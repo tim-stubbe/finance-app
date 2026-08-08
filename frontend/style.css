@@ -1593,3 +1593,56 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   align-items: center;
   justify-content: center;
 }
+
+/* ---------- Vermögensvergleich mit der Altersgruppe ---------- */
+.benchmark-headline {
+  margin: 16px 0 4px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.benchmark-verdict {
+  display: inline-block;
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.benchmark-marks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+
+.benchmark-marks > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.benchmark-mark-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Die Einschraenkungen stehen bewusst direkt unter dem Diagramm und nicht in
+   einem aufklappbaren Bereich - ohne sie ist der Vergleich irrefuehrend. */
+.benchmark-note {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.benchmark-note a { color: var(--accent-strong); }

@@ -1451,7 +1451,7 @@
       <header class="page-head">
         <div>
           <h1>Profil</h1>
-          <p class="page-sub">Anzeigename, Passwort und Anmeldung</p>
+          <p class="page-sub">Anzeigename und Vermögensvergleich</p>
         </div>
       </header>
 
@@ -1463,6 +1463,28 @@
             <button type="submit" class="btn-primary">Speichern</button>
           </div>
         </form>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">📊 Vermögensvergleich mit deiner Altersgruppe</h3>
+        <p class="page-sub">Wo dein Nettovermögen im Vergleich zu Haushalten gleichen Alters in Deutschland steht.</p>
+
+        <form id="birth-year-form" class="form-grid">
+          <label>Geburtsjahr
+            <input type="number" id="profile-birth-year" min="1906" max="2026" placeholder="z. B. 1995">
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+
+        <div id="benchmark-result" class="hidden">
+          <div class="benchmark-headline" id="benchmark-headline"></div>
+          <div class="benchmark-scale" id="benchmark-scale"></div>
+          <div class="chart-box"><canvas id="benchmark-chart"></canvas></div>
+          <p class="benchmark-note" id="benchmark-note"></p>
+        </div>
+        <p class="page-sub" id="benchmark-hint">Trag dein Geburtsjahr ein, um den Vergleich zu sehen.</p>
       </div>
 
     </section>

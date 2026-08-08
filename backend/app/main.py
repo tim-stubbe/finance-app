@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -99,6 +99,11 @@ ensure_columns("settings", {
     "twilio_auth_token_encrypted": "VARCHAR",
     "twilio_from_number": "VARCHAR",
     "twilio_to_number": "VARCHAR",
+})
+ensure_columns("settings", {
+    # Nur das Jahr, kein volles Geburtsdatum - für die Zuordnung zu einer
+    # Altersgruppe reicht das, und weniger personenbezogene Daten sind besser.
+    "birth_year": "INTEGER",
 })
 
 _bootstrap_db = SessionLocal()
@@ -515,6 +520,56 @@ def refresh_prices(db: Session = Depends(get_db), space_id: int = Depends(auth.g
 @api_router.get("/net-worth", response_model=schemas.NetWorthOut)
 def get_net_worth(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.net_worth(db, space_id)
+
+
+@api_router.put("/settings/birth-year", response_model=schemas.BirthYearUpdate)
+def update_birth_year(data: schemas.BirthYearUpdate, db: Session = Depends(get_db)):
+    if data.birth_year is not None:
+        heute = date.today().year
+        # Grob plausibel halten - ein Tippfehler wie 19985 wuerde sonst zu einer
+        # unsinnigen Altersgruppe fuehren.
+        if not (heute - 120 <= data.birth_year <= heute):
+            raise HTTPException(400, "Bitte ein Geburtsjahr zwischen 1906 und heute angeben.")
+    s = auth.get_or_create_settings(db)
+    s.birth_year = data.birth_year
+    db.commit()
+    return schemas.BirthYearUpdate(birth_year=s.birth_year)
+
+
+@api_router.get("/benchmark", response_model=schemas.BenchmarkOut)
+def get_benchmark(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Ordnet das eigene Nettovermögen in die eigene Altersgruppe ein."""
+    s = auth.get_or_create_settings(db)
+    nw = crud.net_worth(db, space_id)
+    total = nw["total"] if isinstance(nw, dict) else nw.total
+
+    own = benchmark.bracket_for_age(
+        benchmark.age_from_birth_year(s.birth_year)) if s.birth_year else None
+
+    def to_schema(b, is_own):
+        return schemas.BenchmarkBracket(
+            key=b.key, label=b.label, p10=b.p10, p50=b.p50, p90=b.p90, is_own=is_own,
+        )
+
+    out = schemas.BenchmarkOut(
+        configured=bool(s.birth_year),
+        birth_year=s.birth_year,
+        net_worth=total,
+        brackets=[to_schema(b, own is not None and b.key == own.key)
+                  for b in benchmark.BRACKETS],
+        overall=to_schema(benchmark.GESAMT, False),
+        source=benchmark.QUELLE,
+        source_url=benchmark.QUELLE_URL,
+        data_year=benchmark.DATENJAHR,
+    )
+    if own:
+        pct, exact = benchmark.estimate_percentile(total, own)
+        out.age = benchmark.age_from_birth_year(s.birth_year)
+        out.own_bracket = own.key
+        out.percentile = round(pct, 1)
+        out.percentile_exact = exact
+        out.verdict = benchmark.verdict(total, own)
+    return out
 
 
 # ---------------- Schulden ----------------

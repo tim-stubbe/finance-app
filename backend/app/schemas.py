@@ -859,6 +859,40 @@ class IntegrationStatusOut(BaseModel):
     incomplete: int
 
 
+# ---------- Vermögensvergleich mit der Altersgruppe ----------
+class BenchmarkBracket(BaseModel):
+    key: str
+    label: str
+    p10: float
+    p50: float
+    p90: float
+    is_own: bool
+
+
+class BenchmarkOut(BaseModel):
+    # Ohne Geburtsjahr kann nicht verglichen werden - dann liefert der Endpunkt
+    # nur die Tabelle, damit die Oberfläche trotzdem etwas zeigen kann.
+    configured: bool
+    birth_year: Optional[int] = None
+    age: Optional[int] = None
+    own_bracket: Optional[str] = None
+    net_worth: float
+    percentile: Optional[float] = None
+    # False, wenn der Wert ausserhalb der belegten Marken liegt und die
+    # Prozentangabe deshalb nur eine Ober-/Untergrenze ist.
+    percentile_exact: Optional[bool] = None
+    verdict: Optional[str] = None
+    brackets: List[BenchmarkBracket]
+    overall: BenchmarkBracket
+    source: str
+    source_url: str
+    data_year: int
+
+
+class BirthYearUpdate(BaseModel):
+    birth_year: Optional[int] = None
+
+
 # ---------- Benachrichtigungen (Telegram) ----------
 class NotificationSettingsOut(BaseModel):
     enabled: bool

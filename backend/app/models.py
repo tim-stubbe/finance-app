@@ -122,6 +122,8 @@ class Settings(Base):
     # solange sich der Tag/Monat nicht ändert - siehe main._check_daily_alerts).
     last_cashflow_alert_date = Column(Date, nullable=True)
     last_budget_alert_month = Column(String, nullable=True)
+    # Für den Vermögensvergleich mit der eigenen Altersgruppe. Nur das Jahr.
+    birth_year = Column(Integer, nullable=True)
 
 
 class BasiszinsRate(Base):
