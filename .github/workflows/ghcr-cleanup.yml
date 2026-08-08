@@ -1,0 +1,30 @@
+name: Alte Docker-Images aufräumen
+
+# Läuft nach jedem erfolgreichen Build (siehe docker-publish.yml) sowie einmal
+# wöchentlich als Sicherheitsnetz, falls mal ein Lauf ausfällt. Behält die 10
+# neuesten Versionen, alles Ältere wird aus der Container-Registry gelöscht.
+# Ohne das würde jeder Push dauerhaft ein weiteres Image ansammeln.
+on:
+  workflow_run:
+    workflows: ["Docker-Image bauen und veröffentlichen"]
+    types: [completed]
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Alte Versionen von ghcr.io/tim-stubbe/finance-app löschen
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: finance-app
+          package-type: container
+          min-versions-to-keep: 10
+          # "latest" zeigt immer auf die neueste Version und würde sonst mit-
+          # gezählt und ggf. geloescht, obwohl es kein eigenständiger Build ist.
+          ignore-versions: "^latest$"
