@@ -2460,7 +2460,68 @@ function handleEnableBankingReturn() {
   });
 }
 
+// Zeichen und Klasse je Zustand. Das Ausrufezeichen steht bewusst auch bei
+// "partial": halb eingerichtet ist genauso wenig nutzbar wie gar nicht.
+const INTEGRATION_MARKS = {
+  ok: { mark: "✓", cls: "is-ok" },
+  partial: { mark: "❗", cls: "is-partial" },
+  missing: { mark: "❗", cls: "is-missing" },
+  off: { mark: "⏸", cls: "is-off" },
+};
+
+async function loadIntegrationStatus() {
+  const box = document.getElementById("integration-status");
+  let data;
+  try {
+    data = await api("/integrations/status");
+  } catch (e) {
+    box.innerHTML = `<p class="page-sub">Status konnte nicht geladen werden: ${esc(e.message)}</p>`;
+    return;
+  }
+
+  box.innerHTML = data.items.map(it => {
+    const m = INTEGRATION_MARKS[it.status] || INTEGRATION_MARKS.missing;
+    const fehlt = it.missing.length
+      ? `<div class="integration-missing">Es fehlt: ${it.missing.map(m => esc(m)).join(", ")}</div>`
+      : "";
+    // Ollama ist die einzige Anbindung, ohne die sichtbare Funktionen ausfallen -
+    // alles andere ist Zusatz und soll nicht wie ein Versäumnis wirken.
+    const pflicht = (!it.optional && it.status !== "ok")
+      ? `<div class="integration-required">Für die KI-Funktionen nötig</div>` : "";
+    return `<div class="integration-card ${m.cls}">
+      <div class="integration-mark">${m.mark}</div>
+      <div class="integration-body">
+        <div class="integration-name">${esc(it.name)}</div>
+        <div class="integration-purpose">${esc(it.purpose)}</div>
+        <div class="integration-purpose">${esc(it.detail)}</div>
+        ${fehlt}${pflicht}
+      </div>
+    </div>`;
+  }).join("");
+
+  updateIntegrationBadge(data.incomplete);
+}
+
+function updateIntegrationBadge(count) {
+  const badge = document.getElementById("integration-nav-badge");
+  if (!badge) return;
+  badge.textContent = count > 0 ? count : "";
+  badge.classList.toggle("hidden", !count);
+}
+
+// Beim Start einmal zählen, damit die Plakette stimmt, ohne dass man die
+// Einstellungen geöffnet haben muss.
+async function refreshIntegrationBadge() {
+  try {
+    const data = await api("/integrations/status");
+    updateIntegrationBadge(data.incomplete);
+  } catch (e) {
+    // Für den Start unkritisch
+  }
+}
+
 async function loadSettingsTab() {
+  await loadIntegrationStatus();
   await loadBudgets();
   await loadOllamaSettings();
   await loadSyncSchedule();
@@ -3391,6 +3452,7 @@ async function init() {
   await loadDashboard();
   await loadGlobalTopbar();
   refreshGoalsBadge();
+  refreshIntegrationBadge();
   handleEnableBankingReturn();
 }
 startApp();

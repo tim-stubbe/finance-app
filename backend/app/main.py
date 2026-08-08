@@ -1651,6 +1651,130 @@ def get_fx_rate(to: str = "CHF"):
     return schemas.FxRateOut(from_currency="EUR", to_currency=to, rate=rate)
 
 
+# ---------------- Einrichtungsstatus der Anbindungen ----------------
+@api_router.get("/integrations/status", response_model=schemas.IntegrationStatusOut)
+def integrations_status(db: Session = Depends(get_db)):
+    """Zeigt, welche Anbindungen einsatzbereit sind und welche noch Zugangsdaten
+    brauchen. Bewusst nur eine Prüfung der hinterlegten Einstellungen, kein
+    Verbindungstest: die Übersicht wird bei jedem Seitenaufruf geladen und darf
+    nicht auf externen Servern hängen bleiben."""
+    s = auth.get_or_create_settings(db)
+
+    # Anzahl der Pflichtfelder je Anbindung. Fehlen alle, ist die Anbindung gar
+    # nicht eingerichtet ("missing"); fehlen nur einzelne, wurde sie angefangen
+    # ("partial") - das ist der Fall, den man beim Einrichten leicht übersieht.
+    FIELD_COUNT = {
+        "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
+        "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
+    }
+
+    def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
+        if missing:
+            status = "missing" if len(missing) >= FIELD_COUNT[key] else "partial"
+        elif not enabled:
+            status = "off"
+        else:
+            status = "ok"
+        detail = {
+            "ok": detail_ok or "Einsatzbereit.",
+            "off": "Vollständig eingerichtet, aber abgeschaltet.",
+            "partial": "Angefangen, aber noch nicht nutzbar.",
+            "missing": "Noch nicht eingerichtet.",
+        }[status]
+        return schemas.IntegrationStatusItem(
+            key=key, name=name, purpose=purpose, status=status,
+            detail=detail, missing=missing, optional=optional,
+        )
+
+    items = []
+
+    missing = []
+    if not s.ollama_url:
+        missing.append("Server-Adresse")
+    if not s.ollama_model:
+        missing.append("Modell")
+    items.append(entry(
+        "ollama", "Ollama (KI)",
+        "KI-Chat, automatische Kategorisierung, Beleg-Auswertung, Antworten des Telegram-Bots",
+        missing, optional=False,
+    ))
+
+    missing = []
+    if not s.telegram_bot_token_encrypted:
+        missing.append("Bot-Token")
+    if not s.telegram_chat_id:
+        missing.append("Chat-ID")
+    items.append(entry(
+        "telegram", "Telegram",
+        "Benachrichtigungen zu Zielen, Cashflow und Budgets; Fragen per Chat",
+        missing, enabled=s.notifications_enabled,
+    ))
+
+    missing = [label for label, value in (
+        ("Account SID", s.twilio_account_sid),
+        ("Auth-Token", s.twilio_auth_token_encrypted),
+        ("Absendernummer", s.twilio_from_number),
+        ("Zielnummer", s.twilio_to_number),
+    ) if not value]
+    items.append(entry(
+        "twilio", "Twilio (Anrufe)",
+        "Echte Anrufe bei zeitkritischen Lagen – kostenpflichtig",
+        missing, enabled=s.calls_enabled,
+    ))
+
+    items.append(entry(
+        "brave", "Brave Search",
+        "Websuche im KI-Chat",
+        [] if s.brave_search_api_key_encrypted else ["API-Schlüssel"],
+    ))
+
+    missing = []
+    if not s.fints_product_id:
+        missing.append("Produkt-ID")
+    if db.query(models.BankConnection).count() == 0:
+        missing.append("mindestens eine Bank-Verbindung")
+    items.append(entry(
+        "fints", "Bank (FinTS)",
+        "Umsätze deutscher Banken automatisch abholen",
+        missing,
+    ))
+
+    missing = []
+    if not s.enablebanking_app_id:
+        missing.append("Anwendungs-ID")
+    if not s.enablebanking_private_key_encrypted:
+        missing.append("Privater Schlüssel")
+    if db.query(models.EnableBankingConnection).count() == 0:
+        missing.append("mindestens eine Verbindung")
+    items.append(entry(
+        "enablebanking", "Enable Banking (PSD2)",
+        "Banken ohne FinTS anbinden",
+        missing,
+    ))
+
+    n_bitvavo = db.query(models.BitvavoConnection).count()
+    items.append(entry(
+        "bitvavo", "Bitvavo",
+        "Krypto-Bestände automatisch abgleichen",
+        [] if n_bitvavo else ["mindestens eine Verbindung"],
+        detail_ok=f"{n_bitvavo} Verbindung{'en' if n_bitvavo != 1 else ''} eingerichtet.",
+    ))
+
+    n_paypal = db.query(models.PayPalConnection).count()
+    items.append(entry(
+        "paypal", "PayPal",
+        "PayPal-Umsätze automatisch abholen",
+        [] if n_paypal else ["mindestens eine Verbindung"],
+        detail_ok=f"{n_paypal} Verbindung{'en' if n_paypal != 1 else ''} eingerichtet.",
+    ))
+
+    return schemas.IntegrationStatusOut(
+        items=items,
+        ready=sum(1 for i in items if i.status == "ok"),
+        incomplete=sum(1 for i in items if i.status in ("missing", "partial")),
+    )
+
+
 # ---------------- Benachrichtigungen (Telegram) ----------------
 @api_router.get("/settings/notifications", response_model=schemas.NotificationSettingsOut)
 def get_notification_settings(db: Session = Depends(get_db)):

@@ -1502,3 +1502,94 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .modal-box { padding: 20px; max-height: none; }
   .modal-overlay { padding: 16px 10px; }
 }
+
+/* ---------- Einrichtungsstatus der Anbindungen ---------- */
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.integration-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  /* Der farbige Streifen links traegt die Aussage auch dann, wenn jemand
+     Rot und Gruen nicht unterscheiden kann - zusammen mit dem Zeichen. */
+  border-left: 4px solid var(--border-strong);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.integration-mark {
+  font-size: 22px;
+  line-height: 1.1;
+  flex-shrink: 0;
+  width: 26px;
+  text-align: center;
+}
+
+.integration-body { min-width: 0; }
+
+.integration-name {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.integration-purpose {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.integration-missing {
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--neg);
+  font-weight: 600;
+}
+
+.integration-required {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--warn);
+  margin-top: 6px;
+}
+
+.integration-card.is-ok { border-left-color: var(--pos); }
+.integration-card.is-ok .integration-mark { color: var(--pos); }
+
+.integration-card.is-missing,
+.integration-card.is-partial {
+  border-left-color: var(--neg);
+  background: var(--neg-wash);
+}
+.integration-card.is-missing .integration-mark,
+.integration-card.is-partial .integration-mark { color: var(--neg); }
+
+.integration-card.is-off { border-left-color: var(--muted); opacity: 0.75; }
+
+/* Zaehler an "Einstellungen" in der Navigation - macht offene Anbindungen
+   sichtbar, ohne dass man erst in die Einstellungen schauen muss. */
+.nav-warn-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--neg);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

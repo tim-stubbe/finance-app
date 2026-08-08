@@ -837,6 +837,28 @@ class FxRateOut(BaseModel):
     rate: float
 
 
+# ---------- Einrichtungsstatus der Anbindungen ----------
+class IntegrationStatusItem(BaseModel):
+    key: str
+    name: str
+    # Wozu die Anbindung gebraucht wird - ohne das ist die Liste nur eine
+    # Ansammlung von Produktnamen und hilft beim Einrichten nicht weiter.
+    purpose: str
+    # "ok" = einsatzbereit, "partial" = teilweise, "missing" = nicht eingerichtet,
+    # "off" = eingerichtet, aber bewusst abgeschaltet.
+    status: str
+    detail: str
+    # Was fehlt noch - leer, wenn nichts fehlt.
+    missing: List[str] = []
+    optional: bool
+
+
+class IntegrationStatusOut(BaseModel):
+    items: List[IntegrationStatusItem]
+    ready: int
+    incomplete: int
+
+
 # ---------- Benachrichtigungen (Telegram) ----------
 class NotificationSettingsOut(BaseModel):
     enabled: bool
