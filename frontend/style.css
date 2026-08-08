@@ -517,14 +517,21 @@ main {
 
 .global-topbar-label { color: var(--muted); }
 .global-topbar-value { font-weight: 700; font-variant-numeric: tabular-nums; }
-.global-topbar-value.neg { color: var(--neg); }
 
 .global-topbar-total {
   margin-left: auto;
   padding-left: 18px;
   border-left: 1px solid var(--border);
 }
-.global-topbar-total .global-topbar-value { font-size: 15px; color: var(--accent-strong); }
+.global-topbar-total .global-topbar-value { font-size: 15px; }
+
+/* Vorzeichen schlaegt Akzentfarbe. Muss nach .global-topbar-total stehen: bei
+   gleicher Spezifitaet gewinnt sonst die spaetere Regel, und das Vermoegen
+   haenge wieder starr an der Themefarbe (im Alpen-Theme Rot). */
+.global-topbar-value.pos,
+.global-topbar-total .global-topbar-value.pos { color: var(--pos); }
+.global-topbar-value.neg,
+.global-topbar-total .global-topbar-value.neg { color: var(--neg); }
 
 .currency-toggle {
   display: flex;

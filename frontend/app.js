@@ -169,6 +169,25 @@ function animateValue(el, from, to, formatFn, duration = 600) {
   requestAnimationFrame(step);
 }
 
+// Färbt Beträge, die je nach Lage positiv oder negativ sein können, nach ihrem
+// Vorzeichen ein - Zahl und Symbol immer gemeinsam. Ohne das erben solche
+// Stellen die Akzentfarbe des Themes; im Alpen-Theme ist die Schweizer Rot,
+// wodurch ein positives Vermögen aussieht wie ein Minus.
+// Feste Größen (Einnahmen immer grün, Ausgaben/Schulden immer rot) bleiben
+// bewusst außen vor - die haben ihre Farbe direkt im HTML.
+function applySign(valueEl, value, cardEl) {
+  const positive = (value ?? 0) >= 0;
+  if (valueEl) {
+    valueEl.classList.toggle("pos", positive);
+    valueEl.classList.toggle("neg", !positive);
+  }
+  if (cardEl) {
+    cardEl.classList.remove("card-bal");
+    cardEl.classList.toggle("card-pos", positive);
+    cardEl.classList.toggle("card-neg", !positive);
+  }
+}
+
 // ================= ACCOUNTS =================
 async function loadAccounts() {
   accountsCache = await api("/accounts");
@@ -334,20 +353,32 @@ async function loadGlobalTopbar() {
   } catch (e) {
     return; // z.B. kein Bereich ausgewählt - Kopfzeile bleibt bei "–"
   }
-  document.getElementById("gtb-accounts").textContent = eur(nw.accounts_total);
-  document.getElementById("gtb-investments").textContent = eur(nw.investments_total);
+  const accEl = document.getElementById("gtb-accounts");
+  accEl.textContent = eur(nw.accounts_total);
+  applySign(accEl, nw.accounts_total);
+  const invEl = document.getElementById("gtb-investments");
+  invEl.textContent = eur(nw.investments_total);
+  applySign(invEl, nw.investments_total);
   const hasDebts = nw.debts_total > 0;
   document.getElementById("gtb-debts-item").classList.toggle("hidden", !hasDebts);
   document.getElementById("gtb-debts").textContent = "−" + eur(nw.debts_total);
   document.getElementById("gtb-total-label").textContent = hasDebts ? "Nettovermögen" : "Gesamtvermögen";
-  document.getElementById("gtb-total").textContent = eur(nw.total);
+  const totalEl = document.getElementById("gtb-total");
+  totalEl.textContent = eur(nw.total);
+  applySign(totalEl, nw.total);
 }
 
 async function loadNetWorth() {
   const nw = await api("/net-worth");
-  document.getElementById("networth-total").textContent = eur(nw.total);
-  document.getElementById("networth-accounts").textContent = eur(nw.accounts_total);
-  document.getElementById("networth-investments").textContent = eur(nw.investments_total);
+  const totalEl = document.getElementById("networth-total");
+  totalEl.textContent = eur(nw.total);
+  applySign(totalEl, nw.total, totalEl.closest(".card"));
+  const accEl = document.getElementById("networth-accounts");
+  accEl.textContent = eur(nw.accounts_total);
+  applySign(accEl, nw.accounts_total, accEl.closest(".card"));
+  const invEl = document.getElementById("networth-investments");
+  invEl.textContent = eur(nw.investments_total);
+  applySign(invEl, nw.investments_total, invEl.closest(".card"));
 
   // Schulden mindern das Gesamtvermögen. Ohne Schulden bleibt die Ansicht exakt
   // wie vorher - Karte und Bruttohinweis erscheinen erst, wenn es welche gibt.
@@ -2459,7 +2490,7 @@ async function loadDashboard() {
   animateValue(document.getElementById("sum-expense"), 0, data.total_expense, eur);
   const balEl = document.getElementById("sum-balance");
   animateValue(balEl, 0, data.balance, eur);
-  balEl.className = data.balance >= 0 ? "pos" : "neg";
+  applySign(balEl, data.balance, balEl.closest(".card"));
 
   const tbody = document.querySelector("#account-balances tbody");
   tbody.innerHTML = "";
@@ -2571,7 +2602,7 @@ async function loadBusinessTab() {
   animateValue(document.getElementById("biz-sum-expense"), 0, data.total_expense, eur);
   const balEl = document.getElementById("biz-sum-balance");
   animateValue(balEl, 0, data.balance, eur);
-  balEl.className = data.balance >= 0 ? "pos" : "neg";
+  applySign(balEl, data.balance, balEl.closest(".card"));
 
   const tbody = document.querySelector("#biz-account-balances tbody");
   tbody.innerHTML = "";
