@@ -6,6 +6,6 @@ pydantic==2.9.2
 itsdangerous==2.2.0
 requests==2.32.3
 fints==5.0.0
-cryptography==43.0.3
+cryptography==50.0.0
 APScheduler==3.10.4
 PyMuPDF==1.24.11
