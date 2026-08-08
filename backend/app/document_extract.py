@@ -1,6 +1,6 @@
 import base64
 
-import fitz  # PyMuPDF
+import pymupdf
 
 MAX_PDF_PAGES_AS_IMAGES = 3
 MAX_TEXT_CHARS = 8000
@@ -11,7 +11,7 @@ def extract_pdf(data: bytes) -> tuple[str | None, list[str]]:
     erzeugter Kontoauszug/eine Wertpapierabrechnung), wird der Text zurückgegeben.
     Andernfalls (z.B. ein eingescannter Beleg) werden die ersten Seiten als
     PNG-Bilder (base64) gerendert, damit ein Vision-Modell sie lesen kann."""
-    doc = fitz.open(stream=data, filetype="pdf")
+    doc = pymupdf.open(stream=data, filetype="pdf")
     text_parts = []
     for page in doc:
         page_text = page.get_text().strip()
