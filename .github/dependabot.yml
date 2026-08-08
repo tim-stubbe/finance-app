@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Python-Abhaengigkeiten des Backends
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Alles in einem PR sammeln statt fuenf einzelne aufzumachen - bei einem
+      # Ein-Personen-Projekt ist ein woechentlicher Sammel-PR besser handhabbar.
+      python:
+        patterns:
+          - "*"
+
+  # Basis-Image des Dockerfiles
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps"
+
+  # Versionen der Actions im Build-Workflow
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps"
