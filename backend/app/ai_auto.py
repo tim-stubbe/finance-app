@@ -1,0 +1,114 @@
+"""Automatische Kategorisierung unkategorisierter Buchungen per Ollama.
+
+Läuft stündlich über den Scheduler (main.py), zusätzlich manuell auslösbar.
+Bewusst konservativ: nur Buchungen, bei denen die KI eine Sicherheit über
+CONFIDENCE_THRESHOLD angibt, werden wirklich zugeordnet - alles andere bleibt
+unkategorisiert liegen, statt geraten zu werden (Nutzerentscheidung)."""
+
+import json
+import re
+from typing import NamedTuple
+
+from sqlalchemy.orm import Session
+
+from . import models, crud, ollama_client
+
+CONFIDENCE_THRESHOLD = 0.7
+BATCH_SIZE = 25
+MAX_PENDING_PER_RUN = 200
+
+_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+
+
+class CategorizeResult(NamedTuple):
+    categorized: int
+    skipped: int
+    error: str | None
+
+
+def _extract_json_array(text: str) -> list:
+    match = _ARRAY_RE.search(text)
+    if not match:
+        return []
+    try:
+        data = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _prompt(categories: list[models.Category], batch: list[models.Transaction]) -> str:
+    lines = [
+        "Du ordnest Kontobuchungen eines privaten Finanztools bestehenden Kategorien zu.",
+        "Antworte NUR mit einem JSON-Array, ein Objekt pro Buchung, keine Erklärung außenrum:",
+        '[{"id": 123, "category": "Lebensmittel", "confidence": 0.9}]',
+        "- confidence: deine Sicherheit zwischen 0 und 1 (0 = geraten, 1 = eindeutig).",
+        "- category: EXAKT einer der folgenden Namen (keine Erfindungen, keine Abweichungen):",
+        ", ".join(c.name for c in categories),
+        "- Bist du dir nicht sicher, gib trotzdem dein bestes category ist mit niedriger confidence an -",
+        "  wird ohnehin nur ab einer bestimmten Sicherheit übernommen.",
+        "",
+        "Buchungen:",
+    ]
+    for t in batch:
+        lines.append(f'- id={t.id}, Betrag={t.amount:.2f} EUR, Beschreibung="{t.description or ""}"')
+    return "\n".join(lines)
+
+
+def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> CategorizeResult:
+    model = settings.ollama_model or settings.beleg_chat_model
+    if not settings.ollama_url or not model:
+        return CategorizeResult(0, 0, "Ollama-Server-URL/Modell nicht konfiguriert")
+
+    categories = crud.get_categories(db)
+    if not categories:
+        return CategorizeResult(0, 0, None)
+    cat_by_name = {c.name.strip().lower(): c for c in categories}
+
+    pending = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.category_id.is_(None),
+            models.Transaction.is_transfer.is_(False),
+        )
+        .order_by(models.Transaction.date.desc())
+        .limit(MAX_PENDING_PER_RUN)
+        .all()
+    )
+    if not pending:
+        return CategorizeResult(0, 0, None)
+
+    categorized, skipped = 0, 0
+    for i in range(0, len(pending), BATCH_SIZE):
+        batch = pending[i:i + BATCH_SIZE]
+        by_id = {t.id: t for t in batch}
+        try:
+            reply = ollama_client.generate(settings.ollama_url, model, _prompt(categories, batch))
+        except Exception:
+            skipped += len(batch)
+            continue
+        rows = _extract_json_array(reply)
+        matched_ids = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            tx = by_id.get(row.get("id"))
+            if tx is None:
+                continue
+            matched_ids.add(tx.id)
+            confidence = row.get("confidence")
+            cat = cat_by_name.get(str(row.get("category", "")).strip().lower())
+            if cat is None or not isinstance(confidence, (int, float)) or confidence < CONFIDENCE_THRESHOLD:
+                skipped += 1
+                continue
+            tx.category_id = cat.id
+            categorized += 1
+        # Buchungen, zu denen die KI gar keine Zeile geliefert hat, zählen ebenfalls
+        # als übersprungen statt stillschweigend zu verschwinden.
+        skipped += len(batch) - len(matched_ids)
+
+    if categorized:
+        db.commit()
+    return CategorizeResult(categorized, skipped, None)

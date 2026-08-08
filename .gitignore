@@ -1,0 +1,20 @@
+# Echte Nutzerdaten - Datenbank, Backups, hochgeladene Belege. Niemals committen,
+# auch nicht in ein privates Repo (Historie ist schwer zu bereinigen).
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor/OS
+.vscode/
+.DS_Store
+
+# Claude Code lokale Einstellungen (maschinenspezifisch)
+.claude/
+
+# Secrets, falls mal welche als .env landen
+.env
+.env.*

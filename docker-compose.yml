@@ -1,0 +1,10 @@
+services:
+  finance-app:
+    build: .
+    image: finance-app:latest
+    container_name: finance-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data

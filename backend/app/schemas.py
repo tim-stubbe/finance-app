@@ -1,0 +1,950 @@
+from datetime import date, datetime
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, ConfigDict
+from .models import (
+    AccountType, CategoryType, AssetType, LotType,
+    GoalType, GoalStatus, GoalMetricType, GoalComparison,
+    DebtKind, DebtStatus,
+)
+
+
+# ---------- Account ----------
+class AccountBase(BaseModel):
+    name: str
+    type: AccountType = AccountType.girokonto
+    initial_balance: float = 0.0
+    is_business: bool = False
+
+
+class AccountCreate(AccountBase):
+    pass
+
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[AccountType] = None
+    initial_balance: Optional[float] = None
+    is_business: Optional[bool] = None
+
+
+class AccountOut(AccountBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    created_at: datetime
+    current_balance: float = 0.0
+
+
+# ---------- Category ----------
+class CategoryBase(BaseModel):
+    name: str
+    type: CategoryType
+    parent_id: Optional[int] = None
+
+
+class CategoryCreate(CategoryBase):
+    pass
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[CategoryType] = None
+    parent_id: Optional[int] = None
+
+
+class CategoryOut(CategoryBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+# ---------- Space ----------
+class SpaceCreate(BaseModel):
+    name: str
+    icon: str = "🏠"
+
+
+class SpaceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    icon: str
+
+
+# ---------- Trip ----------
+class TripCreate(BaseModel):
+    name: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class TripUpdate(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class TripOut(BaseModel):
+    id: int
+    name: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    total_spent: float = 0.0
+    transaction_count: int = 0
+
+
+# ---------- Transaction ----------
+class TransactionBase(BaseModel):
+    date: date
+    amount: float
+    description: Optional[str] = None
+    notes: Optional[str] = None
+    account_id: int
+    category_id: Optional[int] = None
+    trip_id: Optional[int] = None
+
+
+class TransactionCreate(TransactionBase):
+    pass
+
+
+class TransactionUpdate(BaseModel):
+    date: Optional[date] = None
+    amount: Optional[float] = None
+    description: Optional[str] = None
+    notes: Optional[str] = None
+    account_id: Optional[int] = None
+    category_id: Optional[int] = None
+    trip_id: Optional[int] = None
+
+
+class TransactionOut(TransactionBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    receipt_filename: Optional[str] = None
+    is_transfer: bool = False
+    created_at: datetime
+
+
+# ---------- Profil ----------
+class ProfileOut(BaseModel):
+    display_name: str
+
+
+class ProfileUpdate(BaseModel):
+    display_name: str
+
+
+# ---------- Budget ----------
+class BudgetCreate(BaseModel):
+    category_id: int
+    monthly_limit: float
+
+
+class BudgetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    category_id: int
+    category_name: str
+    monthly_limit: float
+
+
+class BudgetProgress(BaseModel):
+    category_id: int
+    category_name: str
+    limit: float
+    spent: float
+    remaining: float
+    percent: float
+
+
+# ---------- Holdings (Investments) ----------
+class HoldingCreate(BaseModel):
+    asset_type: AssetType
+    name: str
+    symbol: str
+    sector: Optional[str] = None
+    quantity: float
+    purchase_price: float
+    purchase_date: Optional[date] = None
+
+
+class HoldingUpdate(BaseModel):
+    asset_type: Optional[AssetType] = None
+    name: Optional[str] = None
+    symbol: Optional[str] = None
+    sector: Optional[str] = None
+    country: Optional[str] = None
+    currency: Optional[str] = None
+    current_price: Optional[float] = None
+
+
+class HoldingOut(BaseModel):
+    id: int
+    asset_type: AssetType
+    name: str
+    symbol: str
+    sector: Optional[str] = None
+    country: Optional[str] = None
+    currency: Optional[str] = None
+    risk_level: str
+    quantity: float
+    purchase_price: float
+    purchase_date: Optional[date] = None
+    current_price: Optional[float] = None
+    price_updated_at: Optional[datetime] = None
+    purchase_value: float
+    current_value: float
+    gain_abs: float
+    gain_pct: float
+    lot_count: int = 0
+
+
+class NetWorthOut(BaseModel):
+    accounts_total: float
+    investments_total: float
+    debts_total: float = 0.0
+    # Konten + Investments ohne Schulden
+    gross_total: float = 0.0
+    # Nettovermögen: gross_total - debts_total
+    total: float
+
+
+class PriceRefreshResult(BaseModel):
+    updated: int
+    failed: List[str]
+    holdings: List[HoldingOut]
+
+
+# ---------- Holding-Lots (einzelne Käufe/Verkäufe) ----------
+class HoldingLotCreate(BaseModel):
+    date: date
+    type: LotType = LotType.kauf
+    quantity: float
+    price_per_unit: float
+    notes: Optional[str] = None
+
+
+class HoldingLotUpdate(BaseModel):
+    date: Optional[date] = None
+    type: Optional[LotType] = None
+    quantity: Optional[float] = None
+    price_per_unit: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class HoldingLotOut(BaseModel):
+    id: int
+    date: date
+    type: LotType
+    quantity: float
+    price_per_unit: float
+    notes: Optional[str] = None
+
+
+# ---------- Kurshistorie & Portfolio-Verlauf ----------
+class HoldingHistoryPoint(BaseModel):
+    date: str
+    price: float
+
+
+class HoldingHistoryOut(BaseModel):
+    holding: HoldingOut
+    points: List[HoldingHistoryPoint]
+    lots: List[HoldingLotOut]
+
+
+class PortfolioHistoryPoint(BaseModel):
+    date: str
+    value: float
+    invested: float
+    return_pct: Optional[float] = None
+
+
+class PortfolioHistoryOut(BaseModel):
+    points: List[PortfolioHistoryPoint]
+    partial: bool = False
+
+
+# ---------- Diversifikation & Risiko ----------
+class DiversificationSlice(BaseModel):
+    label: str
+    value: float
+    percent: float
+
+
+class RiskFlag(BaseModel):
+    level: str
+    message: str
+
+
+class DiversificationOut(BaseModel):
+    by_asset_type: List[DiversificationSlice]
+    by_sector: List[DiversificationSlice]
+    by_position: List[DiversificationSlice]
+    by_region: List[DiversificationSlice]
+    by_currency: List[DiversificationSlice]
+    risk_flags: List[RiskFlag]
+
+
+class HoldingVolatility(BaseModel):
+    holding_id: int
+    name: str
+    volatility_pct: Optional[float] = None
+
+
+class VolatilityOut(BaseModel):
+    holdings: List[HoldingVolatility]
+
+
+# ---------- Dividenden ----------
+class DividendPayment(BaseModel):
+    date: str
+    amount_per_share: float
+    quantity: float
+    total: float
+
+
+class HoldingDividendsOut(BaseModel):
+    holding_id: int
+    name: str
+    symbol: str
+    history: List[DividendPayment]
+    annual_rate_per_share: float
+    annual_income_estimate: float
+    forecast_1y: float
+    forecast_5y: float
+    forecast_10y: float
+
+
+class YearlyDividendPoint(BaseModel):
+    year: int
+    total: float
+
+
+class PortfolioDividendsOut(BaseModel):
+    total_annual_income_estimate: float
+    forecast_1y: float
+    forecast_5y: float
+    forecast_10y: float
+    by_year: List[YearlyDividendPoint]
+    holdings: List[HoldingDividendsOut]
+
+
+# ---------- KI-Assistent (Ollama) ----------
+class OllamaSettingsUpdate(BaseModel):
+    url: str
+    model: Optional[str] = None
+    beleg_chat_model: Optional[str] = None
+
+
+class OllamaSettingsOut(BaseModel):
+    url: Optional[str] = None
+    model: Optional[str] = None
+    beleg_chat_model: Optional[str] = None
+
+
+class OllamaModelsOut(BaseModel):
+    models: List[str]
+
+
+class AiTextResult(BaseModel):
+    text: Optional[str] = None
+    error: Optional[str] = None
+
+
+class MissingReceiptsOut(BaseModel):
+    transactions: List[TransactionOut]
+    total_amount: float
+    summary: Optional[str] = None
+
+
+# ---------- Bank-Sync (FinTS) ----------
+class BankConnectionCreate(BaseModel):
+    name: str
+    blz: str
+    fints_url: str
+    login: str
+    pin: str
+    account_id: int
+    iban: str
+
+
+class BankConnectionOut(BaseModel):
+    id: int
+    name: str
+    blz: str
+    fints_url: str
+    login: str
+    account_id: int
+    iban: Optional[str] = None
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+
+
+class FintsSettingsUpdate(BaseModel):
+    fints_product_id: str
+
+
+class SyncResult(BaseModel):
+    tan_required: bool = False
+    challenge: Optional[str] = None
+    imported: int = 0
+    skipped: int = 0
+    error: Optional[str] = None
+
+
+class TanSubmit(BaseModel):
+    tan: str
+
+
+# ---------- Bitvavo (Krypto-Börse) ----------
+class BitvavoConnectionCreate(BaseModel):
+    name: str
+    api_key: str
+    api_secret: str
+
+
+class BitvavoConnectionOut(BaseModel):
+    id: int
+    name: str
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+
+
+class BitvavoSyncResult(BaseModel):
+    created: int = 0
+    updated: int = 0
+    failed: List[str] = []
+    error: Optional[str] = None
+
+
+# ---------- PayPal ----------
+class PayPalConnectionCreate(BaseModel):
+    name: str
+    client_id: str
+    client_secret: str
+    account_id: int
+
+
+class PayPalConnectionOut(BaseModel):
+    id: int
+    name: str
+    account_id: int
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+
+
+class PayPalSyncResult(BaseModel):
+    imported: int = 0
+    skipped: int = 0
+    error: Optional[str] = None
+
+
+# ---------- Automatischer Sync (Zeitplan) ----------
+class SyncScheduleOut(BaseModel):
+    hour: int
+
+
+class SyncScheduleUpdate(BaseModel):
+    hour: int
+
+
+# ---------- Enable Banking (Open-Banking-Aggregator für PSD2-Banken) ----------
+class EnableBankingSettingsUpdate(BaseModel):
+    app_id: str
+    private_key: str
+
+
+class EnableBankingSettingsOut(BaseModel):
+    app_id: Optional[str] = None
+    private_key_set: bool = False
+
+
+class AspspOut(BaseModel):
+    name: str
+    country: str
+    logo: Optional[str] = None
+
+
+class EnableBankingConnectionCreate(BaseModel):
+    aspsp_name: str
+    aspsp_country: str
+    account_id: int
+
+
+class EnableBankingConnectionOut(BaseModel):
+    id: int
+    aspsp_name: str
+    aspsp_country: str
+    account_id: int
+    status: str
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+
+
+class EnableBankingAuthStart(BaseModel):
+    id: int
+    url: str
+
+
+# ---------- Dashboard ----------
+class CategorySummary(BaseModel):
+    category_id: Optional[int]
+    category_name: str
+    total: float
+
+
+class DashboardSummary(BaseModel):
+    year: int
+    month: Optional[int]
+    total_income: float
+    total_expense: float
+    balance: float
+    by_category: List[CategorySummary]
+    account_balances: List[AccountOut]
+
+
+# ---------- Wiederkehrende Zahlungen ----------
+class RecurringPaymentOut(BaseModel):
+    description: Optional[str] = None
+    account_id: int
+    account_name: Optional[str] = None
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    frequency: str
+    avg_amount: float
+    occurrences: int
+    last_date: date
+    next_expected_date: date
+    total_amount: float
+
+
+# ---------- Cashflow-Prognose ----------
+class CashflowPoint(BaseModel):
+    date: str
+    balance: float
+
+
+class CashflowEvent(BaseModel):
+    date: date
+    amount: float
+    description: Optional[str] = None
+
+
+class CashflowForecastOut(BaseModel):
+    start_balance: float
+    horizon_days: int
+    points: List[CashflowPoint]
+    upcoming_events: List[CashflowEvent]
+    lowest_balance: float
+    lowest_date: Optional[str] = None
+    goes_negative: bool
+    first_negative_date: Optional[str] = None
+
+
+# ---------- Automatische Backups ----------
+class BackupSettingsOut(BaseModel):
+    enabled: bool
+    hour: int
+    retention: int
+
+
+class BackupSettingsUpdate(BaseModel):
+    enabled: bool
+    hour: int
+    retention: int
+
+
+class BackupFileOut(BaseModel):
+    filename: str
+    size_bytes: int
+    created_at: datetime
+
+
+# ---------- Steuer (Vorabpauschale / realisierte Gewinne) ----------
+class VorabpauschaleOut(BaseModel):
+    holding_id: int
+    name: str
+    symbol: str
+    year: int
+    basiszins_percent: float
+    basisertrag: float
+    wertsteigerung: float
+    ausschuettung: float
+    vorabpauschale: float
+    teilfreistellung_percent: float
+    steuerpflichtiger_betrag: float
+    is_estimate: bool
+
+
+class PortfolioVorabpauschaleOut(BaseModel):
+    year: int
+    rows: List[VorabpauschaleOut]
+    total_steuerpflichtig: float
+    missing_basiszins: bool = False
+
+
+class RealizedGainRow(BaseModel):
+    holding_id: int
+    name: str
+    symbol: str
+    date: date
+    quantity: float
+    proceeds: float
+    cost_basis: float
+    gain: float
+
+
+class RealizedGainsOut(BaseModel):
+    year: int
+    rows: List[RealizedGainRow]
+    total_gain: float
+
+
+class TaxSummaryOut(BaseModel):
+    year: int
+    vorabpauschale_total: float
+    realized_gain_total: float
+    sparerpauschbetrag: float
+    taxable_after_allowance: float
+
+
+class BasiszinsRateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    year: int
+    rate_percent: float
+
+
+class BasiszinsRateUpdate(BaseModel):
+    year: int
+    rate_percent: float
+
+
+# ---------- Beleg-Chat (KI liest Belege/Abrechnungen aus Bild/PDF/Text) ----------
+class BelegChatResult(BaseModel):
+    reply: str
+    proposals: List[Dict[str, Any]] = []
+    attachment_filename: Optional[str] = None
+    attachment_base64: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BelegChatApply(BaseModel):
+    type: str
+    data: Dict[str, Any]
+    account_id: Optional[int] = None
+    attachment_filename: Optional[str] = None
+    attachment_base64: Optional[str] = None
+
+
+class BelegChatApplyResult(BaseModel):
+    ok: bool
+    transaction_id: Optional[int] = None
+    holding_id: Optional[int] = None
+    message: str
+
+
+class SparerpauschbetragUpdate(BaseModel):
+    amount: float
+    budgets: List[BudgetProgress] = []
+
+
+# ---------- Schulden ----------
+class DebtBase(BaseModel):
+    name: str
+    kind: DebtKind = DebtKind.annuitaeten
+    lender: Optional[str] = None
+    original_amount: float
+    interest_rate_percent: float = 0.0
+    monthly_payment: Optional[float] = None
+    start_date: Optional[date] = None
+    planned_end_date: Optional[date] = None
+    account_id: Optional[int] = None
+    notes: Optional[str] = None
+    # Zinsbindung
+    interest_fixed_until: Optional[date] = None
+    follow_up_interest_rate_percent: Optional[float] = None
+    # Bereitstellungszinsen
+    commitment_rate_percent: Optional[float] = None
+    commitment_free_months: Optional[int] = None
+    undisbursed_amount: Optional[float] = None
+    # Nebenkosten
+    upfront_fees: Optional[float] = None
+    monthly_fee: Optional[float] = None
+    monthly_insurance: Optional[float] = None
+
+
+class DebtCreate(DebtBase):
+    pass
+
+
+class DebtUpdate(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[DebtKind] = None
+    lender: Optional[str] = None
+    original_amount: Optional[float] = None
+    interest_rate_percent: Optional[float] = None
+    monthly_payment: Optional[float] = None
+    start_date: Optional[date] = None
+    planned_end_date: Optional[date] = None
+    account_id: Optional[int] = None
+    notes: Optional[str] = None
+    status: Optional[DebtStatus] = None
+    interest_fixed_until: Optional[date] = None
+    follow_up_interest_rate_percent: Optional[float] = None
+    commitment_rate_percent: Optional[float] = None
+    commitment_free_months: Optional[int] = None
+    undisbursed_amount: Optional[float] = None
+    upfront_fees: Optional[float] = None
+    monthly_fee: Optional[float] = None
+    monthly_insurance: Optional[float] = None
+
+
+class DebtOut(DebtBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    current_balance: float
+    status: DebtStatus
+    created_at: Optional[datetime] = None
+    # Abgeleitete Kennzahlen
+    paid_off_amount: float = 0.0
+    paid_off_percent: float = 0.0
+    total_interest_paid: float = 0.0
+    total_fees_paid: float = 0.0
+    payment_count: int = 0
+    account_name: Optional[str] = None
+    # Tatsächliche Monatsbelastung inkl. Gebühren und Versicherung
+    monthly_total_burden: float = 0.0
+    monthly_commitment_interest: float = 0.0
+    # Prognose (nur in der Detailansicht gefüllt)
+    projected_end_date: Optional[date] = None
+    projected_remaining_interest: Optional[float] = None
+    projected_remaining_fees: Optional[float] = None
+    projection_note: Optional[str] = None
+    # Zinsbindung
+    balance_at_fixed_interest_end: Optional[float] = None
+
+
+class DebtPaymentCreate(BaseModel):
+    date: date
+    total_amount: float
+    # None = Zinsanteil automatisch aus Restschuld und Zinssatz rechnen
+    interest_amount: Optional[float] = None
+    # None = laufende Nebenkosten des Kredits ansetzen
+    fee_amount: Optional[float] = None
+    is_extra_repayment: bool = False
+    transaction_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DebtPaymentUpdate(BaseModel):
+    date: Optional[date] = None
+    total_amount: Optional[float] = None
+    interest_amount: Optional[float] = None
+    fee_amount: Optional[float] = None
+    is_extra_repayment: Optional[bool] = None
+    transaction_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DebtPaymentOut(BaseModel):
+    id: int
+    date: date
+    total_amount: float
+    interest_amount: float
+    fee_amount: float
+    principal_amount: float
+    balance_after: float
+    is_extra_repayment: bool
+    interest_is_manual: bool
+    transaction_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DebtScheduleRow(BaseModel):
+    month_index: int
+    date: date
+    payment: float
+    interest: float
+    fee: float
+    principal: float
+    balance_after: float
+    after_fixed_interest: bool = False
+
+
+class DebtScheduleOut(BaseModel):
+    rows: List[DebtScheduleRow] = []
+    note: Optional[str] = None
+    total_interest: float = 0.0
+    total_fees: float = 0.0
+    end_date: Optional[date] = None
+
+
+class DebtSummaryOut(BaseModel):
+    total_balance: float
+    total_original: float
+    total_interest_paid: float
+    total_fees_paid: float = 0.0
+    monthly_burden: float
+    active_count: int
+    paid_off_count: int
+
+
+# ---------- Automatisierung (Umbuchungen + Auto-Kategorisierung) ----------
+class AutoCategorizeSettingsOut(BaseModel):
+    enabled: bool
+
+
+class AutoCategorizeSettingsUpdate(BaseModel):
+    enabled: bool
+
+
+class AutoCategorizeRunResult(BaseModel):
+    transfers_marked: int
+    categorized: int
+    skipped: int
+    error: Optional[str] = None
+
+
+# ---------- Assistant-Chat (schwebender KI-Button, allgemeine Anweisungen) ----------
+class AssistantChatResult(BaseModel):
+    reply: str
+    proposals: List[Dict[str, Any]] = []
+    # Für die Anzeige "🌐 hat im Internet gesucht: ..." im Chat.
+    web_searches: List[str] = []
+    error: Optional[str] = None
+
+
+class WebSearchSettingsOut(BaseModel):
+    api_key_set: bool = False
+
+
+class WebSearchSettingsUpdate(BaseModel):
+    api_key: str
+
+
+# ---------- Anzeige-Währung ----------
+class CurrencySettingsOut(BaseModel):
+    currency: str = "EUR"
+
+
+class CurrencySettingsUpdate(BaseModel):
+    currency: str
+
+
+class FxRateOut(BaseModel):
+    from_currency: str
+    to_currency: str
+    rate: float
+
+
+# ---------- Benachrichtigungen (Telegram) ----------
+class NotificationSettingsOut(BaseModel):
+    enabled: bool
+    telegram_configured: bool
+
+
+class NotificationSettingsUpdate(BaseModel):
+    enabled: bool
+    # None = jeweils unverändert lassen (Feld nicht neu gesendet)
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+
+
+class NotificationTestResult(BaseModel):
+    ok: bool
+    message: str
+
+
+# ---------- Echte Anrufe (Twilio) ----------
+class CallSettingsOut(BaseModel):
+    enabled: bool
+    twilio_configured: bool
+
+
+class CallSettingsUpdate(BaseModel):
+    enabled: bool
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_from_number: Optional[str] = None
+    twilio_to_number: Optional[str] = None
+
+
+# ---------- Ziele ----------
+class GoalTriggerIn(BaseModel):
+    metric_type: GoalMetricType
+    comparison: GoalComparison = GoalComparison.gte
+    threshold_value: float
+    scope_account_id: Optional[int] = None
+    scope_asset_type: Optional[AssetType] = None
+    scope_category_id: Optional[int] = None
+    scope_debt_id: Optional[int] = None
+    evaluation_window_months: Optional[int] = None
+
+
+class GoalTriggerOut(GoalTriggerIn):
+    model_config = ConfigDict(from_attributes=True)
+    currency: str = "EUR"
+
+
+class GoalCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    goal_type: GoalType = GoalType.manual
+    target_date: Optional[date] = None
+    predecessor_goal_id: Optional[int] = None
+    # True = bereichsübergreifend (space_id bleibt NULL)
+    all_spaces: bool = False
+    trigger: Optional[GoalTriggerIn] = None
+
+
+class GoalUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    goal_type: Optional[GoalType] = None
+    target_date: Optional[date] = None
+    predecessor_goal_id: Optional[int] = None
+    status: Optional[GoalStatus] = None
+    all_spaces: Optional[bool] = None
+    trigger: Optional[GoalTriggerIn] = None
+
+
+class GoalProgressPoint(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    timestamp: datetime
+    current_value: float
+
+
+class GoalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    space_id: Optional[int] = None
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    goal_type: GoalType
+    target_date: Optional[date] = None
+    status: GoalStatus
+    predecessor_goal_id: Optional[int] = None
+    predecessor_title: Optional[str] = None
+    completion_seen: bool = True
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    trigger: Optional[GoalTriggerOut] = None
+    # Nur bei auto_financial gefüllt: live berechneter Stand.
+    current_value: Optional[float] = None
+    target_value: Optional[float] = None
+    progress_percent: Optional[float] = None
+    # "eur" oder "months" - steuert die Formatierung im Frontend
+    value_unit: str = "eur"
+    # Erklärender Text zur Metrik, z.B. "Kontostand: Girokonto"
+    metric_label: Optional[str] = None
+    # Meldung, falls die Metrik gerade nicht berechenbar ist (z.B. Konto gelöscht)
+    evaluation_error: Optional[str] = None
+
+
+class GoalCompleteResult(BaseModel):
+    ok: bool
+    goal: GoalOut
+    message: str
