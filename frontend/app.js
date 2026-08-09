@@ -1873,6 +1873,35 @@ async function loadSimilarities(groups) {
   }
 }
 
+// Beim Umwählen des zu behaltenden Bilds NUR die eine betroffene Gruppe
+// aktualisieren - nicht renderPhotoGroups() (kompletter Neuaufbau aller 20
+// sichtbaren Gruppen samt jedem einzelnen Bild) aufrufen. Das war der
+// eigentliche Grund fuer "die ganze Seite laedt neu, aber es passiert
+// nichts": ein einzelner Kartenklick liess bei jeder Betaetigung 40-100+
+// Vorschaubilder gleichzeitig neu anfordern, was auf allen getesteten
+// Browsern (iPhone/Mac Safari/Windows Firefox) als voller Seiten-Neuaufbau
+// wahrgenommen wurde - der Zustand aendert sich dabei zwar korrekt, aber
+// sichtbar wird davon in dem visuellen Chaos praktisch nichts.
+function updateGroupKeeperUI(duplicateId) {
+  const group = photoGroupsCache.find(g => g.duplicate_id === duplicateId);
+  const groupEl = document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`);
+  if (!group || !groupEl) return;
+  const keepId = photoKeepChoice.get(duplicateId);
+
+  groupEl.querySelectorAll(".photo-card").forEach(card => {
+    const isKeep = card.dataset.asset === keepId;
+    card.classList.toggle("is-keep", isKeep);
+    card.classList.toggle("is-trash", !isKeep);
+    const badge = card.querySelector(".photo-badge");
+    if (badge) badge.textContent = isKeep ? "behalten" : "Papierkorb";
+  });
+
+  const applyBtn = groupEl.querySelector("[data-apply]");
+  if (applyBtn) applyBtn.textContent = `${group.assets.length - 1} in den Papierkorb`;
+
+  updateSimilarityBadges(duplicateId);
+}
+
 function updateSimilarityBadges(duplicateId) {
   const groupEl = document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`);
   if (!groupEl) return;
@@ -2038,7 +2067,7 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
   const card = e.target.closest(".photo-card");
   if (card) {
     photoKeepChoice.set(card.dataset.group, card.dataset.asset);
-    renderPhotoGroups();
+    updateGroupKeeperUI(card.dataset.group);
     return;
   }
 
