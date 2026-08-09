@@ -1,4 +1,5 @@
 import base64
+import requests
 import csv
 import io
 import json
@@ -2110,12 +2111,19 @@ def immich_duplicates(
 
 
 @api_router.get("/immich/thumbnail/{asset_id}")
-def immich_thumbnail(asset_id: str, db: Session = Depends(get_db)):
-    """Reicht das Vorschaubild durch, damit der API-Schlüssel den Server nie
-    verlässt. Der Browser sieht nur diese eigene Adresse."""
+def immich_thumbnail(asset_id: str, size: str = "thumbnail", db: Session = Depends(get_db)):
+    """Reicht ein Vorschaubild durch, damit der API-Schlüssel den Server nie
+    verlässt. Der Browser sieht nur diese eigene Adresse.
+
+    `size=preview` wird von der Lupen-Ansicht genutzt (siehe fetch_thumbnail);
+    hier auf die von Immich unterstuetzten Werte eingeschraenkt, weil der
+    Parameter direkt vom Browser kommt.
+    """
+    if size not in ("thumbnail", "preview"):
+        raise HTTPException(400, "Ungültige Bildgröße")
     url, key = _immich_credentials(db)
     try:
-        content, content_type = immich.fetch_thumbnail(url, key, asset_id)
+        content, content_type = immich.fetch_thumbnail(url, key, asset_id, size=size)
     except Exception as e:
         raise HTTPException(502, f"Vorschaubild nicht ladbar: {e}")
     # Kurzer Cache: beim Blättern durch viele Gruppen werden dieselben Bilder
@@ -2360,6 +2368,88 @@ def immich_dismiss(duplicate_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
     return {"ok": True}
+
+
+# Ergebnis kurz zwischenspeichern - dieser Endpunkt wird bei jedem Seitenaufruf
+# abgefragt, ein anonymer GHCR-Blick fuer jeden davon waere unnoetig und bei
+# vielen Tabs/Nutzern schnell spuerbar langsam.
+_latest_version_cache: dict = {"checked_at": None, "result": None}
+GHCR_IMAGE = "tim-stubbe/finance-app"
+
+
+def _fetch_latest_published_sha() -> schemas.LatestVersionOut:
+    """Fragt anonym bei ghcr.io nach dem git-SHA-Label des aktuell
+    veroeffentlichten :latest-Images. Braucht dafuer, dass das Paket wirklich
+    oeffentlich ist (siehe Docker-LABEL im Dockerfile) - ist es das (noch)
+    nicht, kommt sauber `available=False` zurueck statt eines Fehlers, der wie
+    ein Problem im eigenen System aussehen wuerde."""
+    try:
+        token_resp = requests.get(
+            "https://ghcr.io/token",
+            params={"service": "ghcr.io", "scope": f"repository:{GHCR_IMAGE}:pull"},
+            timeout=5,
+        )
+        token = token_resp.json().get("token") if token_resp.ok else None
+        if not token:
+            return schemas.LatestVersionOut(available=False, error="Paket nicht öffentlich abrufbar")
+
+        manifest_headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.docker.distribution.manifest.v2+json, "
+                      "application/vnd.docker.distribution.manifest.list.v2+json, "
+                      "application/vnd.oci.image.manifest.v1+json, "
+                      "application/vnd.oci.image.index.v1+json",
+        }
+        manifest_resp = requests.get(
+            f"https://ghcr.io/v2/{GHCR_IMAGE}/manifests/latest",
+            headers=manifest_headers, timeout=5,
+        )
+        manifest_resp.raise_for_status()
+        manifest = manifest_resp.json()
+
+        # Multi-Architektur-Image: das docker-publish.yml-Buildx baut fuer
+        # mehrere Plattformen, "latest" zeigt deshalb auf eine Index-Liste statt
+        # direkt auf ein einzelnes Manifest - amd64 heraussuchen (das laeuft auf
+        # der TrueNAS-Box).
+        if "manifests" in manifest:
+            eintrag = next(
+                (m for m in manifest["manifests"]
+                 if m.get("platform", {}).get("architecture") == "amd64"),
+                manifest["manifests"][0],
+            )
+            manifest_resp = requests.get(
+                f"https://ghcr.io/v2/{GHCR_IMAGE}/manifests/{eintrag['digest']}",
+                headers=manifest_headers, timeout=5,
+            )
+            manifest_resp.raise_for_status()
+            manifest = manifest_resp.json()
+
+        config_digest = manifest["config"]["digest"]
+
+        config_resp = requests.get(
+            f"https://ghcr.io/v2/{GHCR_IMAGE}/blobs/{config_digest}",
+            headers={"Authorization": f"Bearer {token}"}, timeout=5,
+        )
+        config_resp.raise_for_status()
+        sha = config_resp.json().get("config", {}).get("Labels", {}).get(
+            "org.opencontainers.image.revision")
+        if not sha:
+            return schemas.LatestVersionOut(available=False, error="Kein Revisions-Label im Image")
+        return schemas.LatestVersionOut(available=True, git_sha=sha, git_sha_short=sha[:7])
+    except Exception as e:
+        return schemas.LatestVersionOut(available=False, error=str(e))
+
+
+@api_router.get("/version/latest", response_model=schemas.LatestVersionOut)
+def get_latest_version():
+    now = datetime.utcnow()
+    if (_latest_version_cache["checked_at"]
+            and now - _latest_version_cache["checked_at"] < timedelta(minutes=10)):
+        return _latest_version_cache["result"]
+    result = _fetch_latest_published_sha()
+    _latest_version_cache["checked_at"] = now
+    _latest_version_cache["result"] = result
+    return result
 
 
 @api_router.get("/version", response_model=schemas.VersionOut)

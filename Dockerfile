@@ -28,6 +28,10 @@ ARG GIT_SHA=dev
 ARG BUILD_DATE=""
 ENV GIT_SHA=${GIT_SHA}
 ENV BUILD_DATE=${BUILD_DATE}
+# Steht zusaetzlich als OCI-Label im Image selbst, damit sich der SHA auch von
+# aussen ueber die Registry ablesen laesst (Grundlage fuer den
+# "veraltet"-Hinweis) - nicht nur aus dem laufenden Container heraus.
+LABEL org.opencontainers.image.revision=${GIT_SHA}
 
 ENV DATA_DIR=/data
 ENV FRONTEND_DIR=/frontend

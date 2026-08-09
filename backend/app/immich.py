@@ -104,16 +104,20 @@ def list_duplicates(url: str, api_key: str) -> list[dict]:
     return resp.json() or []
 
 
-def fetch_thumbnail(url: str, api_key: str, asset_id: str) -> tuple[bytes, str]:
+def fetch_thumbnail(url: str, api_key: str, asset_id: str, size: str = THUMBNAIL_SIZE) -> tuple[bytes, str]:
     """Lädt ein Vorschaubild und gibt Bytes + Content-Type zurück.
 
     Läuft absichtlich über den Server: Würde der Browser die Bilder direkt bei
     Immich holen, müsste der API-Schlüssel im Frontend liegen.
+
+    `size="preview"` liefert eine groessere, aber immer noch komprimierte
+    Fassung fuer die Lupen-Ansicht - "original" waere bei einem 8064x6048-HEIC-
+    Foto ein zweistelliges MB-Downloaad nur zum Vergleichen, unnoetig langsam.
     """
     resp = requests.get(
         f"{_base(url)}/api/assets/{asset_id}/thumbnail",
         headers={"x-api-key": api_key},
-        params={"size": THUMBNAIL_SIZE},
+        params={"size": size},
         timeout=TIMEOUT,
     )
     resp.raise_for_status()

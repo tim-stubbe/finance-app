@@ -865,6 +865,16 @@ class VersionOut(BaseModel):
     build_date: Optional[str] = None
 
 
+class LatestVersionOut(BaseModel):
+    # False, solange sich der neueste Stand nicht ermitteln laesst (z.B. weil
+    # das GHCR-Paket noch nicht wirklich oeffentlich abrufbar ist) - dann zeigt
+    # das Frontend bewusst gar nichts an, statt etwas zu behaupten.
+    available: bool
+    git_sha: Optional[str] = None
+    git_sha_short: Optional[str] = None
+    error: Optional[str] = None
+
+
 # ---------- Immich (Fotobibliothek) ----------
 class ImmichSettingsOut(BaseModel):
     url: Optional[str] = None

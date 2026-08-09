@@ -1678,13 +1678,18 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .version-watermark {
   margin-top: auto;
   padding: 10px 10px 2px;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  opacity: 0.55;
+  color: var(--text-secondary);
   letter-spacing: 0.02em;
   user-select: text;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.version-watermark.is-outdated { color: var(--warn); }
 
 @media (max-width: 720px) {
   .version-watermark { display: none; }
@@ -1919,4 +1924,60 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   border-radius: var(--radius-sm);
   background: var(--surface);
   border: 1px solid var(--border);
+}
+
+/* ---------- Lupe / Leuchtkasten fuer Immich-Bilder ---------- */
+.photo-zoom {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: zoom-in;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+}
+
+/* Nur bei Hover/Tastaturfokus einblenden - staendig sichtbare Lupen auf
+   jedem Bild waeren bei zwanzig Kacheln pro Seite nur visueller Laerm. */
+.photo-card:hover .photo-zoom,
+.shot-card:hover .photo-zoom,
+.photo-zoom:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.photo-zoom:hover { background: var(--accent-strong); }
+
+.lightbox-box {
+  position: relative;
+  max-width: min(92vw, 1100px);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.lightbox-box img {
+  max-width: 100%;
+  max-height: 82vh;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  background: var(--surface-2);
+}
+
+.lightbox-caption {
+  color: #fff;
+  font-size: 13px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  margin: 0;
 }

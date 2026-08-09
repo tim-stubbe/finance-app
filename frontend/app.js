@@ -1858,12 +1858,45 @@ async function loadSimilarities(groups) {
     try {
       const s = await api(`/immich/duplicates/${g.duplicate_id}/similarity`);
       photoSimilarity.set(g.duplicate_id, s.pairs);
-      // Nur weiterzeichnen, solange dieselbe Seite noch offen ist.
-      if (photoGroupsCache.some(x => x.duplicate_id === g.duplicate_id)) renderPhotoGroups();
     } catch (e) {
       photoSimilarity.set(g.duplicate_id, {});
     }
+    // Nur die eine betroffene Gruppe aktualisieren, NICHT renderPhotoGroups()
+    // (kompletter Neuaufbau der Liste) aufrufen. Das lief bisher bei jedem
+    // einzelnen nachkommenden Ergebnis, oft mehrfach pro Sekunde bei vielen
+    // Gruppen - ein Klick, der genau in diesem Moment stattfand, traf dann
+    // eine Karte, die der Browser gerade durch eine neue ersetzt hatte
+    // ("Element is not attached to the DOM"). Sichtbar als kurzes Aufflackern
+    // ohne jede Wirkung.
+    updateSimilarityBadges(g.duplicate_id);
   }
+}
+
+function updateSimilarityBadges(duplicateId) {
+  const groupEl = document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`);
+  if (!groupEl) return;
+  const keepId = photoKeepChoice.get(duplicateId);
+  const pairs = photoSimilarity.get(duplicateId) || {};
+  groupEl.querySelectorAll(".photo-card").forEach(card => {
+    const assetId = card.dataset.asset;
+    const existing = card.querySelector(".photo-sim");
+    if (assetId === keepId) { existing?.remove(); return; }
+    const pct = pairs[keepId]?.[assetId];
+    if (pct === undefined) { existing?.remove(); return; }
+    const cls = pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low";
+    const title = pct >= 95 ? "praktisch identisch" : pct >= 80 ? "sehr ähnlich" : "nur ähnliche Aufnahme";
+    if (existing) {
+      existing.textContent = `${pct}%`;
+      existing.className = `photo-sim ${cls}`;
+      existing.title = title;
+    } else {
+      const span = document.createElement("span");
+      span.className = `photo-sim ${cls}`;
+      span.title = title;
+      span.textContent = `${pct}%`;
+      card.querySelector(".photo-badge")?.after(span);
+    }
+  });
 }
 
 function renderPhotoGroups() {
@@ -1887,6 +1920,8 @@ function renderPhotoGroups() {
       return `<button type="button" class="photo-card ${keep ? "is-keep" : "is-trash"}"
                 data-group="${esc(g.duplicate_id)}" data-asset="${esc(a.id)}">
         <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+        <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="${esc(a.file_name || "")}"
+              title="Vergrößern">🔍</span>
         <span class="photo-badge">${keep ? "behalten" : "Papierkorb"}</span>${simBadge}
         <span class="photo-meta">
           <span class="photo-name">${esc(a.file_name || "")}</span>
@@ -1929,7 +1964,35 @@ function renderPhotoGroups() {
 }
 
 // Klick auf ein Bild wählt es als das zu behaltende aus.
+// ---------- Lupe: Bild vergrößert anzeigen ----------
+function openLightbox(assetId, caption) {
+  document.getElementById("lightbox-img").src = `/api/immich/thumbnail/${encodeURIComponent(assetId)}?size=preview`;
+  document.getElementById("lightbox-caption").textContent = caption || "";
+  document.getElementById("photo-lightbox").classList.remove("hidden");
+}
+function closeLightbox() {
+  document.getElementById("photo-lightbox").classList.add("hidden");
+  document.getElementById("lightbox-img").src = "";
+}
+document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+document.getElementById("photo-lightbox").addEventListener("click", e => {
+  if (e.target.id === "photo-lightbox") closeLightbox();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeLightbox();
+});
+
+// Vor dem eigentlichen Auswahl-Klick abgefangen: ein Klick auf die Lupe soll
+// das Bild vergrößern, nicht gleichzeitig als "behalten"/"auswählen" zählen.
+function checkZoomClick(e) {
+  const zoom = e.target.closest("[data-zoom]");
+  if (!zoom) return false;
+  openLightbox(zoom.dataset.zoom, zoom.dataset.caption);
+  return true;
+}
+
 document.getElementById("photos-groups").addEventListener("click", async e => {
+  if (checkZoomClick(e)) return;
   const pageTo = e.target.closest("[data-page]")?.dataset.page;
   if (pageTo !== undefined) {
     await loadPhotosTab(parseInt(pageTo, 10));
@@ -1956,7 +2019,7 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
         body: JSON.stringify({ groups: [{ duplicate_id: applyId, keep_ids: [keepId], trash_ids: trashIds }] }),
       });
       toast(`${res.trashed_assets} Aufnahme(n) in den Papierkorb verschoben.`);
-      await loadPhotosTab(photoPage.offset);
+      removePhotoGroupLocally(applyId);
     } catch (err) {
       toast("Fehler: " + err.message);
     }
@@ -1968,12 +2031,31 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
     try {
       await api(`/immich/duplicates/${dismissId}`, { method: "DELETE" });
       toast("Gruppe ausgeblendet, es wurde nichts gelöscht.");
-      await loadPhotosTab(photoPage.offset);
+      removePhotoGroupLocally(dismissId);
     } catch (err) {
       toast("Fehler: " + err.message);
     }
   }
 });
+
+// Entfernt eine erledigte Gruppe nur aus der aktuell angezeigten Seite, statt
+// alle 20 Gruppen neu vom Server zu laden. Der Nutzer will bewusst auf dieser
+// Seite bleiben, bis alle erledigt sind, und selbst entscheiden, wann er
+// "Weitere laden" klickt - nicht nach jeder einzelnen Aktion einen kompletten
+// Seiten-Neuaufbau erleben.
+function removePhotoGroupLocally(duplicateId) {
+  photoGroupsCache = photoGroupsCache.filter(g => g.duplicate_id !== duplicateId);
+  photoKeepChoice.delete(duplicateId);
+  photoSimilarity.delete(duplicateId);
+  document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`)?.remove();
+
+  const summary = document.getElementById("photos-summary");
+  if (photoGroupsCache.length === 0) {
+    summary.innerHTML = `Alle Gruppen dieser Seite sind erledigt. Auf "Weitere laden" klicken für mehr,
+      oder <button type="button" class="link-btn" id="photos-reload-inline">neu laden</button>.`;
+    document.getElementById("photos-reload-inline")?.addEventListener("click", () => loadPhotosTab(photoPage.offset));
+  }
+}
 
 document.getElementById("photos-reload").addEventListener("click", () => loadPhotosTab());
 document.getElementById("photos-goto-settings").addEventListener("click", () => {
@@ -2048,6 +2130,7 @@ function renderShots() {
     const sel = shotSelection.has(a.id);
     return `<button type="button" class="shot-card ${sel ? "is-selected" : ""}" data-shot="${esc(a.id)}">
       <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+      <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="Bildschirmfoto" title="Vergrößern">🔍</span>
       <span class="shot-check">${sel ? "✓" : ""}</span>
       <span class="shot-meta">
         <span>${a.created_at ? fmtDate(a.created_at.slice(0, 10)) : ""}</span>
@@ -2073,6 +2156,7 @@ function renderShots() {
 }
 
 document.getElementById("photos-view-screenshots").addEventListener("click", async e => {
+  if (checkZoomClick(e)) return;
   const months = e.target.closest("[data-shot-months]")?.dataset.shotMonths;
   if (months !== undefined) {
     shotState.months = parseInt(months, 10);
@@ -4129,14 +4213,35 @@ startApp();
 async function loadVersionWatermark() {
   const el = document.getElementById("version-watermark");
   if (!el) return;
+  let v;
   try {
-    const v = await api("/version");
-    let text = v.git_sha === "dev" ? "lokaler Build" : v.git_sha_short;
-    if (v.build_date) text += " · " + relativeTimeDe(new Date(v.build_date));
-    el.textContent = text;
-    el.title = `Version ${v.git_sha}` + (v.build_date ? `, gebaut ${new Date(v.build_date).toLocaleString("de-DE")}` : "");
+    v = await api("/version");
   } catch (e) {
     el.textContent = "";
+    return;
+  }
+  let text = v.git_sha === "dev" ? "lokaler Build" : v.git_sha_short;
+  if (v.build_date) text += " · " + relativeTimeDe(new Date(v.build_date));
+  let title = `Version ${v.git_sha}` + (v.build_date ? `, gebaut ${new Date(v.build_date).toLocaleString("de-DE")}` : "");
+
+  el.innerHTML = `<span>${esc(text)}</span>`;
+  el.title = title;
+  el.classList.remove("is-outdated");
+
+  // Veraltet-Hinweis: nur anzeigen, wenn sich der neueste veroeffentlichte
+  // Stand wirklich ermitteln liess (setzt ein oeffentliches GHCR-Paket
+  // voraus) UND er vom laufenden Stand abweicht. Laesst er sich nicht
+  // ermitteln, bleibt die Zeile wie bisher - lieber nichts zeigen als etwas
+  // Falsches behaupten.
+  if (v.git_sha === "dev") return;
+  try {
+    const latest = await api("/version/latest");
+    if (latest.available && latest.git_sha !== v.git_sha) {
+      el.classList.add("is-outdated");
+      el.innerHTML += ` <span title="Neuere Version veröffentlicht (${esc(latest.git_sha_short)}) – wartet auf Watchtower oder manuellen Neustart">⚠️ veraltet</span>`;
+    }
+  } catch (e) {
+    // Stumm bleiben - der Vergleich ist ein Nice-to-have, kein Kernfeature.
   }
 }
 
