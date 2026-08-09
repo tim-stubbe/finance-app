@@ -162,6 +162,15 @@ class Settings(Base):
     # Ordner-Wildwuchs ("Strom" vs. "Stromrechnung" vs. "Energie").
     file_sort_categories = Column(String, nullable=True, default="Behoerde,Bericht,Rechnung,Sonstiges,Vertrag")
     file_sort_enabled = Column(Boolean, nullable=False, default=False)
+    # Innerhalb dieser einen Kategorie zusätzlich nach Anbieter/Absender in
+    # Unterordner sortieren (z.B. Rechnung/IKEA, Rechnung/McDonald's) - anders
+    # als bei den Hauptkategorien hier bewusst frei, weil Anbieternamen naturgemäß
+    # nicht vorhersehbar aufzählbar sind.
+    file_sort_subfolder_category = Column(String, nullable=True, default="Rechnung")
+    # Eigenes Modell für die Kategorisierung, unabhängig vom globalen
+    # Standardmodell - kleine Modelle unterscheiden sich hier stark in der
+    # Zuverlässigkeit (siehe Kommentar in file_sort.py). Leer = Standardmodell.
+    file_sort_model = Column(String, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)

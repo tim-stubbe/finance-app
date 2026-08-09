@@ -1256,12 +1256,16 @@ class FileSortSettingsUpdate(BaseModel):
     source_path: str
     target_path: str
     categories: str
+    subfolder_category: Optional[str] = None
+    model: Optional[str] = None
 
 
 class FileSortSettingsOut(BaseModel):
     source_path: Optional[str] = None
     target_path: Optional[str] = None
     categories: Optional[str] = None
+    subfolder_category: Optional[str] = None
+    model: Optional[str] = None
 
 
 class FileSortLogOut(BaseModel):
@@ -1279,6 +1283,7 @@ class FileSortRunResult(BaseModel):
     moved: int
     skipped: int
     error: Optional[str] = None
+    receipts_added: int = 0
 
 
 # ---------- E-Mail-Belege ----------

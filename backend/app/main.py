@@ -136,6 +136,12 @@ ensure_columns("settings", {
     "file_sort_enabled": "BOOLEAN DEFAULT 0",
 })
 ensure_columns("settings", {
+    "file_sort_subfolder_category": "VARCHAR DEFAULT 'Rechnung'",
+})
+ensure_columns("settings", {
+    "file_sort_model": "VARCHAR",
+})
+ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
     "imap_host": "VARCHAR",
     "imap_port": "INTEGER DEFAULT 993",
@@ -1766,75 +1772,12 @@ def get_fx_rate(to: str = "CHF"):
 
 
 # ---------------- E-Mail-Belege ----------------
-MAIL_PARSE_PROMPT = (
-    "Du bekommst den Text einer Rechnung oder eines Belegs. Nenne ausschliesslich "
-    "das Belegdatum und den Gesamtbetrag. Antworte NUR mit einem JSON-Block:\n"
-    "```json\n{\"datum\": \"JJJJ-MM-TT\", \"betrag\": 12.34}\n```\n"
-    "Wenn du eines der beiden nicht sicher erkennst, schreibe null. Rate nicht."
-)
-
-
 def _parse_receipt(settings, content: bytes, filename: str) -> tuple[date | None, float | None, str | None]:
-    """Liest Datum und Betrag aus einem Beleg.
-
-    Nutzt dieselbe Auswertung wie der Beleg-Chat (document_extract + Ollama),
-    fragt aber gezielt nur nach den zwei Feldern, die für die Zuordnung zu
-    einer Buchung nötig sind. Gibt (datum, betrag, fehler) zurück - ein
-    Fehlschlag ist kein Drama, der Anhang landet dann nur in der Sichtliste
-    statt automatisch zugeordnet zu werden.
-    """
-    if not settings.ollama_url or not settings.ollama_model:
-        return None, None, "Kein Ollama-Server eingerichtet"
-
-    text, images = None, []
-    try:
-        if filename.lower().endswith(".pdf"):
-            text, images = document_extract.extract_pdf(content)
-        else:
-            images = [base64.b64encode(content).decode()]
-    except Exception as e:
-        return None, None, f"Datei nicht lesbar: {e}"
-
-    nachricht = {"role": "user", "content": MAIL_PARSE_PROMPT}
-    if text:
-        # Echter Text im PDF: an das normale Textmodell, das ist deutlich
-        # zuverlässiger als ein Bildmodell auf einem gerenderten Dokument.
-        nachricht["content"] += f"\n\nBelegtext:\n{text[:6000]}"
-        modell = settings.ollama_model
-    elif images:
-        nachricht["images"] = images[:1]
-        modell = settings.beleg_chat_model or settings.ollama_model
-    else:
-        return None, None, "Weder Text noch Bild aus der Datei gewinnbar"
-
-    try:
-        antwort = ollama_client.chat(settings.ollama_url, modell, [nachricht], timeout=180)
-    except Exception as e:
-        return None, None, f"KI nicht erreichbar: {e}"
-
-    treffer = re.search(r"```json\s*(\{.*?\})\s*```", antwort, re.DOTALL)
-    if not treffer:
-        treffer = re.search(r"(\{[^{}]*\"betrag\"[^{}]*\})", antwort, re.DOTALL)
-    if not treffer:
-        return None, None, "Kein verwertbares Ergebnis von der KI"
-
-    try:
-        daten = json.loads(treffer.group(1))
-    except Exception:
-        return None, None, "Antwort der KI war kein gültiges JSON"
-
-    betrag = daten.get("betrag")
-    try:
-        betrag = float(betrag) if betrag is not None else None
-    except (TypeError, ValueError):
-        betrag = None
-    datum = None
-    if daten.get("datum"):
-        try:
-            datum = date.fromisoformat(str(daten["datum"])[:10])
-        except ValueError:
-            datum = None
-    return datum, betrag, None
+    """Dünner Wrapper um document_extract.parse_receipt_fields - die gemeinsam
+    mit der Datei-Sortierung genutzte Beleg-Auswertung (siehe dort)."""
+    return document_extract.parse_receipt_fields(
+        settings.ollama_url, settings.ollama_model, settings.beleg_chat_model, content, filename,
+    )
 
 
 def _run_mail_sync(db: Session, space_id: int) -> dict:
@@ -3317,6 +3260,8 @@ def get_file_sort_settings(db: Session = Depends(get_db)):
         source_path=settings.file_sort_source_path,
         target_path=settings.file_sort_target_path,
         categories=settings.file_sort_categories,
+        subfolder_category=settings.file_sort_subfolder_category,
+        model=settings.file_sort_model,
     )
 
 
@@ -3326,12 +3271,16 @@ def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session 
     settings.file_sort_source_path = data.source_path
     settings.file_sort_target_path = data.target_path
     settings.file_sort_categories = data.categories
+    settings.file_sort_subfolder_category = data.subfolder_category or None
+    settings.file_sort_model = data.model or None
     settings.file_sort_enabled = True
     db.commit()
     return schemas.FileSortSettingsOut(
         source_path=settings.file_sort_source_path,
         target_path=settings.file_sort_target_path,
         categories=settings.file_sort_categories,
+        subfolder_category=settings.file_sort_subfolder_category,
+        model=settings.file_sort_model,
     )
 
 
@@ -3346,11 +3295,49 @@ def get_file_sort_log(limit: int = 50, db: Session = Depends(get_db)):
     )
 
 
+def _create_mail_attachments_from_receipts(db: Session, settings: models.Settings, receipts: list[dict]) -> int:
+    """Legt für automatisch als Rechnung einsortierte Dateien zusätzlich einen
+    Eintrag im bestehenden Beleg-Eingang an (gleiche Tabelle/Oberfläche wie
+    beim E-Mail-Import) - Datum/Betrag werden vorausgefüllt, die eigentliche
+    Zuordnung zu einer Buchung bleibt aber wie überall in dieser App eine
+    bewusste Entscheidung des Nutzers, kein automatisches Zubuchen."""
+    added = 0
+    for r in receipts:
+        message_id = f"file-sort:{r['filename']}"
+        vorhanden = db.query(models.MailAttachment).filter(
+            models.MailAttachment.message_id == message_id,
+            models.MailAttachment.filename == r["filename"],
+        ).first()
+        if vorhanden:
+            continue
+
+        endung = os.path.splitext(r["filename"])[1]
+        speichername = f"filesort_{uuid.uuid4().hex}{endung}"
+        with open(os.path.join(UPLOAD_DIR, speichername), "wb") as f:
+            f.write(r["content"])
+
+        datum, betrag, fehler = document_extract.parse_receipt_fields(
+            settings.ollama_url, settings.ollama_model, settings.beleg_chat_model,
+            r["content"], r["filename"],
+        )
+        db.add(models.MailAttachment(
+            message_id=message_id, filename=r["filename"], stored_filename=speichername,
+            content_type="application/pdf", size_bytes=len(r["content"]),
+            sender="Datei-Sortierung", subject=r["rel"],
+            parsed_amount=betrag, parsed_date=datum, parse_error=fehler,
+        ))
+        db.commit()
+        added += 1
+    return added
+
+
 @api_router.post("/file-sort/run", response_model=schemas.FileSortRunResult)
 def run_file_sort(db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
     result = file_sort.run(db, settings)
-    return schemas.FileSortRunResult(**result)
+    receipts = result.pop("receipts", [])
+    added = _create_mail_attachments_from_receipts(db, settings, receipts) if receipts else 0
+    return schemas.FileSortRunResult(**result, receipts_added=added)
 
 
 # ---------------- Dashboard ----------------
@@ -3901,7 +3888,10 @@ def _scheduled_file_sort():
         if not settings.file_sort_enabled or not settings.file_sort_source_path:
             return
         try:
-            file_sort.run(db, settings)
+            result = file_sort.run(db, settings)
+            receipts = result.get("receipts") or []
+            if receipts:
+                _create_mail_attachments_from_receipts(db, settings, receipts)
         except Exception:
             pass
     finally:

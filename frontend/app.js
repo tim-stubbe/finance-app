@@ -3170,6 +3170,8 @@ async function loadFileSortSettings() {
   document.getElementById("file-sort-source").value = s.source_path || "";
   document.getElementById("file-sort-target").value = s.target_path || "";
   document.getElementById("file-sort-categories").value = s.categories || "";
+  document.getElementById("file-sort-subfolder-category").value = s.subfolder_category || "";
+  document.getElementById("file-sort-model").value = s.model || "";
 }
 
 document.getElementById("file-sort-settings-form").addEventListener("submit", async e => {
@@ -3178,6 +3180,8 @@ document.getElementById("file-sort-settings-form").addEventListener("submit", as
     source_path: document.getElementById("file-sort-source").value.trim(),
     target_path: document.getElementById("file-sort-target").value.trim(),
     categories: document.getElementById("file-sort-categories").value.trim(),
+    subfolder_category: document.getElementById("file-sort-subfolder-category").value.trim(),
+    model: document.getElementById("file-sort-model").value.trim(),
   };
   if (!payload.source_path || !payload.target_path || !payload.categories) {
     alert("Bitte Eingangsordner, Zielordner und mindestens eine Kategorie angeben.");
@@ -3224,9 +3228,10 @@ document.getElementById("file-sort-run-now").addEventListener("click", async () 
   statusEl.textContent = "Läuft …";
   try {
     const r = await api("/file-sort/run", { method: "POST" });
+    const belegHinweis = r.receipts_added ? ` ${r.receipts_added} davon zusätzlich in den Beleg-Eingang übernommen.` : "";
     statusEl.textContent = r.error
       ? `Fehler: ${r.error}`
-      : `${r.processed} geprüft, ${r.moved} einsortiert, ${r.skipped} zur manuellen Prüfung übersprungen.`;
+      : `${r.processed} geprüft, ${r.moved} einsortiert, ${r.skipped} zur manuellen Prüfung übersprungen.${belegHinweis}`;
   } catch (e) {
     statusEl.textContent = "Fehler: " + e.message;
   }

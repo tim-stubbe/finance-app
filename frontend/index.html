@@ -1109,6 +1109,22 @@
           <label class="wide">Kategorien (Komma-getrennt, entsprechen Unterordnern im Zielordner)
             <input type="text" id="file-sort-categories" placeholder="Behoerde,Bericht,Rechnung,Sonstiges,Vertrag">
           </label>
+          <label>Zusätzlich nach Anbieter sortieren, innerhalb von
+            <input type="text" id="file-sort-subfolder-category" placeholder="Rechnung">
+          </label>
+          <label>Modell für die Einordnung (leer = Standardmodell)
+            <input type="text" id="file-sort-model" placeholder="z.B. qwen3:4b-instruct">
+          </label>
+          <p class="page-sub wide">
+            Kleine Modelle unterscheiden sich hier stark in der Zuverlässigkeit - falls vieles
+            falsch (z.B. immer in dieselbe Kategorie) einsortiert wird, hilft oft ein anderes
+            Modell mehr als eine andere Formulierung.
+          </p>
+          <p class="page-sub wide">
+            Nur bei dieser einen Kategorie wird zusätzlich ein Unterordner je Anbieter angelegt
+            (z.B. Rechnung/IKEA, Rechnung/McDonald's) - erkannte Rechnungen landen außerdem
+            automatisch im Beleg-Eingang (Buchungen-Tab) zur Zuordnung.
+          </p>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="file-sort-run-now" class="btn-ghost">Jetzt ausführen</button>
