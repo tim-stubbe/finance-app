@@ -4043,8 +4043,44 @@ async function loadHubTab() {
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div><h3>Nettovermögen</h3><p>${eur(nw.total)}</p></div>
       </button>`;
+    if (nw.debts_total > 0) {
+      cardsEl.innerHTML += `
+        <button type="button" class="card card-neg" data-hub-jump="debts">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5h16M4 12h16M4 17.5h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div><h3>Restschulden</h3><p class="neg">${eur(nw.debts_total)}</p></div>
+        </button>`;
+    }
   } catch (e) {
     cardsEl.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+  }
+
+  // Nächstes offenes Ziel - frühestes Zieldatum zuerst, sonst (kein Ziel hat
+  // ein Datum) das am weitesten fortgeschrittene automatisch messbare Ziel.
+  const goalPanel = document.getElementById("hub-goal-panel");
+  const goalBody = document.getElementById("hub-goal-body");
+  try {
+    const goalsList = await api("/goals");
+    const open = goalsList.filter(g => g.status === "open");
+    const withDate = open.filter(g => g.target_date).sort((a, b) => a.target_date.localeCompare(b.target_date));
+    const withProgress = open.filter(g => g.progress_percent != null).sort((a, b) => b.progress_percent - a.progress_percent);
+    const next = withDate[0] || withProgress[0];
+    if (next) {
+      goalPanel.classList.remove("hidden");
+      const pct = next.progress_percent != null ? Math.min(100, next.progress_percent) : null;
+      const dateInfo = next.target_date ? `Zieldatum ${fmtDate(next.target_date)}` : "";
+      goalBody.innerHTML = `<button type="button" class="hub-goal-row" data-hub-jump="goals">
+        <div class="hub-goal-row-head">
+          <strong>${esc(next.title)}</strong>
+          <span class="page-sub">${dateInfo}</span>
+        </div>
+        ${pct != null ? `<div class="budget-track"><div class="budget-fill ${pct >= 50 ? "ok" : "warn"}" style="width:${pct}%"></div></div>
+          <span class="page-sub">${pct.toFixed(0)}% erreicht</span>` : ""}
+      </button>`;
+    } else {
+      goalPanel.classList.add("hidden");
+    }
+  } catch {
+    goalPanel.classList.add("hidden");
   }
 
   const body = document.getElementById("hub-services-body");
