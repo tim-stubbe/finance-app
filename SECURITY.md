@@ -23,16 +23,20 @@ schnell wie möglich behoben.
 
 ## Eine Schwachstelle melden
 
-Das Quell-Repository ist privat. Sollte trotzdem jemand (z. B. über das
-öffentliche Docker-Image auf `ghcr.io`) auf ein Sicherheitsproblem stoßen:
+Wer hier ein Sicherheitsproblem findet:
 
 - Am liebsten über **GitHub Security Advisories** dieses Repos
   (Reiter „Security" → „Report a vulnerability") – das erzeugt einen
-  privaten Meldekanal, sichtbar nur für den Repo-Inhaber.
+  privaten Meldekanal, sichtbar nur für den Repo-Inhaber, nicht öffentlich
+  einsehbar.
 - Alternativ: eine E-Mail an die im GitHub-Profil hinterlegte Adresse.
 
-Bitte **keine öffentlichen Issues** für Sicherheitsfragen – auch wenn das
-Repo aktuell privat ist, falls sich das je ändert.
+Meldungen werden in der Regel innerhalb von **24 Stunden** gesichtet. Das ist
+eine realistische Zusage von einer Einzelperson, kein Firmen-SLA – wie lange
+ein tatsächlicher Fix dann dauert, hängt vom Umfang des Problems ab.
+
+Bitte **keine öffentlichen Issues** für Sicherheitsfragen, damit eine Lücke
+nicht publik wird, bevor ein Fix da ist.
 
 ## Was explizit außerhalb des Rahmens liegt
 

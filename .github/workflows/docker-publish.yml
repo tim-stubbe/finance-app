@@ -1,7 +1,8 @@
 name: Docker-Image bauen und veröffentlichen
 
 # Läuft bei jedem Push auf main - baut das Image aus dem bestehenden Dockerfile
-# und lädt es in die private GitHub Container Registry (ghcr.io). TrueNAS zieht
+# und lädt es in die GitHub Container Registry (ghcr.io, öffentlich lesbar,
+# damit Watchtower und andere anonym pullen können). TrueNAS zieht
 # das neue Image dann über Watchtower automatisch (siehe Deploy-Anleitung).
 on:
   push:

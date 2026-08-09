@@ -181,9 +181,8 @@ veröffentlicht, aber noch nicht angekommen ist.
   Docker-Basis-Image und GitHub Actions).
 - Externe Skript-Einbindungen (Chart.js) tragen eine Subresource-Integrity-Prüfung.
 - Datei-Endpunkte (Belege, Backups) sind gegen Pfad-Manipulation abgesichert.
-- Gefundene Sicherheitslücken bitte **nicht** als öffentliches Issue melden
-  (Repository ist zwar privat, aber falls das je geändert wird) – siehe
-  [SECURITY.md](SECURITY.md).
+- Gefundene Sicherheitslücken bitte **nicht** als öffentliches Issue melden,
+  sondern über den privaten Meldeweg – siehe [SECURITY.md](SECURITY.md).
 
 ## Zugriffsschutz
 
@@ -198,4 +197,6 @@ Bankverbindungen nutzen.
 
 ## Lizenz
 
-Privates Projekt, keine Lizenz vergeben. Alle Rechte vorbehalten.
+[Apache License 2.0](LICENSE) © 2026 Tim Stubbe. Nutzung, Änderung und
+Weitergabe sind damit ausdrücklich erlaubt – Namensnennung/Copyright-Hinweis
+muss dabei erhalten bleiben.
