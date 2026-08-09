@@ -153,6 +153,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "goals") loadGoalsTab();
     if (btn.dataset.tab === "ai") loadAiTab();
     if (btn.dataset.tab === "trips") loadTrips();
+    if (btn.dataset.tab === "photos") loadPhotosTab();
     if (btn.dataset.tab === "settings") loadSettingsTab();
     if (btn.dataset.tab === "profile") loadProfile();
     loadGlobalTopbar();
@@ -1773,6 +1774,190 @@ document.getElementById("profile-form").addEventListener("submit", async e => {
   toast("Profil gespeichert.");
 });
 
+// ================= FOTOS (IMMICH) =================
+// Merkt sich je Duplikatgruppe, welches Bild behalten werden soll.
+// Vorbelegt mit Immichs eigenem Vorschlag.
+const photoKeepChoice = new Map();
+let photoGroupsCache = [];
+
+function formatBytes(n) {
+  if (!n) return "";
+  const mb = n / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+}
+
+async function loadPhotosTab() {
+  const hint = document.getElementById("photos-setup-hint");
+  const hintText = document.getElementById("photos-setup-text");
+  const summary = document.getElementById("photos-summary");
+  const wrap = document.getElementById("photos-groups");
+
+  const s = await api("/settings/immich");
+  if (!s.url || !s.api_key_set) {
+    hint.classList.remove("hidden");
+    summary.classList.add("hidden");
+    wrap.innerHTML = "";
+    hintText.textContent = !s.url && !s.api_key_set
+      ? "Es fehlen Server-Adresse und API-Schlüssel."
+      : (!s.url ? "Es fehlt die Server-Adresse." : "Es fehlt der API-Schlüssel.");
+    return;
+  }
+  hint.classList.add("hidden");
+
+  wrap.innerHTML = `<p class="page-sub">Suche doppelte Aufnahmen …</p>`;
+  let data;
+  try {
+    data = await api("/immich/duplicates");
+  } catch (e) {
+    summary.classList.add("hidden");
+    wrap.innerHTML = `<div class="panel"><p class="page-sub">${esc(e.message)}</p></div>`;
+    return;
+  }
+
+  photoGroupsCache = data.groups;
+  photoKeepChoice.clear();
+  data.groups.forEach(g => {
+    // Immichs Vorschlag übernehmen; falls keiner kommt, das erste Bild.
+    const suggested = g.suggested_keep_ids.find(id => g.assets.some(a => a.id === id));
+    photoKeepChoice.set(g.duplicate_id, suggested || g.assets[0]?.id);
+  });
+
+  summary.classList.remove("hidden");
+  if (data.total_groups === 0) {
+    summary.innerHTML = `<strong>Keine Duplikate gefunden.</strong> Deine Bibliothek ist sauber.`;
+    wrap.innerHTML = "";
+    return;
+  }
+  summary.innerHTML = `<strong>${data.total_groups} Gruppe${data.total_groups === 1 ? "" : "n"}</strong>
+    mit insgesamt ${data.total_assets} Aufnahmen. Wähle je Gruppe das Bild, das bleiben soll –
+    die übrigen wandern in Immichs Papierkorb und sind dort wiederherstellbar.`;
+
+  renderPhotoGroups();
+}
+
+function renderPhotoGroups() {
+  const wrap = document.getElementById("photos-groups");
+  wrap.innerHTML = photoGroupsCache.map(g => {
+    const keepId = photoKeepChoice.get(g.duplicate_id);
+    const cards = g.assets.map(a => {
+      const keep = a.id === keepId;
+      const dims = a.width && a.height ? `${a.width}×${a.height}` : "";
+      const meta = [dims, formatBytes(a.size_bytes)].filter(Boolean).join(" · ");
+      return `<button type="button" class="photo-card ${keep ? "is-keep" : "is-trash"}"
+                data-group="${esc(g.duplicate_id)}" data-asset="${esc(a.id)}">
+        <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+        <span class="photo-badge">${keep ? "behalten" : "Papierkorb"}</span>
+        <span class="photo-meta">
+          <span class="photo-name">${esc(a.file_name || "")}</span>
+          ${meta ? `<span>${esc(meta)}</span>` : ""}
+          ${a.created_at ? `<span>${fmtDate(a.created_at.slice(0, 10))}</span>` : ""}
+        </span>
+      </button>`;
+    }).join("");
+
+    const trashCount = g.assets.length - 1;
+    return `<div class="panel photo-group" data-group="${esc(g.duplicate_id)}">
+      <div class="photo-group-head">
+        <h3 class="panel-title">${g.assets.length} ähnliche Aufnahmen</h3>
+        <div class="photo-group-actions">
+          <button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
+          <button type="button" class="btn-primary" data-apply="${esc(g.duplicate_id)}">
+            ${trashCount} in den Papierkorb
+          </button>
+        </div>
+      </div>
+      <div class="photo-strip">${cards}</div>
+    </div>`;
+  }).join("");
+}
+
+// Klick auf ein Bild wählt es als das zu behaltende aus.
+document.getElementById("photos-groups").addEventListener("click", async e => {
+  const card = e.target.closest(".photo-card");
+  if (card) {
+    photoKeepChoice.set(card.dataset.group, card.dataset.asset);
+    renderPhotoGroups();
+    return;
+  }
+
+  const applyId = e.target.closest("[data-apply]")?.dataset.apply;
+  if (applyId) {
+    const group = photoGroupsCache.find(g => g.duplicate_id === applyId);
+    const keepId = photoKeepChoice.get(applyId);
+    const trashIds = group.assets.filter(a => a.id !== keepId).map(a => a.id);
+    if (!confirm(`${trashIds.length} Aufnahme(n) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+    try {
+      const res = await api("/immich/duplicates/resolve", {
+        method: "POST",
+        body: JSON.stringify({ groups: [{ duplicate_id: applyId, keep_ids: [keepId], trash_ids: trashIds }] }),
+      });
+      toast(`${res.trashed_assets} Aufnahme(n) in den Papierkorb verschoben.`);
+      await loadPhotosTab();
+    } catch (err) {
+      toast("Fehler: " + err.message);
+    }
+    return;
+  }
+
+  const dismissId = e.target.closest("[data-dismiss]")?.dataset.dismiss;
+  if (dismissId) {
+    try {
+      await api(`/immich/duplicates/${dismissId}`, { method: "DELETE" });
+      toast("Gruppe ausgeblendet, es wurde nichts gelöscht.");
+      await loadPhotosTab();
+    } catch (err) {
+      toast("Fehler: " + err.message);
+    }
+  }
+});
+
+document.getElementById("photos-reload").addEventListener("click", () => loadPhotosTab());
+document.getElementById("photos-goto-settings").addEventListener("click", () => {
+  document.querySelector('.nav-btn[data-tab="settings"]').click();
+});
+
+// ---------- Immich-Einstellungen ----------
+async function loadImmichSettings() {
+  const s = await api("/settings/immich");
+  document.getElementById("immich-url").value = s.url || "";
+  document.getElementById("immich-remove").classList.toggle("hidden", !s.url && !s.api_key_set);
+  document.getElementById("immich-api-key").placeholder = s.api_key_set
+    ? "gespeichert – leer lassen behält den bisherigen"
+    : "wird verschlüsselt gespeichert";
+}
+
+document.getElementById("immich-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const url = document.getElementById("immich-url").value.trim();
+  if (!url) return;
+  const keyInput = document.getElementById("immich-api-key");
+  const body = { url };
+  if (keyInput.value.trim()) body.api_key = keyInput.value.trim();
+  await api("/settings/immich", { method: "PUT", body: JSON.stringify(body) });
+  keyInput.value = "";
+  toast("Immich-Einstellungen gespeichert.");
+  await loadImmichSettings();
+  refreshIntegrationBadge();
+});
+
+document.getElementById("immich-test").addEventListener("click", async () => {
+  const statusEl = document.getElementById("immich-status");
+  statusEl.textContent = "Teste Verbindung …";
+  const r = await api("/immich/test", { method: "POST" });
+  statusEl.textContent = r.ok
+    ? `✓ Verbunden mit Immich ${r.version} – ${r.duplicate_groups} Duplikatgruppe(n) gefunden.`
+    : `✗ ${r.error}`;
+});
+
+document.getElementById("immich-remove").addEventListener("click", async () => {
+  if (!confirm("Immich-Verbindung entfernen?")) return;
+  await api("/settings/immich", { method: "DELETE" });
+  document.getElementById("immich-status").textContent = "";
+  toast("Immich-Verbindung entfernt.");
+  await loadImmichSettings();
+  refreshIntegrationBadge();
+});
+
 // ================= VERMÖGENSVERGLEICH =================
 let benchmarkChart = null;
 
@@ -2636,6 +2821,7 @@ async function loadSettingsTab() {
   await loadSyncSchedule();
   await loadAutoCategorizeSettings();
   await loadWebSearchSettings();
+  await loadImmichSettings();
   await loadNotificationSettings();
   await loadCallSettings();
   await loadBackupSettings();

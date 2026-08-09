@@ -1,0 +1,149 @@
+"""Immich-Anbindung - Aufräum-Vorschläge für die eigene Fotobibliothek.
+
+Bewusst als reine Anbindung gebaut, nicht als Nachbau: Immich erkennt Duplikate
+bereits selbst über sein eigenes Machine-Learning-Modell. Hier wird dieses
+Ergebnis nur abgeholt, aufbereitet angezeigt und - nach ausdrücklicher
+Bestätigung durch den Nutzer - über die Immich-API angewendet.
+
+Zwei Sicherheitsentscheidungen, die bewusst so getroffen sind:
+
+1. **Niemals ungefragt löschen.** Es gibt hier keine Funktion, die ohne
+   Zutun des Nutzers Bilder entfernt. Die Auswahl trifft immer der Mensch.
+2. **Papierkorb statt endgültig.** Ausgewählte Bilder wandern in Immichs
+   eigenen Papierkorb und lassen sich dort zurückholen. `force=true` (das in
+   Immich am Papierkorb vorbei endgültig löscht) wird in diesem Modul nirgends
+   gesetzt - das ist Absicht, nicht Vergesslichkeit.
+
+Der API-Schlüssel verlässt niemals den Server: Vorschaubilder holt das Backend
+und reicht sie an den Browser weiter (siehe `fetch_thumbnail`), damit der
+Schlüssel nicht im Frontend landen muss.
+"""
+
+import requests
+
+TIMEOUT = 20
+# Immichs Vorschaubild-Groessen. "thumbnail" reicht fuer die Kachelansicht und
+# haelt die Uebertragung klein - bei Duplikatgruppen werden viele Bilder
+# gleichzeitig geladen.
+THUMBNAIL_SIZE = "thumbnail"
+
+
+def _base(url: str) -> str:
+    """Normalisiert die Server-Adresse. Der Nutzer trägt in den Einstellungen
+    typischerweise die Adresse ein, unter der er Immich im Browser aufruft -
+    mit oder ohne abschließenden Schrägstrich, mit oder ohne /api."""
+    url = (url or "").strip().rstrip("/")
+    if url.endswith("/api"):
+        url = url[:-4]
+    return url
+
+
+def _headers(api_key: str) -> dict:
+    return {"x-api-key": api_key, "Accept": "application/json"}
+
+
+def server_version(url: str) -> dict:
+    """Erreichbarkeitsprüfung. Braucht bewusst keinen Schlüssel - so lässt sich
+    unterscheiden, ob der Server nicht erreichbar oder nur der Schlüssel falsch
+    ist. Genau diese Unterscheidung fehlt sonst bei der Fehlersuche."""
+    resp = requests.get(f"{_base(url)}/api/server/version", timeout=TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def check_connection(url: str, api_key: str) -> dict:
+    """Prüft Erreichbarkeit UND Schlüssel und liefert eine sprechende Meldung."""
+    version = server_version(url)
+    resp = requests.get(
+        f"{_base(url)}/api/duplicates", headers=_headers(api_key), timeout=TIMEOUT
+    )
+    if resp.status_code in (401, 403):
+        raise ValueError(
+            "Server erreichbar, aber der API-Schlüssel wurde abgelehnt. "
+            "Stimmt der Schlüssel, und hat er Rechte für Bilder und Duplikate?"
+        )
+    resp.raise_for_status()
+    v = version
+    return {
+        "version": f"{v.get('major')}.{v.get('minor')}.{v.get('patch')}",
+        "duplicate_groups": len(resp.json() or []),
+    }
+
+
+def list_duplicates(url: str, api_key: str) -> list[dict]:
+    """Holt die von Immich erkannten Duplikatgruppen.
+
+    Antwortformat je Gruppe: `duplicateId`, `assets` (vollständige Asset-Objekte)
+    und `suggestedKeepAssetIds` - Immichs eigener Vorschlag, welche Bilder
+    behalten werden sollten. Dieser Vorschlag wird übernommen und dem Nutzer als
+    Vorauswahl angeboten, statt eine eigene Heuristik zu erfinden.
+    """
+    resp = requests.get(
+        f"{_base(url)}/api/duplicates", headers=_headers(api_key), timeout=TIMEOUT
+    )
+    resp.raise_for_status()
+    return resp.json() or []
+
+
+def fetch_thumbnail(url: str, api_key: str, asset_id: str) -> tuple[bytes, str]:
+    """Lädt ein Vorschaubild und gibt Bytes + Content-Type zurück.
+
+    Läuft absichtlich über den Server: Würde der Browser die Bilder direkt bei
+    Immich holen, müsste der API-Schlüssel im Frontend liegen.
+    """
+    resp = requests.get(
+        f"{_base(url)}/api/assets/{asset_id}/thumbnail",
+        headers={"x-api-key": api_key},
+        params={"size": THUMBNAIL_SIZE},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "image/jpeg")
+
+
+def resolve_duplicates(url: str, api_key: str, groups: list[dict]) -> list[dict]:
+    """Wendet die Auswahl des Nutzers an: markierte Bilder in den Papierkorb,
+    die Gruppe gilt danach als erledigt.
+
+    `groups` je Eintrag: `duplicateId`, `keepAssetIds`, `trashAssetIds`.
+    Immichs eigener Endpunkt erledigt beides in einem Schritt - damit kann kein
+    Zwischenzustand entstehen, in dem Bilder schon weg sind, die Gruppe aber
+    noch offen ist.
+    """
+    resp = requests.post(
+        f"{_base(url)}/api/duplicates/resolve",
+        headers=_headers(api_key),
+        json={"groups": groups},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.json() or []
+
+
+def dismiss_duplicate(url: str, api_key: str, duplicate_id: str) -> None:
+    """Blendet eine Gruppe aus, ohne irgendein Bild anzufassen - für den Fall,
+    dass es gar keine echten Duplikate sind (z.B. bewusst mehrere ähnliche
+    Aufnahmen)."""
+    resp = requests.delete(
+        f"{_base(url)}/api/duplicates/{duplicate_id}",
+        headers=_headers(api_key),
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+
+
+def asset_summary(asset: dict) -> dict:
+    """Reduziert ein Immich-Asset auf das, was für die Entscheidung
+    „welches behalte ich" wirklich zählt - Dateigröße und Auflösung sind die
+    beiden Kriterien, nach denen man Duplikate normalerweise auswählt."""
+    exif = asset.get("exifInfo") or {}
+    return {
+        "id": asset.get("id"),
+        "file_name": asset.get("originalFileName"),
+        "type": asset.get("type"),
+        "created_at": asset.get("fileCreatedAt"),
+        "size_bytes": exif.get("fileSizeInByte"),
+        "width": exif.get("exifImageWidth"),
+        "height": exif.get("exifImageHeight"),
+        "camera": " ".join(x for x in [exif.get("make"), exif.get("model")] if x) or None,
+    }

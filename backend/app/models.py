@@ -124,6 +124,10 @@ class Settings(Base):
     last_budget_alert_month = Column(String, nullable=True)
     # Für den Vermögensvergleich mit der eigenen Altersgruppe. Nur das Jahr.
     birth_year = Column(Integer, nullable=True)
+    # --- Immich (Fotobibliothek) ---
+    # URL im Klartext (kein Geheimnis), Schlüssel verschlüsselt wie alle anderen.
+    immich_url = Column(String, nullable=True)
+    immich_api_key_encrypted = Column(String, nullable=True)
 
 
 class BasiszinsRate(Base):

@@ -1678,3 +1678,96 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 @media (max-width: 720px) {
   .version-watermark { display: none; }
 }
+
+/* ---------- Fotos / Immich-Duplikate ---------- */
+.photos-summary {
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+}
+
+.photo-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.photo-group-head .panel-title { margin: 0; }
+.photo-group-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Waagrecht scrollbar, damit auch Gruppen mit vielen Aufnahmen nicht die
+   Seite sprengen. */
+.photo-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.photo-card {
+  flex: 0 0 190px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease-spring);
+}
+
+.photo-card:hover { transform: translateY(-2px); }
+.photo-card img { width: 100%; height: 150px; object-fit: cover; display: block; }
+
+/* Die Auswahl traegt neben der Farbe auch ein Textkuerzel ("behalten" /
+   "Papierkorb") - ohne das waere die Entscheidung rein farbcodiert. */
+.photo-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.photo-card.is-keep { border-color: var(--pos); }
+.photo-card.is-keep .photo-badge { background: var(--pos); }
+.photo-card.is-trash { border-color: var(--border); opacity: 0.62; }
+.photo-card.is-trash .photo-badge { background: var(--neg); }
+.photo-card.is-trash:hover { opacity: 0.85; }
+
+.photo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.photo-name {
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

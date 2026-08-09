@@ -83,6 +83,10 @@
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 3L13.8 8.2L19 10L13.8 11.8L12 17L10.2 11.8L5 10L10.2 8.2L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M19 14L19.8 16.2L22 17L19.8 17.8L19 20L18.2 17.8L16 17L18.2 16.2L19 14Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
         <span>KI-Assistent</span>
       </button>
+      <button class="nav-btn" data-tab="photos">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="13" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 6l1.5-2h5L16 6" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>Fotos</span>
+      </button>
       <button class="nav-btn" data-tab="trips">
         <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="7" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M10 7V5.5a2 2 0 012-2 2 2 0 012 2V7" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h4M17 12h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>Urlaube</span>
@@ -1048,6 +1052,25 @@
     </section>
 
     <!-- TRIPS -->
+    <section id="tab-photos" class="tab-content">
+      <header class="page-head">
+        <div>
+          <h1>Fotos</h1>
+          <p class="page-sub">Doppelte Aufnahmen aus deiner Immich-Bibliothek finden und aufräumen</p>
+        </div>
+        <button class="btn-primary" id="photos-reload">Neu laden</button>
+      </header>
+
+      <div class="panel hidden" id="photos-setup-hint">
+        <h3 class="panel-title">🔌 Immich noch nicht verbunden</h3>
+        <p class="page-sub" id="photos-setup-text"></p>
+        <button class="btn-ghost" id="photos-goto-settings">Zu den Einstellungen</button>
+      </div>
+
+      <div id="photos-summary" class="photos-summary hidden"></div>
+      <div id="photos-groups"></div>
+    </section>
+
     <section id="tab-trips" class="tab-content">
       <header class="page-head">
         <div>
@@ -1245,6 +1268,27 @@
           </div>
         </form>
         <p id="websearch-status" class="page-sub"></p>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">📷 Immich (Fotobibliothek)</h3>
+        <p class="page-sub">
+          Verbindet den Tab „Fotos“ mit deiner Immich-Instanz, um doppelte Aufnahmen zu finden.
+          Den API-Schlüssel erstellst du in Immich unter <strong>Konto-Menü → API-Schlüssel</strong>.
+          Er braucht Rechte zum Lesen und Löschen von Bildern sowie für Duplikate.
+          Ausgewählte Bilder wandern immer nur in Immichs <strong>Papierkorb</strong> und lassen sich
+          dort zurückholen – es wird nie endgültig gelöscht.
+        </p>
+        <form id="immich-settings-form" class="form-grid">
+          <label class="wide">Server-Adresse <input type="text" id="immich-url" placeholder="http://100.72.226.91:32283"></label>
+          <label class="wide">API-Schlüssel <input type="password" id="immich-api-key" placeholder="wird verschlüsselt gespeichert – leer lassen behält den bisherigen" autocomplete="off"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="immich-test" class="btn-ghost">Verbindung testen</button>
+            <button type="button" id="immich-remove" class="btn-ghost hidden">Entfernen</button>
+          </div>
+        </form>
+        <p id="immich-status" class="page-sub"></p>
       </div>
 
       <div class="panel">

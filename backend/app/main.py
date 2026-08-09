@@ -14,14 +14,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, FastAPI, Depends, Form, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, Response
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -104,6 +104,10 @@ ensure_columns("settings", {
     # Nur das Jahr, kein volles Geburtsdatum - für die Zuordnung zu einer
     # Altersgruppe reicht das, und weniger personenbezogene Daten sind besser.
     "birth_year": "INTEGER",
+})
+ensure_columns("settings", {
+    "immich_url": "VARCHAR",
+    "immich_api_key_encrypted": "VARCHAR",
 })
 
 _bootstrap_db = SessionLocal()
@@ -1706,6 +1710,160 @@ def get_fx_rate(to: str = "CHF"):
     return schemas.FxRateOut(from_currency="EUR", to_currency=to, rate=rate)
 
 
+# ---------------- Immich (Fotobibliothek) ----------------
+def _immich_credentials(db: Session) -> tuple[str, str]:
+    """Holt URL und entschlüsselten Schlüssel oder wirft einen sprechenden
+    Fehler, wenn noch nichts eingerichtet ist."""
+    s = auth.get_or_create_settings(db)
+    if not s.immich_url or not s.immich_api_key_encrypted:
+        raise HTTPException(
+            400,
+            "Immich ist noch nicht eingerichtet. Trage unter Einstellungen die "
+            "Server-Adresse und einen API-Schlüssel ein.",
+        )
+    return s.immich_url, bank_sync.decrypt_secret(s.secret_key, s.immich_api_key_encrypted)
+
+
+@api_router.get("/settings/immich", response_model=schemas.ImmichSettingsOut)
+def get_immich_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.ImmichSettingsOut(
+        url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted)
+    )
+
+
+@api_router.put("/settings/immich", response_model=schemas.ImmichSettingsOut)
+def update_immich_settings(data: schemas.ImmichSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.immich_url = data.url.strip()
+    # Leeres Feld = Schlüssel unverändert lassen. Sonst müsste man ihn bei jeder
+    # kleinen Adressänderung erneut aus Immich heraussuchen.
+    if data.api_key:
+        s.immich_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, data.api_key)
+    db.commit()
+    return schemas.ImmichSettingsOut(
+        url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted)
+    )
+
+
+@api_router.delete("/settings/immich", response_model=schemas.ImmichSettingsOut)
+def remove_immich_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.immich_url = None
+    s.immich_api_key_encrypted = None
+    db.commit()
+    return schemas.ImmichSettingsOut(url=None, api_key_set=False)
+
+
+@api_router.post("/immich/test", response_model=schemas.ImmichTestResult)
+def test_immich(db: Session = Depends(get_db)):
+    """Zeigt Fehler bewusst im Klartext an statt sie zu schlucken - eine
+    falsche Adresse oder ein abgelehnter Schlüssel liesse sich sonst nicht
+    debuggen (gleiches Muster wie beim Telegram-/Twilio-Test)."""
+    s = auth.get_or_create_settings(db)
+    if not s.immich_url:
+        return schemas.ImmichTestResult(ok=False, error="Keine Server-Adresse hinterlegt.")
+    if not s.immich_api_key_encrypted:
+        return schemas.ImmichTestResult(ok=False, error="Kein API-Schlüssel hinterlegt.")
+    try:
+        key = bank_sync.decrypt_secret(s.secret_key, s.immich_api_key_encrypted)
+        info = immich.check_connection(s.immich_url, key)
+        return schemas.ImmichTestResult(ok=True, **info)
+    except Exception as e:
+        return schemas.ImmichTestResult(ok=False, error=str(e))
+
+
+@api_router.get("/immich/duplicates", response_model=schemas.ImmichDuplicatesOut)
+def immich_duplicates(db: Session = Depends(get_db)):
+    url, key = _immich_credentials(db)
+    try:
+        raw = immich.list_duplicates(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
+
+    groups = []
+    total_assets = 0
+    for g in raw:
+        assets = [immich.asset_summary(a) for a in (g.get("assets") or [])]
+        total_assets += len(assets)
+        groups.append(schemas.ImmichDuplicateGroupOut(
+            duplicate_id=g.get("duplicateId"),
+            assets=[schemas.ImmichAssetOut(**a) for a in assets],
+            suggested_keep_ids=g.get("suggestedKeepAssetIds") or [],
+        ))
+    return schemas.ImmichDuplicatesOut(
+        groups=groups, total_groups=len(groups), total_assets=total_assets
+    )
+
+
+@api_router.get("/immich/thumbnail/{asset_id}")
+def immich_thumbnail(asset_id: str, db: Session = Depends(get_db)):
+    """Reicht das Vorschaubild durch, damit der API-Schlüssel den Server nie
+    verlässt. Der Browser sieht nur diese eigene Adresse."""
+    url, key = _immich_credentials(db)
+    try:
+        content, content_type = immich.fetch_thumbnail(url, key, asset_id)
+    except Exception as e:
+        raise HTTPException(502, f"Vorschaubild nicht ladbar: {e}")
+    # Kurzer Cache: beim Blättern durch viele Gruppen werden dieselben Bilder
+    # sonst mehrfach über den Umweg Server neu geholt.
+    return Response(content=content, media_type=content_type,
+                    headers={"Cache-Control": "private, max-age=300"})
+
+
+@api_router.post("/immich/duplicates/resolve", response_model=schemas.ImmichResolveResult)
+def immich_resolve(data: schemas.ImmichResolveRequest, db: Session = Depends(get_db)):
+    """Wendet die vom Nutzer bestätigte Auswahl an. Bilder wandern in Immichs
+    Papierkorb und sind dort wiederherstellbar - endgültiges Löschen passiert
+    hier bewusst nie."""
+    url, key = _immich_credentials(db)
+
+    payload = []
+    for g in data.groups:
+        # Schutz gegen einen Bedienfehler oder einen Fehler im Frontend: eine
+        # Gruppe, in der ALLES weggeworfen wird, ist immer ein Versehen - der
+        # Sinn ist, genau ein Bild zu behalten.
+        if not g.keep_ids:
+            raise HTTPException(
+                400,
+                f"In einer Gruppe wurde kein einziges Bild zum Behalten ausgewählt "
+                f"({len(g.trash_ids)} sollten weg). Abgebrochen, es wurde nichts geändert.",
+            )
+        overlap = set(g.keep_ids) & set(g.trash_ids)
+        if overlap:
+            raise HTTPException(
+                400,
+                "Ein Bild wurde gleichzeitig zum Behalten und zum Wegwerfen markiert. "
+                "Abgebrochen, es wurde nichts geändert.",
+            )
+        payload.append({
+            "duplicateId": g.duplicate_id,
+            "keepAssetIds": g.keep_ids,
+            "trashAssetIds": g.trash_ids,
+        })
+
+    try:
+        immich.resolve_duplicates(url, key, payload)
+    except Exception as e:
+        raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
+
+    return schemas.ImmichResolveResult(
+        resolved_groups=len(payload),
+        trashed_assets=sum(len(g.trash_ids) for g in data.groups),
+    )
+
+
+@api_router.delete("/immich/duplicates/{duplicate_id}")
+def immich_dismiss(duplicate_id: str, db: Session = Depends(get_db)):
+    """Gruppe ausblenden, ohne ein Bild anzufassen."""
+    url, key = _immich_credentials(db)
+    try:
+        immich.dismiss_duplicate(url, key, duplicate_id)
+    except Exception as e:
+        raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
+    return {"ok": True}
+
+
 @api_router.get("/version", response_model=schemas.VersionOut)
 def get_version():
     """Welcher Stand tatsächlich läuft - unabhängig davon, ob ein Update
@@ -1734,6 +1892,7 @@ def integrations_status(db: Session = Depends(get_db)):
     FIELD_COUNT = {
         "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
         "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
+        "immich": 2,
     }
 
     def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
@@ -1834,6 +1993,17 @@ def integrations_status(db: Session = Depends(get_db)):
         "PayPal-Umsätze automatisch abholen",
         [] if n_paypal else ["mindestens eine Verbindung"],
         detail_ok=f"{n_paypal} Verbindung{'en' if n_paypal != 1 else ''} eingerichtet.",
+    ))
+
+    missing = []
+    if not s.immich_url:
+        missing.append("Server-Adresse")
+    if not s.immich_api_key_encrypted:
+        missing.append("API-Schlüssel")
+    items.append(entry(
+        "immich", "Immich (Fotos)",
+        "Doppelte Fotos finden und nach Bestätigung aufräumen",
+        missing,
     ))
 
     return schemas.IntegrationStatusOut(

@@ -865,6 +865,66 @@ class VersionOut(BaseModel):
     build_date: Optional[str] = None
 
 
+# ---------- Immich (Fotobibliothek) ----------
+class ImmichSettingsOut(BaseModel):
+    url: Optional[str] = None
+    # Der Schlüssel selbst wird nie zurückgegeben, nur ob einer hinterlegt ist.
+    api_key_set: bool
+
+
+class ImmichSettingsUpdate(BaseModel):
+    url: str
+    # Leer lassen heisst "bestehenden Schlüssel behalten" - sonst müsste man ihn
+    # bei jeder URL-Änderung neu eintippen.
+    api_key: Optional[str] = None
+
+
+class ImmichTestResult(BaseModel):
+    ok: bool
+    version: Optional[str] = None
+    duplicate_groups: Optional[int] = None
+    error: Optional[str] = None
+
+
+class ImmichAssetOut(BaseModel):
+    id: str
+    file_name: Optional[str] = None
+    type: Optional[str] = None
+    created_at: Optional[str] = None
+    size_bytes: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    camera: Optional[str] = None
+
+
+class ImmichDuplicateGroupOut(BaseModel):
+    duplicate_id: str
+    assets: List[ImmichAssetOut]
+    # Immichs eigener Vorschlag, was behalten werden sollte.
+    suggested_keep_ids: List[str]
+
+
+class ImmichDuplicatesOut(BaseModel):
+    groups: List[ImmichDuplicateGroupOut]
+    total_groups: int
+    total_assets: int
+
+
+class ImmichResolveGroup(BaseModel):
+    duplicate_id: str
+    keep_ids: List[str]
+    trash_ids: List[str]
+
+
+class ImmichResolveRequest(BaseModel):
+    groups: List[ImmichResolveGroup]
+
+
+class ImmichResolveResult(BaseModel):
+    resolved_groups: int
+    trashed_assets: int
+
+
 # ---------- Vermögensvergleich mit der Altersgruppe ----------
 class BenchmarkBracket(BaseModel):
     key: str
