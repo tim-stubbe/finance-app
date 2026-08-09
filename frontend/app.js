@@ -2182,7 +2182,7 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
     // "Alle Papierkorb" heisst hier bewusst sofort anwenden, nicht nur
     // auswaehlen - wer den Knopf drueckt, hat die Entscheidung fuer die ganze
     // Gruppe schon getroffen und will nicht noch extra auf "Anwenden" klicken.
-    await applyGroupTrash(selectAllId);
+    await applyGroupTrash(selectAllId, true);
     return;
   }
 
@@ -2208,7 +2208,12 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
   }
 });
 
-async function applyGroupTrash(duplicateId) {
+// forceConfirm: "Alle Papierkorb" wirft die ganze Gruppe auf einmal weg und
+// ist der Klick, bei dem Vertippen am teuersten ist (siehe Fehlklick-Fix oben)
+// - dafür bleibt die Rückfrage IMMER bestehen, auch wenn "ohne Rückfrage"
+// aktiviert ist. Die Einstellung gilt nur für bewusst manuell zusammengestellte
+// Auswahl über die einzelnen Bild-Karten.
+async function applyGroupTrash(duplicateId, forceConfirm = false) {
   const group = photoGroupsCache.find(g => g.duplicate_id === duplicateId);
   if (!group) return;
   const trashSet = photoTrash.get(duplicateId) || new Set();
@@ -2218,7 +2223,7 @@ async function applyGroupTrash(duplicateId) {
   const warnAll = keepIds.length === 0
     ? "\n\n⚠️ Es bleibt kein Bild dieser Gruppe übrig - alle wandern in den Papierkorb."
     : "";
-  if (!immichSkipConfirm &&
+  if ((forceConfirm || !immichSkipConfirm) &&
       !confirm(`${trashIds.length} Aufnahme(n) in den Papierkorb verschieben?${warnAll}\n\nSie bleiben in Immich wiederherstellbar.`)) return;
   try {
     const res = await api("/immich/duplicates/resolve", {
