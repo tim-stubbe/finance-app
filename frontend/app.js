@@ -2053,20 +2053,25 @@ function renderPhotoGroups() {
     // angeboten werden, denn die nicht gezeigten Bilder wären mit betroffen,
     // ohne dass man sie je gesehen hat.
     const truncated = g.asset_count > g.assets.length;
-    // Bei bis zu vier Aufnahmen lohnt sich ein direkter Nebeneinander-
-    // Vergleich - bei mehr wird die Übersicht zu unruhig.
-    const compareBtn = g.assets.length >= 2 && g.assets.length <= 4
-      ? `<button type="button" class="btn-ghost" data-compare="${esc(g.duplicate_id)}">🔍 Nebeneinander vergleichen</button>`
+    // Immer verfügbar (nicht nur bei bis zu 4 Bildern) und immer an erster
+    // Stelle - bei mehr als 4 Aufnahmen vergleicht er nur die ersten 4. Sonst
+    // rutschte an dieser Stelle bei größeren Gruppen "Sind keine Duplikate"
+    // nach vorn, und Nutzer haben aus Gewohnheit an der ersten Position
+    // geklickt und dabei echte Duplikatgruppen ausversehen verworfen.
+    const compareBtn = g.assets.length >= 2
+      ? `<button type="button" class="btn-ghost" data-compare="${esc(g.duplicate_id)}">🔍 ${g.assets.length > 4 ? "Erste 4 vergleichen" : "Nebeneinander vergleichen"}</button>`
       : "";
+    // "Sind keine Duplikate" bewusst immer als LETZTER Button, nie an erster
+    // Stelle - siehe Kommentar bei compareBtn oben.
     const actions = truncated
       ? `<button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>`
       : `${compareBtn}
-         <button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
          <button type="button" class="btn-ghost" data-select-all="${esc(g.duplicate_id)}">Alle Papierkorb</button>
          <button type="button" class="btn-ghost" data-select-none="${esc(g.duplicate_id)}">Alle behalten</button>
          <button type="button" class="btn-primary ${trashSet.size === 0 ? "hidden" : ""}" data-apply="${esc(g.duplicate_id)}">
            ${trashSet.size} in den Papierkorb
-         </button>`;
+         </button>
+         <button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>`;
 
     const bigSim = renderBigSimHtml(g, refId);
 
@@ -2144,7 +2149,9 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
   if (compareId) {
     const group = photoGroupsCache.find(g => g.duplicate_id === compareId);
     if (group) {
-      openLightboxCompare(group.assets.map(a => ({ id: a.id, caption: a.file_name })));
+      // Nebeneinander passen nur bis zu 4 Bilder - bei mehr werden nur die
+      // ersten 4 gezeigt (siehe Kommentar bei compareBtn oben).
+      openLightboxCompare(group.assets.slice(0, 4).map(a => ({ id: a.id, caption: a.file_name })));
     }
     return;
   }
