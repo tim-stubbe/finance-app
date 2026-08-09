@@ -1706,6 +1706,19 @@ def get_fx_rate(to: str = "CHF"):
     return schemas.FxRateOut(from_currency="EUR", to_currency=to, rate=rate)
 
 
+@api_router.get("/version", response_model=schemas.VersionOut)
+def get_version():
+    """Welcher Stand tatsächlich läuft - unabhängig davon, ob ein Update
+    (Watchtower oder manuell) wirklich angekommen ist oder ob eine sichtbare
+    Änderung schlicht an einem alten, nicht aktualisierten Container liegt."""
+    sha = os.environ.get("GIT_SHA", "dev")
+    return schemas.VersionOut(
+        git_sha=sha,
+        git_sha_short=sha[:7],
+        build_date=os.environ.get("BUILD_DATE") or None,
+    )
+
+
 # ---------------- Einrichtungsstatus der Anbindungen ----------------
 @api_router.get("/integrations/status", response_model=schemas.IntegrationStatusOut)
 def integrations_status(db: Session = Depends(get_db)):

@@ -859,6 +859,12 @@ class IntegrationStatusOut(BaseModel):
     incomplete: int
 
 
+class VersionOut(BaseModel):
+    git_sha: str
+    git_sha_short: str
+    build_date: Optional[str] = None
+
+
 # ---------- Vermögensvergleich mit der Altersgruppe ----------
 class BenchmarkBracket(BaseModel):
     key: str

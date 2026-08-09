@@ -1646,3 +1646,22 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 
 .benchmark-note a { color: var(--accent-strong); }
+
+/* ---------- Versions-Wasserzeichen ---------- */
+/* Dauerhaft sichtbar, aber bewusst unauffaellig - dient nur der Kontrolle,
+   ob ein Update (Watchtower oder manuell) wirklich angekommen ist, nicht der
+   allgemeinen Wahrnehmung. */
+.version-watermark {
+  margin-top: auto;
+  padding: 10px 10px 2px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+  user-select: text;
+}
+
+@media (max-width: 720px) {
+  .version-watermark { display: none; }
+}

@@ -20,6 +20,15 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY backend/app ./app
 COPY frontend /frontend
 
+# Von GitHub Actions befuellt (siehe docker-publish.yml), lokal leer ("dev").
+# Dient nur der Anzeige im Frontend, damit erkennbar ist, ob Watchtower
+# wirklich aktualisiert hat oder ob eine sichtbare Aenderung an einem alten
+# Stand liegt - kein Einfluss auf die Anwendungslogik.
+ARG GIT_SHA=dev
+ARG BUILD_DATE=""
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_DATE=${BUILD_DATE}
+
 ENV DATA_DIR=/data
 ENV FRONTEND_DIR=/frontend
 

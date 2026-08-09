@@ -3558,9 +3558,24 @@ async function init() {
   await loadGlobalTopbar();
   refreshGoalsBadge();
   refreshIntegrationBadge();
+  loadVersionWatermark();
   handleEnableBankingReturn();
 }
 startApp();
+
+async function loadVersionWatermark() {
+  const el = document.getElementById("version-watermark");
+  if (!el) return;
+  try {
+    const v = await api("/version");
+    let text = v.git_sha === "dev" ? "lokaler Build" : v.git_sha_short;
+    if (v.build_date) text += " · " + relativeTimeDe(new Date(v.build_date));
+    el.textContent = text;
+    el.title = `Version ${v.git_sha}` + (v.build_date ? `, gebaut ${new Date(v.build_date).toLocaleString("de-DE")}` : "");
+  } catch (e) {
+    el.textContent = "";
+  }
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
