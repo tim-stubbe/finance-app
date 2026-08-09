@@ -232,12 +232,17 @@ body::after {
   100% { transform: translate(-2%, 2%) scale(1.04); }
 }
 
-/* Alpen-Theme: Matterhorn-Illustration statt Farbverlauf-Mesh */
+/* Alpen-Theme: echtes Matterhorn-Foto statt Farbverlauf-Mesh, gedaempft auf
+   ~40% Deckkraft, damit es Hintergrund bleibt und nicht mit dem Seiteninhalt
+   konkurriert. Foto: "Matterhorn sunset 2016" von Sam Ferrara (Unsplash via
+   Wikimedia Commons), CC0 - keine Namensnennung noetig, hier trotzdem
+   dokumentiert. */
 :root[data-theme="alpen"] body::before {
-  background-image: url("alpen-bg.svg");
+  background-image: url("alpen-bg.jpg");
   background-size: cover;
-  background-position: bottom center;
+  background-position: center 65%;
   background-repeat: no-repeat;
+  opacity: 0.4;
   animation: mesh-drift-slow 60s ease-in-out infinite alternate;
 }
 
@@ -488,6 +493,14 @@ main {
   flex: 1;
   padding: 32px 40px 60px;
   max-width: 1180px;
+  /* Kartenraster/Panels sind auto-fit/fr-basiert und wachsen von selbst mit -
+     ohne "auto" haengt auf breiten Bildschirmen der gesamte Leerraum starr
+     rechts, weil main als Flex-Item sonst links in seinem Slot klebt. */
+  margin: 0 auto;
+}
+
+@media (min-width: 1500px) {
+  main { max-width: 1560px; }
 }
 
 /* ---------- Permanente Kopfzeile (Konten/Investments/Vermögen) ---------- */
