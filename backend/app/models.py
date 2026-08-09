@@ -153,6 +153,15 @@ class Settings(Base):
     radicale_url = Column(String, nullable=True)
     radicale_username = Column(String, nullable=True)
     radicale_password_encrypted = Column(String, nullable=True)
+    # --- Datei-Sortierung (Eingangsordner automatisch einsortieren) ---
+    # Pfade wie vom Container aus gesehen (Volume-Mounts) - nicht die
+    # Host-Pfade auf TrueNAS.
+    file_sort_source_path = Column(String, nullable=True)
+    file_sort_target_path = Column(String, nullable=True)
+    # Feste Kategorienliste statt KI-erfundener Ordnernamen - verhindert
+    # Ordner-Wildwuchs ("Strom" vs. "Stromrechnung" vs. "Energie").
+    file_sort_categories = Column(String, nullable=True, default="Behoerde,Bericht,Rechnung,Sonstiges,Vertrag")
+    file_sort_enabled = Column(Boolean, nullable=False, default=False)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -650,6 +659,23 @@ class ImmichQualityFlag(Base):
     # in der Liste auf, auch wenn ein erneuter Scan den Eintrag sonst wieder
     # anlegen würde.
     dismissed = Column(Boolean, nullable=False, default=False)
+
+
+class FileSortLog(Base):
+    """Protokoll jeder automatischen Datei-Einsortierung - vollständige
+    Nachvollziehbarkeit ist hier der Ersatz für eine Bestätigung pro Datei:
+    bewegt wird automatisch, aber jede Aktion bleibt sichtbar und die
+    Originaldatei wird nie überschrieben (siehe file_sort.py)."""
+
+    __tablename__ = "file_sort_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, nullable=False)
+    category = Column(String, nullable=True)
+    # "moved", "skipped_uncertain", "skipped_unsupported", "error"
+    action = Column(String, nullable=False)
+    detail = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Todo(Base):

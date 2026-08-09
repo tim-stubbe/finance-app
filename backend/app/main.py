@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, file_sort, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -128,6 +128,12 @@ ensure_columns("settings", {
 })
 ensure_columns("todos", {
     "completed_at": "DATETIME",
+})
+ensure_columns("settings", {
+    "file_sort_source_path": "VARCHAR",
+    "file_sort_target_path": "VARCHAR",
+    "file_sort_categories": "VARCHAR DEFAULT 'Behoerde,Bericht,Rechnung,Sonstiges,Vertrag'",
+    "file_sort_enabled": "BOOLEAN DEFAULT 0",
 })
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
@@ -3303,6 +3309,50 @@ def settings_has_radicale(db: Session) -> bool:
     return bool(settings.radicale_url)
 
 
+# ---------------- Datei-Sortierung ----------------
+@api_router.get("/settings/file-sort", response_model=schemas.FileSortSettingsOut)
+def get_file_sort_settings(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    return schemas.FileSortSettingsOut(
+        source_path=settings.file_sort_source_path,
+        target_path=settings.file_sort_target_path,
+        categories=settings.file_sort_categories,
+    )
+
+
+@api_router.put("/settings/file-sort", response_model=schemas.FileSortSettingsOut)
+def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    settings.file_sort_source_path = data.source_path
+    settings.file_sort_target_path = data.target_path
+    settings.file_sort_categories = data.categories
+    settings.file_sort_enabled = True
+    db.commit()
+    return schemas.FileSortSettingsOut(
+        source_path=settings.file_sort_source_path,
+        target_path=settings.file_sort_target_path,
+        categories=settings.file_sort_categories,
+    )
+
+
+@api_router.get("/file-sort/log", response_model=List[schemas.FileSortLogOut])
+def get_file_sort_log(limit: int = 50, db: Session = Depends(get_db)):
+    limit = max(1, min(limit, 200))
+    return (
+        db.query(models.FileSortLog)
+        .order_by(models.FileSortLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+@api_router.post("/file-sort/run", response_model=schemas.FileSortRunResult)
+def run_file_sort(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    result = file_sort.run(db, settings)
+    return schemas.FileSortRunResult(**result)
+
+
 # ---------------- Dashboard ----------------
 @api_router.get("/dashboard", response_model=schemas.DashboardSummary)
 def dashboard(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
@@ -3842,6 +3892,22 @@ def _scheduled_radicale_sync():
         db.close()
 
 
+def _scheduled_file_sort():
+    """Alle 10 Minuten den Eingangsordner pruefen und einsortieren - kein
+    zeitkritischer Vorgang, neue Dateien duerfen ein paar Minuten warten."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.file_sort_enabled or not settings.file_sort_source_path:
+            return
+        try:
+            file_sort.run(db, settings)
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 def _scheduled_immich_quality_scan():
     """Scannt alle paar Minuten eine weitere Seite der Immich-Bibliothek auf
     unscharfe/leere Fotos. Läuft absichtlich in kleinen Häppchen statt in
@@ -3925,6 +3991,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_radicale_sync, CronTrigger(minute="*/3"),
     id="radicale_sync", misfire_grace_time=300,
+)
+scheduler.add_job(
+    _scheduled_file_sort, CronTrigger(minute="*/10"),
+    id="file_sort", misfire_grace_time=600,
 )
 scheduler.start()
 

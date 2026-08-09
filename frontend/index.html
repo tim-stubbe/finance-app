@@ -1327,6 +1327,36 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title">🗂️ Datei-Sortierung</h3>
+        <p class="page-sub">
+          Sortiert einen Eingangsordner automatisch in Kategorie-Unterordner - Ollama liest den
+          Inhalt und ordnet einer der unten genannten Kategorien zu. Bei Unsicherheit wird die
+          Datei nicht geraten einsortiert, sondern liegen gelassen (siehe Protokoll unten).
+          Läuft alle 10 Minuten im Hintergrund. Pfade sind die im Container sichtbaren Pfade
+          (Volume-Mounts), nicht die Pfade auf dem Host.
+        </p>
+        <form id="file-sort-settings-form" class="form-grid">
+          <label>Eingangsordner <input type="text" id="file-sort-source" placeholder="/inbox"></label>
+          <label>Zielordner <input type="text" id="file-sort-target" placeholder="/sorted"></label>
+          <label class="wide">Kategorien (Komma-getrennt, entsprechen Unterordnern im Zielordner)
+            <input type="text" id="file-sort-categories" placeholder="Behoerde,Bericht,Rechnung,Sonstiges,Vertrag">
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="file-sort-run-now" class="btn-ghost">Jetzt ausführen</button>
+          </div>
+        </form>
+        <p id="file-sort-status" class="page-sub"></p>
+        <h4 class="panel-subtitle">Protokoll</h4>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Datei</th><th>Aktion</th><th>Details</th><th>Zeit</th></tr></thead>
+            <tbody id="file-sort-log"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title">💾 Datensicherung</h3>
         <p class="page-sub">Vollständiges Backup (Datenbank + Belege) als ZIP herunterladen oder wiederherstellen.</p>
         <div class="filter-row">

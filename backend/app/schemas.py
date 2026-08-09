@@ -1251,6 +1251,36 @@ class TodoSyncResult(BaseModel):
     errors: List[str] = []
 
 
+# ---------- Datei-Sortierung ----------
+class FileSortSettingsUpdate(BaseModel):
+    source_path: str
+    target_path: str
+    categories: str
+
+
+class FileSortSettingsOut(BaseModel):
+    source_path: Optional[str] = None
+    target_path: Optional[str] = None
+    categories: Optional[str] = None
+
+
+class FileSortLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    filename: str
+    category: Optional[str] = None
+    action: str
+    detail: Optional[str] = None
+    created_at: datetime
+
+
+class FileSortRunResult(BaseModel):
+    processed: int
+    moved: int
+    skipped: int
+    error: Optional[str] = None
+
+
 # ---------- E-Mail-Belege ----------
 class MailSettingsOut(BaseModel):
     enabled: bool
