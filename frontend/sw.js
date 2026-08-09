@@ -2,7 +2,7 @@
 // Oberfläche (nicht die Daten!) auch bei wackliger Tailscale-Verbindung sofort
 // lädt. Cacht bewusst NUR die statische App-Hülle - /api/-Antworten werden nie
 // abgefangen, Finanzdaten müssen immer live vom Server kommen, nie aus dem Cache.
-const CACHE_NAME = "finanztool-shell-v1";
+const CACHE_NAME = "finanztool-shell-v2";
 const SHELL_ASSETS = ["/", "/index.html", "/style.css", "/app.js", "/manifest.json", "/alpen-bg.svg"];
 
 self.addEventListener("install", event => {

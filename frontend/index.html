@@ -1624,10 +1624,18 @@
 </div>
 
 <div id="photo-lightbox" class="modal-overlay hidden">
-  <div class="lightbox-box">
+  <div class="lightbox-box" id="lightbox-box">
     <button type="button" id="lightbox-close" class="modal-close" aria-label="Schließen">&times;</button>
-    <img id="lightbox-img" alt="">
-    <p id="lightbox-caption" class="lightbox-caption"></p>
+    <div class="lightbox-images" id="lightbox-images">
+      <figure class="lightbox-figure">
+        <img id="lightbox-img" alt="">
+        <figcaption id="lightbox-caption" class="lightbox-caption"></figcaption>
+      </figure>
+      <figure class="lightbox-figure hidden" id="lightbox-figure-2">
+        <img id="lightbox-img-2" alt="">
+        <figcaption id="lightbox-caption-2" class="lightbox-caption"></figcaption>
+      </figure>
+    </div>
   </div>
 </div>
 

@@ -1944,6 +1944,17 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   opacity: 0;
   transform: scale(0.85);
   transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+  /* Ohne das faengt die Lupe in ihrer 30x30px-Ecke weiterhin Klicks ab,
+     obwohl sie unsichtbar ist (opacity:0 entfernt ein Element NICHT aus der
+     Klick-Erkennung) - ein Klick genau dort landete dann still auf der Lupe
+     statt auf der Karte, ohne dass etwas sichtbar passierte. */
+  pointer-events: none;
+}
+
+.photo-card:hover .photo-zoom,
+.shot-card:hover .photo-zoom,
+.photo-zoom:focus-visible {
+  pointer-events: auto;
 }
 
 /* Nur bei Hover/Tastaturfokus einblenden - staendig sichtbare Lupen auf
@@ -1961,13 +1972,32 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   position: relative;
   max-width: min(92vw, 1100px);
   margin: auto;
+}
+
+.lightbox-images {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
 
-.lightbox-box img {
+/* Nebeneinander-Vergleich bei genau zwei Aufnahmen: zwei Spalten statt einer
+   einzelnen Abbildung, damit man nicht zwischen zwei Ansichten hin- und
+   herwechseln muss, um Kleinigkeiten zu vergleichen. */
+.lightbox-box.is-compare {
+  max-width: min(96vw, 1700px);
+}
+.lightbox-box.is-compare .lightbox-images {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+}
+.lightbox-box.is-compare .lightbox-figure { flex: 1 1 0; min-width: 0; }
+.lightbox-box.is-compare .lightbox-figure img { max-height: 78vh; width: 100%; object-fit: contain; }
+
+.lightbox-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+.lightbox-figure img {
   max-width: 100%;
   max-height: 82vh;
   border-radius: var(--radius);
@@ -1980,4 +2010,10 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   font-size: 13px;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   margin: 0;
+}
+
+@media (max-width: 900px) {
+  /* Auf schmalen Bildschirmen nebeneinander unbrauchbar - lieber
+     untereinander als zwei winzige Spalten. */
+  .lightbox-box.is-compare .lightbox-images { flex-direction: column; }
 }

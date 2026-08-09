@@ -1936,9 +1936,15 @@ function renderPhotoGroups() {
     // ohne dass man sie je gesehen hat.
     const truncated = g.asset_count > g.assets.length;
     const trashCount = g.assets.length - 1;
+    // Bei genau zwei Aufnahmen lohnt sich ein direkter Nebeneinander-Vergleich
+    // besonders - bei mehr als zwei waere unklar, welche zwei gemeint sind.
+    const compareBtn = g.assets.length === 2
+      ? `<button type="button" class="btn-ghost" data-compare="${esc(g.duplicate_id)}">🔍 Nebeneinander vergleichen</button>`
+      : "";
     const actions = truncated
       ? `<button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>`
-      : `<button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
+      : `${compareBtn}
+         <button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
          <button type="button" class="btn-primary" data-apply="${esc(g.duplicate_id)}">
            ${trashCount} in den Papierkorb
          </button>`;
@@ -1968,11 +1974,28 @@ function renderPhotoGroups() {
 function openLightbox(assetId, caption) {
   document.getElementById("lightbox-img").src = `/api/immich/thumbnail/${encodeURIComponent(assetId)}?size=preview`;
   document.getElementById("lightbox-caption").textContent = caption || "";
+  document.getElementById("lightbox-figure-2").classList.add("hidden");
+  document.getElementById("lightbox-box").classList.remove("is-compare");
   document.getElementById("photo-lightbox").classList.remove("hidden");
 }
+
+// Bei genau zwei Aufnahmen ist ein direkter Nebeneinander-Vergleich oft
+// aussagekräftiger als eins nach dem anderen anzusehen - besonders bei
+// Aufnahmen, die sich nur in Kleinigkeiten unterscheiden.
+function openLightboxCompare(assetIdLeft, captionLeft, assetIdRight, captionRight) {
+  document.getElementById("lightbox-img").src = `/api/immich/thumbnail/${encodeURIComponent(assetIdLeft)}?size=preview`;
+  document.getElementById("lightbox-caption").textContent = captionLeft || "";
+  document.getElementById("lightbox-img-2").src = `/api/immich/thumbnail/${encodeURIComponent(assetIdRight)}?size=preview`;
+  document.getElementById("lightbox-caption-2").textContent = captionRight || "";
+  document.getElementById("lightbox-figure-2").classList.remove("hidden");
+  document.getElementById("lightbox-box").classList.add("is-compare");
+  document.getElementById("photo-lightbox").classList.remove("hidden");
+}
+
 function closeLightbox() {
   document.getElementById("photo-lightbox").classList.add("hidden");
   document.getElementById("lightbox-img").src = "";
+  document.getElementById("lightbox-img-2").src = "";
 }
 document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
 document.getElementById("photo-lightbox").addEventListener("click", e => {
@@ -1993,6 +2016,17 @@ function checkZoomClick(e) {
 
 document.getElementById("photos-groups").addEventListener("click", async e => {
   if (checkZoomClick(e)) return;
+
+  const compareId = e.target.closest("[data-compare]")?.dataset.compare;
+  if (compareId) {
+    const group = photoGroupsCache.find(g => g.duplicate_id === compareId);
+    if (group && group.assets.length === 2) {
+      const [a, b] = group.assets;
+      openLightboxCompare(a.id, a.file_name, b.id, b.file_name);
+    }
+    return;
+  }
+
   const pageTo = e.target.closest("[data-page]")?.dataset.page;
   if (pageTo !== undefined) {
     await loadPhotosTab(parseInt(pageTo, 10));
