@@ -430,13 +430,25 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db), space
     return {"ok": True}
 
 
+# Erlaubte Beleg-Endungen. Der Original-Dateiname kommt ungeprüft vom Client -
+# ohne diese Schranke könnte eine präparierte Endung (z.B. mit enthaltenen
+# "/") beim Zusammensetzen des Pfads aus UPLOAD_DIR herausführen
+# (GitHub-Code-Scanning: py/path-injection).
+RECEIPT_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif"}
+
+
 @api_router.post("/transactions/{transaction_id}/receipt", response_model=schemas.TransactionOut)
 def upload_receipt(transaction_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     tx = crud.get_transaction(db, transaction_id, space_id)
     if not tx:
         raise HTTPException(404, "Buchung nicht gefunden")
 
-    ext = os.path.splitext(file.filename)[1]
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in RECEIPT_ALLOWED_EXTENSIONS:
+        raise HTTPException(400, "Nicht unterstütztes Dateiformat. Erlaubt: PDF, JPG, PNG, HEIC, WEBP, GIF.")
+    # Der Dateiname besteht komplett aus selbst erzeugten Teilen (ID, Zufalls-
+    # hex, geprüfte Endung) - der ungeprüfte Original-Dateiname fließt nirgends
+    # mehr roh in den Pfad ein.
     safe_name = f"{transaction_id}_{uuid.uuid4().hex}{ext}"
     dest_path = os.path.join(UPLOAD_DIR, safe_name)
 
@@ -454,7 +466,15 @@ def upload_receipt(transaction_id: int, file: UploadFile = File(...), db: Sessio
 
 @api_router.get("/receipts/{filename}")
 def get_receipt(filename: str):
-    path = os.path.join(UPLOAD_DIR, filename)
+    # os.path.basename() entfernt jeden Verzeichnisanteil (z.B. "../../etc/x")
+    # - ohne das ließe sich über den Pfad aus UPLOAD_DIR herauslesen
+    # (GitHub-Code-Scanning: py/path-injection). Zusätzlich wird der
+    # aufgelöste Pfad auf Zugehörigkeit zu UPLOAD_DIR geprüft, als zweite,
+    # von der ersten unabhängige Absicherung.
+    safe_name = os.path.basename(filename)
+    path = os.path.realpath(os.path.join(UPLOAD_DIR, safe_name))
+    if not path.startswith(os.path.realpath(UPLOAD_DIR) + os.sep):
+        raise HTTPException(404, "Beleg nicht gefunden")
     if not os.path.exists(path):
         raise HTTPException(404, "Beleg nicht gefunden")
     return FileResponse(path)
@@ -2902,7 +2922,10 @@ def import_transactions_csv(file: UploadFile = File(...), db: Session = Depends(
             ))
             imported += 1
         except Exception as e:
-            errors.append(f"Zeile {i}: {e}")
+            # Nur Fehlertyp + Nachricht statt roher Exception-Repraesentation
+            # (koennte interne Details enthalten - CodeQL: py/stack-trace-exposure).
+            # Bleibt fuer den Import des eigenen CSVs nuetzlich.
+            errors.append(f"Zeile {i}: {type(e).__name__}: {e}")
             skipped += 1
 
     return {"imported": imported, "skipped": skipped, "errors": errors}
@@ -2988,7 +3011,10 @@ def import_holdings_csv(file: UploadFile = File(...), db: Session = Depends(get_
                 existing[key] = h
                 created += 1
         except Exception as e:
-            errors.append(f"Zeile {i}: {e}")
+            # Nur Fehlertyp + Nachricht statt roher Exception-Repraesentation
+            # (koennte interne Details enthalten - CodeQL: py/stack-trace-exposure).
+            # Bleibt fuer den Import des eigenen CSVs nuetzlich.
+            errors.append(f"Zeile {i}: {type(e).__name__}: {e}")
             skipped += 1
 
     return {"created": created, "added_lots": added_lots, "skipped": skipped, "errors": errors}
@@ -3033,7 +3059,7 @@ def _write_backup_to_disk(retention: int) -> schemas.BackupFileOut:
     with open(full_path, "wb") as f:
         f.write(data)
 
-    existing = sorted(f for f in os.listdir(BACKUP_DIR) if BACKUP_FILENAME_RE.match(f))
+    existing = sorted(f for f in os.listdir(BACKUP_DIR) if BACKUP_FILENAME_RE.fullmatch(f))
     excess = len(existing) - retention
     for old in existing[:max(excess, 0)]:
         os.remove(os.path.join(BACKUP_DIR, old))
@@ -3081,7 +3107,7 @@ def update_backup_settings(data: schemas.BackupSettingsUpdate, db: Session = Dep
 def list_backups():
     items = []
     for fname in os.listdir(BACKUP_DIR):
-        if not BACKUP_FILENAME_RE.match(fname):
+        if not BACKUP_FILENAME_RE.fullmatch(fname):
             continue
         stat = os.stat(os.path.join(BACKUP_DIR, fname))
         items.append(schemas.BackupFileOut(
@@ -3101,7 +3127,7 @@ def run_backup_now(db: Session = Depends(get_db)):
 @api_router.get("/backups/{filename}")
 def download_backup(filename: str):
     safe_name = os.path.basename(filename)
-    if not BACKUP_FILENAME_RE.match(safe_name):
+    if not BACKUP_FILENAME_RE.fullmatch(safe_name):
         raise HTTPException(404, "Backup nicht gefunden")
     full = os.path.join(BACKUP_DIR, safe_name)
     if not os.path.exists(full):
@@ -3112,7 +3138,7 @@ def download_backup(filename: str):
 @api_router.delete("/backups/{filename}")
 def delete_backup(filename: str):
     safe_name = os.path.basename(filename)
-    if not BACKUP_FILENAME_RE.match(safe_name):
+    if not BACKUP_FILENAME_RE.fullmatch(safe_name):
         raise HTTPException(404, "Backup nicht gefunden")
     full = os.path.join(BACKUP_DIR, safe_name)
     if os.path.exists(full):
