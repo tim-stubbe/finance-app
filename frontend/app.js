@@ -4081,6 +4081,39 @@ async function loadHubTab() {
   } catch { /* eBay nicht eingerichtet - Kachel einfach weglassen */ }
 
   body.innerHTML = parts.length ? parts.join("") : `<p class="page-sub">Noch keine Zusatzdienste eingerichtet - siehe Einstellungen.</p>`;
+
+  // Nächste offene To-Dos - überfällige zuerst, danach nach Fälligkeit,
+  // To-Dos ohne Datum zuletzt.
+  const todosBody = document.getElementById("hub-todos-body");
+  try {
+    const todos = (await api("/todos?include_done=false"))
+      .sort((a, b) => (a.due_date || "9999") < (b.due_date || "9999") ? -1 : 1)
+      .slice(0, 5);
+    todosBody.innerHTML = todos.length
+      ? todos.map(t => `<button type="button" class="hub-list-row" data-hub-jump="goals">
+          <span>${esc(t.title)}</span>
+          ${t.due_date ? `<span class="page-sub">${fmtDate(t.due_date)}</span>` : ""}
+        </button>`).join("")
+      : `<p class="page-sub">Keine offenen To-Dos.</p>`;
+  } catch (e) {
+    todosBody.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+  }
+
+  // Letzte Buchungen - neueste zuerst.
+  const txBody = document.getElementById("hub-transactions-body");
+  try {
+    const tx = (await api("/transactions"))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+    txBody.innerHTML = tx.length
+      ? tx.map(t => `<button type="button" class="hub-list-row" data-hub-jump="transactions">
+          <span>${esc(t.description || "(ohne Beschreibung)")}</span>
+          <span class="${t.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(t.amount)}</span>
+        </button>`).join("")
+      : `<p class="page-sub">Noch keine Buchungen.</p>`;
+  } catch (e) {
+    txBody.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+  }
 }
 
 document.getElementById("tab-hub").addEventListener("click", e => {
