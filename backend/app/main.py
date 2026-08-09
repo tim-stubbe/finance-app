@@ -2515,6 +2515,95 @@ def immich_dismiss_quality(asset_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@api_router.get("/immich/people", response_model=schemas.ImmichPeopleOut)
+def immich_people(db: Session = Depends(get_db)):
+    """Benannte Personen aus Immichs eigener Gesichtserkennung, als weiterer
+    Filter zum gezielten Aufräumen ("alle Fotos von X ansehen")."""
+    url, key = _immich_credentials(db)
+    try:
+        people = immich.list_people(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
+    return schemas.ImmichPeopleOut(people=[schemas.ImmichPersonOut(**p) for p in people])
+
+
+@api_router.get("/immich/people/{person_id}/thumbnail")
+def immich_person_thumbnail(person_id: str, db: Session = Depends(get_db)):
+    url, key = _immich_credentials(db)
+    try:
+        content, content_type = immich.fetch_person_thumbnail(url, key, person_id)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar: {e}")
+    return Response(content=content, media_type=content_type)
+
+
+@api_router.get("/immich/people/{person_id}/assets", response_model=schemas.ImmichPersonAssetsOut)
+def immich_person_assets(person_id: str, page: int = 1, db: Session = Depends(get_db)):
+    url, key = _immich_credentials(db)
+    try:
+        items, has_more = immich.person_assets(url, key, person_id, page)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception:
+        trash = {"enabled": True, "days": None}
+    return schemas.ImmichPersonAssetsOut(
+        assets=[schemas.ImmichAssetOut(**immich.asset_summary(a)) for a in items],
+        page=page, has_more=has_more,
+        trash_enabled=trash["enabled"], trash_days=trash["days"],
+    )
+
+
+@api_router.post("/immich/people/{person_id}/trash", response_model=schemas.ImmichTrashResult)
+def immich_trash_person_assets(person_id: str, data: schemas.ImmichTrashRequest, db: Session = Depends(get_db)):
+    """Verschiebt ausgewählte Fotos einer Person in Immichs Papierkorb."""
+    url, key = _immich_credentials(db)
+    if not data.asset_ids:
+        raise HTTPException(400, "Es wurde nichts ausgewählt.")
+
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Papierkorb-Einstellung nicht prüfbar, abgebrochen: {e}")
+    if not trash["enabled"]:
+        raise HTTPException(
+            400,
+            "Abgebrochen: In Immich ist der Papierkorb abgeschaltet. Aussortierte "
+            "Bilder wären sofort unwiderruflich gelöscht. Es wurde nichts geändert.",
+        )
+
+    # Wie bei den Screenshots: nur IDs annehmen, die wirklich zu dieser Person
+    # gehören - die IDs kommen aus dem Browser und dürfen nicht ungeprüft an
+    # Immich weitergereicht werden. Dafür alle Seiten der Person durchsuchen.
+    erlaubt: dict[str, dict] = {}
+    page = 1
+    while True:
+        try:
+            items, has_more = immich.person_assets(url, key, person_id, page)
+        except Exception as e:
+            raise HTTPException(502, f"Abgleich mit Immich fehlgeschlagen: {e}")
+        for a in items:
+            erlaubt[a["id"]] = a
+        if not has_more or set(data.asset_ids) <= set(erlaubt):
+            break
+        page += 1
+    unbekannt = [i for i in data.asset_ids if i not in erlaubt]
+    if unbekannt:
+        raise HTTPException(
+            400,
+            f"{len(unbekannt)} der ausgewählten Bilder gehören nicht zu dieser Person. "
+            "Abgebrochen, es wurde nichts geändert.",
+        )
+
+    freed = sum((erlaubt[i].get("exifInfo") or {}).get("fileSizeInByte") or 0 for i in data.asset_ids)
+    try:
+        immich.trash_assets(url, key, data.asset_ids)
+    except Exception as e:
+        raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
+    return schemas.ImmichTrashResult(trashed=len(data.asset_ids), freed_bytes=freed)
+
+
 @api_router.delete("/immich/duplicates/{duplicate_id}")
 def immich_dismiss(duplicate_id: str, db: Session = Depends(get_db)):
     """Gruppe ausblenden, ohne ein Bild anzufassen."""

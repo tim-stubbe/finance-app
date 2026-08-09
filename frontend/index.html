@@ -1088,6 +1088,7 @@
         <button type="button" class="range-tab active" data-photos-view="duplicates">🖼️ Duplikate</button>
         <button type="button" class="range-tab" data-photos-view="screenshots">📱 Screenshots</button>
         <button type="button" class="range-tab" data-photos-view="quality">🌫️ Unnötige Fotos</button>
+        <button type="button" class="range-tab" data-photos-view="people">🙂 Personen</button>
       </div>
 
       <div id="photos-view-duplicates">
@@ -1122,6 +1123,26 @@
         <div id="quality-summary" class="photos-summary hidden"></div>
         <div id="quality-grid" class="shot-grid"></div>
         <div id="quality-pager" class="photo-pager"></div>
+      </div>
+
+      <div id="photos-view-people" class="hidden">
+        <div class="panel">
+          <h3 class="panel-title">🙂 Personen</h3>
+          <p class="page-sub">
+            Von Immichs eigener Gesichtserkennung benannte Personen – zum gezielten Durchsehen
+            und Aufräumen, z.B. alle Fotos einer bestimmten Person.
+          </p>
+        </div>
+        <div id="people-grid" class="shot-grid"></div>
+        <div id="person-detail" class="hidden">
+          <div class="panel">
+            <h3 class="panel-title" id="person-detail-title"></h3>
+            <button type="button" class="btn-ghost" id="person-back">← Zurück zu allen Personen</button>
+          </div>
+          <div id="person-summary" class="photos-summary hidden"></div>
+          <div id="person-grid" class="shot-grid"></div>
+          <div id="person-pager" class="photo-pager"></div>
+        </div>
       </div>
     </section>
 

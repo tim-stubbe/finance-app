@@ -938,6 +938,24 @@ class ImmichStatsOut(BaseModel):
     available: bool = True
 
 
+class ImmichPersonOut(BaseModel):
+    id: str
+    name: str
+    asset_count: int = 0
+
+
+class ImmichPeopleOut(BaseModel):
+    people: List[ImmichPersonOut]
+
+
+class ImmichPersonAssetsOut(BaseModel):
+    assets: List["ImmichAssetOut"]
+    page: int
+    has_more: bool
+    trash_enabled: bool = True
+    trash_days: Optional[int] = None
+
+
 class ImmichAssetOut(BaseModel):
     id: str
     file_name: Optional[str] = None

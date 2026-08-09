@@ -2257,8 +2257,10 @@ document.getElementById("photos-subtabs").addEventListener("click", e => {
   document.getElementById("photos-view-duplicates").classList.toggle("hidden", view !== "duplicates");
   document.getElementById("photos-view-screenshots").classList.toggle("hidden", view !== "screenshots");
   document.getElementById("photos-view-quality").classList.toggle("hidden", view !== "quality");
+  document.getElementById("photos-view-people").classList.toggle("hidden", view !== "people");
   if (view === "screenshots" && !shotState.assets.length) loadScreenshots();
   if (view === "quality" && !qualityState.assets.length) loadQuality();
+  if (view === "people" && !peopleCache.length) loadPeople();
 });
 
 async function loadScreenshots(offset = 0) {
@@ -2512,6 +2514,131 @@ document.getElementById("photos-view-quality").addEventListener("click", async e
       });
       toast(`${r.trashed} verschoben, ${formatBytes(r.freed_bytes)} frei.`);
       await loadQuality(qualityState.offset);
+    } catch (err) {
+      toast("Fehler: " + err.message);
+    }
+  }
+});
+
+// ---------- Personen (Immichs Gesichtserkennung) ----------
+let peopleCache = [];
+let personSelection = new Set();
+let personState = { id: null, name: "", page: 1, hasMore: false, assets: [], trashEnabled: true };
+
+async function loadPeople() {
+  const grid = document.getElementById("people-grid");
+  grid.innerHTML = `<p class="page-sub">Lade Personen …</p>`;
+  try {
+    const d = await api("/immich/people");
+    peopleCache = d.people;
+  } catch (e) {
+    grid.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+    return;
+  }
+  if (!peopleCache.length) {
+    grid.innerHTML = `<p class="page-sub">Immich hat noch keine benannten Personen erkannt.</p>`;
+    return;
+  }
+  grid.innerHTML = peopleCache.map(p => `
+    <button type="button" class="shot-card" data-person="${esc(p.id)}">
+      <img loading="lazy" src="/api/immich/people/${esc(p.id)}/thumbnail" alt="">
+      <span class="shot-meta">
+        <span>${esc(p.name)}</span>
+        <span>${p.asset_count} Fotos</span>
+      </span>
+    </button>`).join("");
+}
+
+async function loadPersonAssets(page = 1) {
+  const grid = document.getElementById("person-grid");
+  const summary = document.getElementById("person-summary");
+  grid.innerHTML = `<p class="page-sub">Lade Fotos …</p>`;
+
+  let d;
+  try {
+    d = await api(`/immich/people/${personState.id}/assets?page=${page}`);
+  } catch (e) {
+    grid.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+    return;
+  }
+  personState = { ...personState, page: d.page, hasMore: d.has_more, assets: d.assets, trashEnabled: d.trash_enabled };
+  personSelection.clear();
+  summary.classList.remove("hidden");
+  summary.innerHTML = `Seite ${d.page}.
+    ${d.trash_enabled
+      ? `Ausgewählte wandern in Immichs Papierkorb, wiederherstellbar.`
+      : `<span class="photos-warn">⚠️ Papierkorb in Immich abgeschaltet – Aufräumen ist gesperrt.</span>`}`;
+  renderPersonAssets();
+}
+
+function renderPersonAssets() {
+  const grid = document.getElementById("person-grid");
+  if (!personState.assets.length) { grid.innerHTML = `<p class="page-sub">Keine Fotos auf dieser Seite.</p>`; document.getElementById("person-pager").innerHTML = ""; return; }
+
+  grid.innerHTML = personState.assets.map(a => {
+    const sel = personSelection.has(a.id);
+    return `<button type="button" class="shot-card ${sel ? "is-selected" : ""}" data-person-asset="${esc(a.id)}">
+      <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+      <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="${esc(a.file_name || "")}" title="Vergrößern">🔍</span>
+      <span class="shot-check">${sel ? "✓" : ""}</span>
+      <span class="shot-meta">
+        <span>${a.created_at ? fmtDate(a.created_at.slice(0, 10)) : ""}</span>
+        <span>${formatBytes(a.size_bytes)}</span>
+      </span>
+    </button>`;
+  }).join("");
+
+  const pager = [];
+  if (personSelection.size && personState.trashEnabled) {
+    pager.push(`<button type="button" class="btn-primary" data-person-trash="1">
+      ${personSelection.size} in den Papierkorb</button>`);
+  }
+  if (personState.page > 1) pager.push(`<button type="button" class="btn-ghost" data-person-page="${personState.page - 1}">← Zurück</button>`);
+  if (personState.hasMore) pager.push(`<button type="button" class="btn-ghost" data-person-page="${personState.page + 1}">Weitere →</button>`);
+  document.getElementById("person-pager").innerHTML = pager.join("");
+}
+
+document.getElementById("photos-view-people").addEventListener("click", async e => {
+  if (checkZoomClick(e)) return;
+
+  const personId = e.target.closest("[data-person]")?.dataset.person;
+  if (personId) {
+    const person = peopleCache.find(p => p.id === personId);
+    personState = { id: personId, name: person?.name || "", page: 1, hasMore: false, assets: [], trashEnabled: true };
+    document.getElementById("person-detail-title").textContent = `🙂 ${person?.name || ""}`;
+    document.getElementById("person-detail").classList.remove("hidden");
+    document.getElementById("people-grid").classList.add("hidden");
+    await loadPersonAssets(1);
+    return;
+  }
+  if (e.target.closest("#person-back")) {
+    document.getElementById("person-detail").classList.add("hidden");
+    document.getElementById("people-grid").classList.remove("hidden");
+    return;
+  }
+  const page = e.target.closest("[data-person-page]")?.dataset.personPage;
+  if (page !== undefined) {
+    await loadPersonAssets(parseInt(page, 10));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const card = e.target.closest("[data-person-asset]");
+  if (card) {
+    const id = card.dataset.personAsset;
+    personSelection.has(id) ? personSelection.delete(id) : personSelection.add(id);
+    renderPersonAssets();
+    return;
+  }
+  if (e.target.closest("[data-person-trash]")) {
+    const ids = [...personSelection];
+    if (!immichSkipConfirm &&
+        !confirm(`${ids.length} Foto(s) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+    try {
+      const r = await api(`/immich/people/${personState.id}/trash`, {
+        method: "POST", body: JSON.stringify({ asset_ids: ids }),
+      });
+      toast(`${r.trashed} verschoben, ${formatBytes(r.freed_bytes)} frei.`);
+      await loadPersonAssets(personState.page);
     } catch (err) {
       toast("Fehler: " + err.message);
     }

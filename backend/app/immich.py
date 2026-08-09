@@ -281,6 +281,63 @@ def asset_hash(url: str, api_key: str, asset_id: str) -> int:
     return _hash_cache[asset_id]
 
 
+# ---------- Personen (Immichs eigene Gesichtserkennung) ----------
+# Wieder: nichts nachgebaut, nur Immichs Ergebnis genutzt - Immich erkennt und
+# benennt Personen bereits selbst, hier wird das nur als weiterer Filter zum
+# gezielten Aufräumen angeboten ("alle Fotos von X ansehen und auswählen").
+
+
+def list_people(url: str, api_key: str) -> list[dict]:
+    """Alle vom Nutzer benannten Personen, absteigend nach Bildanzahl - für
+    die Übersicht sind unbenannte oder seltene Gesichter (Immich erkennt auch
+    Statisten auf Gruppenfotos) nicht relevant."""
+    resp = requests.get(
+        f"{_base(url)}/api/people",
+        headers=_headers(api_key), params={"withHidden": False, "size": 1000},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    people = (resp.json() or {}).get("people") or []
+    named = [p for p in people if p.get("name")]
+
+    result = []
+    for p in named:
+        try:
+            stats_resp = requests.get(
+                f"{_base(url)}/api/people/{p['id']}/statistics",
+                headers=_headers(api_key), timeout=TIMEOUT,
+            )
+            stats_resp.raise_for_status()
+            count = stats_resp.json().get("assets", 0)
+        except Exception:
+            count = 0
+        result.append({"id": p["id"], "name": p["name"], "asset_count": count})
+    result.sort(key=lambda p: p["asset_count"], reverse=True)
+    return result
+
+
+def fetch_person_thumbnail(url: str, api_key: str, person_id: str) -> tuple[bytes, str]:
+    resp = requests.get(
+        f"{_base(url)}/api/people/{person_id}/thumbnail",
+        headers={"x-api-key": api_key}, timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "image/jpeg")
+
+
+def person_assets(url: str, api_key: str, person_id: str, page: int, size: int = 60) -> tuple[list[dict], bool]:
+    """Fotos/Videos einer Person, seitenweise über Immichs Metadaten-Suche."""
+    resp = requests.post(
+        f"{_base(url)}/api/search/metadata",
+        headers=_headers(api_key),
+        json={"personIds": [person_id], "page": page, "size": size, "withExif": True},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    block = (resp.json() or {}).get("assets") or {}
+    return list(block.get("items") or []), bool(block.get("nextPage"))
+
+
 # ---------- Unnötige Fotos: unscharf oder leer/einfarbig ----------
 # Bewusst KEIN Bildmodell, aus demselben Grund wie beim dHash oben: die
 # Frage laesst sich mit einfachen Bildstatistiken direkt und deterministisch
