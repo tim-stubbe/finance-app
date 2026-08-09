@@ -1067,8 +1067,29 @@
         <button class="btn-ghost" id="photos-goto-settings">Zu den Einstellungen</button>
       </div>
 
-      <div id="photos-summary" class="photos-summary hidden"></div>
-      <div id="photos-groups"></div>
+      <div class="range-tabs" id="photos-subtabs" style="margin-bottom:20px">
+        <button type="button" class="range-tab active" data-photos-view="duplicates">🖼️ Duplikate</button>
+        <button type="button" class="range-tab" data-photos-view="screenshots">📱 Screenshots</button>
+      </div>
+
+      <div id="photos-view-duplicates">
+        <div id="photos-summary" class="photos-summary hidden"></div>
+        <div id="photos-groups"></div>
+      </div>
+
+      <div id="photos-view-screenshots" class="hidden">
+        <div class="panel">
+          <h3 class="panel-title">📱 Bildschirmfotos</h3>
+          <p class="page-sub">
+            Erkannt am Dateinamen – zuverlässiger und schneller, als ein Bildmodell raten zu lassen.
+            Älteste zuerst, denn die sind am ehesten entbehrlich.
+          </p>
+          <div class="shot-filter" id="shot-filter"></div>
+        </div>
+        <div id="shots-summary" class="photos-summary hidden"></div>
+        <div id="shots-grid" class="shot-grid"></div>
+        <div id="shots-pager" class="photo-pager"></div>
+      </div>
     </section>
 
     <section id="tab-trips" class="tab-content">

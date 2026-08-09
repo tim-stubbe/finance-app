@@ -151,6 +151,58 @@ def dismiss_duplicate(url: str, api_key: str, duplicate_id: str) -> None:
     resp.raise_for_status()
 
 
+# Dateinamensmuster, unter denen Betriebssysteme Bildschirmfotos ablegen.
+# Bewusst über den Dateinamen erkannt statt über ein Bildmodell: das ist
+# nachvollziehbar, kostet keine Rechenzeit und liegt nicht daneben. Ein
+# Vision-Modell müsste 683 Bilder ansehen, um dasselbe schlechter zu wissen.
+SCREENSHOT_PATTERNS = ["Screenshot", "Bildschirmfoto", "Screen Shot", "Screenshot_"]
+
+
+def find_screenshots(url: str, api_key: str) -> list[dict]:
+    """Sucht alle Bildschirmfotos anhand des Dateinamens.
+
+    Immichs Suche liefert seitenweise (`nextPage`); es wird komplett
+    durchgeblättert, weil die Gesamtmenge klein ist (real: knapp 700) und die
+    Altersauswertung sonst nur auf einem Ausschnitt basieren würde.
+    """
+    seen: dict[str, dict] = {}
+    for pattern in SCREENSHOT_PATTERNS:
+        page = 1
+        while page:
+            resp = requests.post(
+                f"{_base(url)}/api/search/metadata",
+                headers=_headers(api_key),
+                json={"originalFileName": pattern, "size": 1000,
+                      "page": page, "withExif": True},
+                timeout=TIMEOUT,
+            )
+            resp.raise_for_status()
+            block = (resp.json() or {}).get("assets") or {}
+            for item in block.get("items") or []:
+                # Über mehrere Muster hinweg entdoppeln.
+                seen[item["id"]] = item
+            nxt = block.get("nextPage")
+            page = int(nxt) if nxt else None
+    return list(seen.values())
+
+
+def trash_assets(url: str, api_key: str, asset_ids: list[str]) -> None:
+    """Verschiebt Bilder in den Papierkorb.
+
+    `force` ist hier fest auf False - laut Immich-Quelltext (asset.service.ts)
+    entscheidet genau dieses Feld zwischen `AssetStatus.Trashed` (holbar) und
+    `AssetStatus.Deleted` (weg). Es wird bewusst ausgeschrieben statt
+    weggelassen, damit beim Lesen sofort klar ist, was passiert.
+    """
+    resp = requests.delete(
+        f"{_base(url)}/api/assets",
+        headers=_headers(api_key),
+        json={"ids": asset_ids, "force": False},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+
+
 def asset_summary(asset: dict) -> dict:
     """Reduziert ein Immich-Asset auf das, was für die Entscheidung
     „welches behalte ich" wirklich zählt - Dateigröße und Auflösung sind die

@@ -937,6 +937,30 @@ class ImmichResolveResult(BaseModel):
     trashed_assets: int
 
 
+class ImmichScreenshotsOut(BaseModel):
+    assets: List[ImmichAssetOut]
+    # Gesamtzahl nach Altersfilter (nicht nur die angezeigte Seite).
+    total: int
+    total_size_bytes: int
+    # Verteilung ueber alle Bildschirmfotos, unabhaengig vom Filter - macht
+    # sichtbar, wie viel jeweils dahintersteckt.
+    by_age: Dict[str, int]
+    offset: int
+    limit: int
+    has_more: bool
+    trash_enabled: bool = True
+    trash_days: Optional[int] = None
+
+
+class ImmichTrashRequest(BaseModel):
+    asset_ids: List[str]
+
+
+class ImmichTrashResult(BaseModel):
+    trashed: int
+    freed_bytes: int
+
+
 # ---------- Vermögensvergleich mit der Altersgruppe ----------
 class BenchmarkBracket(BaseModel):
     key: str

@@ -1954,6 +1954,140 @@ document.getElementById("photos-goto-settings").addEventListener("click", () => 
   document.querySelector('.nav-btn[data-tab="settings"]').click();
 });
 
+// ---------- Screenshots ----------
+const shotSelection = new Set();
+let shotState = { months: 12, offset: 0, hasMore: false, assets: [], trashEnabled: true };
+
+const SHOT_FILTERS = [
+  { months: 0, label: "Alle" },
+  { months: 6, label: "Älter als 6 Monate" },
+  { months: 12, label: "Älter als 1 Jahr" },
+  { months: 24, label: "Älter als 2 Jahre" },
+];
+
+document.getElementById("photos-subtabs").addEventListener("click", e => {
+  const view = e.target.closest("[data-photos-view]")?.dataset.photosView;
+  if (!view) return;
+  document.querySelectorAll("#photos-subtabs .range-tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.photosView === view));
+  document.getElementById("photos-view-duplicates").classList.toggle("hidden", view !== "duplicates");
+  document.getElementById("photos-view-screenshots").classList.toggle("hidden", view !== "screenshots");
+  if (view === "screenshots" && !shotState.assets.length) loadScreenshots();
+});
+
+async function loadScreenshots(offset = 0) {
+  const grid = document.getElementById("shots-grid");
+  const summary = document.getElementById("shots-summary");
+  grid.innerHTML = `<p class="page-sub">Suche Bildschirmfotos …</p>`;
+
+  let d;
+  try {
+    d = await api(`/immich/screenshots?older_than_months=${shotState.months}&offset=${offset}&limit=60`);
+  } catch (e) {
+    grid.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+    return;
+  }
+
+  shotState = { ...shotState, offset: d.offset, hasMore: d.has_more,
+                assets: d.assets, trashEnabled: d.trash_enabled };
+  // Auswahl beim Blättern/Filtern verwerfen - sonst würde man Bilder wegwerfen,
+  // die man auf einer anderen Seite ausgewählt und längst vergessen hat.
+  shotSelection.clear();
+
+  document.getElementById("shot-filter").innerHTML = SHOT_FILTERS.map(f => {
+    const n = f.months === 0 ? d.by_age.alle
+      : (f.months === 6 ? d.by_age["6m"] : f.months === 12 ? d.by_age["1j"] : d.by_age["2j"]);
+    return `<button type="button" class="range-tab ${f.months === shotState.months ? "active" : ""}"
+             data-shot-months="${f.months}">${f.label} (${n})</button>`;
+  }).join("");
+
+  summary.classList.remove("hidden");
+  const mb = (d.total_size_bytes / 1024 / 1024).toFixed(0);
+  summary.innerHTML = d.total === 0
+    ? `Keine Bildschirmfotos in diesem Zeitraum.`
+    : `<strong>${d.total} Bildschirmfotos</strong> (${mb} MB) – angezeigt
+       ${d.offset + 1}–${d.offset + d.assets.length}.
+       ${d.trash_enabled
+         ? `Ausgewählte wandern in Immichs Papierkorb, ${d.trash_days ? `${d.trash_days} Tage lang ` : ""}wiederherstellbar.`
+         : `<span class="photos-warn">⚠️ Papierkorb in Immich abgeschaltet – Aufräumen ist gesperrt.</span>`}`;
+
+  renderShots();
+}
+
+function renderShots() {
+  const grid = document.getElementById("shots-grid");
+  if (!shotState.assets.length) { grid.innerHTML = ""; document.getElementById("shots-pager").innerHTML = ""; return; }
+
+  grid.innerHTML = shotState.assets.map(a => {
+    const sel = shotSelection.has(a.id);
+    return `<button type="button" class="shot-card ${sel ? "is-selected" : ""}" data-shot="${esc(a.id)}">
+      <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+      <span class="shot-check">${sel ? "✓" : ""}</span>
+      <span class="shot-meta">
+        <span>${a.created_at ? fmtDate(a.created_at.slice(0, 10)) : ""}</span>
+        <span>${formatBytes(a.size_bytes)}</span>
+      </span>
+    </button>`;
+  }).join("");
+
+  const selBytes = shotState.assets.filter(a => shotSelection.has(a.id))
+    .reduce((s, a) => s + (a.size_bytes || 0), 0);
+  const alleGewaehlt = shotSelection.size === shotState.assets.length;
+
+  const pager = [];
+  pager.push(`<button type="button" class="btn-ghost" data-shot-all="${alleGewaehlt ? "0" : "1"}">
+    ${alleGewaehlt ? "Auswahl aufheben" : `Alle ${shotState.assets.length} auswählen`}</button>`);
+  if (shotSelection.size && shotState.trashEnabled) {
+    pager.push(`<button type="button" class="btn-primary" data-shot-trash="1">
+      ${shotSelection.size} in den Papierkorb (${formatBytes(selBytes)})</button>`);
+  }
+  if (shotState.offset > 0) pager.push(`<button type="button" class="btn-ghost" data-shot-page="${Math.max(0, shotState.offset - 60)}">← Zurück</button>`);
+  if (shotState.hasMore) pager.push(`<button type="button" class="btn-ghost" data-shot-page="${shotState.offset + 60}">Weitere →</button>`);
+  document.getElementById("shots-pager").innerHTML = pager.join("");
+}
+
+document.getElementById("photos-view-screenshots").addEventListener("click", async e => {
+  const months = e.target.closest("[data-shot-months]")?.dataset.shotMonths;
+  if (months !== undefined) {
+    shotState.months = parseInt(months, 10);
+    await loadScreenshots(0);
+    return;
+  }
+  const page = e.target.closest("[data-shot-page]")?.dataset.shotPage;
+  if (page !== undefined) {
+    await loadScreenshots(parseInt(page, 10));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const card = e.target.closest("[data-shot]");
+  if (card) {
+    const id = card.dataset.shot;
+    shotSelection.has(id) ? shotSelection.delete(id) : shotSelection.add(id);
+    renderShots();
+    return;
+  }
+  const all = e.target.closest("[data-shot-all]")?.dataset.shotAll;
+  if (all !== undefined) {
+    shotSelection.clear();
+    if (all === "1") shotState.assets.forEach(a => shotSelection.add(a.id));
+    renderShots();
+    return;
+  }
+  if (e.target.closest("[data-shot-trash]")) {
+    const ids = [...shotSelection];
+    if (!confirm(`${ids.length} Bildschirmfoto(s) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+    try {
+      const r = await api("/immich/screenshots/trash", {
+        method: "POST", body: JSON.stringify({ asset_ids: ids }),
+      });
+      toast(`${r.trashed} verschoben, ${formatBytes(r.freed_bytes)} frei.`);
+      await loadScreenshots(shotState.offset);
+    } catch (err) {
+      toast("Fehler: " + err.message);
+    }
+  }
+});
+
 // ---------- Immich-Einstellungen ----------
 async function loadImmichSettings() {
   const s = await api("/settings/immich");

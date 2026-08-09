@@ -1900,6 +1900,120 @@ def immich_resolve(data: schemas.ImmichResolveRequest, db: Session = Depends(get
     )
 
 
+SCREENSHOT_PAGE_SIZE = 60
+
+
+@api_router.get("/immich/screenshots", response_model=schemas.ImmichScreenshotsOut)
+def immich_screenshots(
+    older_than_months: int = 0,
+    offset: int = 0,
+    limit: int = SCREENSHOT_PAGE_SIZE,
+    db: Session = Depends(get_db),
+):
+    """Listet Bildschirmfotos, optional nur solche ab einem gewissen Alter."""
+    url, key = _immich_credentials(db)
+    try:
+        raw = immich.find_screenshots(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
+
+    def taken(a: dict) -> str:
+        return a.get("fileCreatedAt") or ""
+
+    # Altersverteilung immer über den kompletten Bestand rechnen, nicht über
+    # die gefilterte Auswahl - sonst zeigt die Übersicht nur sich selbst.
+    heute = date.today()
+    by_age = {"6m": 0, "1j": 0, "2j": 0, "alle": len(raw)}
+    for a in raw:
+        d = taken(a)[:10]
+        if not d:
+            continue
+        try:
+            alter_tage = (heute - date.fromisoformat(d)).days
+        except ValueError:
+            continue
+        if alter_tage >= 180:
+            by_age["6m"] += 1
+        if alter_tage >= 365:
+            by_age["1j"] += 1
+        if alter_tage >= 730:
+            by_age["2j"] += 1
+
+    gefiltert = raw
+    if older_than_months > 0:
+        grenze = heute - timedelta(days=int(older_than_months * 30.44))
+        gefiltert = [a for a in raw
+                     if taken(a)[:10] and taken(a)[:10] < grenze.isoformat()]
+
+    # Älteste zuerst - die sind am ehesten entbehrlich.
+    gefiltert.sort(key=taken)
+
+    total_size = sum((a.get("exifInfo") or {}).get("fileSizeInByte") or 0 for a in gefiltert)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    page = gefiltert[offset:offset + limit]
+
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception:
+        trash = {"enabled": True, "days": None}
+
+    return schemas.ImmichScreenshotsOut(
+        assets=[schemas.ImmichAssetOut(**immich.asset_summary(a)) for a in page],
+        total=len(gefiltert),
+        total_size_bytes=total_size,
+        by_age=by_age,
+        offset=offset, limit=limit, has_more=offset + limit < len(gefiltert),
+        trash_enabled=trash["enabled"], trash_days=trash["days"],
+    )
+
+
+@api_router.post("/immich/screenshots/trash", response_model=schemas.ImmichTrashResult)
+def immich_trash_screenshots(data: schemas.ImmichTrashRequest, db: Session = Depends(get_db)):
+    """Verschiebt ausgewählte Bildschirmfotos in Immichs Papierkorb."""
+    url, key = _immich_credentials(db)
+    if not data.asset_ids:
+        raise HTTPException(400, "Es wurde nichts ausgewählt.")
+
+    # Gleiche Sperre wie beim Auflösen von Duplikaten. Hier zusätzlich
+    # abgesichert dadurch, dass `trash_assets` `force=False` fest setzt - aber
+    # ein abgeschalteter Papierkorb hiesse, dass Immich das Weggeworfene sofort
+    # endgültig entsorgt, und dann soll dieser Weg gar nicht erst offenstehen.
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Papierkorb-Einstellung nicht prüfbar, abgebrochen: {e}")
+    if not trash["enabled"]:
+        raise HTTPException(
+            400,
+            "Abgebrochen: In Immich ist der Papierkorb abgeschaltet. Aussortierte "
+            "Bilder wären sofort unwiderruflich gelöscht. Es wurde nichts geändert.",
+        )
+
+    # Nur echte Bildschirmfotos annehmen. Ohne diese Prüfung könnte über diesen
+    # Endpunkt jedes beliebige Bild der Bibliothek weggeworfen werden - die IDs
+    # kommen schliesslich aus dem Browser.
+    try:
+        erlaubt = {a["id"]: a for a in immich.find_screenshots(url, key)}
+    except Exception as e:
+        raise HTTPException(502, f"Abgleich mit Immich fehlgeschlagen: {e}")
+    unbekannt = [i for i in data.asset_ids if i not in erlaubt]
+    if unbekannt:
+        raise HTTPException(
+            400,
+            f"{len(unbekannt)} der ausgewählten Bilder sind keine Bildschirmfotos. "
+            "Abgebrochen, es wurde nichts geändert.",
+        )
+
+    freed = sum((erlaubt[i].get("exifInfo") or {}).get("fileSizeInByte") or 0
+                for i in data.asset_ids)
+    try:
+        immich.trash_assets(url, key, data.asset_ids)
+    except Exception as e:
+        raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
+    return schemas.ImmichTrashResult(trashed=len(data.asset_ids), freed_bytes=freed)
+
+
 @api_router.delete("/immich/duplicates/{duplicate_id}")
 def immich_dismiss(duplicate_id: str, db: Session = Depends(get_db)):
     """Gruppe ausblenden, ohne ein Bild anzufassen."""
