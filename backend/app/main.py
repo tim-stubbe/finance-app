@@ -2103,6 +2103,19 @@ DUPLICATES_PAGE_SIZE = 20
 MAX_ASSETS_PER_GROUP = 24
 
 
+@api_router.get("/immich/stats", response_model=schemas.ImmichStatsOut)
+def immich_stats(db: Session = Depends(get_db)):
+    """Kurzer Überblick über die ganze Bibliothek oben im Fotos-Tab. Braucht
+    Admin-Rechte auf Immich-Seite - fehlen die, wird das nicht als Fehler
+    behandelt, sondern die Kennzahlen bleiben einfach ausgeblendet."""
+    url, key = _immich_credentials(db)
+    try:
+        stats = immich.server_statistics(url, key)
+    except Exception:
+        return schemas.ImmichStatsOut(available=False)
+    return schemas.ImmichStatsOut(**stats, available=True)
+
+
 @api_router.get("/immich/duplicates", response_model=schemas.ImmichDuplicatesOut)
 def immich_duplicates(
     offset: int = 0,

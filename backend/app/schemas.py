@@ -929,6 +929,15 @@ class ImmichTestResult(BaseModel):
     error: Optional[str] = None
 
 
+class ImmichStatsOut(BaseModel):
+    photos: int = 0
+    videos: int = 0
+    usage_bytes: int = 0
+    usage_photos_bytes: int = 0
+    usage_videos_bytes: int = 0
+    available: bool = True
+
+
 class ImmichAssetOut(BaseModel):
     id: str
     file_name: Optional[str] = None

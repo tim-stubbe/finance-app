@@ -1797,6 +1797,23 @@ function formatBytes(n) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 }
 
+// Ohne Rueckgriff auf Admin-Rechte (server.statistics) bleibt available=false -
+// dann einfach unauffaellig nichts anzeigen, statt eine Fehlermeldung fuer
+// eine reine Zusatzinfo.
+async function loadPhotoStats() {
+  const el = document.getElementById("photos-stats");
+  try {
+    const s = await api("/immich/stats");
+    if (!s.available) { el.classList.add("hidden"); return; }
+    const totalGb = (s.usage_bytes / 1024 / 1024 / 1024).toFixed(1);
+    el.textContent = `📚 Bibliothek: ${s.photos.toLocaleString("de-DE")} Fotos, ` +
+      `${s.videos.toLocaleString("de-DE")} Videos, ${totalGb} GB belegt.`;
+    el.classList.remove("hidden");
+  } catch {
+    el.classList.add("hidden");
+  }
+}
+
 async function loadPhotosTab(offset = 0) {
   const hint = document.getElementById("photos-setup-hint");
   const hintText = document.getElementById("photos-setup-text");
@@ -1814,6 +1831,7 @@ async function loadPhotosTab(offset = 0) {
     return;
   }
   hint.classList.add("hidden");
+  loadPhotoStats();
 
   wrap.innerHTML = `<p class="page-sub">Suche doppelte Aufnahmen …</p>`;
   let data;

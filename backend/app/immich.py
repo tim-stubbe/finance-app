@@ -70,6 +70,26 @@ def check_connection(url: str, api_key: str) -> dict:
     }
 
 
+def server_statistics(url: str, api_key: str) -> dict:
+    """Gesamtzahlen der Bibliothek (Fotos/Videos/Speicherplatz) - für einen
+    kurzen Überblick oben im Fotos-Tab. Braucht laut Immich-Doku das Recht
+    `server.statistics`; ein normaler API-Schlüssel ohne Admin-Rechte bekommt
+    hier ggf. 403, deshalb wird der Aufruf immer mit try/except umgeben.
+    """
+    resp = requests.get(
+        f"{_base(url)}/api/server/statistics", headers=_headers(api_key), timeout=TIMEOUT
+    )
+    resp.raise_for_status()
+    data = resp.json() or {}
+    return {
+        "photos": data.get("photos", 0),
+        "videos": data.get("videos", 0),
+        "usage_bytes": data.get("usage", 0),
+        "usage_photos_bytes": data.get("usagePhotos", 0),
+        "usage_videos_bytes": data.get("usageVideos", 0),
+    }
+
+
 def trash_config(url: str, api_key: str) -> dict:
     """Liest Immichs Papierkorb-Einstellung.
 
