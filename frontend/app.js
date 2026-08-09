@@ -142,6 +142,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.classList.add("active");
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
     moveNavIndicator(btn);
+    if (btn.dataset.tab === "hub") loadHubTab();
     if (btn.dataset.tab === "dashboard") loadDashboard();
     if (btn.dataset.tab === "business") loadBusinessTab();
     if (btn.dataset.tab === "transactions") { loadTransactions(); loadMailInbox(); }
@@ -4013,6 +4014,80 @@ async function loadSettingsTab() {
 }
 
 // ================= DASHBOARD =================
+// Springt programmatisch zu einem Tab - gleiche Schritte wie ein echter Klick
+// auf den Nav-Button, nur ausgelöst von einer Hub-Kachel statt vom Nutzer
+// direkt in der Navigation.
+function goToTab(tabName) {
+  document.querySelector(`.nav-btn[data-tab="${tabName}"]`)?.click();
+}
+
+// ---------- Hub (Startseite) ----------
+async function loadHubTab() {
+  const cardsEl = document.getElementById("hub-finance-cards");
+  try {
+    const [dash, nw] = await Promise.all([api("/dashboard"), api("/net-worth")]);
+    cardsEl.innerHTML = `
+      <button type="button" class="card card-pos" data-hub-jump="dashboard">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><h3>Einnahmen (Jahr)</h3><p class="pos">${eur(dash.total_income)}</p></div>
+      </button>
+      <button type="button" class="card card-neg" data-hub-jump="dashboard">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><h3>Ausgaben (Jahr)</h3><p class="neg">${eur(dash.total_expense)}</p></div>
+      </button>
+      <button type="button" class="card card-bal" data-hub-jump="dashboard">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8 12H16M12 8V16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div><h3>Saldo (Jahr)</h3><p>${eur(dash.balance)}</p></div>
+      </button>
+      <button type="button" class="card" data-hub-jump="investments">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><h3>Nettovermögen</h3><p>${eur(nw.total)}</p></div>
+      </button>`;
+  } catch (e) {
+    cardsEl.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+  }
+
+  const body = document.getElementById("hub-services-body");
+  const parts = [];
+  try {
+    const goalsList = await api("/goals");
+    const openGoals = goalsList.filter(g => g.status === "open").length;
+    parts.push(`<button type="button" class="integrations-widget-item" data-hub-jump="goals">
+      <span class="integrations-widget-icon">🎯</span>
+      <div><strong>Ziele &amp; To-Dos</strong><br><span class="page-sub">${openGoals} offene Ziel(e)</span></div>
+    </button>`);
+  } catch { /* Ziele nicht ladbar - Kachel einfach weglassen */ }
+
+  try {
+    const stats = await api("/immich/stats");
+    if (stats.available) {
+      const gb = (stats.usage_bytes / 1024 / 1024 / 1024).toFixed(1);
+      parts.push(`<button type="button" class="integrations-widget-item" data-hub-jump="photos">
+        <span class="integrations-widget-icon">📸</span>
+        <div><strong>Immich</strong><br><span class="page-sub">${stats.photos.toLocaleString("de-DE")} Fotos, ${gb} GB</span></div>
+      </button>`);
+    }
+  } catch { /* Immich nicht eingerichtet - Kachel einfach weglassen */ }
+
+  try {
+    const conns = await api("/ebay/connections");
+    const connected = conns.filter(c => c.status === "connected");
+    if (connected.length) {
+      parts.push(`<button type="button" class="integrations-widget-item" data-hub-jump="settings">
+        <span class="integrations-widget-icon">🛒</span>
+        <div><strong>eBay</strong><br><span class="page-sub">${connected.length} Verbindung${connected.length !== 1 ? "en" : ""} aktiv</span></div>
+      </button>`);
+    }
+  } catch { /* eBay nicht eingerichtet - Kachel einfach weglassen */ }
+
+  body.innerHTML = parts.length ? parts.join("") : `<p class="page-sub">Noch keine Zusatzdienste eingerichtet - siehe Einstellungen.</p>`;
+}
+
+document.getElementById("tab-hub").addEventListener("click", e => {
+  const jump = e.target.closest("[data-hub-jump]")?.dataset.hubJump;
+  if (jump) goToTab(jump);
+});
+
 async function loadDashboard() {
   const year = document.getElementById("db-year").value;
   const month = document.getElementById("db-month").value;
@@ -4978,7 +5053,9 @@ async function init() {
   await initCurrency();
   await loadAccounts();
   await loadCategories();
-  await loadDashboard();
+  // Hub ist jetzt die Startseite, nicht mehr das Dashboard - das lädt wie
+  // jeder andere Tab erst bei Klick (siehe Zeile 112 und den nav-btn-Handler).
+  await loadHubTab();
   await loadGlobalTopbar();
   refreshGoalsBadge();
   refreshIntegrationBadge();

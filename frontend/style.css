@@ -657,6 +657,25 @@ main {
 .card p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+
+/* Klickbare Karten (Hub) sind <button>-Elemente, damit sie per Tastatur
+   erreichbar sind - Browser-Grundstyling für Buttons zurücksetzen, damit sie
+   genauso aussehen wie die normalen, nicht klickbaren Dashboard-Karten. */
+button.card {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+button.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.integrations-widget-item[type="button"] {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .cards .card:nth-child(1) { animation-delay: 0.02s; }
 .cards .card:nth-child(2) { animation-delay: 0.08s; }
 .cards .card:nth-child(3) { animation-delay: 0.14s; }

@@ -52,7 +52,11 @@
     </div>
     <nav class="nav">
       <span class="nav-indicator"></span>
-      <button class="nav-btn active" data-tab="dashboard">
+      <button class="nav-btn active" data-tab="hub">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 11L12 4L20 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10V19a1 1 0 001 1h4v-5h2v5h4a1 1 0 001-1V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Hub</span>
+      </button>
+      <button class="nav-btn" data-tab="dashboard">
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="3" width="8" height="6" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="11" width="8" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="8" height="6" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>
         <span>Dashboard</span>
       </button>
@@ -139,7 +143,23 @@
     </div>
 
     <!-- DASHBOARD -->
-    <section id="tab-dashboard" class="tab-content active">
+    <section id="tab-hub" class="tab-content active">
+      <header class="page-head">
+        <div>
+          <h1>Hub</h1>
+          <p class="page-sub">Überblick über alles auf einen Blick – Finanzen und angebundene Dienste</p>
+        </div>
+      </header>
+
+      <div class="cards" id="hub-finance-cards"></div>
+
+      <div class="panel">
+        <h3 class="panel-title">🧩 Angebundene Dienste</h3>
+        <div id="hub-services-body" class="integrations-widget-body"></div>
+      </div>
+    </section>
+
+    <section id="tab-dashboard" class="tab-content">
       <header class="page-head">
         <div>
           <h1>Dashboard</h1>
