@@ -1971,16 +1971,16 @@ function updateSimilarityBadges(duplicateId) {
     }
   });
 
-  // Bei genau zwei Aufnahmen zusätzlich die große Übereinstimmungsanzeige
-  // im Gruppentitel aktualisieren - die Ähnlichkeit wird oft erst asynchron
-  // nachgeladen, nach dem ersten Rendern der Gruppe.
+  // Große Übereinstimmungsanzeige im Gruppentitel aktualisieren - die
+  // Ähnlichkeit wird oft erst asynchron nachgeladen, nach dem ersten Rendern
+  // der Gruppe. groupUniformPct() entscheidet, ob das bei dieser Gruppengröße
+  // überhaupt eindeutig genug ist (siehe Kommentar dort).
   const group = photoGroupsCache.find(g => g.duplicate_id === duplicateId);
   const titleEl = groupEl.querySelector(".panel-title");
-  if (group && group.assets.length === 2 && titleEl) {
-    const otherId = group.assets.find(a => a.id !== refId)?.id;
-    const pct = pairs[refId]?.[otherId];
+  if (group && titleEl) {
     titleEl.querySelector(".photo-sim-big")?.remove();
-    if (pct !== undefined && pct !== null) {
+    const pct = groupUniformPct(group, refId);
+    if (pct !== null) {
       const cls = pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low";
       const span = document.createElement("span");
       span.className = `photo-sim-big ${cls}`;
@@ -1988,6 +1988,34 @@ function updateSimilarityBadges(duplicateId) {
       titleEl.appendChild(span);
     }
   }
+}
+
+// Bei genau zwei Aufnahmen ist die Übereinstimmung die zentrale Frage der
+// ganzen Gruppe ("ist das wirklich dasselbe Foto?") - deshalb groß und direkt
+// sichtbar statt nur als kleine Plakette an der Karte. Bei mehr als zwei
+// Aufnahmen wäre eine einzelne Zahl mehrdeutig (welches Paar ist gemeint?) -
+// AUSSER alle stimmen exakt zu 100% mit dem Vorschlag überein, dann ist die
+// Aussage "das ist wirklich überall dasselbe Bild" trotzdem eindeutig.
+function groupUniformPct(g, refId) {
+  const others = g.assets.filter(a => a.id !== refId).map(a => a.id);
+  if (!others.length) return null;
+  const pairs = photoSimilarity.get(g.duplicate_id)?.[refId] || {};
+  if (g.assets.length === 2) {
+    const pct = pairs[others[0]];
+    return (pct === undefined || pct === null) ? null : pct;
+  }
+  for (const id of others) {
+    const pct = pairs[id];
+    if (pct === undefined || pct === null || pct < 100) return null;
+  }
+  return 100;
+}
+
+function renderBigSimHtml(g, refId) {
+  const pct = groupUniformPct(g, refId);
+  if (pct === null) return "";
+  const cls = pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low";
+  return `<span class="photo-sim-big ${cls}">${pct}% Übereinstimmung</span>`;
 }
 
 function renderPhotoGroups() {
@@ -2040,13 +2068,7 @@ function renderPhotoGroups() {
            ${trashSet.size} in den Papierkorb
          </button>`;
 
-    // Bei genau zwei Aufnahmen ist die Übereinstimmung die zentrale Frage der
-    // ganzen Gruppe ("ist das wirklich dasselbe Foto?") - deshalb hier groß
-    // und direkt sichtbar statt nur als kleine Plakette an der Karte.
-    const pairPct = g.assets.length === 2 ? photoSimilarity.get(g.duplicate_id)?.[refId]?.[
-      g.assets.find(a => a.id !== refId)?.id] : undefined;
-    const bigSim = pairPct === undefined || pairPct === null ? "" :
-      `<span class="photo-sim-big ${pairPct >= 95 ? "sim-high" : pairPct >= 80 ? "sim-mid" : "sim-low"}">${pairPct}% Übereinstimmung</span>`;
+    const bigSim = renderBigSimHtml(g, refId);
 
     return `<div class="panel photo-group" data-group="${esc(g.duplicate_id)}">
       <div class="photo-group-head">
@@ -4821,6 +4843,11 @@ async function init() {
   await loadGlobalTopbar();
   refreshGoalsBadge();
   refreshIntegrationBadge();
+  // Ohne das bleibt immichSkipConfirm auf dem Standardwert false, bis der
+  // Nutzer einmal den Einstellungen-Tab geöffnet hat - die Bestätigung beim
+  // Papierkorb-Löschen im Fotos-Tab erschien dadurch trotz aktivierter
+  // Einstellung immer wieder, weil der Wert nie aus dem Backend geladen wurde.
+  loadImmichSettings().catch(() => {});
   loadVersionWatermark();
   handleEnableBankingReturn();
   handleEbayReturn();
