@@ -293,7 +293,12 @@ def list_people(url: str, api_key: str) -> list[dict]:
     Statisten auf Gruppenfotos) nicht relevant."""
     resp = requests.get(
         f"{_base(url)}/api/people",
-        headers=_headers(api_key), params={"withHidden": False, "size": 1000},
+        headers=_headers(api_key),
+        # requests serialisiert Python-False als String "False" (Grossbuchstabe)
+        # in der Query - Immichs API akzeptiert nur den JSON-Boolean-String
+        # "false" und antwortet sonst mit 400 Bad Request. Deshalb explizit
+        # als kleingeschriebener String statt als Python-bool.
+        params={"withHidden": "false", "size": 1000},
         timeout=TIMEOUT,
     )
     resp.raise_for_status()

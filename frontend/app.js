@@ -1254,6 +1254,8 @@ document.getElementById("ai-receipts-btn").addEventListener("click", async () =>
 
 async function loadAiTab() {
   await loadBelegChatModelSelect();
+  await loadFileSortSettings();
+  await loadFileSortLog();
 }
 
 // ================= BELEG-CHAT =================
@@ -4080,8 +4082,6 @@ async function loadSettingsTab() {
   await loadEbaySettings();
   await loadEbayConnections();
   await loadRadicaleSettings();
-  await loadFileSortSettings();
-  await loadFileSortLog();
 }
 
 // ================= DASHBOARD =================
