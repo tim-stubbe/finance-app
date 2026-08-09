@@ -99,9 +99,13 @@ function getCatColors() {
   return [1, 2, 3, 4, 5, 6, 7, 8].map(i => cssVar(`--cat-${i}`));
 }
 
+const THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a" };
+
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   try { localStorage.setItem("financeAppTheme", theme); } catch (e) {}
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeColorMeta) themeColorMeta.setAttribute("content", THEME_BG[theme] || THEME_BG.dark);
   document.querySelectorAll(".theme-option").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.themeOption === theme);
   });

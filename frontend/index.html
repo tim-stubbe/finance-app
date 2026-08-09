@@ -2,11 +2,20 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="theme-color" content="#0d0d0d">
 <script>
 (function () {
+  // Hintergrundfarbe je Theme - dieselbe Zuordnung nutzt applyTheme() in
+  // app.js beim Umschalten erneut. Hier separat gehalten, damit die
+  // Titelleiste/Statusleiste schon beim allerersten Rendern stimmt, bevor
+  // app.js ueberhaupt geladen ist (verhindert ein kurzes Aufblitzen).
+  // Muss NACH dem meta-Tag oben stehen - der Browser parst von oben nach
+  // unten, querySelector faende das Tag sonst noch nicht.
+  var THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a" };
   try {
     var theme = localStorage.getItem("financeAppTheme") || "dark";
     document.documentElement.setAttribute("data-theme", theme);
+    document.querySelector('meta[name="theme-color"]').setAttribute("content", THEME_BG[theme] || THEME_BG.dark);
   } catch (e) {}
 })();
 </script>
@@ -17,7 +26,6 @@
 <!-- PWA: installierbar auf dem Homescreen (iOS/Android), startet ohne Browser-Rahmen -->
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<meta name="theme-color" content="#5aa0ee">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
