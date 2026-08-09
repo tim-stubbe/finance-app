@@ -1171,3 +1171,13 @@ class MailAttachmentOut(BaseModel):
 
 class MailAttachRequest(BaseModel):
     transaction_id: int
+
+
+class MailCreateTransactionRequest(BaseModel):
+    account_id: int
+    category_id: Optional[int] = None
+    # Vorbelegt mit dem ausgelesenen Datum/Betrag, aber überschreibbar - die
+    # KI-Erkennung ist eine Vorlage, keine Zwangsvorgabe.
+    date: date
+    amount: float
+    description: Optional[str] = None

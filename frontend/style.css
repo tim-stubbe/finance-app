@@ -1905,3 +1905,18 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .mail-warn { color: var(--warn); font-weight: 600; }
 .mail-item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .mail-suggest { font-size: 12px; }
+
+.mail-new-tx { margin-top: 8px; }
+.mail-new-tx summary {
+  cursor: pointer;
+  display: inline-flex;
+  list-style: none;
+}
+.mail-new-tx summary::-webkit-details-marker { display: none; }
+.mail-new-tx-form {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}

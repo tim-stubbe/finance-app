@@ -1950,6 +1950,41 @@ def attach_mail_attachment(attachment_id: int, data: schemas.MailAttachRequest,
     return {"ok": True}
 
 
+@api_router.post("/mail/attachments/{attachment_id}/create-transaction", response_model=schemas.TransactionOut)
+def create_transaction_from_mail(attachment_id: int, data: schemas.MailCreateTransactionRequest,
+                                 db: Session = Depends(get_db),
+                                 space_id: int = Depends(auth.get_active_space_id)):
+    """Für den Fall, dass zum Beleg noch gar keine Buchung existiert - z.B.
+    weil der Kontoumsatz noch nicht importiert wurde. Legt eine neue Buchung
+    an und hängt den Beleg direkt mit an, in einem Schritt.
+
+    Wie beim Beleg-Chat gilt: die KI liefert nur die Vorlage (Datum/Betrag),
+    angelegt wird erst nach ausdrücklicher Bestätigung durch den Nutzer -
+    hier durch den expliziten Aufruf dieses Endpunkts mit den (ggf. vom
+    Nutzer korrigierten) Werten, nicht automatisch beim Abholen.
+    """
+    a = db.query(models.MailAttachment).filter(models.MailAttachment.id == attachment_id).first()
+    if not a:
+        raise HTTPException(404, "Anhang nicht gefunden")
+    if a.status != "pending":
+        raise HTTPException(400, "Dieser Beleg ist bereits bearbeitet.")
+    konto = db.query(models.Account).filter(models.Account.id == data.account_id).first()
+    if not konto:
+        raise HTTPException(404, "Konto nicht gefunden")
+
+    tx = crud.create_transaction(db, schemas.TransactionCreate(
+        date=data.date, amount=data.amount,
+        description=data.description or a.subject or a.filename,
+        account_id=data.account_id, category_id=data.category_id,
+    ))
+    crud.set_receipt(db, tx.id, space_id, a.stored_filename)
+    a.status = "attached"
+    a.transaction_id = tx.id
+    db.commit()
+    db.refresh(tx)
+    return tx
+
+
 @api_router.post("/mail/attachments/{attachment_id}/ignore")
 def ignore_mail_attachment(attachment_id: int, db: Session = Depends(get_db)):
     a = db.query(models.MailAttachment).filter(models.MailAttachment.id == attachment_id).first()

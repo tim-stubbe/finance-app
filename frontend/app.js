@@ -2197,6 +2197,15 @@ async function loadMailInbox() {
   document.getElementById("mail-inbox-count").textContent = items.length;
   if (!items.length) return;
 
+  // Absicherung gegen den seltenen Fall, dass der Beleg-Eingang gerendert
+  // wird, bevor die Start-Ladung von Konten/Kategorien durch ist - sonst
+  // stünden leere Auswahlfelder im "neue Buchung"-Formular.
+  if (!accountsCache.length) accountsCache = await api("/accounts");
+  if (!categoriesCache.length) categoriesCache = await api("/categories");
+
+  const kontoOptions = accountsCache.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join("");
+  const katOptions = categoriesCache.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join("");
+
   list.innerHTML = items.map(a => {
     const erkannt = a.parsed_date && a.parsed_amount
       ? `erkannt: ${fmtDate(a.parsed_date)} · ${eur(a.parsed_amount)}`
@@ -2204,12 +2213,29 @@ async function loadMailInbox() {
     const vorschlaege = a.suggestions.length
       ? a.suggestions.map(s => `<button type="button" class="btn-primary mail-suggest"
            data-attach="${a.id}" data-tx="${s.id}">An ${fmtDate(s.date)} · ${eur(s.amount)} anhängen</button>`).join("")
-      : `<span class="page-sub">Keine passende Buchung gefunden.</span>`;
+      : "";
+    // Kein Treffer heisst nicht zwangsläufig "es gibt keine Buchung" - der
+    // Kontoumsatz kann einfach noch nicht importiert sein. Dafür direkt hier
+    // eine neue Buchung anlegen können, statt den Beleg erst wegzulegen und
+    // später wiederzufinden.
+    const neueBuchung = `
+      <details class="mail-new-tx">
+        <summary class="btn-ghost">${a.suggestions.length ? "Stattdessen neue Buchung" : "Keine passende Buchung – neu anlegen"}</summary>
+        <form class="form-grid mail-new-tx-form" data-new-tx="${a.id}">
+          <label>Datum <input type="date" name="date" value="${esc(a.parsed_date || "")}" required></label>
+          <label>Betrag <input type="number" step="0.01" name="amount" value="${a.parsed_amount ?? ""}" required></label>
+          <label>Konto <select name="account_id" required>${kontoOptions}</select></label>
+          <label>Kategorie <select name="category_id"><option value="">–</option>${katOptions}</select></label>
+          <label class="wide">Beschreibung <input type="text" name="description" value="${esc(a.subject || a.filename)}"></label>
+          <div class="form-actions"><button type="submit" class="btn-primary">Buchung anlegen &amp; Beleg anhängen</button></div>
+        </form>
+      </details>`;
     return `<div class="mail-item">
       <div class="mail-item-main">
         <a href="/api/receipts/${esc(a.stored_filename)}" target="_blank" rel="noopener" class="mail-file">${esc(a.filename)}</a>
         <span class="mail-meta">${esc(a.sender || "")} · ${esc(a.subject || "")}</span>
         <span class="mail-meta">${erkannt}</span>
+        ${neueBuchung}
       </div>
       <div class="mail-item-actions">
         ${vorschlaege}
@@ -2218,6 +2244,30 @@ async function loadMailInbox() {
     </div>`;
   }).join("");
 }
+
+document.getElementById("mail-inbox-list").addEventListener("submit", async e => {
+  const form = e.target.closest("[data-new-tx]");
+  if (!form) return;
+  e.preventDefault();
+  const fd = new FormData(form);
+  const body = {
+    account_id: parseInt(fd.get("account_id"), 10),
+    category_id: fd.get("category_id") ? parseInt(fd.get("category_id"), 10) : null,
+    date: fd.get("date"),
+    amount: parseFloat(fd.get("amount")),
+    description: fd.get("description") || null,
+  };
+  try {
+    await api(`/mail/attachments/${form.dataset.newTx}/create-transaction`, {
+      method: "POST", body: JSON.stringify(body),
+    });
+    toast("Buchung angelegt, Beleg angehängt.");
+    await loadMailInbox();
+    await loadTransactions();
+  } catch (err) {
+    toast("Fehler: " + err.message);
+  }
+});
 
 document.getElementById("mail-inbox-list").addEventListener("click", async e => {
   const attach = e.target.closest("[data-attach]");
