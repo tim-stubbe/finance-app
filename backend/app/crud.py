@@ -1,3 +1,4 @@
+import calendar
 import hashlib
 import json
 import math
@@ -571,6 +572,14 @@ def budget_progress(db: Session, space_id: int, year: int, month: int | None = N
     budgets = get_budgets(db, space_id)
     result = []
     months_factor = 1 if month else 12
+
+    # Hochrechnung nur sinnvoll für den Monat, der gerade läuft - bei einem
+    # abgeschlossenen oder zukünftigen Monat gibt es kein "aktuelles Tempo".
+    today = date.today()
+    is_current_month = month == today.month and year == today.year
+    days_in_month = calendar.monthrange(year, month)[1] if month else None
+    days_elapsed = today.day if is_current_month else None
+
     for b in budgets:
         query = (
             db.query(func.coalesce(func.sum(models.Transaction.amount), 0.0))
@@ -585,6 +594,11 @@ def budget_progress(db: Session, space_id: int, year: int, month: int | None = N
             query = query.filter(extract("month", models.Transaction.date) == month)
         spent = abs(min(0.0, query.scalar() or 0.0))
         limit = round(b.monthly_limit * months_factor, 2)
+
+        projected = None
+        if is_current_month and days_elapsed:
+            projected = round(spent / days_elapsed * days_in_month, 2)
+
         result.append(
             schemas.BudgetProgress(
                 category_id=b.category_id,
@@ -593,6 +607,7 @@ def budget_progress(db: Session, space_id: int, year: int, month: int | None = N
                 spent=round(spent, 2),
                 remaining=round(limit - spent, 2),
                 percent=round((spent / limit * 100) if limit else 0.0, 1),
+                projected_total=projected,
             )
         )
     return sorted(result, key=lambda r: r.percent, reverse=True)

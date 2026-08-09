@@ -942,6 +942,13 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .budget-fill.warn { background: var(--warn); }
 .budget-fill.over { background: var(--neg); }
 
+.budget-projection {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--warn);
+}
+
 /* ---------- Ziele ---------- */
 .goal-grid {
   display: grid;

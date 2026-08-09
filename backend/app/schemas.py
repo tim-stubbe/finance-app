@@ -154,6 +154,11 @@ class BudgetProgress(BaseModel):
     spent: float
     remaining: float
     percent: float
+    # Nur gesetzt, wenn gerade der laufende Monat angezeigt wird - eine
+    # Hochrechnung für einen abgeschlossenen oder zukünftigen Monat wäre
+    # bedeutungslos. Zeigt, ob das aktuelle Tempo bis Monatsende übers
+    # Limit tragen würde, bevor es tatsächlich so weit ist.
+    projected_total: Optional[float] = None
 
 
 # ---------- Holdings (Investments) ----------

@@ -3888,6 +3888,11 @@ async function loadDashboard() {
     data.budgets.forEach(b => {
       const pct = Math.min(100, b.percent);
       const cls = b.percent >= 100 ? "over" : b.percent >= 80 ? "warn" : "ok";
+      // Nur beim laufenden Monat vorhanden - zeigt frühzeitig (nicht erst am
+      // Monatsende), ob das aktuelle Tempo übers Limit tragen würde.
+      const projectionHint = (b.projected_total != null && b.projected_total > b.limit)
+        ? `<span class="budget-projection">bei diesem Tempo: ~${eur(b.projected_total)} am Monatsende</span>`
+        : "";
       const row = document.createElement("div");
       row.className = "budget-row";
       row.innerHTML = `
@@ -3895,7 +3900,8 @@ async function loadDashboard() {
           <span class="budget-name"><span class="row-icon">🎯</span>${b.category_name}</span>
           <span class="budget-amounts">${eur(b.spent)} von ${eur(b.limit)} (${b.percent.toFixed(0)}%)</span>
         </div>
-        <div class="budget-track"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>`;
+        <div class="budget-track"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>
+        ${projectionHint}`;
       budgetListEl.appendChild(row);
     });
   }
