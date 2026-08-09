@@ -486,6 +486,37 @@ class EnableBankingAuthStart(BaseModel):
     url: str
 
 
+class EbaySettingsUpdate(BaseModel):
+    app_id: str
+    cert_id: str
+    ru_name: str
+
+
+class EbaySettingsOut(BaseModel):
+    app_id: Optional[str] = None
+    cert_id_set: bool = False
+    ru_name: Optional[str] = None
+
+
+class EbayConnectionCreate(BaseModel):
+    account_id: int
+
+
+class EbayConnectionOut(BaseModel):
+    id: int
+    account_id: int
+    ebay_username: Optional[str] = None
+    status: str
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+    refresh_token_expires_at: Optional[datetime] = None
+
+
+class EbayAuthStart(BaseModel):
+    id: int
+    url: str
+
+
 # ---------- Dashboard ----------
 class CategorySummary(BaseModel):
     category_id: Optional[int]

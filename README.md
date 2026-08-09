@@ -16,7 +16,7 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 
 **Fertig:**
 - ✅ Konten, Buchungen, Investments, Ziele, Schulden, Steuerauswertung
-- ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo)
+- ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo, eBay)
 - ✅ KI-Assistent (Kategorisierung, Beleg-Auswertung, Chat) über eigenen Ollama-Server
 - ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen
 - ✅ Immich-Anbindung: doppelte Fotos und alte Bildschirmfotos aufräumen
@@ -27,9 +27,7 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 
 **Als Nächstes geplant** (siehe Projektnotizen für Details zum jeweiligen
 Interaktionsmodell):
-- 🔜 eBay-Verkäufe als vollwertige Anbindung – Umsätze fließen wie ein Konto
-  ins Dashboard und Nettovermögen ein, nicht nur als separates Widget
-- 🔜 Weitere Immich-Funktionen (aktuell nur Duplikate + Screenshots)
+- 🔜 Weitere Immich-Funktionen (aktuell Duplikate, Screenshots, unscharfe/leere Fotos)
 
 Kein festes Datum, keine Garantie – das hier ist ein Freizeitprojekt für den
 Eigenbedarf, kein Produkt mit Fahrplan.

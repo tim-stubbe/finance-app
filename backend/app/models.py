@@ -137,6 +137,15 @@ class Settings(Base):
     # und beginnt nach der letzten Seite wieder von vorn, damit auch neu
     # hinzugekommene Fotos irgendwann erfasst werden.
     immich_quality_scan_page = Column(Integer, nullable=False, default=1)
+    # --- eBay (Verkäufe als vollwertiges Konto) ---
+    # App-Zugangsdaten gelten fuer die ganze Instanz (eine eBay-App), so wie
+    # bei Enable Banking - nicht pro Verbindung wie bei PayPal, wo jede
+    # Verbindung ihre eigene PayPal-App war.
+    ebay_app_id = Column(String, nullable=True)
+    ebay_cert_id_encrypted = Column(String, nullable=True)
+    # eBays Bezeichnung fuer die registrierte Redirect-Adresse (RuName) - kein
+    # gewoehnliches redirect_uri, sondern ein bei eBay hinterlegter Name.
+    ebay_ru_name = Column(String, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -295,6 +304,32 @@ class EnableBankingConnection(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     space = relationship("Space", back_populates="enablebanking_connections")
+    account = relationship("Account")
+
+
+class EbayConnection(Base):
+    """Eine per OAuth verbundene eBay-Verkäufer-Verbindung, gemappt auf ein
+    eigenes Konto - Verkäufe sollen laut Vision-Entscheidung wie ein Konto ins
+    Dashboard/Vermögen einfließen, nicht nur als separater Report daneben
+    stehen (siehe [[project_finance_app_vision]])."""
+
+    __tablename__ = "ebay_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    ebay_username = Column(String, nullable=True)
+    state = Column(String, nullable=False, unique=True, index=True)
+    refresh_token_encrypted = Column(Text, nullable=True)
+    # eBay-Refresh-Token gilt ca. 18 Monate - danach muss der Nutzer die
+    # Zustimmung erneut erteilen. Wird angezeigt, damit das nicht überrascht.
+    refresh_token_expires_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default="pending")
+    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_status = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    space = relationship("Space")
     account = relationship("Account")
 
 

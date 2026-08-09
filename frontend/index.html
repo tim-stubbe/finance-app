@@ -1579,6 +1579,40 @@
           </table>
         </div>
       </div>
+
+      <div class="panel">
+        <h3 class="panel-title">🛒 eBay – Verkäufe als Konto</h3>
+        <p class="page-sub">
+          eBay-Verkäufe fließen wie ein normales Konto ins Dashboard und Nettovermögen ein.
+          Einmaliges Setup: auf <strong>developer.ebay.com</strong> kostenlos registrieren, eine
+          Production-Anwendung anlegen (App-ID/Cert-ID) und unter „User Tokens" einen RuName mit
+          genau <code id="ebay-redirect-hint">…</code> als Redirect hinterlegen. Danach unten
+          eintragen und eine Verbindung starten – die Freigabe erfolgt direkt bei eBay.
+        </p>
+        <form id="ebay-settings-form" class="form-grid">
+          <label>App-ID (Client-ID) <input type="text" id="ebay-app-id" placeholder="von developer.ebay.com"></label>
+          <label>Cert-ID (Client-Secret) <input type="password" id="ebay-cert-id" placeholder="wird verschlüsselt gespeichert"></label>
+          <label>RuName <input type="text" id="ebay-ru-name" placeholder="bei eBay hinterlegter Redirect-Name"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <p id="ebay-key-status" class="page-sub"></p>
+
+        <h4 class="panel-subtitle">Neue Verbindung</h4>
+        <form id="ebay-conn-form" class="form-grid">
+          <label>Ziel-Konto in dieser App <select id="ebay-account" required></select></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Bei eBay anmelden</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Konto</th><th>Status</th><th>Letzter Sync</th><th></th></tr></thead>
+            <tbody id="ebay-conn-list"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- PROFILE -->

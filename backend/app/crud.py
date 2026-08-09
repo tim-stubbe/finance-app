@@ -1352,6 +1352,43 @@ def delete_enablebanking_connection(db: Session, connection_id: int, space_id: i
     return conn
 
 
+# ---------- eBay-Verbindungen ----------
+def get_ebay_connections(db: Session, space_id: int):
+    return db.query(models.EbayConnection).filter(models.EbayConnection.space_id == space_id).all()
+
+
+def get_ebay_connection(db: Session, connection_id: int, space_id: int):
+    return (
+        db.query(models.EbayConnection)
+        .filter(models.EbayConnection.id == connection_id, models.EbayConnection.space_id == space_id)
+        .first()
+    )
+
+
+def get_ebay_connection_by_state(db: Session, state: str):
+    return db.query(models.EbayConnection).filter(models.EbayConnection.state == state).first()
+
+
+def get_all_ebay_connections(db: Session):
+    return db.query(models.EbayConnection).all()
+
+
+def create_ebay_connection(db: Session, space_id: int, account_id: int, state: str):
+    conn = models.EbayConnection(space_id=space_id, account_id=account_id, state=state)
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+
+def delete_ebay_connection(db: Session, connection_id: int, space_id: int):
+    conn = get_ebay_connection(db, connection_id, space_id)
+    if conn:
+        db.delete(conn)
+        db.commit()
+    return conn
+
+
 # ---------- Ziele ----------
 def _goal_visible_filter(space_id: int):
     """Ziele des aktiven Bereichs plus bereichsübergreifende (space_id NULL)."""

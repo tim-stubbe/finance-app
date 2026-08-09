@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -115,6 +115,11 @@ ensure_columns("settings", {
 })
 ensure_columns("settings", {
     "immich_quality_scan_page": "INTEGER DEFAULT 1",
+})
+ensure_columns("settings", {
+    "ebay_app_id": "VARCHAR",
+    "ebay_cert_id_encrypted": "VARCHAR",
+    "ebay_ru_name": "VARCHAR",
 })
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
@@ -2618,7 +2623,7 @@ def integrations_status(db: Session = Depends(get_db)):
     FIELD_COUNT = {
         "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
         "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
-        "immich": 2, "mail": 3,
+        "immich": 2, "mail": 3, "ebay": 3,
     }
 
     def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
@@ -2719,6 +2724,23 @@ def integrations_status(db: Session = Depends(get_db)):
         "PayPal-Umsätze automatisch abholen",
         [] if n_paypal else ["mindestens eine Verbindung"],
         detail_ok=f"{n_paypal} Verbindung{'en' if n_paypal != 1 else ''} eingerichtet.",
+    ))
+
+    missing = []
+    if not s.ebay_app_id:
+        missing.append("App-ID")
+    if not s.ebay_cert_id_encrypted:
+        missing.append("Cert-ID")
+    if not s.ebay_ru_name:
+        missing.append("RuName")
+    n_ebay = db.query(models.EbayConnection).filter(models.EbayConnection.status == "connected").count()
+    if not missing and n_ebay == 0:
+        missing.append("mindestens eine Verbindung")
+    items.append(entry(
+        "ebay", "eBay",
+        "Verkäufe wie ein Konto einbinden",
+        missing,
+        detail_ok=f"{n_ebay} Verbindung{'en' if n_ebay != 1 else ''} verbunden." if n_ebay else None,
     ))
 
     missing = []
@@ -2958,6 +2980,85 @@ def sync_enablebanking_connection(connection_id: int, db: Session = Depends(get_
     settings = auth.get_or_create_settings(db)
     private_key = bank_sync.decrypt_secret(settings.secret_key, settings.enablebanking_private_key_encrypted)
     result = enablebanking_sync.sync(db, conn, settings.enablebanking_app_id, private_key)
+    return schemas.SyncResult(imported=result.get("imported", 0), skipped=result.get("skipped", 0), error=result.get("error"))
+
+
+# ---------------- eBay (Verkäufe als Konto) ----------------
+@api_router.get("/settings/ebay", response_model=schemas.EbaySettingsOut)
+def get_ebay_settings(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    return schemas.EbaySettingsOut(
+        app_id=settings.ebay_app_id,
+        cert_id_set=bool(settings.ebay_cert_id_encrypted),
+        ru_name=settings.ebay_ru_name,
+    )
+
+
+@api_router.put("/settings/ebay", response_model=schemas.EbaySettingsOut)
+def update_ebay_settings(data: schemas.EbaySettingsUpdate, db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    settings.ebay_app_id = data.app_id
+    settings.ebay_cert_id_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.cert_id)
+    settings.ebay_ru_name = data.ru_name
+    db.commit()
+    return schemas.EbaySettingsOut(app_id=settings.ebay_app_id, cert_id_set=True, ru_name=settings.ebay_ru_name)
+
+
+@api_router.get("/ebay/connections", response_model=List[schemas.EbayConnectionOut])
+def list_ebay_connections(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.get_ebay_connections(db, space_id)
+
+
+@api_router.post("/ebay/connections", response_model=schemas.EbayAuthStart)
+def create_ebay_connection(data: schemas.EbayConnectionCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    if not crud.get_account(db, data.account_id, space_id):
+        raise HTTPException(400, "Ziel-Konto existiert nicht in diesem Bereich")
+    settings = auth.get_or_create_settings(db)
+    if not settings.ebay_app_id or not settings.ebay_cert_id_encrypted or not settings.ebay_ru_name:
+        raise HTTPException(400, "Bitte zuerst App-ID, Cert-ID und RuName in den Einstellungen hinterlegen")
+
+    state = uuid.uuid4().hex
+    conn = crud.create_ebay_connection(db, space_id, data.account_id, state)
+    url = ebay_sync.build_consent_url(settings.ebay_app_id, settings.ebay_ru_name, state)
+    return schemas.EbayAuthStart(id=conn.id, url=url)
+
+
+@api_router.get("/ebay/callback")
+def ebay_callback(code: str = None, state: str = None, error: str = None, db: Session = Depends(get_db)):
+    if not state:
+        return RedirectResponse(url="/?ebay_error=missing_state")
+    conn = crud.get_ebay_connection_by_state(db, state)
+    if not conn:
+        return RedirectResponse(url="/?ebay_error=unknown_state")
+    if error or not code:
+        conn.status = "error"
+        conn.last_sync_status = f"Autorisierung abgebrochen oder fehlgeschlagen: {error or 'kein Code erhalten'}"
+        db.commit()
+        return RedirectResponse(url=f"/?ebay_done={conn.id}")
+    settings = auth.get_or_create_settings(db)
+    cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
+    ebay_sync.finalize_connection(db, conn, settings.ebay_app_id, cert_id, settings.ebay_ru_name, code)
+    return RedirectResponse(url=f"/?ebay_done={conn.id}")
+
+
+@api_router.delete("/ebay/connections/{connection_id}")
+def remove_ebay_connection(connection_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    conn = crud.delete_ebay_connection(db, connection_id, space_id)
+    if not conn:
+        raise HTTPException(404, "Verbindung nicht gefunden")
+    return {"ok": True}
+
+
+@api_router.post("/ebay/connections/{connection_id}/sync", response_model=schemas.SyncResult)
+def sync_ebay_connection(connection_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    conn = crud.get_ebay_connection(db, connection_id, space_id)
+    if not conn:
+        raise HTTPException(404, "Verbindung nicht gefunden")
+    if conn.status != "connected":
+        raise HTTPException(400, "Verbindung ist noch nicht abgeschlossen (eBay-Autorisierung ausstehend)")
+    settings = auth.get_or_create_settings(db)
+    cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
+    result = ebay_sync.sync(db, conn, settings.ebay_app_id, cert_id)
     return schemas.SyncResult(imported=result.get("imported", 0), skipped=result.get("skipped", 0), error=result.get("error"))
 
 
@@ -3329,6 +3430,17 @@ def _scheduled_bank_sync():
                     continue
                 try:
                     enablebanking_sync.sync(db, eb_conn, settings.enablebanking_app_id, private_key)
+                except Exception as e:
+                    eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+                    db.commit()
+
+        if settings.ebay_app_id and settings.ebay_cert_id_encrypted:
+            cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
+            for eb_conn in crud.get_all_ebay_connections(db):
+                if eb_conn.status != "connected":
+                    continue
+                try:
+                    ebay_sync.sync(db, eb_conn, settings.ebay_app_id, cert_id)
                 except Exception as e:
                     eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
                     db.commit()

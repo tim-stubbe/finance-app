@@ -3518,6 +3518,112 @@ function handleEnableBankingReturn() {
   });
 }
 
+// ---------- eBay ----------
+async function loadEbaySettings() {
+  const s = await api("/settings/ebay");
+  document.getElementById("ebay-app-id").value = s.app_id || "";
+  document.getElementById("ebay-ru-name").value = s.ru_name || "";
+  document.getElementById("ebay-key-status").textContent = s.cert_id_set
+    ? "Cert-ID ist hinterlegt (wird aus Sicherheitsgründen nicht wieder angezeigt)."
+    : "Noch keine Cert-ID hinterlegt.";
+  document.getElementById("ebay-redirect-hint").textContent = location.origin + "/api/ebay/callback";
+}
+
+document.getElementById("ebay-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const app_id = document.getElementById("ebay-app-id").value;
+  const cert_id = document.getElementById("ebay-cert-id").value;
+  const ru_name = document.getElementById("ebay-ru-name").value;
+  if (!cert_id.trim()) {
+    alert("Bitte die Cert-ID (Client-Secret) eingeben.");
+    return;
+  }
+  await api("/settings/ebay", { method: "PUT", body: JSON.stringify({ app_id, cert_id, ru_name }) });
+  document.getElementById("ebay-cert-id").value = "";
+  loadEbaySettings();
+  toast("eBay-Zugang gespeichert.");
+});
+
+function populateEbayAccountSelect() {
+  const sel = document.getElementById("ebay-account");
+  sel.innerHTML = "";
+  accountsCache.forEach(a => {
+    const opt = document.createElement("option");
+    opt.value = a.id; opt.textContent = a.name;
+    sel.appendChild(opt);
+  });
+}
+
+const EBAY_STATUS_LABELS = { pending: "Autorisierung ausstehend", connected: "Verbunden", error: "Fehler" };
+
+async function loadEbayConnections() {
+  if (!accountsCache.length) await loadAccounts();
+  populateEbayAccountSelect();
+  const conns = await api("/ebay/connections");
+  const tbody = document.getElementById("ebay-conn-list");
+  tbody.innerHTML = "";
+  if (conns.length === 0) {
+    tbody.innerHTML = emptyRow(4, "🛒", "Noch keine Verbindung angelegt.");
+  }
+  conns.forEach(c => {
+    const account = accountsCache.find(a => a.id === c.account_id);
+    const lastSync = c.last_sync_at ? new Date(c.last_sync_at).toLocaleString("de-DE") : "noch nie";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${account ? esc(account.name) : c.account_id}</td>
+      <td>${EBAY_STATUS_LABELS[c.status] || c.status}${c.last_sync_status ? `<br><span class="page-sub">${esc(c.last_sync_status)}</span>` : ""}</td>
+      <td>${lastSync}</td>
+      <td>
+        ${c.status === "connected" ? `<button class="link-btn" onclick="syncEbayConnection(${c.id})">Jetzt synchronisieren</button>` : ""}
+        <button class="link-btn" onclick="deleteEbayConnection(${c.id})">Löschen</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("ebay-conn-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const payload = { account_id: parseInt(document.getElementById("ebay-account").value) };
+  const result = await api("/ebay/connections", { method: "POST", body: JSON.stringify(payload) });
+  loadEbayConnections();
+  window.open(result.url, "_blank");
+});
+
+window.syncEbayConnection = async id => {
+  const result = await api(`/ebay/connections/${id}/sync`, { method: "POST" });
+  if (result.error) {
+    alert("Sync-Fehler: " + result.error);
+  } else {
+    alert(`Sync abgeschlossen: ${result.imported} neue Buchung(en), ${result.skipped} bereits vorhanden.`);
+    loadTransactions();
+    loadAccounts();
+  }
+  loadEbayConnections();
+};
+
+window.deleteEbayConnection = async id => {
+  if (!confirm("Verbindung wirklich löschen? Bereits importierte Buchungen bleiben erhalten.")) return;
+  await api(`/ebay/connections/${id}`, { method: "DELETE" });
+  loadEbayConnections();
+};
+
+function handleEbayReturn() {
+  const params = new URLSearchParams(location.search);
+  const done = params.get("ebay_done");
+  const err = params.get("ebay_error");
+  if (!done && !err) return;
+  history.replaceState({}, "", location.pathname);
+  const settingsBtn = document.querySelector('.nav-btn[data-tab="settings"]');
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+  settingsBtn.classList.add("active");
+  document.getElementById("tab-settings").classList.add("active");
+  moveNavIndicator(settingsBtn);
+  loadSettingsTab().then(() => {
+    if (err) alert("eBay-Autorisierung fehlgeschlagen: " + err);
+  });
+}
+
 // Zeichen und Klasse je Zustand. Das Ausrufezeichen steht bewusst auch bei
 // "partial": halb eingerichtet ist genauso wenig nutzbar wie gar nicht.
 const INTEGRATION_MARKS = {
@@ -3597,6 +3703,8 @@ async function loadSettingsTab() {
   await loadPaypalConnections();
   await loadEnableBankingSettings();
   await loadEnableBankingConnections();
+  await loadEbaySettings();
+  await loadEbayConnections();
 }
 
 // ================= DASHBOARD =================
@@ -4515,6 +4623,7 @@ async function init() {
   refreshIntegrationBadge();
   loadVersionWatermark();
   handleEnableBankingReturn();
+  handleEbayReturn();
 }
 startApp();
 
