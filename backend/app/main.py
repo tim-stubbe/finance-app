@@ -1900,6 +1900,58 @@ def immich_resolve(data: schemas.ImmichResolveRequest, db: Session = Depends(get
     )
 
 
+# Ähnlichkeit nur für überschaubare Gruppen rechnen: jedes Bild muss dafür
+# einmal geladen werden. Bei den real vorkommenden Riesengruppen (bis 841
+# Aufnahmen) wären das hunderte Abrufe für eine Zahl, die dort ohnehin nichts
+# aussagt - solche Gruppen sind keine echten Duplikate.
+MAX_ASSETS_FOR_SIMILARITY = 12
+
+
+@api_router.get("/immich/duplicates/{duplicate_id}/similarity",
+                response_model=schemas.ImmichSimilarityOut)
+def immich_similarity(duplicate_id: str, db: Session = Depends(get_db)):
+    """Rechnet aus, wie stark sich die Bilder einer Gruppe gleichen."""
+    url, key = _immich_credentials(db)
+    try:
+        gruppen = immich.list_duplicates(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar: {e}")
+
+    gruppe = next((g for g in gruppen if g.get("duplicateId") == duplicate_id), None)
+    if not gruppe:
+        raise HTTPException(404, "Diese Duplikatgruppe gibt es nicht (mehr).")
+
+    ids = [a["id"] for a in (gruppe.get("assets") or [])]
+    if len(ids) > MAX_ASSETS_FOR_SIMILARITY:
+        return schemas.ImmichSimilarityOut(
+            duplicate_id=duplicate_id, pairs={},
+            error=f"Zu viele Aufnahmen ({len(ids)}) für einen sinnvollen Vergleich.",
+        )
+
+    hashes = {}
+    fehler = []
+    for asset_id in ids:
+        try:
+            hashes[asset_id] = immich.asset_hash(url, key, asset_id)
+        except Exception as e:
+            # Ein einzelnes nicht ladbares Bild darf die Gruppe nicht
+            # unbrauchbar machen - aber der Grund muss sichtbar bleiben.
+            # Vorher wurde hier stillschweigend weitergemacht, wodurch ein
+            # nicht lesbares Bildformat als "leeres Ergebnis ohne Fehler"
+            # ankam und wie ein Anzeigefehler aussah.
+            fehler.append(f"{type(e).__name__}: {e}")
+
+    pairs = {
+        a: {b: immich.similarity_percent(hashes[a], hashes[b])
+            for b in hashes if b != a}
+        for a in hashes
+    }
+    err = None
+    if fehler:
+        err = f"{len(fehler)} von {len(ids)} Bildern nicht vergleichbar ({fehler[0][:80]})"
+    return schemas.ImmichSimilarityOut(duplicate_id=duplicate_id, pairs=pairs, error=err)
+
+
 SCREENSHOT_PAGE_SIZE = 60
 
 

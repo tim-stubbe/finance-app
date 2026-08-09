@@ -1859,3 +1859,21 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Uebereinstimmung zum behaltenen Bild. Farbe UND Zahl - die Zahl allein
+   traegt die Aussage, die Farbe macht sie nur schneller erfassbar. */
+.photo-sim {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-sim.sim-high { background: var(--neg); }
+.photo-sim.sim-mid  { background: var(--warn); }
+.photo-sim.sim-low  { background: var(--muted); }

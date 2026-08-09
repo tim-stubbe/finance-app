@@ -9,3 +9,6 @@ fints==5.0.0
 cryptography==50.0.0
 APScheduler==3.11.3
 PyMuPDF==1.28.2
+# Fuer den Bildvergleich der Immich-Duplikate. Noetig, weil Immich seine
+# Vorschaubilder als WebP ausliefert und PyMuPDF dieses Format nicht liest.
+pillow==12.1.0

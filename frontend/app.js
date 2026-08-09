@@ -1778,6 +1778,9 @@ document.getElementById("profile-form").addEventListener("submit", async e => {
 // Merkt sich je Duplikatgruppe, welches Bild behalten werden soll.
 // Vorbelegt mit Immichs eigenem Vorschlag.
 const photoKeepChoice = new Map();
+// Übereinstimmung je Gruppe, nachgeladen nachdem die Bilder schon stehen -
+// die Berechnung braucht einen Moment und soll die Anzeige nicht aufhalten.
+const photoSimilarity = new Map();
 let photoGroupsCache = [];
 let photoPage = { offset: 0, hasMore: false, total: 0 };
 
@@ -1844,6 +1847,23 @@ async function loadPhotosTab(offset = 0) {
     Wähle je Gruppe das Bild, das bleiben soll. ${trashNote}`;
 
   renderPhotoGroups();
+  loadSimilarities(data.groups);
+}
+
+// Nacheinander statt alle gleichzeitig: jede Gruppe bedeutet mehrere
+// Bildabrufe, parallel wuerde das Immich unnoetig belasten.
+async function loadSimilarities(groups) {
+  for (const g of groups) {
+    if (photoSimilarity.has(g.duplicate_id)) continue;
+    try {
+      const s = await api(`/immich/duplicates/${g.duplicate_id}/similarity`);
+      photoSimilarity.set(g.duplicate_id, s.pairs);
+      // Nur weiterzeichnen, solange dieselbe Seite noch offen ist.
+      if (photoGroupsCache.some(x => x.duplicate_id === g.duplicate_id)) renderPhotoGroups();
+    } catch (e) {
+      photoSimilarity.set(g.duplicate_id, {});
+    }
+  }
 }
 
 function renderPhotoGroups() {
@@ -1858,10 +1878,16 @@ function renderPhotoGroups() {
       const keep = a.id === keepId;
       const dims = a.width && a.height ? `${a.width}×${a.height}` : "";
       const meta = [dims, formatBytes(a.size_bytes)].filter(Boolean).join(" · ");
+      // Übereinstimmung zum aktuell behaltenen Bild - beantwortet die Frage
+      // "ist das wirklich dasselbe Foto oder nur eine ähnliche Aufnahme".
+      const pct = keep ? null : photoSimilarity.get(g.duplicate_id)?.[keepId]?.[a.id];
+      const simBadge = pct === undefined || pct === null ? "" :
+        `<span class="photo-sim ${pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low"}"
+           title="${pct >= 95 ? "praktisch identisch" : pct >= 80 ? "sehr ähnlich" : "nur ähnliche Aufnahme"}">${pct}%</span>`;
       return `<button type="button" class="photo-card ${keep ? "is-keep" : "is-trash"}"
                 data-group="${esc(g.duplicate_id)}" data-asset="${esc(a.id)}">
         <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
-        <span class="photo-badge">${keep ? "behalten" : "Papierkorb"}</span>
+        <span class="photo-badge">${keep ? "behalten" : "Papierkorb"}</span>${simBadge}
         <span class="photo-meta">
           <span class="photo-name">${esc(a.file_name || "")}</span>
           ${meta ? `<span>${esc(meta)}</span>` : ""}

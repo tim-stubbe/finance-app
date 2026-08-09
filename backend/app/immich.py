@@ -203,6 +203,60 @@ def trash_assets(url: str, api_key: str, asset_ids: list[str]) -> None:
     resp.raise_for_status()
 
 
+# ---------- Bildähnlichkeit ----------
+# Immich gruppiert Duplikate, sagt aber nicht, WIE ähnlich zwei Bilder sind.
+# Genau das ist beim Aussortieren die entscheidende Information: 99 % heisst
+# "praktisch dasselbe Bild", 70 % heisst "zwei Aufnahmen derselben Szene".
+#
+# Verfahren: Differenz-Hash (dHash) über das Vorschaubild. Bewusst kein
+# Bildmodell - ein Hash ist deterministisch, in Millisekunden gerechnet und
+# beantwortet exakt die gestellte Frage ("wie gleich sehen die aus"). Ein
+# neuronales Netz würde hier nur raten, was es sowieso nicht besser weiss.
+HASH_SIZE = 8  # ergibt 8x8 Vergleiche = 64 Bit
+
+
+def _dhash(image_bytes: bytes) -> int:
+    """Differenz-Hash: verkleinert das Bild auf 9x8 Graustufen und setzt je
+    Pixelpaar ein Bit, ob links heller ist als rechts. Unempfindlich gegen
+    Grösse, Kompression und leichte Helligkeitsunterschiede - genau das, was
+    zwei Kopien desselben Fotos unterscheidet (bzw. eben nicht).
+
+    Nutzt Pillow statt PyMuPDF: Immich liefert seine Vorschaubilder als WebP
+    aus, das PyMuPDF nicht dekodieren kann.
+    """
+    from io import BytesIO
+    from PIL import Image
+
+    img = Image.open(BytesIO(image_bytes)).convert("L").resize(
+        (HASH_SIZE + 1, HASH_SIZE), Image.LANCZOS
+    )
+    px = img.load()
+    bits = 0
+    for y in range(HASH_SIZE):
+        for x in range(HASH_SIZE):
+            bits = (bits << 1) | (1 if px[x, y] > px[x + 1, y] else 0)
+    return bits
+
+
+def similarity_percent(hash_a: int, hash_b: int) -> float:
+    """Übereinstimmung zweier Hashes in Prozent (64 Bit Hamming-Abstand)."""
+    unterschiede = bin(hash_a ^ hash_b).count("1")
+    return round((1 - unterschiede / (HASH_SIZE * HASH_SIZE)) * 100, 1)
+
+
+# Hashes je Asset zwischenspeichern. Ein Bild ändert sich nicht, also muss es
+# nie zweimal geladen und gerechnet werden - beim Blättern durch die Gruppen
+# spart das den Grossteil der Netzwerkzugriffe.
+_hash_cache: dict[str, int] = {}
+
+
+def asset_hash(url: str, api_key: str, asset_id: str) -> int:
+    if asset_id not in _hash_cache:
+        content, _ = fetch_thumbnail(url, api_key, asset_id)
+        _hash_cache[asset_id] = _dhash(content)
+    return _hash_cache[asset_id]
+
+
 def asset_summary(asset: dict) -> dict:
     """Reduziert ein Immich-Asset auf das, was für die Entscheidung
     „welches behalte ich" wirklich zählt - Dateigröße und Auflösung sind die

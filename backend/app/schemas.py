@@ -952,6 +952,15 @@ class ImmichScreenshotsOut(BaseModel):
     trash_days: Optional[int] = None
 
 
+class ImmichSimilarityOut(BaseModel):
+    duplicate_id: str
+    # Je Bild-ID die Übereinstimmung in Prozent zu jedem anderen Bild der
+    # Gruppe. Vollständig, damit die Anzeige beim Umwählen des zu behaltenden
+    # Bildes nicht neu rechnen muss.
+    pairs: Dict[str, Dict[str, float]]
+    error: Optional[str] = None
+
+
 class ImmichTrashRequest(BaseModel):
     asset_ids: List[str]
 
