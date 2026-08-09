@@ -1390,13 +1390,36 @@ def create_todo(db: Session, title: str, due_date=None):
 def update_todo(db: Session, todo: models.Todo, title=None, done=None, due_date=None):
     if title is not None:
         todo.title = title
-    if done is not None:
+    if done is not None and done != todo.done:
         todo.done = done
+        # Zeitpunkt des Abhakens merken (bzw. beim Zurücknehmen wieder
+        # löschen) - Grundlage für die automatische Aufräumung nach 2 Tagen.
+        todo.completed_at = datetime.utcnow() if done else None
     if due_date is not None:
         todo.due_date = due_date
     db.commit()
     db.refresh(todo)
     return todo
+
+
+def cleanup_old_done_todos(db: Session, days: int = 2) -> int:
+    """Erledigte To-Dos verschwinden 2 Tage, nachdem sie abgehakt wurden, von
+    selbst - abgehakt heißt hier "erledigt, kann weg", nicht "soll dauerhaft
+    als Liste stehen bleiben". Löschung läuft über denselben pending_delete-
+    Weg wie eine manuelle Löschung, damit sie beim nächsten Sync auch auf dem
+    Radicale-Server verschwindet."""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    old = (
+        db.query(models.Todo)
+        .filter(models.Todo.done.is_(True), models.Todo.completed_at.isnot(None),
+                models.Todo.completed_at < cutoff, models.Todo.pending_delete.is_(False))
+        .all()
+    )
+    for todo in old:
+        todo.pending_delete = True
+    if old:
+        db.commit()
+    return len(old)
 
 
 def delete_todo(db: Session, todo: models.Todo):

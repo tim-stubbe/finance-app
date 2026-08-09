@@ -727,6 +727,27 @@ main {
   color: var(--text);
 }
 
+/* Bereits eingerichtete Anbindungen in den Einstellungen einklappbar - bei
+   vielen aktiven Anbindungen (FinTS, PayPal, eBay, Immich, ...) sonst zu
+   unübersichtlich, um noch die fehlenden zu finden. */
+.panel[data-integration-key] .panel-title {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel[data-integration-key] .panel-title::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.2s var(--ease);
+}
+.panel[data-integration-key].is-collapsed .panel-title::after { transform: rotate(-90deg); }
+.panel[data-integration-key].is-collapsed > *:not(.panel-title) { display: none; }
+.panel-collapsed-hint { font-weight: 400; font-size: 12px; color: var(--pos); }
+
 .panel-subtitle {
   margin: 22px 0 12px;
   font-size: 12.5px;

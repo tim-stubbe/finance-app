@@ -3934,7 +3934,41 @@ async function loadIntegrationStatus() {
   }).join("");
 
   updateIntegrationBadge(data.incomplete);
+  applySettingsPanelCollapse(data.items);
 }
+
+// Klappt die Einstellungen-Panels bereits vollständig eingerichteter
+// Anbindungen standardmäßig zu - bewusst NUR die einzelnen Formulare unten,
+// nicht die große Übersicht ("Einrichtungsstatus") oben, die soll unverändert
+// alles auf einen Blick zeigen. Jedes Panel bleibt per Klick auf den Titel
+// auf-/zuklappbar, auch die noch offenen.
+function applySettingsPanelCollapse(items) {
+  const byKey = Object.fromEntries(items.map(it => [it.key, it]));
+  document.querySelectorAll(".panel[data-integration-key]").forEach(panel => {
+    const key = panel.dataset.integrationKey;
+    const it = byKey[key];
+    if (!it) return;
+    const titleEl = panel.querySelector(".panel-title");
+    titleEl.querySelector(".panel-collapsed-hint")?.remove();
+    if (it.status === "ok") {
+      const hint = document.createElement("span");
+      hint.className = "panel-collapsed-hint";
+      hint.textContent = "✓ eingerichtet";
+      titleEl.appendChild(hint);
+      // Nur beim ersten Laden automatisch zuklappen - ein Klick des Nutzers
+      // (data-user-toggled) soll nicht bei jedem Neuladen überschrieben werden.
+      if (!panel.dataset.userToggled) panel.classList.add("is-collapsed");
+    }
+  });
+}
+
+document.addEventListener("click", e => {
+  const titleEl = e.target.closest(".panel[data-integration-key] > .panel-title");
+  if (!titleEl) return;
+  const panel = titleEl.closest(".panel");
+  panel.classList.toggle("is-collapsed");
+  panel.dataset.userToggled = "1";
+});
 
 function updateIntegrationBadge(count) {
   const badge = document.getElementById("integration-nav-badge");

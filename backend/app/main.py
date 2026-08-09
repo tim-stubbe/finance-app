@@ -126,6 +126,9 @@ ensure_columns("settings", {
     "radicale_username": "VARCHAR",
     "radicale_password_encrypted": "VARCHAR",
 })
+ensure_columns("todos", {
+    "completed_at": "DATETIME",
+})
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
     "imap_host": "VARCHAR",
@@ -3225,6 +3228,16 @@ def _radicale_credentials(db: Session) -> tuple[str, str, str]:
 
 @api_router.get("/todos", response_model=List[schemas.TodoOut])
 def list_todos(include_done: bool = True, db: Session = Depends(get_db)):
+    # Beim Öffnen des Tabs direkt abgleichen statt auf den nächsten
+    # Hintergrund-Sync (alle 3 Minuten) zu warten oder auf die nächste lokale
+    # Änderung - sonst wirkt es, als kämen am Handy eingetragene To-Dos gar
+    # nicht an, bis man selbst etwas hier ändert.
+    if settings_has_radicale(db):
+        url, username, password = _radicale_credentials(db)
+        try:
+            radicale_sync.sync(db, url, username, password)
+        except Exception:
+            pass
     return crud.get_todos(db, include_done)
 
 
@@ -3804,11 +3817,21 @@ def _scheduled_ai_maintenance():
 def _scheduled_radicale_sync():
     """Alle paar Minuten mit dem Radicale-Server abgleichen - läuft öfter als
     die anderen Sync-Jobs, weil To-Dos, die man gerade am Handy einträgt, sich
-    anders als Bankumsätze typischerweise sofort sehen lassen sollen."""
+    anders als Bankumsätze typischerweise sofort sehen lassen sollen.
+
+    Räumt zusätzlich abgehakte To-Dos auf, die seit 2 Tagen erledigt sind -
+    das läuft auch ohne Radicale-Anbindung (rein lokale Nutzung)."""
     db = SessionLocal()
     try:
+        crud.cleanup_old_done_todos(db)
         settings = auth.get_or_create_settings(db)
         if not settings.radicale_url:
+            # Ohne Server nichts zum Abgleichen - zur Löschung markierte
+            # To-Dos direkt entfernen, statt auf einen Sync zu warten, der nie
+            # kommt.
+            for todo in db.query(models.Todo).filter(models.Todo.pending_delete.is_(True)).all():
+                db.delete(todo)
+            db.commit()
             return
         password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
         try:

@@ -675,6 +675,9 @@ class Todo(Base):
     uid = Column(String, nullable=False, unique=True, index=True)
     title = Column(String, nullable=False)
     done = Column(Boolean, nullable=False, default=False)
+    # Gesetzt, sobald `done` auf True wechselt - Grundlage für die
+    # automatische Aufräumung 2 Tage nach dem Abhaken (siehe main.py).
+    completed_at = Column(DateTime, nullable=True)
     due_date = Column(Date, nullable=True)
     # href/etag: Position und Versionsstempel der Ressource auf dem Radicale-
     # Server. NULL, solange das Todo lokal angelegt, aber noch nicht
