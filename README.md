@@ -6,12 +6,41 @@ Anbieter. Einzelnutzer-Anwendung, erreichbar im eigenen Netz bzw. über Tailscal
 
 Oberfläche und Code sind auf Deutsch gehalten.
 
+## Roadmap
+
+Die Grundidee: **ein** Tool statt vieler einzelner Dienste – nicht nur
+Finanzen, sondern nach und nach alles, was sich sinnvoll an einer Stelle
+bündeln lässt. Neue Anbindungen werden dabei immer *eingebunden*, nicht
+nachgebaut: wenn ein Dienst etwas schon gut kann (z. B. Immichs eigene
+KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
+
+**Fertig:**
+- ✅ Konten, Buchungen, Investments, Ziele, Schulden, Steuerauswertung
+- ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo)
+- ✅ KI-Assistent (Kategorisierung, Beleg-Auswertung, Chat) über eigenen Ollama-Server
+- ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen
+- ✅ Immich-Anbindung: doppelte Fotos und alte Bildschirmfotos aufräumen
+- ✅ Telegram-Benachrichtigungen + Chat-Bot, Twilio-Notrufe für Notfälle
+- ✅ Vermögensvergleich mit der eigenen Altersgruppe
+- ✅ PWA (installierbar auf Handy/Desktop), vier Themes, EUR/CHF-Umschalter
+- ✅ Automatisches Deployment (GitHub Actions → GHCR → Watchtower auf TrueNAS)
+
+**Als Nächstes geplant** (siehe Projektnotizen für Details zum jeweiligen
+Interaktionsmodell):
+- 🔜 eBay-Verkäufe als vollwertige Anbindung – Umsätze fließen wie ein Konto
+  ins Dashboard und Nettovermögen ein, nicht nur als separates Widget
+- 🔜 Weitere Immich-Funktionen (aktuell nur Duplikate + Screenshots)
+
+Kein festes Datum, keine Garantie – das hier ist ein Freizeitprojekt für den
+Eigenbedarf, kein Produkt mit Fahrplan.
+
 ## Was es kann
 
 **Konten und Buchungen**
 - Mehrere Konten, Kategorien, wiederkehrende Buchungen
 - CSV-Import für Buchungen und Wertpapierbestände
-- Belege als Datei an Buchungen anhängen
+- Belege als Datei an Buchungen anhängen – manuell, per KI-Chat oder
+  automatisch aus E-Mail-Anhängen geholt und zugeordnet
 - Automatische Erkennung von Umbuchungen zwischen eigenen Konten – die zählen
   weder als Einnahme noch als Ausgabe
 
@@ -21,6 +50,8 @@ Oberfläche und Code sind auf Deutsch gehalten.
 - PayPal
 - Bitvavo für Kryptobestände
 - Kursdaten für Wertpapiere
+- IMAP-Postfach für Belege aus E-Mail-Anhängen (rein lesend)
+- Immich für die eigene Fotobibliothek
 
 **Investitionen**
 - Positionen mit Einstandskursen und Lots, Gewinn/Verlust, Dividenden
@@ -28,6 +59,7 @@ Oberfläche und Code sind auf Deutsch gehalten.
 
 **Planung und Auswertung**
 - Dashboard mit Vermögensübersicht und Auswertung nach Kategorien
+- Vermögensvergleich mit der eigenen Altersgruppe (Bundesbank-Vermögensbefragung)
 - Budgets pro Kategorie
 - Cashflow-Prognose
 - Ziele (automatisch aus den App-Daten gemessen oder als manuelle Meilensteine,
@@ -38,6 +70,13 @@ Oberfläche und Code sind auf Deutsch gehalten.
   Privatvermögen, deshalb nur eine Ansicht, kein getrennter Datenbestand)
 - Reisekosten
 - Steuerauswertung
+
+**Fotos** (über eine bestehende [Immich](https://immich.app)-Instanz)
+- Duplikate: Immichs eigene Erkennung wird angezeigt und lässt sich nach
+  Bestätigung anwenden – jedes Bild einzeln auswählbar (auch alle oder keins),
+  inklusive prozentualer Bildähnlichkeit und Nebeneinander-Vergleich
+- Alte Bildschirmfotos nach Alter filtern und aufräumen
+- Wandert grundsätzlich nur in Immichs Papierkorb, nie direkt und endgültig weg
 
 **KI-Funktionen** (über einen selbst betriebenen [Ollama](https://ollama.com)-Server)
 - Chat-Schaltfläche auf jeder Seite für Anweisungen in normaler Sprache
@@ -61,15 +100,17 @@ nach ausdrücklicher Bestätigung.
 - Vier Themes, umschaltbar zwischen EUR- und CHF-Anzeige
 - Als PWA auf dem Handy installierbar
 - Automatische Backups mit einstellbarer Aufbewahrungsdauer
+- Versionsanzeige in der Seitenleiste – zeigt an, ob ein Update tatsächlich
+  angekommen ist, mit Warnung bei veraltetem Stand
 
 ## Technik
 
 | Bereich   | Umsetzung                                                   |
 |-----------|-------------------------------------------------------------|
-| Backend   | FastAPI, SQLAlchemy, SQLite (135 Endpunkte)                 |
+| Backend   | FastAPI, SQLAlchemy, SQLite (160 Endpunkte)                  |
 | Frontend  | HTML/CSS/JavaScript ohne Build-Schritt, Chart.js über CDN   |
 | Jobs      | APScheduler für Sync, Kursabruf, Kategorisierung, Backups   |
-| Betrieb   | Docker, Python 3.12                                          |
+| Betrieb   | Docker, Python 3.14                                          |
 
 Der gesamte Zustand liegt in **einer** Datei: `data/finance.db`.
 
@@ -89,10 +130,10 @@ ins Bild gemountet und uvicorn startet mit `--reload`.
 
 ### Einstellungen
 
-Zugangsdaten für Banken, PayPal, Bitvavo, Telegram, Twilio und Brave werden
-nicht über Umgebungsvariablen gesetzt, sondern in der Oberfläche unter
-**Einstellungen** hinterlegt. Sie liegen mit Fernet verschlüsselt in der
-Datenbank.
+Zugangsdaten für Banken, PayPal, Bitvavo, Telegram, Twilio, Brave, das
+E-Mail-Postfach und Immich werden nicht über Umgebungsvariablen gesetzt,
+sondern in der Oberfläche unter **Einstellungen** hinterlegt. Sie liegen mit
+Fernet verschlüsselt in der Datenbank.
 
 Nur zwei Umgebungsvariablen gibt es:
 
@@ -124,7 +165,25 @@ SQLite-Datei bedeutet ein Konflikt schlicht, dass eine Seite überschrieben wird
 ## Aktualisierung
 
 Jeder Push auf `main` baut über GitHub Actions ein Docker-Image und lädt es nach
-`ghcr.io/tim-stubbe/finance-app:latest`.
+`ghcr.io/tim-stubbe/finance-app:latest`. Ein wöchentlicher (und nach jedem Build
+laufender) Workflow räumt alte Image-Versionen aus der Registry auf und behält
+die zehn neuesten. Auf dem Produktivsystem zieht Watchtower neue Versionen
+automatisch, sobald sie verfügbar sind (Abfrage alle 5 Minuten).
+
+Welcher Stand gerade läuft, zeigt die Versionsanzeige unten in der Seitenleiste
+(Commit-Kurzform + Alter des Builds), mit Warnung, falls ein neuerer Stand
+veröffentlicht, aber noch nicht angekommen ist.
+
+## Sicherheit
+
+- Automatisierte Prüfung über GitHub Code Scanning (CodeQL) und Dependabot
+  (Sicherheitslücken + wöchentliche Versions-Updates für Python-Pakete,
+  Docker-Basis-Image und GitHub Actions).
+- Externe Skript-Einbindungen (Chart.js) tragen eine Subresource-Integrity-Prüfung.
+- Datei-Endpunkte (Belege, Backups) sind gegen Pfad-Manipulation abgesichert.
+- Gefundene Sicherheitslücken bitte **nicht** als öffentliches Issue melden
+  (Repository ist zwar privat, aber falls das je geändert wird) – siehe
+  [SECURITY.md](SECURITY.md).
 
 ## Zugriffsschutz
 
