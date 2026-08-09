@@ -70,6 +70,25 @@ def check_connection(url: str, api_key: str) -> dict:
     }
 
 
+def trash_config(url: str, api_key: str) -> dict:
+    """Liest Immichs Papierkorb-Einstellung.
+
+    Das ist sicherheitsrelevant, nicht bloß Information: Immichs
+    `resolve`-Endpunkt entscheidet **anhand dieser Server-Einstellung**, ob
+    aussortierte Bilder in den Papierkorb wandern oder sofort endgültig
+    verschwinden (`isForce = !trash.enabled`, siehe duplicate.service.ts).
+    Ist der Papierkorb in Immich abgeschaltet, löscht derselbe Aufruf also
+    unwiderruflich - ohne dass hier im Code irgendetwas anders aussähe.
+    Deshalb wird das vor jedem Anwenden geprüft, nicht einmalig angenommen.
+    """
+    resp = requests.get(
+        f"{_base(url)}/api/system-config", headers=_headers(api_key), timeout=TIMEOUT
+    )
+    resp.raise_for_status()
+    trash = (resp.json() or {}).get("trash") or {}
+    return {"enabled": bool(trash.get("enabled")), "days": trash.get("days")}
+
+
 def list_duplicates(url: str, api_key: str) -> list[dict]:
     """Holt die von Immich erkannten Duplikatgruppen.
 

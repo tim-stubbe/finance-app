@@ -1779,6 +1779,7 @@ document.getElementById("profile-form").addEventListener("submit", async e => {
 // Vorbelegt mit Immichs eigenem Vorschlag.
 const photoKeepChoice = new Map();
 let photoGroupsCache = [];
+let photoPage = { offset: 0, hasMore: false, total: 0 };
 
 function formatBytes(n) {
   if (!n) return "";
@@ -1786,7 +1787,7 @@ function formatBytes(n) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 }
 
-async function loadPhotosTab() {
+async function loadPhotosTab(offset = 0) {
   const hint = document.getElementById("photos-setup-hint");
   const hintText = document.getElementById("photos-setup-text");
   const summary = document.getElementById("photos-summary");
@@ -1807,13 +1808,14 @@ async function loadPhotosTab() {
   wrap.innerHTML = `<p class="page-sub">Suche doppelte Aufnahmen …</p>`;
   let data;
   try {
-    data = await api("/immich/duplicates");
+    data = await api(`/immich/duplicates?offset=${offset}&limit=20`);
   } catch (e) {
     summary.classList.add("hidden");
     wrap.innerHTML = `<div class="panel"><p class="page-sub">${esc(e.message)}</p></div>`;
     return;
   }
 
+  photoPage = { offset: data.offset, hasMore: data.has_more, total: data.total_groups };
   photoGroupsCache = data.groups;
   photoKeepChoice.clear();
   data.groups.forEach(g => {
@@ -1828,9 +1830,18 @@ async function loadPhotosTab() {
     wrap.innerHTML = "";
     return;
   }
-  summary.innerHTML = `<strong>${data.total_groups} Gruppe${data.total_groups === 1 ? "" : "n"}</strong>
-    mit insgesamt ${data.total_assets} Aufnahmen. Wähle je Gruppe das Bild, das bleiben soll –
-    die übrigen wandern in Immichs Papierkorb und sind dort wiederherstellbar.`;
+  // Der Papierkorb-Zustand kommt vom Server und ist keine Behauptung: Immich
+  // löscht bei abgeschaltetem Papierkorb sofort endgültig.
+  const trashNote = data.trash_enabled
+    ? `Die übrigen wandern in Immichs Papierkorb und sind dort
+       ${data.trash_days ? `${data.trash_days} Tage lang ` : ""}wiederherstellbar.`
+    : `<span class="photos-warn">⚠️ Achtung: In Immich ist der Papierkorb abgeschaltet.
+       Aufräumen ist deshalb gesperrt – sonst wären Bilder sofort unwiderruflich weg.</span>`;
+  const from = data.offset + 1;
+  const to = data.offset + data.groups.length;
+  summary.innerHTML = `<strong>${data.total_groups} Gruppen</strong>
+    mit insgesamt ${data.total_assets} Aufnahmen – angezeigt ${from}–${to}.
+    Wähle je Gruppe das Bild, das bleiben soll. ${trashNote}`;
 
   renderPhotoGroups();
 }
@@ -1839,7 +1850,11 @@ function renderPhotoGroups() {
   const wrap = document.getElementById("photos-groups");
   wrap.innerHTML = photoGroupsCache.map(g => {
     const keepId = photoKeepChoice.get(g.duplicate_id);
-    const cards = g.assets.map(a => {
+    // Das zu behaltende Bild immer zuerst. Bei grossen Gruppen stand Immichs
+    // Vorschlag sonst weit rechts ausserhalb des Sichtbereichs - man haette
+    // bestaetigt, ohne je gesehen zu haben, was bleibt.
+    const ordered = [...g.assets].sort((a, b) => (b.id === keepId) - (a.id === keepId));
+    const cards = ordered.map(a => {
       const keep = a.id === keepId;
       const dims = a.width && a.height ? `${a.width}×${a.height}` : "";
       const meta = [dims, formatBytes(a.size_bytes)].filter(Boolean).join(" · ");
@@ -1855,24 +1870,47 @@ function renderPhotoGroups() {
       </button>`;
     }).join("");
 
+    // Gekürzt dargestellte Gruppe: dann darf nicht "in den Papierkorb"
+    // angeboten werden, denn die nicht gezeigten Bilder wären mit betroffen,
+    // ohne dass man sie je gesehen hat.
+    const truncated = g.asset_count > g.assets.length;
     const trashCount = g.assets.length - 1;
+    const actions = truncated
+      ? `<button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>`
+      : `<button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
+         <button type="button" class="btn-primary" data-apply="${esc(g.duplicate_id)}">
+           ${trashCount} in den Papierkorb
+         </button>`;
+
     return `<div class="panel photo-group" data-group="${esc(g.duplicate_id)}">
       <div class="photo-group-head">
-        <h3 class="panel-title">${g.assets.length} ähnliche Aufnahmen</h3>
-        <div class="photo-group-actions">
-          <button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
-          <button type="button" class="btn-primary" data-apply="${esc(g.duplicate_id)}">
-            ${trashCount} in den Papierkorb
-          </button>
-        </div>
+        <h3 class="panel-title">${g.asset_count} ähnliche Aufnahmen</h3>
+        <div class="photo-group-actions">${actions}</div>
       </div>
+      ${truncated ? `<p class="photos-warn">Sehr große Gruppe – hier werden nur
+        ${g.assets.length} von ${g.asset_count} Aufnahmen gezeigt. Bei dieser Menge sind das
+        meist keine echten Duplikate (z.B. eine Serienaufnahme). Zum Aufräumen bitte direkt
+        in Immich prüfen – hier wäre nicht sichtbar, was alles betroffen ist.</p>` : ""}
       <div class="photo-strip">${cards}</div>
     </div>`;
   }).join("");
+
+  // Blätter-Schaltflächen
+  const nav = [];
+  if (photoPage.offset > 0) nav.push(`<button type="button" class="btn-ghost" data-page="${Math.max(0, photoPage.offset - 20)}">← Zurück</button>`);
+  if (photoPage.hasMore) nav.push(`<button type="button" class="btn-primary" data-page="${photoPage.offset + 20}">Weitere 20 Gruppen →</button>`);
+  if (nav.length) wrap.innerHTML += `<div class="photo-pager">${nav.join("")}</div>`;
 }
 
 // Klick auf ein Bild wählt es als das zu behaltende aus.
 document.getElementById("photos-groups").addEventListener("click", async e => {
+  const pageTo = e.target.closest("[data-page]")?.dataset.page;
+  if (pageTo !== undefined) {
+    await loadPhotosTab(parseInt(pageTo, 10));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+
   const card = e.target.closest(".photo-card");
   if (card) {
     photoKeepChoice.set(card.dataset.group, card.dataset.asset);
@@ -1892,7 +1930,7 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
         body: JSON.stringify({ groups: [{ duplicate_id: applyId, keep_ids: [keepId], trash_ids: trashIds }] }),
       });
       toast(`${res.trashed_assets} Aufnahme(n) in den Papierkorb verschoben.`);
-      await loadPhotosTab();
+      await loadPhotosTab(photoPage.offset);
     } catch (err) {
       toast("Fehler: " + err.message);
     }
@@ -1904,7 +1942,7 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
     try {
       await api(`/immich/duplicates/${dismissId}`, { method: "DELETE" });
       toast("Gruppe ausgeblendet, es wurde nichts gelöscht.");
-      await loadPhotosTab();
+      await loadPhotosTab(photoPage.offset);
     } catch (err) {
       toast("Fehler: " + err.message);
     }

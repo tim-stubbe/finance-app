@@ -1773,26 +1773,54 @@ def test_immich(db: Session = Depends(get_db)):
         return schemas.ImmichTestResult(ok=False, error=str(e))
 
 
+# Eine echte Bibliothek liefert schnell mehrere tausend Gruppen (hier real:
+# 5.501 Gruppen / 24.143 Aufnahmen, ~6 MB JSON). Alles auf einmal auszuliefern
+# und zu rendern legt den Browser lahm, deshalb seitenweise.
+DUPLICATES_PAGE_SIZE = 20
+# Einzelne Gruppen sind real bis zu 841 Aufnahmen gross - das sind dann keine
+# echten Duplikate mehr, sondern eine Serienaufnahme o.ae. Fuer die Anzeige
+# gekuerzt; die Gesamtzahl steht weiterhin in `asset_count`.
+MAX_ASSETS_PER_GROUP = 24
+
+
 @api_router.get("/immich/duplicates", response_model=schemas.ImmichDuplicatesOut)
-def immich_duplicates(db: Session = Depends(get_db)):
+def immich_duplicates(
+    offset: int = 0,
+    limit: int = DUPLICATES_PAGE_SIZE,
+    db: Session = Depends(get_db),
+):
     url, key = _immich_credentials(db)
     try:
         raw = immich.list_duplicates(url, key)
     except Exception as e:
         raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
 
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    total_assets = sum(len(g.get("assets") or []) for g in raw)
+    page = raw[offset:offset + limit]
+
     groups = []
-    total_assets = 0
-    for g in raw:
-        assets = [immich.asset_summary(a) for a in (g.get("assets") or [])]
-        total_assets += len(assets)
+    for g in page:
+        all_assets = g.get("assets") or []
+        shown = [immich.asset_summary(a) for a in all_assets[:MAX_ASSETS_PER_GROUP]]
         groups.append(schemas.ImmichDuplicateGroupOut(
             duplicate_id=g.get("duplicateId"),
-            assets=[schemas.ImmichAssetOut(**a) for a in assets],
+            assets=[schemas.ImmichAssetOut(**a) for a in shown],
             suggested_keep_ids=g.get("suggestedKeepAssetIds") or [],
+            asset_count=len(all_assets),
         ))
+    # Fehlschlag hier darf die Anzeige nicht blockieren - die Sperre beim
+    # tatsächlichen Anwenden greift ohnehin unabhängig davon.
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception:
+        trash = {"enabled": True, "days": None}
+
     return schemas.ImmichDuplicatesOut(
-        groups=groups, total_groups=len(groups), total_assets=total_assets
+        groups=groups, total_groups=len(raw), total_assets=total_assets,
+        trash_enabled=trash["enabled"], trash_days=trash["days"],
+        offset=offset, limit=limit, has_more=offset + limit < len(raw),
     )
 
 
@@ -1817,6 +1845,25 @@ def immich_resolve(data: schemas.ImmichResolveRequest, db: Session = Depends(get
     Papierkorb und sind dort wiederherstellbar - endgültiges Löschen passiert
     hier bewusst nie."""
     url, key = _immich_credentials(db)
+
+    # Zuerst prüfen, ob Immichs Papierkorb überhaupt aktiv ist. Immich
+    # entscheidet anhand dieser Server-Einstellung, ob aussortierte Bilder
+    # wiederherstellbar bleiben oder sofort unwiderruflich weg sind - der
+    # Aufruf von hier sieht in beiden Fällen identisch aus. Ohne diese Prüfung
+    # würde ein Umlegen des Schalters in Immich diese Funktion still von
+    # "aufräumen" zu "endgültig vernichten" machen.
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Papierkorb-Einstellung nicht prüfbar, abgebrochen: {e}")
+    if not trash["enabled"]:
+        raise HTTPException(
+            400,
+            "Abgebrochen: In Immich ist der Papierkorb abgeschaltet. Aussortierte "
+            "Bilder wären sofort unwiderruflich gelöscht statt wiederherstellbar. "
+            "Aktiviere den Papierkorb in Immich (Administration → Einstellungen → "
+            "Papierkorb), dann klappt es. Es wurde nichts geändert.",
+        )
 
     payload = []
     for g in data.groups:

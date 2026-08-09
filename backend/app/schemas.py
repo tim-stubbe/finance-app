@@ -902,12 +902,24 @@ class ImmichDuplicateGroupOut(BaseModel):
     assets: List[ImmichAssetOut]
     # Immichs eigener Vorschlag, was behalten werden sollte.
     suggested_keep_ids: List[str]
+    # Gesamtzahl in der Gruppe. Kann groesser sein als len(assets), wenn die
+    # Gruppe fuer die Anzeige gekuerzt wurde (siehe MAX_ASSETS_PER_GROUP).
+    asset_count: int = 0
 
 
 class ImmichDuplicatesOut(BaseModel):
     groups: List[ImmichDuplicateGroupOut]
     total_groups: int
     total_assets: int
+    # Seitenweises Laden - bei mehreren tausend Gruppen kann nicht alles auf
+    # einmal geliefert werden.
+    offset: int = 0
+    limit: int = 0
+    has_more: bool = False
+    # Zustand von Immichs Papierkorb - entscheidet darüber, ob aussortierte
+    # Bilder wiederherstellbar sind. Wird in der Oberfläche angezeigt.
+    trash_enabled: bool = True
+    trash_days: Optional[int] = None
 
 
 class ImmichResolveGroup(BaseModel):

@@ -493,6 +493,14 @@ main {
   flex: 1;
   padding: 32px 40px 60px;
   max-width: 1180px;
+  /* Pflicht fuer ein Flex-Element: ohne min-width:0 gilt min-width:auto, und
+     main waechst bis zur Mindestbreite seines breitesten Inhalts (statt zu
+     schrumpfen und den Inhalt scrollen zu lassen). Zusammen mit der
+     max-width-Anhebung weiter unten ragte main dadurch bei Fensterbreiten
+     zwischen 1500 und 1780px ueber den Rand hinaus - und weil die Seite
+     waagrechtes Scrollen unterdrueckt, waren Schaltflaechen schlicht nicht
+     mehr erreichbar. */
+  min-width: 0;
   /* Kartenraster/Panels sind auto-fit/fr-basiert und wachsen von selbst mit -
      ohne "auto" haengt auf breiten Bildschirmen der gesamte Leerraum starr
      rechts, weil main als Flex-Item sonst links in seinem Slot klebt. */
@@ -1507,7 +1515,10 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .brand-name { display: none; }
   .nav { flex-direction: row; flex: 1; overflow-x: auto; }
   .nav-btn { flex-direction: column; gap: 4px; font-size: 11px; padding: 8px 10px; white-space: nowrap; }
-  main { padding: 20px 16px 48px; }
+  /* max-width/margin:auto hier zuruecknehmen: in der Spalten-Flexbox schaltet
+     ein automatischer Seitenrand das Dehnen auf die Containerbreite ab, main
+     bemisst sich dann am Inhalt und wird breiter als der Bildschirm. */
+  main { padding: 20px 16px 48px; max-width: none; margin: 0; width: 100%; }
   /* Sidebar wird hier selbst zur sticky Kopfleiste - eine zweite sticky Leiste
      würde beide beim Scrollen übereinander pinnen. Läuft daher mit weg. */
   .global-topbar { position: static; margin: -20px -16px 16px; }
@@ -1701,6 +1712,9 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 
 .photo-group-head .panel-title { margin: 0; }
+/* Gleicher Grund wie bei .photo-strip - die Panels duerfen nicht durch ihren
+   Inhalt breiter werden als der verfuegbare Platz. */
+.photo-group { min-width: 0; overflow: hidden; }
 .photo-group-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Waagrecht scrollbar, damit auch Gruppen mit vielen Aufnahmen nicht die
@@ -1710,6 +1724,13 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 6px;
+  /* Ohne min-width:0 nimmt dieses Flex-Element die Summe ALLER Karten als
+     Mindestbreite (min-width:auto ist der Flexbox-Standard) und drueckt damit
+     den ganzen Seiteninhalt breiter als das Fenster. Da die Seite waagrechtes
+     Scrollen unterdrueckt, wurde der Inhalt dann stillschweigend abgeschnitten
+     statt scrollbar zu sein - bei einer Gruppe mit 16 Aufnahmen waren die
+     Schaltflaechen nicht mehr erreichbar. */
+  min-width: 0;
 }
 
 .photo-card {
@@ -1770,4 +1791,13 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.photos-warn { color: var(--neg); font-weight: 600; }
+
+.photo-pager {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
 }
