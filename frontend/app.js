@@ -144,7 +144,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     moveNavIndicator(btn);
     if (btn.dataset.tab === "dashboard") loadDashboard();
     if (btn.dataset.tab === "business") loadBusinessTab();
-    if (btn.dataset.tab === "transactions") loadTransactions();
+    if (btn.dataset.tab === "transactions") { loadTransactions(); loadMailInbox(); }
     if (btn.dataset.tab === "accounts") loadAccounts();
     if (btn.dataset.tab === "recurring") loadRecurringTab();
     if (btn.dataset.tab === "categories") loadCategories();
@@ -2114,6 +2114,130 @@ document.getElementById("photos-view-screenshots").addEventListener("click", asy
   }
 });
 
+// ================= BELEGE AUS E-MAILS =================
+async function loadMailSettings() {
+  const s = await api("/settings/mail");
+  document.getElementById("mail-host").value = s.host || "";
+  document.getElementById("mail-port").value = s.port || 993;
+  document.getElementById("mail-user").value = s.user || "";
+  document.getElementById("mail-folder").value = s.folder || "INBOX";
+  document.getElementById("mail-enabled").checked = s.enabled;
+  document.getElementById("mail-remove").classList.toggle("hidden", !s.host);
+  document.getElementById("mail-password").placeholder = s.password_set
+    ? "gespeichert – leer lassen behält das bisherige"
+    : "wird verschlüsselt gespeichert";
+  if (s.last_sync_at) {
+    document.getElementById("mail-status").textContent =
+      "Zuletzt abgeholt: " + relativeTimeDe(new Date(s.last_sync_at));
+  }
+}
+
+document.getElementById("mail-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pw = document.getElementById("mail-password").value.trim();
+  const body = {
+    enabled: document.getElementById("mail-enabled").checked,
+    host: document.getElementById("mail-host").value.trim(),
+    port: parseInt(document.getElementById("mail-port").value, 10) || 993,
+    user: document.getElementById("mail-user").value.trim(),
+    folder: document.getElementById("mail-folder").value.trim() || "INBOX",
+  };
+  if (pw) body.password = pw;
+  await api("/settings/mail", { method: "PUT", body: JSON.stringify(body) });
+  document.getElementById("mail-password").value = "";
+  toast("Postfach-Einstellungen gespeichert.");
+  await loadMailSettings();
+  refreshIntegrationBadge();
+});
+
+document.getElementById("mail-test").addEventListener("click", async () => {
+  const el = document.getElementById("mail-status");
+  el.textContent = "Teste Verbindung …";
+  const r = await api("/mail/test", { method: "POST" });
+  el.textContent = r.ok
+    ? `✓ Verbunden – Ordner „${r.folder}" mit ${r.message_count} Nachrichten.`
+    : `✗ ${r.error}`;
+});
+
+document.getElementById("mail-sync-now").addEventListener("click", async () => {
+  const el = document.getElementById("mail-status");
+  el.textContent = "Hole Anhänge … (kann bei vielen Mails dauern)";
+  try {
+    const r = await api("/mail/sync", { method: "POST" });
+    el.textContent = `${r.new_attachments} neue Anhänge, davon ${r.auto_attached} automatisch zugeordnet. ${r.skipped} schon bekannt.`;
+    toast(`${r.new_attachments} neue Belege geholt.`);
+    await loadMailInbox();
+  } catch (err) {
+    el.textContent = "✗ " + err.message;
+  }
+});
+
+document.getElementById("mail-remove").addEventListener("click", async () => {
+  if (!confirm("Postfach-Verbindung entfernen?")) return;
+  await api("/settings/mail", { method: "DELETE" });
+  toast("Postfach-Verbindung entfernt.");
+  await loadMailSettings();
+  refreshIntegrationBadge();
+});
+
+// ---------- Beleg-Eingang ----------
+async function loadMailInbox() {
+  const panel = document.getElementById("mail-inbox-panel");
+  const list = document.getElementById("mail-inbox-list");
+  let items = [];
+  try {
+    items = await api("/mail/attachments?status=pending");
+  } catch (e) {
+    panel.classList.add("hidden");
+    return;
+  }
+  // Panel nur zeigen, wenn wirklich etwas offen ist - sonst nimmt es im
+  // Buchungen-Tab dauerhaft Platz weg.
+  panel.classList.toggle("hidden", items.length === 0);
+  document.getElementById("mail-inbox-count").textContent = items.length;
+  if (!items.length) return;
+
+  list.innerHTML = items.map(a => {
+    const erkannt = a.parsed_date && a.parsed_amount
+      ? `erkannt: ${fmtDate(a.parsed_date)} · ${eur(a.parsed_amount)}`
+      : `<span class="mail-warn">nicht auslesbar${a.parse_error ? ` (${esc(a.parse_error)})` : ""}</span>`;
+    const vorschlaege = a.suggestions.length
+      ? a.suggestions.map(s => `<button type="button" class="btn-primary mail-suggest"
+           data-attach="${a.id}" data-tx="${s.id}">An ${fmtDate(s.date)} · ${eur(s.amount)} anhängen</button>`).join("")
+      : `<span class="page-sub">Keine passende Buchung gefunden.</span>`;
+    return `<div class="mail-item">
+      <div class="mail-item-main">
+        <a href="/api/receipts/${esc(a.stored_filename)}" target="_blank" rel="noopener" class="mail-file">${esc(a.filename)}</a>
+        <span class="mail-meta">${esc(a.sender || "")} · ${esc(a.subject || "")}</span>
+        <span class="mail-meta">${erkannt}</span>
+      </div>
+      <div class="mail-item-actions">
+        ${vorschlaege}
+        <button type="button" class="btn-ghost" data-ignore="${a.id}">Ablegen</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+document.getElementById("mail-inbox-list").addEventListener("click", async e => {
+  const attach = e.target.closest("[data-attach]");
+  if (attach) {
+    await api(`/mail/attachments/${attach.dataset.attach}/attach`, {
+      method: "POST", body: JSON.stringify({ transaction_id: parseInt(attach.dataset.tx, 10) }),
+    });
+    toast("Beleg an Buchung angehängt.");
+    await loadMailInbox();
+    await loadTransactions();
+    return;
+  }
+  const ign = e.target.closest("[data-ignore]");
+  if (ign) {
+    await api(`/mail/attachments/${ign.dataset.ignore}/ignore`, { method: "POST" });
+    toast("Beleg abgelegt.");
+    await loadMailInbox();
+  }
+});
+
 // ---------- Immich-Einstellungen ----------
 async function loadImmichSettings() {
   const s = await api("/settings/immich");
@@ -3020,6 +3144,7 @@ async function loadSettingsTab() {
   await loadAutoCategorizeSettings();
   await loadWebSearchSettings();
   await loadImmichSettings();
+  await loadMailSettings();
   await loadNotificationSettings();
   await loadCallSettings();
   await loadBackupSettings();

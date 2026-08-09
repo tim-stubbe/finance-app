@@ -1877,3 +1877,31 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .photo-sim.sim-high { background: var(--neg); }
 .photo-sim.sim-mid  { background: var(--warn); }
 .photo-sim.sim-low  { background: var(--muted); }
+
+/* ---------- Beleg-Eingang aus E-Mails ---------- */
+.mail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.mail-item-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mail-file { font-weight: 700; font-size: 14px; color: var(--accent-strong); }
+.mail-meta {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60ch;
+}
+.mail-warn { color: var(--warn); font-weight: 600; }
+.mail-item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.mail-suggest { font-size: 12px; }

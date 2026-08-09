@@ -283,6 +283,15 @@
         </div>
       </header>
 
+      <div class="panel hidden" id="mail-inbox-panel">
+        <h3 class="panel-title">📧 Beleg-Eingang <span class="nav-warn-badge" id="mail-inbox-count">0</span></h3>
+        <p class="page-sub">
+          Aus E-Mails geholte Belege, die sich nicht eindeutig zuordnen liessen.
+          Ordne sie einer Buchung zu oder lege sie ab.
+        </p>
+        <div id="mail-inbox-list"></div>
+      </div>
+
       <div class="panel">
         <h3 class="panel-title">🧾 Neue Buchung</h3>
         <form id="tx-form" class="form-grid">
@@ -1289,6 +1298,32 @@
           </div>
         </form>
         <p id="websearch-status" class="page-sub"></p>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">📧 Belege aus E-Mails</h3>
+        <p class="page-sub">
+          Holt stündlich PDF- und Bild-Anhänge aus deinem Postfach, liest Datum und Betrag aus
+          und hängt sie an die passende Buchung. Passt genau eine Buchung, geschieht das
+          automatisch – sonst landet der Beleg im Tab <strong>Buchungen → Beleg-Eingang</strong>.
+          Der Zugriff ist rein lesend: es wird nichts gelöscht, verschoben oder als gelesen markiert.
+          Bei Gmail/GMX brauchst du ein <strong>App-Passwort</strong>, nicht dein normales.
+        </p>
+        <form id="mail-settings-form" class="form-grid">
+          <label>IMAP-Server <input type="text" id="mail-host" placeholder="imap.gmail.com"></label>
+          <label>Port <input type="number" id="mail-port" value="993"></label>
+          <label>Benutzername <input type="text" id="mail-user" placeholder="name@gmail.com" autocomplete="off"></label>
+          <label>Passwort <input type="password" id="mail-password" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+          <label>Ordner <input type="text" id="mail-folder" value="INBOX"></label>
+          <label class="checkbox-label"><input type="checkbox" id="mail-enabled"> Stündlich automatisch abholen</label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="mail-test" class="btn-ghost">Verbindung testen</button>
+            <button type="button" id="mail-sync-now" class="btn-ghost">Jetzt abholen</button>
+            <button type="button" id="mail-remove" class="btn-ghost hidden">Entfernen</button>
+          </div>
+        </form>
+        <p id="mail-status" class="page-sub"></p>
       </div>
 
       <div class="panel">

@@ -1115,3 +1115,59 @@ class GoalCompleteResult(BaseModel):
     ok: bool
     goal: GoalOut
     message: str
+
+
+# ---------- E-Mail-Belege ----------
+class MailSettingsOut(BaseModel):
+    enabled: bool
+    host: Optional[str] = None
+    port: int = 993
+    user: Optional[str] = None
+    folder: str = "INBOX"
+    # Das Passwort wird nie zurueckgegeben, nur ob eines hinterlegt ist.
+    password_set: bool = False
+    last_sync_at: Optional[str] = None
+
+
+class MailSettingsUpdate(BaseModel):
+    enabled: bool = False
+    host: Optional[str] = None
+    port: int = 993
+    user: Optional[str] = None
+    folder: str = "INBOX"
+    # Leer lassen behaelt das bisherige Passwort.
+    password: Optional[str] = None
+
+
+class MailTestResult(BaseModel):
+    ok: bool
+    folder: Optional[str] = None
+    message_count: Optional[int] = None
+    error: Optional[str] = None
+
+
+class MailSyncResult(BaseModel):
+    new_attachments: int
+    skipped: int
+    auto_attached: int
+
+
+class MailAttachmentOut(BaseModel):
+    id: int
+    filename: str
+    stored_filename: str
+    sender: Optional[str] = None
+    subject: Optional[str] = None
+    mail_date: Optional[str] = None
+    size_bytes: Optional[int] = None
+    status: str
+    parsed_amount: Optional[float] = None
+    parsed_date: Optional[str] = None
+    parse_error: Optional[str] = None
+    transaction_id: Optional[int] = None
+    # Passende Buchungen ohne Beleg, live ermittelt.
+    suggestions: List[Dict[str, Any]] = []
+
+
+class MailAttachRequest(BaseModel):
+    transaction_id: int

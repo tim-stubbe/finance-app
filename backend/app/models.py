@@ -128,6 +128,14 @@ class Settings(Base):
     # URL im Klartext (kein Geheimnis), Schlüssel verschlüsselt wie alle anderen.
     immich_url = Column(String, nullable=True)
     immich_api_key_encrypted = Column(String, nullable=True)
+    # --- E-Mail-Postfach (Belege aus Anhängen) ---
+    mail_enabled = Column(Boolean, nullable=False, default=False)
+    imap_host = Column(String, nullable=True)
+    imap_port = Column(Integer, nullable=False, default=993)
+    imap_user = Column(String, nullable=True)
+    imap_password_encrypted = Column(String, nullable=True)
+    imap_folder = Column(String, nullable=False, default="INBOX")
+    mail_last_sync_at = Column(DateTime, nullable=True)
 
 
 class BasiszinsRate(Base):
@@ -519,3 +527,44 @@ class PriceHistoryCache(Base):
     range_key = Column(String, nullable=False)
     fetched_at = Column(DateTime, nullable=False)
     data_json = Column(Text, nullable=False)
+
+
+class MailAttachment(Base):
+    """Ein aus einer E-Mail geholter Beleg, bevor er einer Buchung zugeordnet ist.
+
+    Eigene Tabelle statt direkt an eine Buchung zu haengen: Beim Abholen ist
+    noch nicht bekannt, zu welcher Buchung ein Anhang gehoert - manches passt
+    eindeutig, manches gar nicht, und manches gehoert zu einer Buchung, die es
+    noch nicht gibt (Kontoumsatz kommt oft Tage nach der Rechnung). Der Anhang
+    muss also zwischengelagert werden koennen, ohne verloren zu gehen.
+    """
+
+    __tablename__ = "mail_attachments"
+    __table_args__ = (UniqueConstraint("message_id", "filename", name="uq_mail_attachment"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    # message_id + Dateiname verhindern, dass derselbe Anhang bei jedem
+    # Abholen erneut angelegt wird (gleiches Prinzip wie bei den Bank-Importen).
+    message_id = Column(String, nullable=False, index=True)
+    filename = Column(String, nullable=False)
+    # Name auf der Platte in data/uploads - der Originalname ist nicht sicher.
+    stored_filename = Column(String, nullable=False)
+    content_type = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+
+    sender = Column(String, nullable=True)
+    subject = Column(String, nullable=True)
+    mail_date = Column(DateTime, nullable=True)
+    fetched_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # "pending" = liegt zur Sichtung, "attached" = einer Buchung zugeordnet,
+    # "ignored" = vom Nutzer als uninteressant abgelegt.
+    status = Column(String, nullable=False, default="pending")
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    # Aus dem Beleg ausgelesen (Datum/Betrag), fuer die Zuordnung.
+    parsed_amount = Column(Float, nullable=True)
+    parsed_date = Column(Date, nullable=True)
+    parse_error = Column(String, nullable=True)
+
+    transaction = relationship("Transaction")

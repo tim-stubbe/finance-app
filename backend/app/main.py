@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -108,6 +108,15 @@ ensure_columns("settings", {
 ensure_columns("settings", {
     "immich_url": "VARCHAR",
     "immich_api_key_encrypted": "VARCHAR",
+})
+ensure_columns("settings", {
+    "mail_enabled": "BOOLEAN DEFAULT 0",
+    "imap_host": "VARCHAR",
+    "imap_port": "INTEGER DEFAULT 993",
+    "imap_user": "VARCHAR",
+    "imap_password_encrypted": "VARCHAR",
+    "imap_folder": "VARCHAR DEFAULT 'INBOX'",
+    "mail_last_sync_at": "DATETIME",
 })
 
 _bootstrap_db = SessionLocal()
@@ -1710,6 +1719,247 @@ def get_fx_rate(to: str = "CHF"):
     return schemas.FxRateOut(from_currency="EUR", to_currency=to, rate=rate)
 
 
+# ---------------- E-Mail-Belege ----------------
+MAIL_PARSE_PROMPT = (
+    "Du bekommst den Text einer Rechnung oder eines Belegs. Nenne ausschliesslich "
+    "das Belegdatum und den Gesamtbetrag. Antworte NUR mit einem JSON-Block:\n"
+    "```json\n{\"datum\": \"JJJJ-MM-TT\", \"betrag\": 12.34}\n```\n"
+    "Wenn du eines der beiden nicht sicher erkennst, schreibe null. Rate nicht."
+)
+
+
+def _parse_receipt(settings, content: bytes, filename: str) -> tuple[date | None, float | None, str | None]:
+    """Liest Datum und Betrag aus einem Beleg.
+
+    Nutzt dieselbe Auswertung wie der Beleg-Chat (document_extract + Ollama),
+    fragt aber gezielt nur nach den zwei Feldern, die für die Zuordnung zu
+    einer Buchung nötig sind. Gibt (datum, betrag, fehler) zurück - ein
+    Fehlschlag ist kein Drama, der Anhang landet dann nur in der Sichtliste
+    statt automatisch zugeordnet zu werden.
+    """
+    if not settings.ollama_url or not settings.ollama_model:
+        return None, None, "Kein Ollama-Server eingerichtet"
+
+    text, images = None, []
+    try:
+        if filename.lower().endswith(".pdf"):
+            text, images = document_extract.extract_pdf(content)
+        else:
+            images = [base64.b64encode(content).decode()]
+    except Exception as e:
+        return None, None, f"Datei nicht lesbar: {e}"
+
+    nachricht = {"role": "user", "content": MAIL_PARSE_PROMPT}
+    if text:
+        # Echter Text im PDF: an das normale Textmodell, das ist deutlich
+        # zuverlässiger als ein Bildmodell auf einem gerenderten Dokument.
+        nachricht["content"] += f"\n\nBelegtext:\n{text[:6000]}"
+        modell = settings.ollama_model
+    elif images:
+        nachricht["images"] = images[:1]
+        modell = settings.beleg_chat_model or settings.ollama_model
+    else:
+        return None, None, "Weder Text noch Bild aus der Datei gewinnbar"
+
+    try:
+        antwort = ollama_client.chat(settings.ollama_url, modell, [nachricht], timeout=180)
+    except Exception as e:
+        return None, None, f"KI nicht erreichbar: {e}"
+
+    treffer = re.search(r"```json\s*(\{.*?\})\s*```", antwort, re.DOTALL)
+    if not treffer:
+        treffer = re.search(r"(\{[^{}]*\"betrag\"[^{}]*\})", antwort, re.DOTALL)
+    if not treffer:
+        return None, None, "Kein verwertbares Ergebnis von der KI"
+
+    try:
+        daten = json.loads(treffer.group(1))
+    except Exception:
+        return None, None, "Antwort der KI war kein gültiges JSON"
+
+    betrag = daten.get("betrag")
+    try:
+        betrag = float(betrag) if betrag is not None else None
+    except (TypeError, ValueError):
+        betrag = None
+    datum = None
+    if daten.get("datum"):
+        try:
+            datum = date.fromisoformat(str(daten["datum"])[:10])
+        except ValueError:
+            datum = None
+    return datum, betrag, None
+
+
+def _run_mail_sync(db: Session, space_id: int) -> dict:
+    """Holt neue Anhänge, wertet sie aus und ordnet eindeutige Treffer zu."""
+    s = auth.get_or_create_settings(db)
+    if not (s.imap_host and s.imap_user and s.imap_password_encrypted):
+        raise ValueError("Postfach ist nicht vollständig eingerichtet.")
+
+    passwort = bank_sync.decrypt_secret(s.secret_key, s.imap_password_encrypted)
+    anhaenge = mail_sync.fetch_attachments(
+        s.imap_host, s.imap_port, s.imap_user, passwort, s.imap_folder, s.mail_last_sync_at
+    )
+
+    neu = uebersprungen = zugeordnet = 0
+    for a in anhaenge:
+        vorhanden = db.query(models.MailAttachment).filter(
+            models.MailAttachment.message_id == a["message_id"],
+            models.MailAttachment.filename == a["filename"],
+        ).first()
+        if vorhanden:
+            uebersprungen += 1
+            continue
+
+        endung = os.path.splitext(a["filename"])[1]
+        speichername = f"mail_{uuid.uuid4().hex}{endung}"
+        with open(os.path.join(UPLOAD_DIR, speichername), "wb") as f:
+            f.write(a["content"])
+
+        datum, betrag, fehler = _parse_receipt(s, a["content"], a["filename"])
+        eintrag = models.MailAttachment(
+            message_id=a["message_id"], filename=a["filename"],
+            stored_filename=speichername, content_type=a.get("content_type"),
+            size_bytes=len(a["content"]), sender=a.get("sender"),
+            subject=a.get("subject"), mail_date=a.get("mail_date"),
+            parsed_amount=betrag, parsed_date=datum, parse_error=fehler,
+        )
+        db.add(eintrag)
+        db.flush()
+        neu += 1
+
+        # Nur bei GENAU EINEM passenden Kandidaten automatisch zuordnen. Bei
+        # mehreren wäre es geraten - dann entscheidet der Nutzer in der Liste.
+        if datum and betrag:
+            treffer = _find_receipt_matches(db, space_id, betrag, datum)
+            if len(treffer) == 1:
+                tx_id = treffer[0]["id"]
+                crud.set_receipt(db, tx_id, space_id, speichername)
+                eintrag.status = "attached"
+                eintrag.transaction_id = tx_id
+                zugeordnet += 1
+
+    s.mail_last_sync_at = datetime.utcnow()
+    db.commit()
+    return {"neu": neu, "uebersprungen": uebersprungen, "zugeordnet": zugeordnet}
+
+
+@api_router.get("/settings/mail", response_model=schemas.MailSettingsOut)
+def get_mail_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.MailSettingsOut(
+        enabled=s.mail_enabled, host=s.imap_host, port=s.imap_port,
+        user=s.imap_user, folder=s.imap_folder,
+        password_set=bool(s.imap_password_encrypted),
+        last_sync_at=s.mail_last_sync_at.isoformat() if s.mail_last_sync_at else None,
+    )
+
+
+@api_router.put("/settings/mail", response_model=schemas.MailSettingsOut)
+def update_mail_settings(data: schemas.MailSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.mail_enabled = data.enabled
+    s.imap_host = (data.host or "").strip() or None
+    s.imap_port = data.port or 993
+    s.imap_user = (data.user or "").strip() or None
+    s.imap_folder = (data.folder or "INBOX").strip() or "INBOX"
+    if data.password:
+        s.imap_password_encrypted = bank_sync.encrypt_secret(s.secret_key, data.password)
+    db.commit()
+    return get_mail_settings(db)
+
+
+@api_router.delete("/settings/mail", response_model=schemas.MailSettingsOut)
+def remove_mail_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.mail_enabled = False
+    s.imap_host = s.imap_user = s.imap_password_encrypted = None
+    db.commit()
+    return get_mail_settings(db)
+
+
+@api_router.post("/mail/test", response_model=schemas.MailTestResult)
+def test_mail(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not (s.imap_host and s.imap_user and s.imap_password_encrypted):
+        return schemas.MailTestResult(ok=False, error="Postfach ist nicht vollständig eingerichtet.")
+    try:
+        passwort = bank_sync.decrypt_secret(s.secret_key, s.imap_password_encrypted)
+        info = mail_sync.check_connection(s.imap_host, s.imap_port, s.imap_user,
+                                          passwort, s.imap_folder)
+        return schemas.MailTestResult(ok=True, **info)
+    except Exception as e:
+        return schemas.MailTestResult(ok=False, error=str(e))
+
+
+@api_router.post("/mail/sync", response_model=schemas.MailSyncResult)
+def sync_mail(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    try:
+        r = _run_mail_sync(db, space_id)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(502, f"Abholen fehlgeschlagen: {e}")
+    return schemas.MailSyncResult(
+        new_attachments=r["neu"], skipped=r["uebersprungen"], auto_attached=r["zugeordnet"]
+    )
+
+
+@api_router.get("/mail/attachments", response_model=List[schemas.MailAttachmentOut])
+def list_mail_attachments(status: str = "pending", db: Session = Depends(get_db),
+                          space_id: int = Depends(auth.get_active_space_id)):
+    q = db.query(models.MailAttachment)
+    if status != "alle":
+        q = q.filter(models.MailAttachment.status == status)
+    eintraege = q.order_by(models.MailAttachment.mail_date.desc().nullslast()).limit(200).all()
+
+    out = []
+    for a in eintraege:
+        # Passende Buchungen erst hier ermitteln, nicht speichern: die
+        # Buchungslage ändert sich (neue Umsätze kommen nach), eine gespeicherte
+        # Vorschlagsliste wäre nach dem nächsten Bank-Sync veraltet.
+        vorschlaege = []
+        if a.status == "pending" and a.parsed_amount and a.parsed_date:
+            vorschlaege = _find_receipt_matches(db, space_id, a.parsed_amount, a.parsed_date)
+        out.append(schemas.MailAttachmentOut(
+            id=a.id, filename=a.filename, stored_filename=a.stored_filename,
+            sender=a.sender, subject=a.subject,
+            mail_date=a.mail_date.isoformat() if a.mail_date else None,
+            size_bytes=a.size_bytes, status=a.status,
+            parsed_amount=a.parsed_amount,
+            parsed_date=a.parsed_date.isoformat() if a.parsed_date else None,
+            parse_error=a.parse_error, transaction_id=a.transaction_id,
+            suggestions=vorschlaege,
+        ))
+    return out
+
+
+@api_router.post("/mail/attachments/{attachment_id}/attach")
+def attach_mail_attachment(attachment_id: int, data: schemas.MailAttachRequest,
+                           db: Session = Depends(get_db),
+                           space_id: int = Depends(auth.get_active_space_id)):
+    a = db.query(models.MailAttachment).filter(models.MailAttachment.id == attachment_id).first()
+    if not a:
+        raise HTTPException(404, "Anhang nicht gefunden")
+    if not crud.get_transaction(db, data.transaction_id, space_id):
+        raise HTTPException(404, "Buchung nicht gefunden")
+    crud.set_receipt(db, data.transaction_id, space_id, a.stored_filename)
+    a.status = "attached"
+    a.transaction_id = data.transaction_id
+    db.commit()
+    return {"ok": True}
+
+
+@api_router.post("/mail/attachments/{attachment_id}/ignore")
+def ignore_mail_attachment(attachment_id: int, db: Session = Depends(get_db)):
+    a = db.query(models.MailAttachment).filter(models.MailAttachment.id == attachment_id).first()
+    if not a:
+        raise HTTPException(404, "Anhang nicht gefunden")
+    a.status = "ignored"
+    db.commit()
+    return {"ok": True}
+
+
 # ---------------- Immich (Fotobibliothek) ----------------
 def _immich_credentials(db: Session) -> tuple[str, str]:
     """Holt URL und entschlüsselten Schlüssel oder wirft einen sprechenden
@@ -2105,7 +2355,7 @@ def integrations_status(db: Session = Depends(get_db)):
     FIELD_COUNT = {
         "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
         "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
-        "immich": 2,
+        "immich": 2, "mail": 3,
     }
 
     def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
@@ -2217,6 +2467,17 @@ def integrations_status(db: Session = Depends(get_db)):
         "immich", "Immich (Fotos)",
         "Doppelte Fotos finden und nach Bestätigung aufräumen",
         missing,
+    ))
+
+    missing = [label for label, value in (
+        ("IMAP-Server", s.imap_host),
+        ("Benutzername", s.imap_user),
+        ("Passwort", s.imap_password_encrypted),
+    ) if not value]
+    items.append(entry(
+        "mail", "E-Mail-Postfach",
+        "Belege aus Anhängen holen und Buchungen zuordnen",
+        missing, enabled=s.mail_enabled,
     ))
 
     return schemas.IntegrationStatusOut(
@@ -2917,6 +3178,16 @@ def _scheduled_ai_maintenance():
                 _run_ai_maintenance_for_space(db, space.id, settings)
             except Exception:
                 db.rollback()
+
+        # Belege aus dem Postfach laufen im selben Stundentakt mit - ein
+        # eigener Zeitplan waere nur eine weitere Stellschraube ohne Nutzen.
+        # Fehler duerfen die Kategorisierung nicht mitreissen.
+        if settings.mail_enabled and settings.imap_host:
+            for space in crud.get_spaces(db):
+                try:
+                    _run_mail_sync(db, space.id)
+                except Exception:
+                    db.rollback()
     finally:
         db.close()
 
