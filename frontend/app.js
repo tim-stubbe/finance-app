@@ -1775,9 +1775,16 @@ document.getElementById("profile-form").addEventListener("submit", async e => {
 });
 
 // ================= FOTOS (IMMICH) =================
-// Merkt sich je Duplikatgruppe, welches Bild behalten werden soll.
-// Vorbelegt mit Immichs eigenem Vorschlag.
-const photoKeepChoice = new Map();
+// Je Duplikatgruppe die Menge der aktuell zum Papierkorb ausgewaehlten
+// Bild-IDs - eine echte, von den anderen Bildern unabhaengige Mehrfachauswahl.
+// Kein "genau ein Bild bleibt" mehr: leer = alles bleibt, komplett gefuellt =
+// alles geht raus, beides ist ein gueltiger Zustand.
+const photoTrash = new Map();
+// Immichs Vorschlag bleibt als fester Bezugspunkt fuer die
+// Uebereinstimmungs-Prozente erhalten, unabhaengig davon, was der Nutzer
+// gerade aus-/abgewaehlt hat - sonst wuerde sich die Prozentzahl bei jedem
+// Klick auf ein anderes Bild beziehen und waere nicht mehr vergleichbar.
+const photoSuggestedKeep = new Map();
 // Übereinstimmung je Gruppe, nachgeladen nachdem die Bilder schon stehen -
 // die Berechnung braucht einen Moment und soll die Anzeige nicht aufhalten.
 const photoSimilarity = new Map();
@@ -1819,13 +1826,20 @@ async function loadPhotosTab(offset = 0) {
   }
 
   photoPage = { offset: data.offset, hasMore: data.has_more, total: data.total_groups };
-  photoGroupsCache = data.groups;
-  photoKeepChoice.clear();
+  photoTrash.clear();
+  photoSuggestedKeep.clear();
   data.groups.forEach(g => {
     // Immichs Vorschlag übernehmen; falls keiner kommt, das erste Bild.
-    const suggested = g.suggested_keep_ids.find(id => g.assets.some(a => a.id === id));
-    photoKeepChoice.set(g.duplicate_id, suggested || g.assets[0]?.id);
+    const suggested = g.suggested_keep_ids.find(id => g.assets.some(a => a.id === id)) || g.assets[0]?.id;
+    photoSuggestedKeep.set(g.duplicate_id, suggested);
+    // Vorbelegung wie bisher (alles ausser dem Vorschlag zum Papierkorb) -
+    // spart bei der haeufigsten Auswahl ("das beste Bild behalten") weiterhin
+    // Klicks. Der Nutzer kann jedes Bild einzeln umschalten, auch den
+    // Vorschlag selbst, bis hin zu "alles" oder "nichts".
+    g.assets.sort((a, b) => (b.id === suggested) - (a.id === suggested));
+    photoTrash.set(g.duplicate_id, new Set(g.assets.filter(a => a.id !== suggested).map(a => a.id)));
   });
+  photoGroupsCache = data.groups;
 
   summary.classList.remove("hidden");
   if (data.total_groups === 0) {
@@ -1844,7 +1858,8 @@ async function loadPhotosTab(offset = 0) {
   const to = data.offset + data.groups.length;
   summary.innerHTML = `<strong>${data.total_groups} Gruppen</strong>
     mit insgesamt ${data.total_assets} Aufnahmen – angezeigt ${from}–${to}.
-    Wähle je Gruppe das Bild, das bleiben soll. ${trashNote}`;
+    Wähle je Gruppe, welche Bilder in den Papierkorb sollen – jedes Bild einzeln,
+    auch alle oder keins. ${trashNote}`;
 
   renderPhotoGroups();
   loadSimilarities(data.groups);
@@ -1882,22 +1897,30 @@ async function loadSimilarities(groups) {
 // Browsern (iPhone/Mac Safari/Windows Firefox) als voller Seiten-Neuaufbau
 // wahrgenommen wurde - der Zustand aendert sich dabei zwar korrekt, aber
 // sichtbar wird davon in dem visuellen Chaos praktisch nichts.
-function updateGroupKeeperUI(duplicateId) {
+// Aktualisiert nur die eine betroffene Gruppe (Kartenzustand, Papierkorb-
+// Zaehler/-Knopf, Uebereinstimmungs-Plaketten) - kein renderPhotoGroups()
+// (kompletter Neuaufbau aller sichtbaren Gruppen samt jedem Vorschaubild).
+// Genau das war zuvor der Grund, warum ein einzelner Klick wie ein Neuladen
+// der ganzen Seite wirkte.
+function updateGroupSelectionUI(duplicateId) {
   const group = photoGroupsCache.find(g => g.duplicate_id === duplicateId);
   const groupEl = document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`);
   if (!group || !groupEl) return;
-  const keepId = photoKeepChoice.get(duplicateId);
+  const trashSet = photoTrash.get(duplicateId) || new Set();
 
   groupEl.querySelectorAll(".photo-card").forEach(card => {
-    const isKeep = card.dataset.asset === keepId;
-    card.classList.toggle("is-keep", isKeep);
-    card.classList.toggle("is-trash", !isKeep);
+    const isTrash = trashSet.has(card.dataset.asset);
+    card.classList.toggle("is-trash", isTrash);
+    card.classList.toggle("is-keep", !isTrash);
     const badge = card.querySelector(".photo-badge");
-    if (badge) badge.textContent = isKeep ? "behalten" : "Papierkorb";
+    if (badge) badge.textContent = isTrash ? "Papierkorb" : "behalten";
   });
 
   const applyBtn = groupEl.querySelector("[data-apply]");
-  if (applyBtn) applyBtn.textContent = `${group.assets.length - 1} in den Papierkorb`;
+  if (applyBtn) {
+    applyBtn.textContent = `${trashSet.size} in den Papierkorb`;
+    applyBtn.classList.toggle("hidden", trashSet.size === 0);
+  }
 
   updateSimilarityBadges(duplicateId);
 }
@@ -1905,13 +1928,15 @@ function updateGroupKeeperUI(duplicateId) {
 function updateSimilarityBadges(duplicateId) {
   const groupEl = document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`);
   if (!groupEl) return;
-  const keepId = photoKeepChoice.get(duplicateId);
+  // Fester Bezugspunkt (Immichs Vorschlag), unabhaengig von der aktuellen
+  // Papierkorb-Auswahl - siehe Kommentar bei der Variable weiter oben.
+  const refId = photoSuggestedKeep.get(duplicateId);
   const pairs = photoSimilarity.get(duplicateId) || {};
   groupEl.querySelectorAll(".photo-card").forEach(card => {
     const assetId = card.dataset.asset;
     const existing = card.querySelector(".photo-sim");
-    if (assetId === keepId) { existing?.remove(); return; }
-    const pct = pairs[keepId]?.[assetId];
+    if (assetId === refId) { existing?.remove(); return; }
+    const pct = pairs[refId]?.[assetId];
     if (pct === undefined) { existing?.remove(); return; }
     const cls = pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low";
     const title = pct >= 95 ? "praktisch identisch" : pct >= 80 ? "sehr ähnlich" : "nur ähnliche Aufnahme";
@@ -1932,27 +1957,24 @@ function updateSimilarityBadges(duplicateId) {
 function renderPhotoGroups() {
   const wrap = document.getElementById("photos-groups");
   wrap.innerHTML = photoGroupsCache.map(g => {
-    const keepId = photoKeepChoice.get(g.duplicate_id);
-    // Das zu behaltende Bild immer zuerst. Bei grossen Gruppen stand Immichs
-    // Vorschlag sonst weit rechts ausserhalb des Sichtbereichs - man haette
-    // bestaetigt, ohne je gesehen zu haben, was bleibt.
-    const ordered = [...g.assets].sort((a, b) => (b.id === keepId) - (a.id === keepId));
-    const cards = ordered.map(a => {
-      const keep = a.id === keepId;
+    const trashSet = photoTrash.get(g.duplicate_id) || new Set();
+    const refId = photoSuggestedKeep.get(g.duplicate_id);
+    const cards = g.assets.map(a => {
+      const isTrash = trashSet.has(a.id);
       const dims = a.width && a.height ? `${a.width}×${a.height}` : "";
       const meta = [dims, formatBytes(a.size_bytes)].filter(Boolean).join(" · ");
-      // Übereinstimmung zum aktuell behaltenen Bild - beantwortet die Frage
+      // Übereinstimmung zu Immichs Vorschlag - beantwortet die Frage
       // "ist das wirklich dasselbe Foto oder nur eine ähnliche Aufnahme".
-      const pct = keep ? null : photoSimilarity.get(g.duplicate_id)?.[keepId]?.[a.id];
+      const pct = a.id === refId ? null : photoSimilarity.get(g.duplicate_id)?.[refId]?.[a.id];
       const simBadge = pct === undefined || pct === null ? "" :
         `<span class="photo-sim ${pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low"}"
            title="${pct >= 95 ? "praktisch identisch" : pct >= 80 ? "sehr ähnlich" : "nur ähnliche Aufnahme"}">${pct}%</span>`;
-      return `<button type="button" class="photo-card ${keep ? "is-keep" : "is-trash"}"
+      return `<button type="button" class="photo-card ${isTrash ? "is-trash" : "is-keep"}"
                 data-group="${esc(g.duplicate_id)}" data-asset="${esc(a.id)}">
         <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
         <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="${esc(a.file_name || "")}"
               title="Vergrößern">🔍</span>
-        <span class="photo-badge">${keep ? "behalten" : "Papierkorb"}</span>${simBadge}
+        <span class="photo-badge">${isTrash ? "Papierkorb" : "behalten"}</span>${simBadge}
         <span class="photo-meta">
           <span class="photo-name">${esc(a.file_name || "")}</span>
           ${meta ? `<span>${esc(meta)}</span>` : ""}
@@ -1965,7 +1987,6 @@ function renderPhotoGroups() {
     // angeboten werden, denn die nicht gezeigten Bilder wären mit betroffen,
     // ohne dass man sie je gesehen hat.
     const truncated = g.asset_count > g.assets.length;
-    const trashCount = g.assets.length - 1;
     // Bei genau zwei Aufnahmen lohnt sich ein direkter Nebeneinander-Vergleich
     // besonders - bei mehr als zwei waere unklar, welche zwei gemeint sind.
     const compareBtn = g.assets.length === 2
@@ -1975,8 +1996,10 @@ function renderPhotoGroups() {
       ? `<button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>`
       : `${compareBtn}
          <button type="button" class="btn-ghost" data-dismiss="${esc(g.duplicate_id)}">Sind keine Duplikate</button>
-         <button type="button" class="btn-primary" data-apply="${esc(g.duplicate_id)}">
-           ${trashCount} in den Papierkorb
+         <button type="button" class="btn-ghost" data-select-all="${esc(g.duplicate_id)}">Alle Papierkorb</button>
+         <button type="button" class="btn-ghost" data-select-none="${esc(g.duplicate_id)}">Alle behalten</button>
+         <button type="button" class="btn-primary ${trashSet.size === 0 ? "hidden" : ""}" data-apply="${esc(g.duplicate_id)}">
+           ${trashSet.size} in den Papierkorb
          </button>`;
 
     return `<div class="panel photo-group" data-group="${esc(g.duplicate_id)}">
@@ -2066,21 +2089,45 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
 
   const card = e.target.closest(".photo-card");
   if (card) {
-    photoKeepChoice.set(card.dataset.group, card.dataset.asset);
-    updateGroupKeeperUI(card.dataset.group);
+    const trashSet = photoTrash.get(card.dataset.group);
+    // Unabhaengiges Umschalten NUR dieses einen Bilds - kein "genau eins
+    // bleibt" mehr. Alle Bilder koennen einzeln in den Papierkorb, bis hin zu
+    // allen oder keinem.
+    trashSet.has(card.dataset.asset) ? trashSet.delete(card.dataset.asset) : trashSet.add(card.dataset.asset);
+    updateGroupSelectionUI(card.dataset.group);
+    return;
+  }
+
+  const selectAllId = e.target.closest("[data-select-all]")?.dataset.selectAll;
+  if (selectAllId) {
+    const group = photoGroupsCache.find(g => g.duplicate_id === selectAllId);
+    photoTrash.set(selectAllId, new Set(group.assets.map(a => a.id)));
+    updateGroupSelectionUI(selectAllId);
+    return;
+  }
+
+  const selectNoneId = e.target.closest("[data-select-none]")?.dataset.selectNone;
+  if (selectNoneId) {
+    photoTrash.set(selectNoneId, new Set());
+    updateGroupSelectionUI(selectNoneId);
     return;
   }
 
   const applyId = e.target.closest("[data-apply]")?.dataset.apply;
   if (applyId) {
     const group = photoGroupsCache.find(g => g.duplicate_id === applyId);
-    const keepId = photoKeepChoice.get(applyId);
-    const trashIds = group.assets.filter(a => a.id !== keepId).map(a => a.id);
-    if (!confirm(`${trashIds.length} Aufnahme(n) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+    const trashSet = photoTrash.get(applyId) || new Set();
+    const trashIds = [...trashSet];
+    const keepIds = group.assets.map(a => a.id).filter(id => !trashSet.has(id));
+    if (!trashIds.length) return;
+    const warnAll = keepIds.length === 0
+      ? "\n\n⚠️ Es bleibt kein Bild dieser Gruppe übrig - alle wandern in den Papierkorb."
+      : "";
+    if (!confirm(`${trashIds.length} Aufnahme(n) in den Papierkorb verschieben?${warnAll}\n\nSie bleiben in Immich wiederherstellbar.`)) return;
     try {
       const res = await api("/immich/duplicates/resolve", {
         method: "POST",
-        body: JSON.stringify({ groups: [{ duplicate_id: applyId, keep_ids: [keepId], trash_ids: trashIds }] }),
+        body: JSON.stringify({ groups: [{ duplicate_id: applyId, keep_ids: keepIds, trash_ids: trashIds }] }),
       });
       toast(`${res.trashed_assets} Aufnahme(n) in den Papierkorb verschoben.`);
       removePhotoGroupLocally(applyId);
@@ -2109,7 +2156,8 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
 // Seiten-Neuaufbau erleben.
 function removePhotoGroupLocally(duplicateId) {
   photoGroupsCache = photoGroupsCache.filter(g => g.duplicate_id !== duplicateId);
-  photoKeepChoice.delete(duplicateId);
+  photoTrash.delete(duplicateId);
+  photoSuggestedKeep.delete(duplicateId);
   photoSimilarity.delete(duplicateId);
   document.querySelector(`.photo-group[data-group="${CSS.escape(duplicateId)}"]`)?.remove();
 

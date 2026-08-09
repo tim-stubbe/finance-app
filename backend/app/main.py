@@ -2183,12 +2183,12 @@ def immich_resolve(data: schemas.ImmichResolveRequest, db: Session = Depends(get
         # Schutz gegen einen Bedienfehler oder einen Fehler im Frontend: eine
         # Gruppe, in der ALLES weggeworfen wird, ist immer ein Versehen - der
         # Sinn ist, genau ein Bild zu behalten.
-        if not g.keep_ids:
-            raise HTTPException(
-                400,
-                f"In einer Gruppe wurde kein einziges Bild zum Behalten ausgewählt "
-                f"({len(g.trash_ids)} sollten weg). Abgebrochen, es wurde nichts geändert.",
-            )
+        # Kein Zwang mehr zu "mindestens ein Bild bleibt" - der Nutzer soll
+        # bewusst auch eine ganze Gruppe leeren koennen, wenn keine der
+        # Aufnahmen etwas taugt. Immichs eigene Pruefung verlangt nur, dass
+        # jedes Bild in GENAU einer der beiden Listen steht (siehe Overlap-
+        # Pruefung gleich darunter) - eine leere keep_ids-Liste ist dafuer
+        # bereits gueltig.
         overlap = set(g.keep_ids) & set(g.trash_ids)
         if overlap:
             raise HTTPException(
