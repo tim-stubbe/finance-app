@@ -1952,6 +1952,24 @@ function updateSimilarityBadges(duplicateId) {
       card.querySelector(".photo-badge")?.after(span);
     }
   });
+
+  // Bei genau zwei Aufnahmen zusätzlich die große Übereinstimmungsanzeige
+  // im Gruppentitel aktualisieren - die Ähnlichkeit wird oft erst asynchron
+  // nachgeladen, nach dem ersten Rendern der Gruppe.
+  const group = photoGroupsCache.find(g => g.duplicate_id === duplicateId);
+  const titleEl = groupEl.querySelector(".panel-title");
+  if (group && group.assets.length === 2 && titleEl) {
+    const otherId = group.assets.find(a => a.id !== refId)?.id;
+    const pct = pairs[refId]?.[otherId];
+    titleEl.querySelector(".photo-sim-big")?.remove();
+    if (pct !== undefined && pct !== null) {
+      const cls = pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low";
+      const span = document.createElement("span");
+      span.className = `photo-sim-big ${cls}`;
+      span.textContent = `${pct}% Übereinstimmung`;
+      titleEl.appendChild(span);
+    }
+  }
 }
 
 function renderPhotoGroups() {
@@ -1969,9 +1987,11 @@ function renderPhotoGroups() {
       const simBadge = pct === undefined || pct === null ? "" :
         `<span class="photo-sim ${pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low"}"
            title="${pct >= 95 ? "praktisch identisch" : pct >= 80 ? "sehr ähnlich" : "nur ähnliche Aufnahme"}">${pct}%</span>`;
+      const videoBadge = a.type === "VIDEO" ? `<span class="photo-video-badge" title="Video">🎥</span>` : "";
       return `<button type="button" class="photo-card ${isTrash ? "is-trash" : "is-keep"}"
                 data-group="${esc(g.duplicate_id)}" data-asset="${esc(a.id)}">
         <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+        ${videoBadge}
         <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="${esc(a.file_name || "")}"
               title="Vergrößern">🔍</span>
         <span class="photo-badge">${isTrash ? "Papierkorb" : "behalten"}</span>${simBadge}
@@ -1987,9 +2007,9 @@ function renderPhotoGroups() {
     // angeboten werden, denn die nicht gezeigten Bilder wären mit betroffen,
     // ohne dass man sie je gesehen hat.
     const truncated = g.asset_count > g.assets.length;
-    // Bei genau zwei Aufnahmen lohnt sich ein direkter Nebeneinander-Vergleich
-    // besonders - bei mehr als zwei waere unklar, welche zwei gemeint sind.
-    const compareBtn = g.assets.length === 2
+    // Bei bis zu vier Aufnahmen lohnt sich ein direkter Nebeneinander-
+    // Vergleich - bei mehr wird die Übersicht zu unruhig.
+    const compareBtn = g.assets.length >= 2 && g.assets.length <= 4
       ? `<button type="button" class="btn-ghost" data-compare="${esc(g.duplicate_id)}">🔍 Nebeneinander vergleichen</button>`
       : "";
     const actions = truncated
@@ -2002,9 +2022,17 @@ function renderPhotoGroups() {
            ${trashSet.size} in den Papierkorb
          </button>`;
 
+    // Bei genau zwei Aufnahmen ist die Übereinstimmung die zentrale Frage der
+    // ganzen Gruppe ("ist das wirklich dasselbe Foto?") - deshalb hier groß
+    // und direkt sichtbar statt nur als kleine Plakette an der Karte.
+    const pairPct = g.assets.length === 2 ? photoSimilarity.get(g.duplicate_id)?.[refId]?.[
+      g.assets.find(a => a.id !== refId)?.id] : undefined;
+    const bigSim = pairPct === undefined || pairPct === null ? "" :
+      `<span class="photo-sim-big ${pairPct >= 95 ? "sim-high" : pairPct >= 80 ? "sim-mid" : "sim-low"}">${pairPct}% Übereinstimmung</span>`;
+
     return `<div class="panel photo-group" data-group="${esc(g.duplicate_id)}">
       <div class="photo-group-head">
-        <h3 class="panel-title">${g.asset_count} ähnliche Aufnahmen</h3>
+        <h3 class="panel-title">${g.asset_count} ähnliche Aufnahmen${bigSim}</h3>
         <div class="photo-group-actions">${actions}</div>
       </div>
       ${truncated ? `<p class="photos-warn">Sehr große Gruppe – hier werden nur
@@ -2024,31 +2052,33 @@ function renderPhotoGroups() {
 
 // Klick auf ein Bild wählt es als das zu behaltende aus.
 // ---------- Lupe: Bild vergrößert anzeigen ----------
-function openLightbox(assetId, caption) {
-  document.getElementById("lightbox-img").src = `/api/immich/thumbnail/${encodeURIComponent(assetId)}?size=preview`;
-  document.getElementById("lightbox-caption").textContent = caption || "";
-  document.getElementById("lightbox-figure-2").classList.add("hidden");
-  document.getElementById("lightbox-box").classList.remove("is-compare");
+// Baut 1 bis 4 Figuren dynamisch auf, statt fest verdrahteter 2 Slots -
+// damit sich sowohl das einzelne Vergrößern als auch der Nebeneinander-
+// Vergleich (jetzt bis zu 4 Aufnahmen) dieselbe Funktion teilen.
+function renderLightbox(items) {
+  const box = document.getElementById("lightbox-images");
+  box.innerHTML = items.map((it, i) => `<figure class="lightbox-figure">
+      <img id="lightbox-img-${i}" alt="" src="/api/immich/thumbnail/${encodeURIComponent(it.id)}?size=preview">
+      <figcaption class="lightbox-caption">${esc(it.caption || "")}</figcaption>
+    </figure>`).join("");
+  document.getElementById("lightbox-box").classList.toggle("is-compare", items.length > 1);
   document.getElementById("photo-lightbox").classList.remove("hidden");
 }
 
-// Bei genau zwei Aufnahmen ist ein direkter Nebeneinander-Vergleich oft
-// aussagekräftiger als eins nach dem anderen anzusehen - besonders bei
-// Aufnahmen, die sich nur in Kleinigkeiten unterscheiden.
-function openLightboxCompare(assetIdLeft, captionLeft, assetIdRight, captionRight) {
-  document.getElementById("lightbox-img").src = `/api/immich/thumbnail/${encodeURIComponent(assetIdLeft)}?size=preview`;
-  document.getElementById("lightbox-caption").textContent = captionLeft || "";
-  document.getElementById("lightbox-img-2").src = `/api/immich/thumbnail/${encodeURIComponent(assetIdRight)}?size=preview`;
-  document.getElementById("lightbox-caption-2").textContent = captionRight || "";
-  document.getElementById("lightbox-figure-2").classList.remove("hidden");
-  document.getElementById("lightbox-box").classList.add("is-compare");
-  document.getElementById("photo-lightbox").classList.remove("hidden");
+function openLightbox(assetId, caption) {
+  renderLightbox([{ id: assetId, caption }]);
+}
+
+// Bei bis zu vier Aufnahmen lohnt sich ein direkter Nebeneinander-Vergleich
+// besonders - bei mehr wäre die Übersicht zu unruhig, um noch zu erkennen,
+// welche Details sich unterscheiden.
+function openLightboxCompare(items) {
+  renderLightbox(items);
 }
 
 function closeLightbox() {
   document.getElementById("photo-lightbox").classList.add("hidden");
-  document.getElementById("lightbox-img").src = "";
-  document.getElementById("lightbox-img-2").src = "";
+  document.getElementById("lightbox-images").innerHTML = "";
 }
 document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
 document.getElementById("photo-lightbox").addEventListener("click", e => {
@@ -2073,9 +2103,8 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
   const compareId = e.target.closest("[data-compare]")?.dataset.compare;
   if (compareId) {
     const group = photoGroupsCache.find(g => g.duplicate_id === compareId);
-    if (group && group.assets.length === 2) {
-      const [a, b] = group.assets;
-      openLightboxCompare(a.id, a.file_name, b.id, b.file_name);
+    if (group) {
+      openLightboxCompare(group.assets.map(a => ({ id: a.id, caption: a.file_name })));
     }
     return;
   }
@@ -2103,51 +2132,68 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
     const group = photoGroupsCache.find(g => g.duplicate_id === selectAllId);
     photoTrash.set(selectAllId, new Set(group.assets.map(a => a.id)));
     updateGroupSelectionUI(selectAllId);
+    // "Alle Papierkorb" heisst hier bewusst sofort anwenden, nicht nur
+    // auswaehlen - wer den Knopf drueckt, hat die Entscheidung fuer die ganze
+    // Gruppe schon getroffen und will nicht noch extra auf "Anwenden" klicken.
+    await applyGroupTrash(selectAllId);
     return;
   }
 
   const selectNoneId = e.target.closest("[data-select-none]")?.dataset.selectNone;
   if (selectNoneId) {
-    photoTrash.set(selectNoneId, new Set());
-    updateGroupSelectionUI(selectNoneId);
+    // "Alle behalten" heisst: mit dieser Gruppe gibt es nichts zu tun - genau
+    // das drueckt Immichs Dismiss-Funktion aus (Gruppe nicht mehr als
+    // Duplikat fuehren, nichts loeschen). Ohne das blieb die Gruppe nach
+    // "alle behalten" einfach stehen, ohne dass es einen naechsten Schritt gab.
+    await dismissGroup(selectNoneId);
     return;
   }
 
   const applyId = e.target.closest("[data-apply]")?.dataset.apply;
   if (applyId) {
-    const group = photoGroupsCache.find(g => g.duplicate_id === applyId);
-    const trashSet = photoTrash.get(applyId) || new Set();
-    const trashIds = [...trashSet];
-    const keepIds = group.assets.map(a => a.id).filter(id => !trashSet.has(id));
-    if (!trashIds.length) return;
-    const warnAll = keepIds.length === 0
-      ? "\n\n⚠️ Es bleibt kein Bild dieser Gruppe übrig - alle wandern in den Papierkorb."
-      : "";
-    if (!confirm(`${trashIds.length} Aufnahme(n) in den Papierkorb verschieben?${warnAll}\n\nSie bleiben in Immich wiederherstellbar.`)) return;
-    try {
-      const res = await api("/immich/duplicates/resolve", {
-        method: "POST",
-        body: JSON.stringify({ groups: [{ duplicate_id: applyId, keep_ids: keepIds, trash_ids: trashIds }] }),
-      });
-      toast(`${res.trashed_assets} Aufnahme(n) in den Papierkorb verschoben.`);
-      removePhotoGroupLocally(applyId);
-    } catch (err) {
-      toast("Fehler: " + err.message);
-    }
+    await applyGroupTrash(applyId);
     return;
   }
 
   const dismissId = e.target.closest("[data-dismiss]")?.dataset.dismiss;
   if (dismissId) {
-    try {
-      await api(`/immich/duplicates/${dismissId}`, { method: "DELETE" });
-      toast("Gruppe ausgeblendet, es wurde nichts gelöscht.");
-      removePhotoGroupLocally(dismissId);
-    } catch (err) {
-      toast("Fehler: " + err.message);
-    }
+    await dismissGroup(dismissId);
   }
 });
+
+async function applyGroupTrash(duplicateId) {
+  const group = photoGroupsCache.find(g => g.duplicate_id === duplicateId);
+  if (!group) return;
+  const trashSet = photoTrash.get(duplicateId) || new Set();
+  const trashIds = [...trashSet];
+  const keepIds = group.assets.map(a => a.id).filter(id => !trashSet.has(id));
+  if (!trashIds.length) return;
+  const warnAll = keepIds.length === 0
+    ? "\n\n⚠️ Es bleibt kein Bild dieser Gruppe übrig - alle wandern in den Papierkorb."
+    : "";
+  if (!immichSkipConfirm &&
+      !confirm(`${trashIds.length} Aufnahme(n) in den Papierkorb verschieben?${warnAll}\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+  try {
+    const res = await api("/immich/duplicates/resolve", {
+      method: "POST",
+      body: JSON.stringify({ groups: [{ duplicate_id: duplicateId, keep_ids: keepIds, trash_ids: trashIds }] }),
+    });
+    toast(`${res.trashed_assets} Aufnahme(n) in den Papierkorb verschoben.`);
+    removePhotoGroupLocally(duplicateId);
+  } catch (err) {
+    toast("Fehler: " + err.message);
+  }
+}
+
+async function dismissGroup(duplicateId) {
+  try {
+    await api(`/immich/duplicates/${duplicateId}`, { method: "DELETE" });
+    toast("Gruppe ausgeblendet, es wurde nichts gelöscht.");
+    removePhotoGroupLocally(duplicateId);
+  } catch (err) {
+    toast("Fehler: " + err.message);
+  }
+}
 
 // Entfernt eine erledigte Gruppe nur aus der aktuell angezeigten Seite, statt
 // alle 20 Gruppen neu vom Server zu laden. Der Nutzer will bewusst auf dieser
@@ -2192,7 +2238,9 @@ document.getElementById("photos-subtabs").addEventListener("click", e => {
     b.classList.toggle("active", b.dataset.photosView === view));
   document.getElementById("photos-view-duplicates").classList.toggle("hidden", view !== "duplicates");
   document.getElementById("photos-view-screenshots").classList.toggle("hidden", view !== "screenshots");
+  document.getElementById("photos-view-quality").classList.toggle("hidden", view !== "quality");
   if (view === "screenshots" && !shotState.assets.length) loadScreenshots();
+  if (view === "quality" && !qualityState.assets.length) loadQuality();
 });
 
 async function loadScreenshots(offset = 0) {
@@ -2297,13 +2345,155 @@ document.getElementById("photos-view-screenshots").addEventListener("click", asy
   }
   if (e.target.closest("[data-shot-trash]")) {
     const ids = [...shotSelection];
-    if (!confirm(`${ids.length} Bildschirmfoto(s) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+    if (!immichSkipConfirm &&
+        !confirm(`${ids.length} Bildschirmfoto(s) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
     try {
       const r = await api("/immich/screenshots/trash", {
         method: "POST", body: JSON.stringify({ asset_ids: ids }),
       });
       toast(`${r.trashed} verschoben, ${formatBytes(r.freed_bytes)} frei.`);
       await loadScreenshots(shotState.offset);
+    } catch (err) {
+      toast("Fehler: " + err.message);
+    }
+  }
+});
+
+// ---------- Unnötige Fotos (unscharf/leer) ----------
+const qualitySelection = new Set();
+let qualityState = { reason: "", offset: 0, hasMore: false, assets: [], trashEnabled: true, byReason: {} };
+
+const QUALITY_FILTERS = [
+  { reason: "", label: "Alle" },
+  { reason: "blur", label: "Unscharf" },
+  { reason: "blank", label: "Leer/einfarbig" },
+];
+
+async function loadQuality(offset = 0) {
+  const grid = document.getElementById("quality-grid");
+  const summary = document.getElementById("quality-summary");
+  grid.innerHTML = `<p class="page-sub">Lade …</p>`;
+
+  let d;
+  try {
+    d = await api(`/immich/quality?offset=${offset}&limit=60&reason=${encodeURIComponent(qualityState.reason)}`);
+  } catch (e) {
+    grid.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+    return;
+  }
+
+  qualityState = { ...qualityState, offset: d.offset, hasMore: d.has_more,
+                    assets: d.assets, trashEnabled: d.trash_enabled, byReason: d.by_reason };
+  qualitySelection.clear();
+
+  document.getElementById("quality-filter").innerHTML = QUALITY_FILTERS.map(f => {
+    const n = f.reason === "" ? d.total : (d.by_reason[f.reason] || 0);
+    return `<button type="button" class="range-tab ${f.reason === qualityState.reason ? "active" : ""}"
+             data-quality-reason="${f.reason}">${f.label} (${n})</button>`;
+  }).join("");
+
+  summary.classList.remove("hidden");
+  const mb = (d.total_size_bytes / 1024 / 1024).toFixed(0);
+  summary.innerHTML = d.total === 0
+    ? `Bisher keine unnötigen Fotos gefunden. Der Hintergrund-Scan hat die Bibliothek bis
+       Seite ${d.scan_page} durchsucht und läuft alle paar Minuten weiter.`
+    : `<strong>${d.total} unnötige Fotos</strong> (${mb} MB) – Scan-Fortschritt: Seite ${d.scan_page}.
+       ${d.trash_enabled
+         ? `Ausgewählte wandern in Immichs Papierkorb, ${d.trash_days ? `${d.trash_days} Tage lang ` : ""}wiederherstellbar.`
+         : `<span class="photos-warn">⚠️ Papierkorb in Immich abgeschaltet – Aufräumen ist gesperrt.</span>`}`;
+
+  renderQuality();
+}
+
+function renderQuality() {
+  const grid = document.getElementById("quality-grid");
+  if (!qualityState.assets.length) { grid.innerHTML = ""; document.getElementById("quality-pager").innerHTML = ""; return; }
+
+  grid.innerHTML = qualityState.assets.map(a => {
+    const sel = qualitySelection.has(a.id);
+    const label = a.reason === "blur" ? "Unscharf" : "Leer";
+    return `<button type="button" class="shot-card ${sel ? "is-selected" : ""}" data-quality="${esc(a.id)}">
+      <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+      <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="${esc(a.file_name || "")}" title="Vergrößern">🔍</span>
+      <span class="shot-check">${sel ? "✓" : ""}</span>
+      <span class="photo-badge" style="left:auto;right:8px;background:var(--warn)">${label}</span>
+      <span class="shot-meta">
+        <span>${a.created_at ? fmtDate(a.created_at.slice(0, 10)) : ""}</span>
+        <span>${formatBytes(a.size_bytes)}</span>
+      </span>
+    </button>`;
+  }).join("");
+
+  const selBytes = qualityState.assets.filter(a => qualitySelection.has(a.id))
+    .reduce((s, a) => s + (a.size_bytes || 0), 0);
+  const alleGewaehlt = qualitySelection.size === qualityState.assets.length;
+
+  const pager = [];
+  pager.push(`<button type="button" class="btn-ghost" data-quality-all="${alleGewaehlt ? "0" : "1"}">
+    ${alleGewaehlt ? "Auswahl aufheben" : `Alle ${qualityState.assets.length} auswählen`}</button>`);
+  if (qualitySelection.size) {
+    pager.push(`<button type="button" class="btn-ghost" data-quality-dismiss="1">
+      ${qualitySelection.size} als okay behalten</button>`);
+  }
+  if (qualitySelection.size && qualityState.trashEnabled) {
+    pager.push(`<button type="button" class="btn-primary" data-quality-trash="1">
+      ${qualitySelection.size} in den Papierkorb (${formatBytes(selBytes)})</button>`);
+  }
+  if (qualityState.offset > 0) pager.push(`<button type="button" class="btn-ghost" data-quality-page="${Math.max(0, qualityState.offset - 60)}">← Zurück</button>`);
+  if (qualityState.hasMore) pager.push(`<button type="button" class="btn-ghost" data-quality-page="${qualityState.offset + 60}">Weitere →</button>`);
+  document.getElementById("quality-pager").innerHTML = pager.join("");
+}
+
+document.getElementById("photos-view-quality").addEventListener("click", async e => {
+  if (checkZoomClick(e)) return;
+
+  const reason = e.target.closest("[data-quality-reason]")?.dataset.qualityReason;
+  if (reason !== undefined) {
+    qualityState.reason = reason;
+    await loadQuality(0);
+    return;
+  }
+  const page = e.target.closest("[data-quality-page]")?.dataset.qualityPage;
+  if (page !== undefined) {
+    await loadQuality(parseInt(page, 10));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const card = e.target.closest("[data-quality]");
+  if (card) {
+    const id = card.dataset.quality;
+    qualitySelection.has(id) ? qualitySelection.delete(id) : qualitySelection.add(id);
+    renderQuality();
+    return;
+  }
+  const all = e.target.closest("[data-quality-all]")?.dataset.qualityAll;
+  if (all !== undefined) {
+    qualitySelection.clear();
+    if (all === "1") qualityState.assets.forEach(a => qualitySelection.add(a.id));
+    renderQuality();
+    return;
+  }
+  if (e.target.closest("[data-quality-dismiss]")) {
+    const ids = [...qualitySelection];
+    try {
+      await Promise.all(ids.map(id => api(`/immich/quality/${id}`, { method: "DELETE" })));
+      toast(`${ids.length} Foto(s) als okay markiert.`);
+      await loadQuality(qualityState.offset);
+    } catch (err) {
+      toast("Fehler: " + err.message);
+    }
+    return;
+  }
+  if (e.target.closest("[data-quality-trash]")) {
+    const ids = [...qualitySelection];
+    if (!immichSkipConfirm &&
+        !confirm(`${ids.length} Foto(s) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+    try {
+      const r = await api("/immich/quality/trash", {
+        method: "POST", body: JSON.stringify({ asset_ids: ids }),
+      });
+      toast(`${r.trashed} verschoben, ${formatBytes(r.freed_bytes)} frei.`);
+      await loadQuality(qualityState.offset);
     } catch (err) {
       toast("Fehler: " + err.message);
     }
@@ -2485,6 +2675,10 @@ document.getElementById("mail-inbox-list").addEventListener("click", async e => 
 });
 
 // ---------- Immich-Einstellungen ----------
+// Global gemerkt, damit die Papierkorb-Handler im Fotos-Tab nicht bei jedem
+// Klick erst die Einstellungen nachladen müssen.
+let immichSkipConfirm = false;
+
 async function loadImmichSettings() {
   const s = await api("/settings/immich");
   document.getElementById("immich-url").value = s.url || "";
@@ -2492,6 +2686,8 @@ async function loadImmichSettings() {
   document.getElementById("immich-api-key").placeholder = s.api_key_set
     ? "gespeichert – leer lassen behält den bisherigen"
     : "wird verschlüsselt gespeichert";
+  document.getElementById("immich-skip-confirm").checked = s.skip_confirm;
+  immichSkipConfirm = s.skip_confirm;
 }
 
 document.getElementById("immich-settings-form").addEventListener("submit", async e => {
@@ -2499,7 +2695,7 @@ document.getElementById("immich-settings-form").addEventListener("submit", async
   const url = document.getElementById("immich-url").value.trim();
   if (!url) return;
   const keyInput = document.getElementById("immich-api-key");
-  const body = { url };
+  const body = { url, skip_confirm: document.getElementById("immich-skip-confirm").checked };
   if (keyInput.value.trim()) body.api_key = keyInput.value.trim();
   await api("/settings/immich", { method: "PUT", body: JSON.stringify(body) });
   keyInput.value = "";

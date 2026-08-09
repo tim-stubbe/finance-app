@@ -1085,6 +1085,7 @@
       <div class="range-tabs" id="photos-subtabs" style="margin-bottom:20px">
         <button type="button" class="range-tab active" data-photos-view="duplicates">🖼️ Duplikate</button>
         <button type="button" class="range-tab" data-photos-view="screenshots">📱 Screenshots</button>
+        <button type="button" class="range-tab" data-photos-view="quality">🌫️ Unnötige Fotos</button>
       </div>
 
       <div id="photos-view-duplicates">
@@ -1104,6 +1105,21 @@
         <div id="shots-summary" class="photos-summary hidden"></div>
         <div id="shots-grid" class="shot-grid"></div>
         <div id="shots-pager" class="photo-pager"></div>
+      </div>
+
+      <div id="photos-view-quality" class="hidden">
+        <div class="panel">
+          <h3 class="panel-title">🌫️ Unnötige Fotos</h3>
+          <p class="page-sub">
+            Unscharfe oder leere/einfarbige Aufnahmen, erkannt über einfache Bildstatistik
+            (kein Ratemodell). Ein Hintergrund-Scan arbeitet die Bibliothek seitenweise durch –
+            es kann etwas dauern, bis alle erfasst sind.
+          </p>
+          <div class="shot-filter" id="quality-filter"></div>
+        </div>
+        <div id="quality-summary" class="photos-summary hidden"></div>
+        <div id="quality-grid" class="shot-grid"></div>
+        <div id="quality-pager" class="photo-pager"></div>
       </div>
     </section>
 
@@ -1344,6 +1360,10 @@
         <form id="immich-settings-form" class="form-grid">
           <label class="wide">Server-Adresse <input type="text" id="immich-url" placeholder="http://100.72.226.91:32283"></label>
           <label class="wide">API-Schlüssel <input type="password" id="immich-api-key" placeholder="wird verschlüsselt gespeichert – leer lassen behält den bisherigen" autocomplete="off"></label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="immich-skip-confirm">
+            Papierkorb-Aktionen ohne Bestätigungsdialog anwenden
+          </label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="immich-test" class="btn-ghost">Verbindung testen</button>
@@ -1632,16 +1652,7 @@
 <div id="photo-lightbox" class="modal-overlay hidden">
   <div class="lightbox-box" id="lightbox-box">
     <button type="button" id="lightbox-close" class="modal-close" aria-label="Schließen">&times;</button>
-    <div class="lightbox-images" id="lightbox-images">
-      <figure class="lightbox-figure">
-        <img id="lightbox-img" alt="">
-        <figcaption id="lightbox-caption" class="lightbox-caption"></figcaption>
-      </figure>
-      <figure class="lightbox-figure hidden" id="lightbox-figure-2">
-        <img id="lightbox-img-2" alt="">
-        <figcaption id="lightbox-caption-2" class="lightbox-caption"></figcaption>
-      </figure>
-    </div>
+    <div class="lightbox-images" id="lightbox-images"></div>
   </div>
 </div>
 

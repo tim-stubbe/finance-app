@@ -1883,6 +1883,34 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .photo-sim.sim-mid  { background: var(--warn); }
 .photo-sim.sim-low  { background: var(--muted); }
 
+/* Große Übereinstimmungsanzeige im Gruppentitel bei genau zwei Aufnahmen -
+   das ist dort die zentrale Frage der Gruppe, nicht nur ein Detail an einer
+   einzelnen Karte. */
+.photo-sim-big {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+.photo-sim-big.sim-high { background: var(--neg); }
+.photo-sim-big.sim-mid  { background: var(--warn); }
+.photo-sim-big.sim-low  { background: var(--muted); }
+
+.photo-video-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
 /* ---------- Beleg-Eingang aus E-Mails ---------- */
 .mail-item {
   display: flex;
@@ -1995,10 +2023,11 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 .lightbox-box.is-compare .lightbox-images {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: center;
 }
-.lightbox-box.is-compare .lightbox-figure { flex: 1 1 0; min-width: 0; }
+.lightbox-box.is-compare .lightbox-figure { flex: 1 1 0; min-width: 220px; max-width: 48%; }
 .lightbox-box.is-compare .lightbox-figure img { max-height: 78vh; width: 100%; object-fit: contain; }
 
 .lightbox-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }

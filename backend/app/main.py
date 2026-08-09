@@ -111,6 +111,12 @@ ensure_columns("settings", {
     "immich_api_key_encrypted": "VARCHAR",
 })
 ensure_columns("settings", {
+    "immich_skip_confirm": "BOOLEAN DEFAULT 0",
+})
+ensure_columns("settings", {
+    "immich_quality_scan_page": "INTEGER DEFAULT 1",
+})
+ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
     "imap_host": "VARCHAR",
     "imap_port": "INTEGER DEFAULT 993",
@@ -2034,7 +2040,8 @@ def _immich_credentials(db: Session) -> tuple[str, str]:
 def get_immich_settings(db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
     return schemas.ImmichSettingsOut(
-        url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted)
+        url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted),
+        skip_confirm=s.immich_skip_confirm,
     )
 
 
@@ -2046,9 +2053,11 @@ def update_immich_settings(data: schemas.ImmichSettingsUpdate, db: Session = Dep
     # kleinen Adressänderung erneut aus Immich heraussuchen.
     if data.api_key:
         s.immich_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, data.api_key)
+    s.immich_skip_confirm = data.skip_confirm
     db.commit()
     return schemas.ImmichSettingsOut(
-        url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted)
+        url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted),
+        skip_confirm=s.immich_skip_confirm,
     )
 
 
@@ -2380,6 +2389,112 @@ def immich_trash_screenshots(data: schemas.ImmichTrashRequest, db: Session = Dep
     except Exception as e:
         raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
     return schemas.ImmichTrashResult(trashed=len(data.asset_ids), freed_bytes=freed)
+
+
+QUALITY_PAGE_SIZE = 60
+
+
+@api_router.get("/immich/quality", response_model=schemas.ImmichQualityOut)
+def immich_quality(offset: int = 0, limit: int = QUALITY_PAGE_SIZE, reason: str = "", db: Session = Depends(get_db)):
+    """Listet vom Hintergrund-Scan erkannte unscharfe/leere Fotos.
+
+    Liest aus dem lokalen Zwischenspeicher (immich_quality_flags), nicht live
+    aus Immich - bei ~24.000 Fotos waere ein Scan bei jedem Seitenaufruf viel
+    zu langsam. Siehe _scheduled_immich_quality_scan für den Hintergrund-Job.
+    """
+    url, key = _immich_credentials(db)
+    alle = db.query(models.ImmichQualityFlag).filter(models.ImmichQualityFlag.dismissed.is_(False)).all()
+
+    by_reason: dict[str, int] = {}
+    for f in alle:
+        by_reason[f.reason] = by_reason.get(f.reason, 0) + 1
+
+    # Nach Grund filtern, BEVOR die Seite geschnitten wird - sonst waere die
+    # Zaehlung "wie viele Seiten gibt es" beim Filtern falsch.
+    gefiltert = [f for f in alle if not reason or f.reason == reason]
+    total_size = sum(f.size_bytes or 0 for f in gefiltert)
+
+    # Neueste zuerst - bei unscharfen/leeren Fotos ist kein "Alter" wie bei
+    # Screenshots ausschlaggebend, sondern schlicht, dass sie ueberhaupt
+    # gefunden wurden.
+    gefiltert.sort(key=lambda f: f.scanned_at, reverse=True)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    page = gefiltert[offset:offset + limit]
+
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception:
+        trash = {"enabled": True, "days": None}
+    settings = auth.get_or_create_settings(db)
+
+    return schemas.ImmichQualityOut(
+        assets=[schemas.ImmichQualityAssetOut(
+            id=f.asset_id, file_name=f.file_name, created_at=f.created_at_immich,
+            size_bytes=f.size_bytes, width=f.width, height=f.height,
+            reason=f.reason, score=f.score,
+        ) for f in page],
+        total=len(gefiltert), total_size_bytes=total_size, by_reason=by_reason,
+        offset=offset, limit=limit, has_more=offset + limit < len(gefiltert),
+        trash_enabled=trash["enabled"], trash_days=trash["days"],
+        scan_page=settings.immich_quality_scan_page,
+    )
+
+
+@api_router.post("/immich/quality/trash", response_model=schemas.ImmichTrashResult)
+def immich_trash_quality(data: schemas.ImmichTrashRequest, db: Session = Depends(get_db)):
+    """Verschiebt ausgewählte unscharfe/leere Fotos in Immichs Papierkorb."""
+    url, key = _immich_credentials(db)
+    if not data.asset_ids:
+        raise HTTPException(400, "Es wurde nichts ausgewählt.")
+
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Papierkorb-Einstellung nicht prüfbar, abgebrochen: {e}")
+    if not trash["enabled"]:
+        raise HTTPException(
+            400,
+            "Abgebrochen: In Immich ist der Papierkorb abgeschaltet. Aussortierte "
+            "Bilder wären sofort unwiderruflich gelöscht. Es wurde nichts geändert.",
+        )
+
+    # Nur Fotos annehmen, die der eigene Scan tatsächlich markiert hat - die
+    # IDs kommen aus dem Browser und duerfen nicht ungeprueft an Immich
+    # weitergereicht werden.
+    erlaubt = {
+        f.asset_id: f for f in db.query(models.ImmichQualityFlag)
+        .filter(models.ImmichQualityFlag.asset_id.in_(data.asset_ids)).all()
+    }
+    unbekannt = [i for i in data.asset_ids if i not in erlaubt]
+    if unbekannt:
+        raise HTTPException(
+            400,
+            f"{len(unbekannt)} der ausgewählten Bilder sind nicht als unnötig markiert. "
+            "Abgebrochen, es wurde nichts geändert.",
+        )
+
+    freed = sum(erlaubt[i].size_bytes or 0 for i in data.asset_ids)
+    try:
+        immich.trash_assets(url, key, data.asset_ids)
+    except Exception as e:
+        raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
+
+    for i in data.asset_ids:
+        db.delete(erlaubt[i])
+    db.commit()
+    return schemas.ImmichTrashResult(trashed=len(data.asset_ids), freed_bytes=freed)
+
+
+@api_router.delete("/immich/quality/{asset_id}")
+def immich_dismiss_quality(asset_id: str, db: Session = Depends(get_db)):
+    """Blendet ein Foto aus der Liste aus, ohne es anzufassen ("ist doch okay")."""
+    flag = db.query(models.ImmichQualityFlag).filter(models.ImmichQualityFlag.asset_id == asset_id).first()
+    if not flag:
+        raise HTTPException(404, "Nicht gefunden.")
+    flag.dismissed = True
+    db.commit()
+    return {"ok": True}
 
 
 @api_router.delete("/immich/duplicates/{duplicate_id}")
@@ -3346,6 +3461,69 @@ def _scheduled_ai_maintenance():
         db.close()
 
 
+def _scheduled_immich_quality_scan():
+    """Scannt alle paar Minuten eine weitere Seite der Immich-Bibliothek auf
+    unscharfe/leere Fotos. Läuft absichtlich in kleinen Häppchen statt in
+    einem Rutsch - bei ~24.000 Fotos wäre ein einzelner Durchlauf viel zu
+    lang für einen einzelnen Job-Aufruf. Nach der letzten Seite geht es wieder
+    bei Seite 1 los, damit auch neu hinzugekommene Fotos erfasst werden."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.immich_url or not settings.immich_api_key_encrypted:
+            return
+        url, key = _immich_credentials(db)
+        page = settings.immich_quality_scan_page or 1
+        try:
+            items, has_more = immich.list_assets_page(url, key, page)
+        except Exception:
+            return
+
+        for a in items:
+            asset_id = a.get("id")
+            if not asset_id:
+                continue
+            existing = db.query(models.ImmichQualityFlag).filter(
+                models.ImmichQualityFlag.asset_id == asset_id).first()
+            # Vom Nutzer bewusst behaltene Fotos nicht erneut bewerten -
+            # sonst tauchen sie nach dem naechsten Durchlauf wieder auf.
+            if existing and existing.dismissed:
+                continue
+            try:
+                content, _ = immich.fetch_thumbnail(url, key, asset_id)
+                reason, score = immich.assess_quality(content)
+            except Exception:
+                continue
+
+            if reason is None:
+                if existing:
+                    db.delete(existing)
+                continue
+
+            summary = immich.asset_summary(a)
+            if existing:
+                existing.reason = reason
+                existing.score = score
+                existing.file_name = summary["file_name"]
+                existing.created_at_immich = summary["created_at"]
+                existing.width = summary["width"]
+                existing.height = summary["height"]
+                existing.size_bytes = summary["size_bytes"]
+                existing.scanned_at = datetime.utcnow()
+            else:
+                db.add(models.ImmichQualityFlag(
+                    asset_id=asset_id, reason=reason, score=score,
+                    file_name=summary["file_name"], created_at_immich=summary["created_at"],
+                    width=summary["width"], height=summary["height"], size_bytes=summary["size_bytes"],
+                ))
+        db.commit()
+
+        settings.immich_quality_scan_page = page + 1 if has_more else 1
+        db.commit()
+    finally:
+        db.close()
+
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     _scheduled_bank_sync, CronTrigger(hour=INITIAL_SYNC_HOUR, minute=0),
@@ -3358,6 +3536,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_auto_backup, CronTrigger(hour=INITIAL_BACKUP_HOUR, minute=0),
     id="auto_backup", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_immich_quality_scan, CronTrigger(minute="*/5"),
+    id="immich_quality_scan", misfire_grace_time=600,
 )
 scheduler.start()
 

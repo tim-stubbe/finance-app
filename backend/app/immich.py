@@ -261,6 +261,68 @@ def asset_hash(url: str, api_key: str, asset_id: str) -> int:
     return _hash_cache[asset_id]
 
 
+# ---------- Unnötige Fotos: unscharf oder leer/einfarbig ----------
+# Bewusst KEIN Bildmodell, aus demselben Grund wie beim dHash oben: die
+# Frage laesst sich mit einfachen Bildstatistiken direkt und deterministisch
+# beantworten, ohne dass ein Netz auf ~24.000 Fotos angewendet werden muesste.
+QUALITY_PAGE_SIZE = 300
+BLUR_STDDEV_THRESHOLD = 6.0    # Kantenbild-Streuung darunter = unscharf
+BLANK_STDDEV_THRESHOLD = 8.0   # Graustufen-Streuung darunter = quasi einfarbig
+
+
+def _stddev(values) -> float:
+    n = len(values)
+    if not n:
+        return 0.0
+    mean = sum(values) / n
+    return (sum((v - mean) ** 2 for v in values) / n) ** 0.5
+
+
+def assess_quality(image_bytes: bytes) -> tuple[str | None, float] | tuple[None, None]:
+    """Prüft ein Vorschaubild auf Unschärfe oder Einfarbigkeit.
+
+    Liefert `(reason, score)` oder `(None, None)`, wenn beides unauffällig ist.
+    Verkleinert bewusst stark (256px) - für diese Fragestellung reicht das,
+    und es hält den Scan der ganzen Bibliothek schnell genug.
+    """
+    from io import BytesIO
+    from PIL import Image, ImageFilter
+
+    img = Image.open(BytesIO(image_bytes)).convert("L")
+    img.thumbnail((256, 256), Image.LANCZOS)
+    px = list(img.getdata())
+
+    blank_score = _stddev(px)
+    if blank_score < BLANK_STDDEV_THRESHOLD:
+        return "blank", round(blank_score, 2)
+
+    edges = img.filter(ImageFilter.FIND_EDGES)
+    blur_score = _stddev(list(edges.getdata()))
+    if blur_score < BLUR_STDDEV_THRESHOLD:
+        return "blur", round(blur_score, 2)
+
+    return None, None
+
+
+def list_assets_page(url: str, api_key: str, page: int, size: int = QUALITY_PAGE_SIZE) -> tuple[list[dict], bool]:
+    """Blättert seitenweise durch die GESAMTE Bibliothek (kein Dateiname-Filter
+    wie bei den Screenshots) - für den Unschärfe-/Leer-Scan, der sich nicht auf
+    einen Ausschnitt stützen darf. Nur Fotos (kein Video, da ein einzelnes
+    Vorschaubild bei Video wenig über das ganze Video aussagt).
+
+    Gibt die Seite plus ob es eine nächste Seite gibt zurück.
+    """
+    resp = requests.post(
+        f"{_base(url)}/api/search/metadata",
+        headers=_headers(api_key),
+        json={"type": "IMAGE", "size": size, "page": page, "withExif": True},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    block = (resp.json() or {}).get("assets") or {}
+    return list(block.get("items") or []), bool(block.get("nextPage"))
+
+
 def asset_summary(asset: dict) -> dict:
     """Reduziert ein Immich-Asset auf das, was für die Entscheidung
     „welches behalte ich" wirklich zählt - Dateigröße und Auflösung sind die

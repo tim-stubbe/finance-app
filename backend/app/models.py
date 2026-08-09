@@ -128,6 +128,15 @@ class Settings(Base):
     # URL im Klartext (kein Geheimnis), Schlüssel verschlüsselt wie alle anderen.
     immich_url = Column(String, nullable=True)
     immich_api_key_encrypted = Column(String, nullable=True)
+    # Standard bleibt bewusst "mit Bestaetigung" (False) - eine Papierkorb-
+    # Aktion ohne jede Rueckfrage sollte man aktiv anschalten muessen, nicht
+    # aus Versehen schon aktiv haben.
+    immich_skip_confirm = Column(Boolean, nullable=False, default=False)
+    # Fortlaufender Scan auf unscharfe/leere Fotos: läuft seitenweise im
+    # Hintergrund (die Bibliothek ist zu groß für einen einzelnen Durchlauf)
+    # und beginnt nach der letzten Seite wieder von vorn, damit auch neu
+    # hinzugekommene Fotos irgendwann erfasst werden.
+    immich_quality_scan_page = Column(Integer, nullable=False, default=1)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -568,3 +577,34 @@ class MailAttachment(Base):
     parse_error = Column(String, nullable=True)
 
     transaction = relationship("Transaction")
+
+
+class ImmichQualityFlag(Base):
+    """Ein von der Immich-Bibliothek als 'unnötig' erkanntes Foto (unscharf
+    oder leer/einfarbig) - Ergebnis des seitenweisen Hintergrund-Scans.
+
+    Nur AUFFÄLLIGE Fotos werden gespeichert, nicht die ganze Bibliothek -
+    bei ~24.000 Aufnahmen wäre ein Zwischenspeicher aller Ergebnisse reiner
+    Ballast. Ein erneuter Scan (siehe Settings.immich_quality_scan_page)
+    überschreibt bestehende Einträge einfach neu, verschwundene oder
+    inzwischen unauffällige Fotos bleiben aber bis zum nächsten Durchlauf
+    stehen - das ist hier bewusst in Kauf genommen, denn löschen würde
+    bedeuten, den Nutzer-Ausschluss (dismiss) zu verlieren.
+    """
+
+    __tablename__ = "immich_quality_flags"
+
+    asset_id = Column(String, primary_key=True)
+    file_name = Column(String, nullable=True)
+    created_at_immich = Column(String, nullable=True)
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    # "blur" oder "blank".
+    reason = Column(String, nullable=False)
+    score = Column(Float, nullable=True)
+    scanned_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    # Vom Nutzer bewusst behalten ("ist doch okay") - taucht dann nicht mehr
+    # in der Liste auf, auch wenn ein erneuter Scan den Eintrag sonst wieder
+    # anlegen würde.
+    dismissed = Column(Boolean, nullable=False, default=False)

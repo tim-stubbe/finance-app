@@ -880,6 +880,7 @@ class ImmichSettingsOut(BaseModel):
     url: Optional[str] = None
     # Der Schlüssel selbst wird nie zurückgegeben, nur ob einer hinterlegt ist.
     api_key_set: bool
+    skip_confirm: bool = False
 
 
 class ImmichSettingsUpdate(BaseModel):
@@ -887,6 +888,7 @@ class ImmichSettingsUpdate(BaseModel):
     # Leer lassen heisst "bestehenden Schlüssel behalten" - sonst müsste man ihn
     # bei jeder URL-Änderung neu eintippen.
     api_key: Optional[str] = None
+    skip_confirm: bool = False
 
 
 class ImmichTestResult(BaseModel):
@@ -978,6 +980,26 @@ class ImmichTrashRequest(BaseModel):
 class ImmichTrashResult(BaseModel):
     trashed: int
     freed_bytes: int
+
+
+class ImmichQualityAssetOut(ImmichAssetOut):
+    reason: str  # "blur" oder "blank"
+    score: Optional[float] = None
+
+
+class ImmichQualityOut(BaseModel):
+    assets: List[ImmichQualityAssetOut]
+    total: int
+    total_size_bytes: int
+    by_reason: Dict[str, int]
+    offset: int
+    limit: int
+    has_more: bool
+    trash_enabled: bool = True
+    trash_days: Optional[int] = None
+    # Fortschritt des Hintergrund-Scans (welche Seite der Bibliothek zuletzt
+    # geprüft wurde) - macht sichtbar, dass hier laufend nachgetragen wird.
+    scan_page: int = 1
 
 
 # ---------- Vermögensvergleich mit der Altersgruppe ----------
