@@ -3803,6 +3803,97 @@ function handleEbayReturn() {
   });
 }
 
+// ---------- Radicale-Einstellungen ----------
+async function loadRadicaleSettings() {
+  const s = await api("/settings/radicale");
+  document.getElementById("radicale-url").value = s.url || "";
+  document.getElementById("radicale-username").value = s.username || "";
+  document.getElementById("radicale-status").textContent = s.password_set
+    ? "Zugangsdaten sind hinterlegt (Passwort wird aus Sicherheitsgründen nicht wieder angezeigt)."
+    : "Noch keine Zugangsdaten hinterlegt.";
+}
+
+document.getElementById("radicale-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const url = document.getElementById("radicale-url").value.trim();
+  const username = document.getElementById("radicale-username").value.trim();
+  const password = document.getElementById("radicale-password").value;
+  if (!url || !password) {
+    alert("Bitte Adresse und Passwort eingeben.");
+    return;
+  }
+  await api("/settings/radicale", { method: "PUT", body: JSON.stringify({ url, username, password }) });
+  document.getElementById("radicale-password").value = "";
+  loadRadicaleSettings();
+  toast("Radicale-Zugang gespeichert.");
+});
+
+document.getElementById("radicale-test").addEventListener("click", async () => {
+  const statusEl = document.getElementById("radicale-status");
+  statusEl.textContent = "Teste Verbindung …";
+  const r = await api("/radicale/test", { method: "POST" });
+  statusEl.textContent = r.ok
+    ? `✓ Verbunden – ${r.todo_count} To-Do(s) auf dem Server gefunden.`
+    : `✗ ${r.error}`;
+});
+
+// ---------- To-Dos ----------
+let todosCache = [];
+
+async function loadTodos() {
+  const list = document.getElementById("todo-list");
+  try {
+    todosCache = await api("/todos");
+  } catch (e) {
+    list.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+    return;
+  }
+  renderTodos();
+}
+
+function renderTodos() {
+  const list = document.getElementById("todo-list");
+  if (!todosCache.length) {
+    list.innerHTML = `<p class="page-sub">Noch keine To-Dos.</p>`;
+    return;
+  }
+  list.innerHTML = todosCache.map(t => `
+    <label class="todo-row ${t.done ? "is-done" : ""}">
+      <input type="checkbox" data-todo-toggle="${t.id}" ${t.done ? "checked" : ""}>
+      <span class="todo-title">${esc(t.title)}</span>
+      ${t.due_date ? `<span class="todo-due">${fmtDate(t.due_date)}</span>` : ""}
+      <button type="button" class="link-btn" data-todo-delete="${t.id}">Löschen</button>
+    </label>`).join("");
+}
+
+document.getElementById("todo-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const titleInput = document.getElementById("todo-title");
+  const dueInput = document.getElementById("todo-due-date");
+  const title = titleInput.value.trim();
+  if (!title) return;
+  await api("/todos", { method: "POST", body: JSON.stringify({ title, due_date: dueInput.value || null }) });
+  titleInput.value = "";
+  dueInput.value = "";
+  await loadTodos();
+});
+
+document.getElementById("todo-list").addEventListener("click", async e => {
+  const delId = e.target.closest("[data-todo-delete]")?.dataset.todoDelete;
+  if (delId) {
+    await api(`/todos/${delId}`, { method: "DELETE" });
+    await loadTodos();
+  }
+});
+
+document.getElementById("todo-list").addEventListener("change", async e => {
+  const toggleId = e.target.closest("[data-todo-toggle]")?.dataset.todoToggle;
+  if (toggleId) {
+    await api(`/todos/${toggleId}`, { method: "PATCH", body: JSON.stringify({ done: e.target.checked }) });
+    await loadTodos();
+  }
+});
+
 // Zeichen und Klasse je Zustand. Das Ausrufezeichen steht bewusst auch bei
 // "partial": halb eingerichtet ist genauso wenig nutzbar wie gar nicht.
 const INTEGRATION_MARKS = {
@@ -3884,6 +3975,7 @@ async function loadSettingsTab() {
   await loadEnableBankingConnections();
   await loadEbaySettings();
   await loadEbayConnections();
+  await loadRadicaleSettings();
 }
 
 // ================= DASHBOARD =================
@@ -4575,6 +4667,7 @@ async function loadGoalsTab() {
     goalsCache.forEach(g => { g.completion_seen = true; });
   }
   updateGoalsBadge(0);
+  loadTodos();
 }
 
 function updateGoalsBadge(count) {

@@ -933,6 +933,17 @@
         </button>
         <div class="goal-grid hidden" id="goal-done-grid"></div>
       </div>
+
+      <div class="panel">
+        <h3 class="panel-title">✅ To-Dos</h3>
+        <p class="page-sub" id="todo-sync-hint">Zweiseitig mit deinem Radicale-Server synchronisiert – trag welche am Handy ein, sie erscheinen auch hier.</p>
+        <form id="todo-form" class="filter-row">
+          <input type="text" id="todo-title" placeholder="Neues To-Do …" required style="flex:1;min-width:200px">
+          <input type="date" id="todo-due-date">
+          <button type="submit" class="btn-primary">Hinzufügen</button>
+        </form>
+        <div id="todo-list"></div>
+      </div>
     </section>
 
     <!-- ZIEL ANLEGEN/BEARBEITEN -->
@@ -1640,6 +1651,25 @@
             <tbody id="ebay-conn-list"></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">✅ Radicale – To-Dos vom Handy</h3>
+        <p class="page-sub">
+          Zweiseitiger Abgleich mit einer CalDAV-Todo-Liste auf deinem Radicale-Server – trag die
+          volle Adresse der Todo-Liste ein (die Kalender-Collection, z.B.
+          <code>https://server/user/todo-list/</code>), nicht nur die Server-Adresse.
+        </p>
+        <form id="radicale-settings-form" class="form-grid">
+          <label class="wide">Adresse der Todo-Liste <input type="text" id="radicale-url" placeholder="https://…/user/todo-list/"></label>
+          <label>Benutzername <input type="text" id="radicale-username"></label>
+          <label>Passwort <input type="password" id="radicale-password" placeholder="wird verschlüsselt gespeichert"></label>
+          <div class="form-actions">
+            <button type="button" id="radicale-test" class="btn-ghost">Verbindung testen</button>
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <p id="radicale-status" class="page-sub"></p>
       </div>
     </section>
 

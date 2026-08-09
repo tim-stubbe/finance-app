@@ -146,6 +146,13 @@ class Settings(Base):
     # eBays Bezeichnung fuer die registrierte Redirect-Adresse (RuName) - kein
     # gewoehnliches redirect_uri, sondern ein bei eBay hinterlegter Name.
     ebay_ru_name = Column(String, nullable=True)
+    # --- Radicale (To-Dos, CalDAV) ---
+    # Bewusst die volle Adresse der Todo-Liste (Kalender-Collection) statt nur
+    # der Server-URL - eine automatische Kalender-Erkennung wäre für eine
+    # einzelne, vom Nutzer selbst benannte Liste unnötiger Aufwand.
+    radicale_url = Column(String, nullable=True)
+    radicale_username = Column(String, nullable=True)
+    radicale_password_encrypted = Column(String, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -643,3 +650,42 @@ class ImmichQualityFlag(Base):
     # in der Liste auf, auch wenn ein erneuter Scan den Eintrag sonst wieder
     # anlegen würde.
     dismissed = Column(Boolean, nullable=False, default=False)
+
+
+class Todo(Base):
+    """To-Do, zweiseitig mit einem Radicale/CalDAV-Server synchronisiert - der
+    Nutzer trägt To-Dos oft am Handy in einer CalDAV-App ein und will sie auch
+    hier sehen und abhaken, nicht nur andersherum.
+
+    Bewusst KEINE eigene Kalender-/iCal-Bibliothek: die VTODO-Teilmenge, die
+    hier gebraucht wird (UID/SUMMARY/STATUS/DUE/LAST-MODIFIED), ist klein genug,
+    um sie direkt zu lesen und zu schreiben - passend zum Rest der App, die
+    auch bei Immich/PayPal/eBay ohne SDK direkt gegen die HTTP-APIs arbeitet.
+
+    Kein space_id: To-Dos sind persönlich und bereichsübergreifend gemeint,
+    genauso wie ein `manual`-Ziel ohne Bereichsbindung.
+    """
+
+    __tablename__ = "todos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Lokal per uuid4 erzeugt (neue Todos) oder vom Server übernommen (von dort
+    # gezogene Todos) - eindeutiger Schlüssel für den Abgleich in beide
+    # Richtungen, unabhängig vom lokalen href/etag.
+    uid = Column(String, nullable=False, unique=True, index=True)
+    title = Column(String, nullable=False)
+    done = Column(Boolean, nullable=False, default=False)
+    due_date = Column(Date, nullable=True)
+    # href/etag: Position und Versionsstempel der Ressource auf dem Radicale-
+    # Server. NULL, solange das Todo lokal angelegt, aber noch nicht
+    # hochgeladen wurde.
+    href = Column(String, nullable=True)
+    etag = Column(String, nullable=True)
+    # Für die Sync-Richtung: wurde seit dem letzten Abgleich lokal geändert,
+    # muss das gepusht werden, statt eine ältere Server-Fassung zu übernehmen.
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced_at = Column(DateTime, nullable=True)
+    # Löschung erst als Markierung, damit der nächste Sync sie noch zum Server
+    # übertragen kann, bevor die Zeile tatsächlich verschwindet.
+    pending_delete = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

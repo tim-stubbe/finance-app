@@ -1824,6 +1824,21 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 .integrations-widget-icon { font-size: 22px; }
 
+/* ---------- To-Dos ---------- */
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.todo-row:last-child { border-bottom: none; }
+.todo-row .todo-title { flex: 1; }
+.todo-row.is-done .todo-title { text-decoration: line-through; color: var(--muted); }
+.todo-row .todo-due { font-size: 12px; color: var(--muted); }
+.todo-row input[type="checkbox"] { width: 18px; height: 18px; }
+
 .photo-pager {
   display: flex;
   justify-content: center;

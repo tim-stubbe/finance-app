@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -120,6 +120,11 @@ ensure_columns("settings", {
     "ebay_app_id": "VARCHAR",
     "ebay_cert_id_encrypted": "VARCHAR",
     "ebay_ru_name": "VARCHAR",
+})
+ensure_columns("settings", {
+    "radicale_url": "VARCHAR",
+    "radicale_username": "VARCHAR",
+    "radicale_password_encrypted": "VARCHAR",
 })
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
@@ -2725,7 +2730,7 @@ def integrations_status(db: Session = Depends(get_db)):
     FIELD_COUNT = {
         "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
         "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
-        "immich": 2, "mail": 3, "ebay": 3,
+        "immich": 2, "mail": 3, "ebay": 3, "radicale": 2,
     }
 
     def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
@@ -2843,6 +2848,19 @@ def integrations_status(db: Session = Depends(get_db)):
         "Verkäufe wie ein Konto einbinden",
         missing,
         detail_ok=f"{n_ebay} Verbindung{'en' if n_ebay != 1 else ''} verbunden." if n_ebay else None,
+    ))
+
+    missing = []
+    if not s.radicale_url:
+        missing.append("Server-Adresse")
+    if not s.radicale_password_encrypted:
+        missing.append("Zugangsdaten")
+    n_todos = db.query(models.Todo).count()
+    items.append(entry(
+        "radicale", "To-Dos (Radicale)",
+        "To-Dos zweiseitig mit dem Handy synchronisieren",
+        missing,
+        detail_ok=f"{n_todos} To-Do{'s' if n_todos != 1 else ''} synchronisiert." if n_todos else None,
     ))
 
     missing = []
@@ -3162,6 +3180,114 @@ def sync_ebay_connection(connection_id: int, db: Session = Depends(get_db), spac
     cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
     result = ebay_sync.sync(db, conn, settings.ebay_app_id, cert_id)
     return schemas.SyncResult(imported=result.get("imported", 0), skipped=result.get("skipped", 0), error=result.get("error"))
+
+
+# ---------------- To-Dos (Radicale/CalDAV) ----------------
+@api_router.get("/settings/radicale", response_model=schemas.RadicaleSettingsOut)
+def get_radicale_settings(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    return schemas.RadicaleSettingsOut(
+        url=settings.radicale_url, username=settings.radicale_username,
+        password_set=bool(settings.radicale_password_encrypted),
+    )
+
+
+@api_router.put("/settings/radicale", response_model=schemas.RadicaleSettingsOut)
+def update_radicale_settings(data: schemas.RadicaleSettingsUpdate, db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    settings.radicale_url = data.url
+    settings.radicale_username = data.username
+    settings.radicale_password_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.password)
+    db.commit()
+    return schemas.RadicaleSettingsOut(url=settings.radicale_url, username=settings.radicale_username, password_set=True)
+
+
+@api_router.post("/radicale/test")
+def test_radicale(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    if not settings.radicale_url:
+        raise HTTPException(400, "Bitte zuerst die Radicale-Adresse in den Einstellungen hinterlegen")
+    password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
+    try:
+        n = radicale_sync.check_connection(settings.radicale_url, settings.radicale_username, password)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "todo_count": n}
+
+
+def _radicale_credentials(db: Session) -> tuple[str, str, str]:
+    settings = auth.get_or_create_settings(db)
+    if not settings.radicale_url:
+        raise HTTPException(400, "Radicale ist noch nicht eingerichtet. Trage unter Einstellungen die Adresse ein.")
+    password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
+    return settings.radicale_url, settings.radicale_username, password
+
+
+@api_router.get("/todos", response_model=List[schemas.TodoOut])
+def list_todos(include_done: bool = True, db: Session = Depends(get_db)):
+    return crud.get_todos(db, include_done)
+
+
+@api_router.post("/todos", response_model=schemas.TodoOut)
+def create_todo(data: schemas.TodoCreate, db: Session = Depends(get_db)):
+    todo = crud.create_todo(db, data.title, data.due_date)
+    # Sofort hochladen, damit ein neues To-Do nicht erst auf den nächsten
+    # Hintergrund-Sync warten muss, um am Handy sichtbar zu werden.
+    if settings_has_radicale(db):
+        url, username, password = _radicale_credentials(db)
+        try:
+            radicale_sync.sync(db, url, username, password)
+        except Exception:
+            pass
+    return todo
+
+
+@api_router.patch("/todos/{todo_id}", response_model=schemas.TodoOut)
+def update_todo(todo_id: int, data: schemas.TodoUpdate, db: Session = Depends(get_db)):
+    todo = crud.get_todo(db, todo_id)
+    if not todo:
+        raise HTTPException(404, "To-Do nicht gefunden")
+    todo = crud.update_todo(db, todo, data.title, data.done, data.due_date)
+    if settings_has_radicale(db):
+        url, username, password = _radicale_credentials(db)
+        try:
+            radicale_sync.sync(db, url, username, password)
+        except Exception:
+            pass
+    return todo
+
+
+@api_router.delete("/todos/{todo_id}")
+def remove_todo(todo_id: int, db: Session = Depends(get_db)):
+    todo = crud.get_todo(db, todo_id)
+    if not todo:
+        raise HTTPException(404, "To-Do nicht gefunden")
+    if settings_has_radicale(db):
+        crud.delete_todo(db, todo)
+        url, username, password = _radicale_credentials(db)
+        try:
+            radicale_sync.sync(db, url, username, password)
+        except Exception:
+            pass
+    else:
+        # Ohne Radicale gibt es nichts zum Nachtragen - sofort endgültig
+        # löschen, statt als "pending_delete" liegen zu bleiben, bis
+        # irgendwann doch noch eine Verbindung eingerichtet wird.
+        db.delete(todo)
+        db.commit()
+    return {"ok": True}
+
+
+@api_router.post("/todos/sync", response_model=schemas.TodoSyncResult)
+def sync_todos(db: Session = Depends(get_db)):
+    url, username, password = _radicale_credentials(db)
+    result = radicale_sync.sync(db, url, username, password)
+    return schemas.TodoSyncResult(**result)
+
+
+def settings_has_radicale(db: Session) -> bool:
+    settings = auth.get_or_create_settings(db)
+    return bool(settings.radicale_url)
 
 
 # ---------------- Dashboard ----------------
@@ -3675,6 +3801,24 @@ def _scheduled_ai_maintenance():
         db.close()
 
 
+def _scheduled_radicale_sync():
+    """Alle paar Minuten mit dem Radicale-Server abgleichen - läuft öfter als
+    die anderen Sync-Jobs, weil To-Dos, die man gerade am Handy einträgt, sich
+    anders als Bankumsätze typischerweise sofort sehen lassen sollen."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.radicale_url:
+            return
+        password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
+        try:
+            radicale_sync.sync(db, settings.radicale_url, settings.radicale_username, password)
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 def _scheduled_immich_quality_scan():
     """Scannt alle paar Minuten eine weitere Seite der Immich-Bibliothek auf
     unscharfe/leere Fotos. Läuft absichtlich in kleinen Häppchen statt in
@@ -3754,6 +3898,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_immich_quality_scan, CronTrigger(minute="*/5"),
     id="immich_quality_scan", misfire_grace_time=600,
+)
+scheduler.add_job(
+    _scheduled_radicale_sync, CronTrigger(minute="*/3"),
+    id="radicale_sync", misfire_grace_time=300,
 )
 scheduler.start()
 

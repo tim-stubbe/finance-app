@@ -1212,6 +1212,45 @@ class GoalCompleteResult(BaseModel):
     message: str
 
 
+# ---------- To-Dos (Radicale/CalDAV) ----------
+class RadicaleSettingsUpdate(BaseModel):
+    url: str
+    username: str
+    password: str
+
+
+class RadicaleSettingsOut(BaseModel):
+    url: Optional[str] = None
+    username: Optional[str] = None
+    password_set: bool = False
+
+
+class TodoCreate(BaseModel):
+    title: str
+    due_date: Optional[date] = None
+
+
+class TodoUpdate(BaseModel):
+    title: Optional[str] = None
+    done: Optional[bool] = None
+    due_date: Optional[date] = None
+
+
+class TodoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    done: bool
+    due_date: Optional[date] = None
+    created_at: datetime
+
+
+class TodoSyncResult(BaseModel):
+    pushed: int
+    pulled: int
+    errors: List[str] = []
+
+
 # ---------- E-Mail-Belege ----------
 class MailSettingsOut(BaseModel):
     enabled: bool

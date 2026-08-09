@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from statistics import median
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
-from . import models, schemas, prices, debts
+from . import models, schemas, prices, debts, radicale_sync
 
 CACHE_TTL = timedelta(hours=24)
 
@@ -1365,6 +1365,46 @@ def delete_enablebanking_connection(db: Session, connection_id: int, space_id: i
         db.delete(conn)
         db.commit()
     return conn
+
+
+# ---------- To-Dos ----------
+def get_todos(db: Session, include_done: bool = True):
+    q = db.query(models.Todo).filter(models.Todo.pending_delete.is_(False))
+    if not include_done:
+        q = q.filter(models.Todo.done.is_(False))
+    return q.order_by(models.Todo.done, models.Todo.due_date.is_(None), models.Todo.due_date, models.Todo.created_at).all()
+
+
+def get_todo(db: Session, todo_id: int):
+    return db.query(models.Todo).filter(models.Todo.id == todo_id, models.Todo.pending_delete.is_(False)).first()
+
+
+def create_todo(db: Session, title: str, due_date=None):
+    todo = models.Todo(uid=radicale_sync.new_uid(), title=title, due_date=due_date)
+    db.add(todo)
+    db.commit()
+    db.refresh(todo)
+    return todo
+
+
+def update_todo(db: Session, todo: models.Todo, title=None, done=None, due_date=None):
+    if title is not None:
+        todo.title = title
+    if done is not None:
+        todo.done = done
+    if due_date is not None:
+        todo.due_date = due_date
+    db.commit()
+    db.refresh(todo)
+    return todo
+
+
+def delete_todo(db: Session, todo: models.Todo):
+    # Erst zum Löschen markieren, damit der nächste Sync die Löschung noch auf
+    # den Server übertragen kann - direktes db.delete() würde die Radicale-
+    # Ressource verwaist zurücklassen.
+    todo.pending_delete = True
+    db.commit()
 
 
 # ---------- eBay-Verbindungen ----------
