@@ -1800,6 +1800,23 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .photos-warn { color: var(--neg); font-weight: 600; }
 
+/* ---------- Dashboard: weitere Anbindungen ---------- */
+.integrations-widget-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.integrations-widget-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.integrations-widget-icon { font-size: 22px; }
+
 .photo-pager {
   display: flex;
   justify-content: center;

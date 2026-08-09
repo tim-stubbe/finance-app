@@ -3950,6 +3950,55 @@ async function loadDashboard() {
       },
     },
   });
+
+  loadIntegrationsWidget();
+}
+
+// Bewusst kein neuer eigener "Hub" mit dienstübergreifenden Kacheln - dafür
+// gibt es noch keine abgestimmte Entscheidung. Stattdessen ein kleines,
+// zurückhaltendes Widget auf dem bestehenden Dashboard, das nur zeigt, was
+// tatsächlich verbunden ist, und sich komplett versteckt, wenn nichts davon
+// eingerichtet ist.
+async function loadIntegrationsWidget() {
+  const widget = document.getElementById("integrations-widget");
+  const body = document.getElementById("integrations-widget-body");
+  const parts = [];
+
+  try {
+    const stats = await api("/immich/stats");
+    if (stats.available) {
+      const gb = (stats.usage_bytes / 1024 / 1024 / 1024).toFixed(1);
+      parts.push(`<div class="integrations-widget-item">
+        <span class="integrations-widget-icon">📸</span>
+        <div><strong>Immich</strong><br>
+        <span class="page-sub">${stats.photos.toLocaleString("de-DE")} Fotos, ${stats.videos.toLocaleString("de-DE")} Videos, ${gb} GB</span></div>
+      </div>`);
+    }
+  } catch { /* Immich nicht eingerichtet oder nicht erreichbar - Widget lässt es einfach weg. */ }
+
+  try {
+    const conns = await api("/ebay/connections");
+    const connected = conns.filter(c => c.status === "connected");
+    if (connected.length) {
+      const lastSync = connected
+        .map(c => c.last_sync_at)
+        .filter(Boolean)
+        .sort()
+        .pop();
+      parts.push(`<div class="integrations-widget-item">
+        <span class="integrations-widget-icon">🛒</span>
+        <div><strong>eBay</strong><br>
+        <span class="page-sub">${connected.length} Verbindung${connected.length !== 1 ? "en" : ""} aktiv${lastSync ? `, zuletzt synchronisiert ${new Date(lastSync).toLocaleString("de-DE")}` : ""}</span></div>
+      </div>`);
+    }
+  } catch { /* eBay nicht eingerichtet - Widget lässt es einfach weg. */ }
+
+  if (!parts.length) {
+    widget.classList.add("hidden");
+    return;
+  }
+  body.innerHTML = parts.join("");
+  widget.classList.remove("hidden");
 }
 
 document.getElementById("db-refresh").addEventListener("click", loadDashboard);
