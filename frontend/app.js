@@ -1856,7 +1856,8 @@ async function loadSimilarities(groups) {
   for (const g of groups) {
     if (photoSimilarity.has(g.duplicate_id)) continue;
     try {
-      const s = await api(`/immich/duplicates/${g.duplicate_id}/similarity`);
+      const ids = g.assets.map(a => a.id).join(",");
+      const s = await api(`/immich/duplicates/${g.duplicate_id}/similarity?asset_ids=${encodeURIComponent(ids)}`);
       photoSimilarity.set(g.duplicate_id, s.pairs);
     } catch (e) {
       photoSimilarity.set(g.duplicate_id, {});

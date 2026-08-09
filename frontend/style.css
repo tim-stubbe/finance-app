@@ -1941,29 +1941,35 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   justify-content: center;
   font-size: 14px;
   cursor: zoom-in;
-  opacity: 0;
-  transform: scale(0.85);
   transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
-  /* Ohne das faengt die Lupe in ihrer 30x30px-Ecke weiterhin Klicks ab,
-     obwohl sie unsichtbar ist (opacity:0 entfernt ein Element NICHT aus der
-     Klick-Erkennung) - ein Klick genau dort landete dann still auf der Lupe
-     statt auf der Karte, ohne dass etwas sichtbar passierte. */
-  pointer-events: none;
 }
 
-.photo-card:hover .photo-zoom,
-.shot-card:hover .photo-zoom,
-.photo-zoom:focus-visible {
-  pointer-events: auto;
+/* Auf Geraeten mit echter Maus: nur bei Hover/Tastaturfokus einblenden -
+   staendig sichtbare Lupen auf jedem Bild waeren bei 20 Kacheln pro Seite nur
+   visueller Laerm. WICHTIG: das darf sich NIE auf pointer-events auswirken,
+   nur auf Sichtbarkeit - sonst faengt die unsichtbare Lupe in ihrer 30x30px-
+   Ecke weiterhin Klicks ab, ohne dass sichtbar etwas passiert.
+   Auf Touch-Geraeten (@media hover:none) gibt es keinen Hover-Zustand vor dem
+   eigentlichen Antippen - Safari auf iOS behandelt dort den ERSTEN Tipp auf
+   ein Element, dessen Kindelement eine :hover-Regel hat, nur als "Hover
+   aktivieren", nicht als Klick (bekannter WebKit-Effekt). Ohne diese Abfrage
+   waere auf dem iPhone JEDE Karte unbedienbar gewesen, nicht nur die Lupe -
+   deshalb bekommt die Lupe auf Touch-Geraeten von vornherein volle Sichtbarkeit
+   und braucht keinen Hover, der den Klick auf die ganze Karte blockieren
+   wuerde. */
+@media (hover: hover) and (pointer: fine) {
+  .photo-zoom { opacity: 0; transform: scale(0.85); pointer-events: none; }
+  .photo-card:hover .photo-zoom,
+  .shot-card:hover .photo-zoom,
+  .photo-zoom:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
 }
 
-/* Nur bei Hover/Tastaturfokus einblenden - staendig sichtbare Lupen auf
-   jedem Bild waeren bei zwanzig Kacheln pro Seite nur visueller Laerm. */
-.photo-card:hover .photo-zoom,
-.shot-card:hover .photo-zoom,
-.photo-zoom:focus-visible {
-  opacity: 1;
-  transform: scale(1);
+@media (hover: none) {
+  .photo-zoom { opacity: 0.85; }
 }
 
 .photo-zoom:hover { background: var(--accent-strong); }

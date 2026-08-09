@@ -2202,19 +2202,22 @@ MAX_ASSETS_FOR_SIMILARITY = 12
 
 @api_router.get("/immich/duplicates/{duplicate_id}/similarity",
                 response_model=schemas.ImmichSimilarityOut)
-def immich_similarity(duplicate_id: str, db: Session = Depends(get_db)):
-    """Rechnet aus, wie stark sich die Bilder einer Gruppe gleichen."""
+def immich_similarity(duplicate_id: str, asset_ids: str, db: Session = Depends(get_db)):
+    """Rechnet aus, wie stark sich die Bilder einer Gruppe gleichen.
+
+    `asset_ids` (kommagetrennt) kommt vom Frontend mit, das die Liste aus der
+    ohnehin schon geladenen Gruppe kennt. Frueher wurde hier stattdessen bei
+    JEDER Anfrage Immichs komplette Duplikat-Liste neu abgerufen, nur um darin
+    die eine gesuchte Gruppe wiederzufinden - bei einer grossen Bibliothek
+    (real: 5.500 Gruppen, mehrere MB) macht das 20 Anfragen pro Seite 20 volle
+    Neuabrufe. Das legte den Server bei jedem Seitenaufruf spuerbar lahm und
+    liess Anfragen haengen bleiben - im Browser sichtbar als voellig
+    unzusammenhaengend wirkender Fehler ("access control checks" in Safari
+    fuer eine schlicht zu langsam gewordene Verbindung)."""
+    ids = [i for i in asset_ids.split(",") if i]
+    if not ids:
+        raise HTTPException(400, "Keine Bild-IDs übergeben.")
     url, key = _immich_credentials(db)
-    try:
-        gruppen = immich.list_duplicates(url, key)
-    except Exception as e:
-        raise HTTPException(502, f"Immich nicht erreichbar: {e}")
-
-    gruppe = next((g for g in gruppen if g.get("duplicateId") == duplicate_id), None)
-    if not gruppe:
-        raise HTTPException(404, "Diese Duplikatgruppe gibt es nicht (mehr).")
-
-    ids = [a["id"] for a in (gruppe.get("assets") or [])]
     if len(ids) > MAX_ASSETS_FOR_SIMILARITY:
         return schemas.ImmichSimilarityOut(
             duplicate_id=duplicate_id, pairs={},
