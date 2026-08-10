@@ -914,6 +914,7 @@ button:active { transform: scale(0.97); }
   color: var(--text-secondary);
 }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
 
 /* ---------- Forms ---------- */
 .form-grid {
@@ -960,6 +961,8 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .data-table tbody tr:hover { background: var(--surface-2); }
 .data-table tbody tr:last-child td, .simple-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr.row-warning { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.data-table tbody tr.row-warning:hover { background: color-mix(in srgb, var(--warn) 20%, transparent); }
 
 .data-table th[data-sort-key] {
   cursor: pointer;

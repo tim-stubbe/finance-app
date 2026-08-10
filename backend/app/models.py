@@ -731,3 +731,35 @@ class Todo(Base):
     # übertragen kann, bevor die Zeile tatsächlich verschwindet.
     pending_delete = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ContractReminder(Base):
+    """Kündigungsfrist-Erinnerung für ein erkanntes Abo (siehe
+    crud.detect_recurring_transactions). Bewusst eine eigene, schlanke Tabelle
+    statt Erweiterung der Buchungen: die Erkennung selbst bleibt eine reine
+    Live-Berechnung ohne Identität über die Zeit, hier braucht es aber eine
+    stabile Zuordnung (account_id + normalisierte Bezeichnung), an der eine
+    vom Nutzer gepflegte Frist/ein Verlängerungsdatum hängen bleibt.
+
+    `renewal_date` rückt automatisch weiter, sobald sie in der Vergangenheit
+    liegt und eine Frequenz hinterlegt ist (siehe crud.evaluate_contract_reminders)
+    - jährliche/monatliche Verträge müssen so nicht jedes Mal von Hand neu
+    gepflegt werden. `last_reminded_for` verhindert, dieselbe Frist mehrfach
+    zu melden (Muster wie Settings.last_cashflow_alert_date)."""
+
+    __tablename__ = "contract_reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    description_key = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    notice_period_days = Column(Integer, nullable=False)
+    renewal_date = Column(Date, nullable=False)
+    auto_advance_frequency = Column(String, nullable=True)
+    last_reminded_for = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "description_key", name="uq_contract_reminder_account_desc"),
+    )

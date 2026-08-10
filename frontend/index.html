@@ -450,15 +450,52 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title">📄 Kündigungsfristen</h3>
+        <p class="page-sub">
+          Trag bei Abos mit automatischer Verlängerung ein, bis wann du kündigen musst – du wirst rechtzeitig per
+          Telegram erinnert. Bei hinterlegter Häufigkeit rückt der Verlängerungstermin nach Ablauf automatisch weiter.
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Bezeichnung</th><th>Konto</th><th>Verlängert sich am</th><th>Kündigungsfrist</th><th>Erinnerung ab</th><th></th></tr></thead>
+            <tbody id="contract-reminder-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title">🔁 Erkannte wiederkehrende Zahlungen</h3>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Bezeichnung</th><th>Konto</th><th>Kategorie</th><th>Häufigkeit</th><th>Ø Betrag</th><th>Nächste erwartet</th><th>Bisher gesamt</th></tr></thead>
+            <thead><tr><th>Bezeichnung</th><th>Konto</th><th>Kategorie</th><th>Häufigkeit</th><th>Ø Betrag</th><th>Nächste erwartet</th><th>Bisher gesamt</th><th></th></tr></thead>
             <tbody id="recurring-list"></tbody>
           </table>
         </div>
       </div>
     </section>
+
+    <div id="contract-reminder-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="contract-reminder-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="contract-reminder-modal-title">Kündigungsfrist</h2>
+          <p class="page-sub" id="contract-reminder-modal-sub"></p>
+        </div>
+        <form id="contract-reminder-form" class="form-grid">
+          <input type="hidden" id="cr-id">
+          <input type="hidden" id="cr-account-id">
+          <input type="hidden" id="cr-description-key">
+          <input type="hidden" id="cr-frequency">
+          <label class="wide">Bezeichnung <input type="text" id="cr-label" required></label>
+          <label>Verlängert sich am <input type="date" id="cr-renewal" required></label>
+          <label>Kündigungsfrist (Tage vorher) <input type="number" step="1" min="0" id="cr-notice" required value="30"></label>
+          <div class="form-actions wide">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="cr-delete" class="btn-ghost hidden">Löschen</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- CATEGORIES -->
     <section id="tab-categories" class="tab-content">

@@ -392,7 +392,7 @@ def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
         groups.setdefault((tx.account_id, norm), []).append(tx)
 
     results = []
-    for (account_id, _norm), items in groups.items():
+    for (account_id, norm), items in groups.items():
         if len(items) < 3:
             continue
         items.sort(key=lambda t: t.date)
@@ -425,6 +425,7 @@ def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
 
         results.append({
             "description": last.description,
+            "description_key": norm,
             "account_id": account_id,
             "account_name": accounts.get(account_id),
             "category_id": top_category_id,
@@ -439,6 +440,90 @@ def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
 
     results.sort(key=lambda r: r["next_expected_date"])
     return results
+
+
+# ---------- Kündigungsfrist-Erinnerungen ----------
+def _contract_reminder_out(r: models.ContractReminder, account_name: str | None) -> schemas.ContractReminderOut:
+    reminder_date = r.renewal_date - timedelta(days=r.notice_period_days)
+    return schemas.ContractReminderOut(
+        id=r.id, account_id=r.account_id, account_name=account_name,
+        description_key=r.description_key, label=r.label,
+        notice_period_days=r.notice_period_days, renewal_date=r.renewal_date,
+        auto_advance_frequency=r.auto_advance_frequency, reminder_date=reminder_date,
+        days_until_reminder=(reminder_date - date.today()).days,
+        due=date.today() >= reminder_date,
+    )
+
+
+def get_contract_reminders(db: Session, space_id: int) -> list[schemas.ContractReminderOut]:
+    rows = (
+        db.query(models.ContractReminder)
+        .filter(models.ContractReminder.space_id == space_id)
+        .order_by(models.ContractReminder.renewal_date)
+        .all()
+    )
+    accounts = {a.id: a.name for a in get_accounts(db, space_id)}
+    return [_contract_reminder_out(r, accounts.get(r.account_id)) for r in rows]
+
+
+def create_contract_reminder(db: Session, space_id: int, data: schemas.ContractReminderCreate) -> schemas.ContractReminderOut:
+    row = models.ContractReminder(space_id=space_id, **data.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    account = db.get(models.Account, row.account_id)
+    return _contract_reminder_out(row, account.name if account else None)
+
+
+def update_contract_reminder(db: Session, reminder_id: int, space_id: int, data: schemas.ContractReminderUpdate) -> schemas.ContractReminderOut | None:
+    row = db.query(models.ContractReminder).filter(
+        models.ContractReminder.id == reminder_id, models.ContractReminder.space_id == space_id,
+    ).first()
+    if not row:
+        return None
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(row, key, value)
+    # Neues Verlängerungsdatum -> alte Erinnerungssperre ist hinfällig.
+    if "renewal_date" in data.model_dump(exclude_unset=True):
+        row.last_reminded_for = None
+    db.commit()
+    db.refresh(row)
+    account = db.get(models.Account, row.account_id)
+    return _contract_reminder_out(row, account.name if account else None)
+
+
+def delete_contract_reminder(db: Session, reminder_id: int, space_id: int) -> bool:
+    row = db.query(models.ContractReminder).filter(
+        models.ContractReminder.id == reminder_id, models.ContractReminder.space_id == space_id,
+    ).first()
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def evaluate_contract_reminders(db: Session, space_id: int) -> list[models.ContractReminder]:
+    """Läuft täglich (siehe main._check_daily_alerts): rückt abgelaufene
+    Verlängerungstermine automatisch weiter (nur wenn eine Frequenz
+    hinterlegt ist - sonst bleibt das Datum stehen, bis der Nutzer es selbst
+    korrigiert) und gibt die Erinnerungen zurück, die JETZT erstmals fällig
+    sind (für genau diesen Verlängerungstermin noch nicht gemeldet)."""
+    today = date.today()
+    due: list[models.ContractReminder] = []
+    rows = db.query(models.ContractReminder).filter(models.ContractReminder.space_id == space_id).all()
+    for r in rows:
+        interval = RECURRING_INTERVAL_DAYS.get(r.auto_advance_frequency)
+        if interval:
+            while r.renewal_date < today:
+                r.renewal_date += timedelta(days=interval)
+                r.last_reminded_for = None
+        reminder_date = r.renewal_date - timedelta(days=r.notice_period_days)
+        if today >= reminder_date and r.last_reminded_for != r.renewal_date:
+            r.last_reminded_for = r.renewal_date
+            due.append(r)
+    db.commit()
+    return due
 
 
 def get_transaction(db: Session, transaction_id: int, space_id: int):

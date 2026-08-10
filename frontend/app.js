@@ -1667,11 +1667,11 @@ document.querySelectorAll("#cashflow-range-tabs .range-tab").forEach(btn => {
 
 async function loadRecurringTab() {
   await loadCashflowForecast();
-  const items = await api("/transactions/recurring");
+  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders()]);
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {
-    tbody.innerHTML = emptyRow(7, "🔁", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
+    tbody.innerHTML = emptyRow(8, "🔁", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
   }
   let monthlyTotal = 0;
   items.forEach(it => {
@@ -1684,8 +1684,14 @@ async function loadRecurringTab() {
       <td>${RECURRING_FREQ_LABELS[it.frequency] || it.frequency}</td>
       <td class="${it.avg_amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(it.avg_amount)}</td>
       <td>${fmtDate(it.next_expected_date)}</td>
-      <td>${eur(it.total_amount)}</td>`;
+      <td>${eur(it.total_amount)}</td>
+      <td><button type="button" class="btn-ghost btn-sm" data-cr-account="${it.account_id}" data-cr-key="${esc(it.description_key)}" data-cr-label="${esc(it.description || "")}" data-cr-freq="${it.frequency}">📄 Frist</button></td>`;
     tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("[data-cr-account]").forEach(btn => {
+    btn.addEventListener("click", () => openContractReminderModal(
+      parseInt(btn.dataset.crAccount), btn.dataset.crKey, btn.dataset.crLabel, btn.dataset.crFreq,
+    ));
   });
 
   document.getElementById("recurring-summary-cards").innerHTML = `
@@ -1698,6 +1704,87 @@ async function loadRecurringTab() {
       <div><h3>Hochgerechnet pro Monat</h3><p>${eur(monthlyTotal)}</p></div>
     </div>`;
 }
+
+let contractRemindersCache = [];
+
+async function loadContractReminders() {
+  contractRemindersCache = await api("/contract-reminders");
+  const tbody = document.getElementById("contract-reminder-list");
+  tbody.innerHTML = "";
+  if (contractRemindersCache.length === 0) {
+    tbody.innerHTML = emptyRow(5, "📄", "Noch keine Kündigungsfrist hinterlegt – bei einem Abo unten auf „📄 Frist“ klicken.");
+    return;
+  }
+  contractRemindersCache.forEach(r => {
+    const tr = document.createElement("tr");
+    if (r.due) tr.classList.add("row-warning");
+    tr.innerHTML = `
+      <td>${esc(r.label)}</td>
+      <td>${r.account_name || "–"}</td>
+      <td>${fmtDate(r.renewal_date)}</td>
+      <td>${r.notice_period_days} Tage</td>
+      <td>${fmtDate(r.reminder_date)}${r.due ? " ⚠️" : ""}</td>
+      <td><button type="button" class="btn-ghost btn-sm" data-edit-cr="${r.id}">Bearbeiten</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("[data-edit-cr]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const r = contractRemindersCache.find(x => x.id === parseInt(btn.dataset.editCr));
+      if (r) openContractReminderModal(r.account_id, r.description_key, r.label, r.auto_advance_frequency, r);
+    });
+  });
+}
+
+function openContractReminderModal(accountId, descriptionKey, label, frequency, existingOverride = null) {
+  const existing = existingOverride && existingOverride.id
+    ? existingOverride
+    : contractRemindersCache.find(r => r.account_id === accountId && r.description_key === descriptionKey);
+  document.getElementById("contract-reminder-modal-title").textContent = existing ? "Kündigungsfrist bearbeiten" : "Kündigungsfrist anlegen";
+  document.getElementById("contract-reminder-modal-sub").textContent = frequency
+    ? `Häufigkeit erkannt: ${RECURRING_FREQ_LABELS[frequency] || frequency} – Verlängerungstermin rückt danach automatisch weiter.`
+    : "";
+  document.getElementById("cr-id").value = existing ? existing.id : "";
+  document.getElementById("cr-account-id").value = accountId;
+  document.getElementById("cr-description-key").value = descriptionKey;
+  document.getElementById("cr-frequency").value = frequency || "";
+  document.getElementById("cr-label").value = existing ? existing.label : label;
+  document.getElementById("cr-renewal").value = existing ? existing.renewal_date : "";
+  document.getElementById("cr-notice").value = existing ? existing.notice_period_days : 30;
+  document.getElementById("cr-delete").classList.toggle("hidden", !existing);
+  document.getElementById("contract-reminder-modal").classList.remove("hidden");
+}
+
+function closeContractReminderModal() {
+  document.getElementById("contract-reminder-modal").classList.add("hidden");
+}
+document.getElementById("contract-reminder-modal-close").addEventListener("click", closeContractReminderModal);
+
+document.getElementById("contract-reminder-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const id = document.getElementById("cr-id").value;
+  const payload = {
+    account_id: parseInt(document.getElementById("cr-account-id").value),
+    description_key: document.getElementById("cr-description-key").value,
+    label: document.getElementById("cr-label").value,
+    renewal_date: document.getElementById("cr-renewal").value,
+    notice_period_days: parseInt(document.getElementById("cr-notice").value),
+    auto_advance_frequency: document.getElementById("cr-frequency").value || null,
+  };
+  await api(id ? `/contract-reminders/${id}` : "/contract-reminders", {
+    method: id ? "PUT" : "POST",
+    body: JSON.stringify(payload),
+  });
+  closeContractReminderModal();
+  loadContractReminders();
+});
+
+document.getElementById("cr-delete").addEventListener("click", async () => {
+  const id = document.getElementById("cr-id").value;
+  if (!id || !confirm("Kündigungsfrist-Erinnerung wirklich löschen?")) return;
+  await api(`/contract-reminders/${id}`, { method: "DELETE" });
+  closeContractReminderModal();
+  loadContractReminders();
+});
 
 document.getElementById("tx-filter-btn").addEventListener("click", loadTransactions);
 document.getElementById("tx-search").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); loadTransactions(); } });

@@ -542,6 +542,7 @@ class DashboardSummary(BaseModel):
 # ---------- Wiederkehrende Zahlungen ----------
 class RecurringPaymentOut(BaseModel):
     description: Optional[str] = None
+    description_key: str
     account_id: int
     account_name: Optional[str] = None
     category_id: Optional[int] = None
@@ -552,6 +553,38 @@ class RecurringPaymentOut(BaseModel):
     last_date: date
     next_expected_date: date
     total_amount: float
+
+
+# ---------- Kündigungsfrist-Erinnerungen ----------
+class ContractReminderCreate(BaseModel):
+    account_id: int
+    description_key: str
+    label: str
+    notice_period_days: int
+    renewal_date: date
+    auto_advance_frequency: Optional[str] = None
+
+
+class ContractReminderUpdate(BaseModel):
+    label: Optional[str] = None
+    notice_period_days: Optional[int] = None
+    renewal_date: Optional[date] = None
+    auto_advance_frequency: Optional[str] = None
+
+
+class ContractReminderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    account_id: int
+    account_name: Optional[str] = None
+    description_key: str
+    label: str
+    notice_period_days: int
+    renewal_date: date
+    auto_advance_frequency: Optional[str] = None
+    reminder_date: date
+    days_until_reminder: int
+    due: bool
 
 
 # ---------- Cashflow-Prognose ----------

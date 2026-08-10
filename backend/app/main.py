@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse,
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 import threading
 
@@ -429,6 +430,48 @@ def list_transactions(
 @api_router.get("/transactions/recurring", response_model=List[schemas.RecurringPaymentOut])
 def get_recurring_transactions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.detect_recurring_transactions(db, space_id)
+
+
+@api_router.get("/contract-reminders", response_model=List[schemas.ContractReminderOut])
+def list_contract_reminders(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.get_contract_reminders(db, space_id)
+
+
+@api_router.post("/contract-reminders", response_model=schemas.ContractReminderOut)
+def add_contract_reminder(
+    data: schemas.ContractReminderCreate,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    try:
+        return crud.create_contract_reminder(db, space_id, data)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Für dieses Abo ist schon eine Kündigungsfrist hinterlegt.")
+
+
+@api_router.put("/contract-reminders/{reminder_id}", response_model=schemas.ContractReminderOut)
+def edit_contract_reminder(
+    reminder_id: int,
+    data: schemas.ContractReminderUpdate,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    result = crud.update_contract_reminder(db, reminder_id, space_id, data)
+    if not result:
+        raise HTTPException(404, "Erinnerung nicht gefunden.")
+    return result
+
+
+@api_router.delete("/contract-reminders/{reminder_id}")
+def remove_contract_reminder(
+    reminder_id: int,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    if not crud.delete_contract_reminder(db, reminder_id, space_id):
+        raise HTTPException(404, "Erinnerung nicht gefunden.")
+    return {"ok": True}
 
 
 @api_router.get("/forecast/cashflow", response_model=schemas.CashflowForecastOut)
@@ -3814,6 +3857,17 @@ def _check_daily_alerts():
                         )
                         settings.last_budget_alert_month = month_key
                         db.commit()
+            except Exception:
+                db.rollback()
+
+            try:
+                for reminder in crud.evaluate_contract_reminders(db, space.id):
+                    notifications.notify(
+                        settings,
+                        f"📄 Kündigungsfrist ({space.name}): „{reminder.label}“ verlängert sich am "
+                        f"{reminder.renewal_date.strftime('%d.%m.%Y')} automatisch - "
+                        f"Kündigungsfrist beginnt jetzt ({reminder.notice_period_days} Tage vorher).",
+                    )
             except Exception:
                 db.rollback()
     finally:
