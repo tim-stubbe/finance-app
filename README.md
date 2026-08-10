@@ -19,18 +19,18 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 - ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo, eBay)
 - ✅ KI-Assistent (Kategorisierung, Beleg-Auswertung, Chat) über eigenen Ollama-Server
 - ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen
-- ✅ Immich-Anbindung: doppelte Fotos und alte Bildschirmfotos aufräumen
+- ✅ Automatische Datei-Sortierung eines Eingangsordners (Kategorien, Kontoauszug-Import)
+- ✅ Immich-Anbindung: doppelte Fotos, alte Bildschirmfotos, unscharfe/leere Fotos
+  aufräumen (inkl. Tinder-artigem Swipe-Modus), Personen durchsuchen
+- ✅ To-Dos zweiseitig mit dem Handy synchronisiert (Radicale/CalDAV)
+- ✅ Kündigungsfristen für Abos, Rückgabefristen für einzelne Käufe
 - ✅ Telegram-Benachrichtigungen + Chat-Bot, Twilio-Notrufe für Notfälle
 - ✅ Vermögensvergleich mit der eigenen Altersgruppe
 - ✅ PWA (installierbar auf Handy/Desktop), vier Themes, EUR/CHF-Umschalter
 - ✅ Automatisches Deployment (GitHub Actions → GHCR → Watchtower auf TrueNAS)
 
-**Als Nächstes geplant** (siehe Projektnotizen für Details zum jeweiligen
-Interaktionsmodell):
-- 🔜 Weitere Immich-Funktionen (aktuell Duplikate, Screenshots, unscharfe/leere Fotos)
-
-Kein festes Datum, keine Garantie – das hier ist ein Freizeitprojekt für den
-Eigenbedarf, kein Produkt mit Fahrplan.
+Kein festes Datum, keine Garantie, keine feste Roadmap – das hier ist ein
+Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 
 ## Was es kann
 
@@ -50,16 +50,21 @@ Eigenbedarf, kein Produkt mit Fahrplan.
 - Kursdaten für Wertpapiere
 - IMAP-Postfach für Belege aus E-Mail-Anhängen (rein lesend)
 - Immich für die eigene Fotobibliothek
+- Radicale/CalDAV für zweiseitigen To-Do-Abgleich mit dem Handy
 
 **Investitionen**
 - Positionen mit Einstandskursen und Lots, Gewinn/Verlust, Dividenden
 - Sortierbare Bestandstabelle, Anzeige des letzten Kursabrufs
 
 **Planung und Auswertung**
+- Hub-Startseite mit Überblick über Finanzen, offene Aufgaben und nächste Ziele
 - Dashboard mit Vermögensübersicht und Auswertung nach Kategorien
 - Vermögensvergleich mit der eigenen Altersgruppe (Bundesbank-Vermögensbefragung)
 - Budgets pro Kategorie
-- Cashflow-Prognose
+- Wiederkehrende Zahlungen automatisch erkannt, Cashflow-Prognose darauf aufbauend
+- Kündigungsfristen für Abos (Verlängerungstermin rückt bei erkannter Häufigkeit
+  automatisch weiter) und Rückgabefristen für einzelne Käufe – beide erinnern
+  rechtzeitig per Telegram
 - Ziele (automatisch aus den App-Daten gemessen oder als manuelle Meilensteine,
   optional in Ketten voneinander abhängig)
 - Schulden mit Tilgungsplan, Zinsbindungsfristen, Bereitstellungszinsen,
@@ -74,7 +79,21 @@ Eigenbedarf, kein Produkt mit Fahrplan.
   Bestätigung anwenden – jedes Bild einzeln auswählbar (auch alle oder keins),
   inklusive prozentualer Bildähnlichkeit und Nebeneinander-Vergleich
 - Alte Bildschirmfotos nach Alter filtern und aufräumen
+- Unscharfe/leere Fotos automatisch erkannt (Hintergrund-Scan der Bibliothek)
+- Tinder-artiger Swipe-Modus als Alternative zur Raster-Auswahl: rechts wischen
+  = behalten, links = Papierkorb
+- Personen (Immichs eigene Gesichtserkennung) gezielt durchsuchen
 - Wandert grundsätzlich nur in Immichs Papierkorb, nie direkt und endgültig weg
+
+**Datei-Sortierung**
+- Ein Eingangsordner (z. B. wo E-Mail-Anhänge/Scans landen) wird automatisch
+  in Kategorie-Unterordner einsortiert – Ollama liest den Inhalt, bei
+  Unsicherheit wird nichts geraten, sondern liegen gelassen
+- Ein zweiter, vom Nutzer selbst befüllter Ordner funktioniert genauso als
+  zweiter aktiver Eingang (z. B. vom Desktop reingezogene Dateien)
+- Optionaler dritter Unterordner: Kontoauszüge werden dort automatisch als
+  Buchungen importiert (Konto-Erkennung + Duplikat-Schutz), ohne manuelles
+  Bestätigen
 
 **KI-Funktionen** (über einen selbst betriebenen [Ollama](https://ollama.com)-Server)
 - Chat-Schaltfläche auf jeder Seite für Anweisungen in normaler Sprache
@@ -105,7 +124,7 @@ nach ausdrücklicher Bestätigung.
 
 | Bereich   | Umsetzung                                                   |
 |-----------|-------------------------------------------------------------|
-| Backend   | FastAPI, SQLAlchemy, SQLite (160 Endpunkte)                  |
+| Backend   | FastAPI, SQLAlchemy, SQLite (197 Endpunkte)                  |
 | Frontend  | HTML/CSS/JavaScript ohne Build-Schritt, Chart.js über CDN   |
 | Jobs      | APScheduler für Sync, Kursabruf, Kategorisierung, Backups   |
 | Betrieb   | Docker, Python 3.14                                          |
