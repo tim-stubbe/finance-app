@@ -236,7 +236,12 @@ def _move_to_review(db: Session, review_path: str, source: str, filename: str, a
     try:
         os.makedirs(review_path, exist_ok=True)
         dest = _unique_target(review_path, filename)
-        shutil.move(os.path.join(source, filename), dest)
+        # copy_function=copyfile statt des Standards (copy2): copy2 versucht
+        # auch Berechtigungen/Zeitstempel zu uebertragen, was auf mancher
+        # SMB-Freigabe mit "Operation not permitted" fehlschlaegt - dann blieb
+        # die Datei kopiert UND im Eingang liegen. copyfile ueberträgt nur den
+        # Inhalt, das reicht hier.
+        shutil.move(os.path.join(source, filename), dest, copy_function=shutil.copyfile)
         _log_once(db, filename, action, detail)
     except Exception as e:
         _log_once(db, filename, "error", f"Verschieben zum Prüfen fehlgeschlagen: {e}")
@@ -308,7 +313,10 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
         os.makedirs(target_dir, exist_ok=True)
         dest = _unique_target(target_dir, filename)
         try:
-            shutil.move(path, dest)
+            # Gleicher Grund wie bei _move_to_review: copyfile statt copy2,
+            # keine Metadaten-Uebertragung noetig, auf mancher SMB-Freigabe
+            # schlaegt das sonst mit "Operation not permitted" fehl.
+            shutil.move(path, dest, copy_function=shutil.copyfile)
         except Exception as e:
             db.add(models.FileSortLog(filename=filename, action="error", detail=f"Verschieben fehlgeschlagen: {e}"))
             db.commit()
