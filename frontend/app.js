@@ -3577,6 +3577,12 @@ document.getElementById("statement-import-run-now").addEventListener("click", as
   loadFileSortLog();
 });
 
+document.getElementById("file-sort-log-clear").addEventListener("click", async () => {
+  if (!confirm("Protokoll der Datei-/Belegerkennung wirklich vollständig löschen?")) return;
+  await api("/file-sort/log", { method: "DELETE" });
+  loadFileSortLog();
+});
+
 document.getElementById("restore-btn").addEventListener("click", async () => {
   const fileInput = document.getElementById("restore-file");
   const resultEl = document.getElementById("restore-result");

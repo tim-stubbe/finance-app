@@ -3398,6 +3398,13 @@ def get_file_sort_log(limit: int = 50, db: Session = Depends(get_db)):
     )
 
 
+@api_router.delete("/file-sort/log")
+def clear_file_sort_log(db: Session = Depends(get_db)):
+    deleted = db.query(models.FileSortLog).delete()
+    db.commit()
+    return {"deleted": deleted}
+
+
 def _create_mail_attachments_from_receipts(db: Session, settings: models.Settings, receipts: list[dict]) -> int:
     """Legt für automatisch als Rechnung einsortierte Dateien zusätzlich einen
     Eintrag im bestehenden Beleg-Eingang an (gleiche Tabelle/Oberfläche wie
