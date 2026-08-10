@@ -38,16 +38,22 @@ from sqlalchemy.orm import Session
 from . import crud, document_extract, file_sort, models, ollama_client, schemas
 
 MAX_STATEMENT_CHARS = 60000
-# BEWUSST viel kürzer als file_sort.py's 3-Stunden-Timeout (dort gilt er pro
-# Datei mit eigenem, unabhängigem Lauf). Hier teilt sich process_statement_
-# inbox seit dem gemeinsamen _run_lock denselben Lauf-Slot mit der normalen
-# Datei-Sortierung - ein einzelner, auf dieser instabilen Ollama-Box
-# hängender Chat-Aufruf hätte sonst BEIDE Features stundenlang lahmgelegt,
-# live beobachtet (Sperre blieb >1h belegt, nichts lief mehr, nur ein
-# Container-Neustart hat sie wieder freigegeben). 10 Minuten reichen
-# komfortabel (beobachtete erfolgreiche Aufrufe brauchten Sekunden bis
-# wenige Minuten) und der nächste 10-Minuten-Job versucht es ohnehin erneut.
-OLLAMA_TIMEOUT = 10 * 60
+# BEWUSST kürzer als file_sort.py's 3-Stunden-Timeout (dort gilt er pro Datei
+# mit eigenem, unabhängigem Lauf) - process_statement_inbox teilt sich seit
+# dem gemeinsamen _run_lock denselben Lauf-Slot mit der normalen
+# Datei-Sortierung, ein wirklich hängender Aufruf soll nicht beide Features
+# stundenlang lahmlegen.
+#
+# ABER: live gemessen läuft diese Ollama-Instanz rein auf der CPU mit nur
+# ~3,2 Tokens/Sekunde bei der Textgenerierung (kein GPU-Support nutzbar) -
+# ein einzelnes Häppchen mit vielen Buchungszeilen kann dadurch legitim
+# mehrere Minuten brauchen, keineswegs hängengeblieben. Ein erster,
+# zu knapper Versuch mit 10 Minuten hat genau solche echten, nur langsamen
+# Aufrufe mitten in der Verarbeitung abgewürgt - IMMER mit demselben
+# Ergebnis "Read timed out", nie ein einziger Erfolg. 20 Minuten geben der
+# Verarbeitung realistisch Luft und bleiben trotzdem weit unter den
+# ursprünglichen 3 Stunden.
+OLLAMA_TIMEOUT = 20 * 60
 # Live beobachtet: ein einzelner Ollama-Aufruf mit dem ganzen Auszugstext kam
 # auf bis zu 13.289 Tokens - das Server-Kontextfenster lag hier aber nur bei
 # 4096, und ein Versuch, es per num_ctx pro Anfrage hochzusetzen, hat den
