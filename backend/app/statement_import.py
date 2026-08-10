@@ -7,14 +7,24 @@ speziellen Ordner ausdrücklich so gewollt.
 Zwei Sicherheitsnetze, die trotzdem verhindern, dass etwas Falsches auf ein
 Konto gebucht wird:
 - Buchungen werden NUR angelegt, wenn das Modell den Kontoauszug einem der
-  echten, bekannten Kontonamen eindeutig zuordnen konnte. Sonst landet die
-  Datei unverändert im "Zum Prüfen"-Ordner (Muster wie file_sort.py), es
-  wird nichts geraten.
+  echten, bekannten Kontonamen eindeutig zuordnen konnte. Sonst bleibt die
+  Datei unverändert in IHREM eigenen Unterordner liegen, es wird nichts
+  geraten.
 - Vor jeder neuen Buchung wird auf diesem Konto nach einer bereits
   existierenden Buchung mit gleichem Betrag (±0,01 €) innerhalb von einem
   Tag gesucht - ein Treffer gilt als Duplikat (z.B. weil derselbe Auszug
   versehentlich zweimal reinkopiert wurde oder eine Buchung schon über
   FinTS/PayPal-Sync da ist) und wird übersprungen statt doppelt angelegt.
+
+Wichtig: nicht zuordenbare Dateien werden bewusst NICHT wie bei file_sort.py
+in den geteilten "Zum Prüfen"-Ordner verschoben - dieser wird von der
+normalen Kategorie-Einsortierung selbst als zweiter aktiver Eingang
+durchsucht (siehe file_sort.py). Live beobachtet: ein dorthin verschobener,
+nicht zuordenbarer Kontoauszug wurde vom nächsten Kategorisierungslauf als
+"Rechnung" fehlklassifiziert und verschwand im falschen Ordner, obwohl der
+eigentliche Import ihn schon als Kontoauszug erkannt, nur das Konto nicht
+sicher zugeordnet hatte. Die Datei bleibt deshalb in ihrem eigenen
+Kontoauszüge-Unterordner liegen, wo sie nur dieses Modul je anfasst.
 """
 
 import json
@@ -188,8 +198,12 @@ def process_statement_inbox(db: Session, settings: models.Settings, space_id: in
         ext = os.path.splitext(filename)[1].lower()
 
         if ext != ".pdf":
-            file_sort._move_to_review(
-                db, settings.file_sort_review_path, source_dir, filename, "review",
+            # Bewusst NICHT file_sort._move_to_review: dieser Ordner ist NICHT
+            # der geteilte "Zum Prüfen"-Ordner, den die normale Kategorisierung
+            # ebenfalls als zweiten Eingang durchsucht (siehe Modul-Docstring) -
+            # die Datei bleibt hier liegen, zum manuellen Anschauen.
+            file_sort._log_once(
+                db, filename, "review",
                 f"Kontoauszug: Dateityp {ext or '(ohne Endung)'} wird nicht unterstützt.",
             )
             continue
@@ -204,8 +218,8 @@ def process_statement_inbox(db: Session, settings: models.Settings, space_id: in
             continue
 
         if not text:
-            file_sort._move_to_review(
-                db, settings.file_sort_review_path, source_dir, filename, "review",
+            file_sort._log_once(
+                db, filename, "review",
                 "Kontoauszug: kein Text erkennbar (vermutlich eingescannt statt digital erzeugt).",
             )
             continue
@@ -249,8 +263,8 @@ def process_statement_inbox(db: Session, settings: models.Settings, space_id: in
         if account_name and account_name.lower() not in text.lower():
             account_name = None
         if not account_name:
-            file_sort._move_to_review(
-                db, settings.file_sort_review_path, source_dir, filename, "review",
+            file_sort._log_once(
+                db, filename, "review",
                 "Kontoauszug: Konto nicht sicher erkannt - bitte manuell zuordnen und importieren.",
             )
             continue
