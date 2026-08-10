@@ -181,6 +181,20 @@ def _is_duplicate(db: Session, account_id: int, amount: float, tx_date: date) ->
 
 
 def process_statement_inbox(db: Session, settings: models.Settings, space_id: int) -> dict:
+    """Nutzt dieselbe Sperre wie file_sort.run() (der 10-Minuten-Job ruft
+    beide nacheinander auf, ein manueller Trigger kann aber jederzeit
+    dazwischenfunken) - zwei gleichzeitige Läufe würden sich sonst dieselbe
+    ohnehin fragile Ollama-Instanz teilen und sich gegenseitig Timeouts/
+    Abstürze verursachen (live beobachtet, siehe file_sort._run_lock)."""
+    if not file_sort._run_lock.acquire(blocking=False):
+        return {"processed": 0, "imported": 0, "duplicates": 0, "error": "Läuft bereits, dieser Aufruf wird übersprungen."}
+    try:
+        return _process_statement_inbox_locked(db, settings, space_id)
+    finally:
+        file_sort._run_lock.release()
+
+
+def _process_statement_inbox_locked(db: Session, settings: models.Settings, space_id: int) -> dict:
     subfolder = settings.file_sort_statements_subfolder
     result = {"processed": 0, "imported": 0, "duplicates": 0, "error": None}
     if not subfolder or not settings.file_sort_source_path:
