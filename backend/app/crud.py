@@ -526,6 +526,116 @@ def evaluate_contract_reminders(db: Session, space_id: int) -> list[models.Contr
     return due
 
 
+# ---------- Rückgabefristen ----------
+def _return_deadline_out(r: models.ReturnDeadline, tx: models.Transaction | None) -> schemas.ReturnDeadlineOut:
+    deadline_date = r.start_date + timedelta(days=r.deadline_days)
+    return schemas.ReturnDeadlineOut(
+        id=r.id, transaction_id=r.transaction_id,
+        transaction_description=tx.description if tx else None,
+        transaction_amount=tx.amount if tx else None,
+        start_date=r.start_date, deadline_days=r.deadline_days,
+        remind_days_before=r.remind_days_before, returned=r.returned,
+        deadline_date=deadline_date,
+        days_left=(deadline_date - date.today()).days,
+        due=(not r.returned) and date.today() >= deadline_date - timedelta(days=r.remind_days_before),
+    )
+
+
+def get_return_deadlines(db: Session, space_id: int) -> list[schemas.ReturnDeadlineOut]:
+    rows = (
+        db.query(models.ReturnDeadline)
+        .join(models.Transaction, models.ReturnDeadline.transaction_id == models.Transaction.id)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .filter(models.Account.space_id == space_id)
+        .order_by(models.ReturnDeadline.start_date)
+        .all()
+    )
+    tx_by_id = {t.id: t for t in db.query(models.Transaction).filter(
+        models.Transaction.id.in_([r.transaction_id for r in rows])
+    ).all()} if rows else {}
+    return [_return_deadline_out(r, tx_by_id.get(r.transaction_id)) for r in rows]
+
+
+def create_return_deadline(db: Session, space_id: int, data: schemas.ReturnDeadlineCreate) -> schemas.ReturnDeadlineOut | None:
+    tx = get_transaction(db, data.transaction_id, space_id)
+    if not tx:
+        return None
+    row = models.ReturnDeadline(**data.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _return_deadline_out(row, tx)
+
+
+def update_return_deadline(db: Session, deadline_id: int, space_id: int, data: schemas.ReturnDeadlineUpdate) -> schemas.ReturnDeadlineOut | None:
+    row = (
+        db.query(models.ReturnDeadline)
+        .join(models.Transaction, models.ReturnDeadline.transaction_id == models.Transaction.id)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .filter(models.ReturnDeadline.id == deadline_id, models.Account.space_id == space_id)
+        .first()
+    )
+    if not row:
+        return None
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(row, key, value)
+    # Frist/Startdatum geändert -> eine schon verschickte Erinnerung war ggf.
+    # für den alten Termin - bei neuem Termin wieder erinnerbar machen.
+    if {"start_date", "deadline_days"} & set(data.model_dump(exclude_unset=True)):
+        row.reminded = False
+    db.commit()
+    db.refresh(row)
+    return _return_deadline_out(row, get_transaction(db, row.transaction_id, space_id))
+
+
+def delete_return_deadline(db: Session, deadline_id: int, space_id: int) -> bool:
+    row = (
+        db.query(models.ReturnDeadline)
+        .join(models.Transaction, models.ReturnDeadline.transaction_id == models.Transaction.id)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .filter(models.ReturnDeadline.id == deadline_id, models.Account.space_id == space_id)
+        .first()
+    )
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def evaluate_return_deadlines(db: Session, space_id: int) -> list[dict]:
+    """Läuft täglich (siehe main._check_daily_alerts): meldet jede noch nicht
+    zurückgeschickte Frist, die in remind_days_before-Tagen oder weniger
+    abläuft, genau einmal (kein wiederkehrender Termin wie bei
+    ContractReminder - ein einmaliger Hinweis reicht)."""
+    today = date.today()
+    due: list[dict] = []
+    rows = (
+        db.query(models.ReturnDeadline)
+        .join(models.Transaction, models.ReturnDeadline.transaction_id == models.Transaction.id)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .filter(
+            models.Account.space_id == space_id,
+            models.ReturnDeadline.returned.is_(False),
+            models.ReturnDeadline.reminded.is_(False),
+        )
+        .all()
+    )
+    for r in rows:
+        deadline_date = r.start_date + timedelta(days=r.deadline_days)
+        if today >= deadline_date - timedelta(days=r.remind_days_before):
+            r.reminded = True
+            tx = get_transaction(db, r.transaction_id, space_id)
+            due.append({
+                "label": (tx.description if tx and tx.description else "Kauf"),
+                "deadline_date": deadline_date,
+                "days_left": (deadline_date - today).days,
+            })
+    if due:
+        db.commit()
+    return due
+
+
 def get_transaction(db: Session, transaction_id: int, space_id: int):
     return (
         db.query(models.Transaction)

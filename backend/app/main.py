@@ -477,6 +477,51 @@ def remove_contract_reminder(
     return {"ok": True}
 
 
+@api_router.get("/return-deadlines", response_model=List[schemas.ReturnDeadlineOut])
+def list_return_deadlines(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.get_return_deadlines(db, space_id)
+
+
+@api_router.post("/return-deadlines", response_model=schemas.ReturnDeadlineOut)
+def add_return_deadline(
+    data: schemas.ReturnDeadlineCreate,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    try:
+        result = crud.create_return_deadline(db, space_id, data)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Für diese Buchung ist schon eine Rückgabefrist hinterlegt.")
+    if not result:
+        raise HTTPException(404, "Buchung nicht gefunden.")
+    return result
+
+
+@api_router.put("/return-deadlines/{deadline_id}", response_model=schemas.ReturnDeadlineOut)
+def edit_return_deadline(
+    deadline_id: int,
+    data: schemas.ReturnDeadlineUpdate,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    result = crud.update_return_deadline(db, deadline_id, space_id, data)
+    if not result:
+        raise HTTPException(404, "Rückgabefrist nicht gefunden.")
+    return result
+
+
+@api_router.delete("/return-deadlines/{deadline_id}")
+def remove_return_deadline(
+    deadline_id: int,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    if not crud.delete_return_deadline(db, deadline_id, space_id):
+        raise HTTPException(404, "Rückgabefrist nicht gefunden.")
+    return {"ok": True}
+
+
 @api_router.get("/forecast/cashflow", response_model=schemas.CashflowForecastOut)
 def get_cashflow_forecast(days: int = 90, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     days = max(7, min(days, 365))
@@ -3879,6 +3924,16 @@ def _check_daily_alerts():
                         f"📄 Kündigungsfrist ({space.name}): „{reminder.label}“ verlängert sich am "
                         f"{reminder.renewal_date.strftime('%d.%m.%Y')} automatisch - "
                         f"Kündigungsfrist beginnt jetzt ({reminder.notice_period_days} Tage vorher).",
+                    )
+            except Exception:
+                db.rollback()
+
+            try:
+                for r in crud.evaluate_return_deadlines(db, space.id):
+                    notifications.notify(
+                        settings,
+                        f"🔄 Rückgabefrist ({space.name}): „{r['label']}“ läuft am "
+                        f"{r['deadline_date'].strftime('%d.%m.%Y')} ab (noch {r['days_left']} Tag(e)).",
                     )
             except Exception:
                 db.rollback()

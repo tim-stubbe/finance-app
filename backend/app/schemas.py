@@ -587,6 +587,36 @@ class ContractReminderOut(BaseModel):
     due: bool
 
 
+# ---------- Rückgabefristen ----------
+class ReturnDeadlineCreate(BaseModel):
+    transaction_id: int
+    start_date: date
+    deadline_days: int
+    remind_days_before: int = 3
+
+
+class ReturnDeadlineUpdate(BaseModel):
+    start_date: Optional[date] = None
+    deadline_days: Optional[int] = None
+    remind_days_before: Optional[int] = None
+    returned: Optional[bool] = None
+
+
+class ReturnDeadlineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    transaction_id: int
+    transaction_description: Optional[str] = None
+    transaction_amount: Optional[float] = None
+    start_date: date
+    deadline_days: int
+    remind_days_before: int
+    returned: bool
+    deadline_date: date
+    days_left: int
+    due: bool
+
+
 # ---------- Cashflow-Prognose ----------
 class CashflowPoint(BaseModel):
     date: str

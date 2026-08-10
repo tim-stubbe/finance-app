@@ -1076,6 +1076,8 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   white-space: nowrap;
 }
 
+.goal-chip.is-warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+
 .goal-new-badge {
   position: absolute;
   top: -9px;

@@ -376,6 +376,28 @@
       </div>
     </section>
 
+    <div id="return-deadline-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="return-deadline-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="return-deadline-modal-title">Rückgabefrist</h2>
+          <p class="page-sub" id="return-deadline-modal-sub"></p>
+        </div>
+        <form id="return-deadline-form" class="form-grid">
+          <input type="hidden" id="rd-id">
+          <input type="hidden" id="rd-transaction-id">
+          <label>Frist beginnt am <input type="date" id="rd-start" required></label>
+          <label>Rückgabefrist (Tage) <input type="number" step="1" min="1" id="rd-days" required value="14"></label>
+          <label>Erinnerung wie viele Tage vorher <input type="number" step="1" min="0" id="rd-remind" required value="3"></label>
+          <div class="form-actions wide">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="rd-mark-returned" class="btn-ghost hidden">Als zurückgeschickt markieren</button>
+            <button type="button" id="rd-delete" class="btn-ghost hidden">Löschen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- ACCOUNTS -->
     <section id="tab-accounts" class="tab-content">
       <header class="page-head">

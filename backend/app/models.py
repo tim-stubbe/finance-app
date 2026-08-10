@@ -767,3 +767,28 @@ class ContractReminder(Base):
     __table_args__ = (
         UniqueConstraint("account_id", "description_key", name="uq_contract_reminder_account_desc"),
     )
+
+
+class ReturnDeadline(Base):
+    """Rückgabefrist zu einer einzelnen Buchung (z.B. "auf Probe" gekauft,
+    kostenlose Rückgabe nur innerhalb von N Tagen). Bewusst manuell pro Buchung
+    gesetzt statt automatisch erkannt - welcher Kauf überhaupt ein Rückgaberecht
+    hat und wie lang die Frist ist, kann eine KI nicht zuverlässig aus der
+    Buchung allein ableiten (Nutzerwunsch, nach Rückfrage bestätigt).
+
+    `start_date` ist bewusst frei editierbar statt fest an Transaction.date
+    gekoppelt - die Frist beginnt bei einer Lieferung oft erst mit Erhalt der
+    Ware, nicht mit dem Buchungsdatum. `reminded` ist ein einmaliger Schalter
+    (anders als bei ContractReminder gibt es hier keinen wiederkehrenden
+    Termin, der zurückgesetzt werden müsste)."""
+
+    __tablename__ = "return_deadlines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, unique=True)
+    start_date = Column(Date, nullable=False)
+    deadline_days = Column(Integer, nullable=False)
+    remind_days_before = Column(Integer, nullable=False, default=3)
+    reminded = Column(Boolean, nullable=False, default=False)
+    returned = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

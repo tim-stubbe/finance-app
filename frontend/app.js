@@ -1547,6 +1547,8 @@ window.deleteTrip = async id => {
 };
 
 // ================= TRANSACTIONS =================
+let returnDeadlinesCache = [];
+
 async function loadTransactions() {
   loadGlobalTopbar();
   if (!accountsCache.length) await loadAccounts();
@@ -1563,7 +1565,10 @@ async function loadTransactions() {
   if (catId) params.set("category_id", catId);
   if (tripId) params.set("trip_id", tripId);
 
-  const txs = await api("/transactions?" + params.toString());
+  const [txs] = await Promise.all([
+    api("/transactions?" + params.toString()),
+    api("/return-deadlines").then(d => { returnDeadlinesCache = d; }),
+  ]);
   const tbody = document.getElementById("tx-list");
   tbody.innerHTML = "";
   if (txs.length === 0) {
@@ -1572,10 +1577,14 @@ async function loadTransactions() {
   txs.forEach(t => {
     const acc = accountsCache.find(a => a.id === t.account_id);
     const cat = categoriesCache.find(c => c.id === t.category_id);
+    const rd = returnDeadlinesCache.find(r => r.transaction_id === t.id && !r.returned);
+    const rdBadge = rd
+      ? ` <span class="goal-chip ${rd.due ? "is-warn" : ""}" title="Rückgabefrist ${fmtDate(rd.deadline_date)}">🔄 ${rd.days_left >= 0 ? `noch ${rd.days_left} Tag(e)` : "abgelaufen"}</span>`
+      : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${t.date}</td>
-      <td>${t.description || ""}</td>
+      <td>${t.description || ""}${rdBadge}</td>
       <td>${acc ? acc.name : ""}</td>
       <td>${t.is_transfer ? '<span class="goal-chip">🔁 Umbuchung</span>' : (cat ? cat.name : "–")}</td>
       <td class="${t.is_transfer ? "" : (t.amount >= 0 ? "row-amount-pos" : "row-amount-neg")}">${eur(t.amount)}</td>
@@ -1583,10 +1592,64 @@ async function loadTransactions() {
       <td>
         <button class="link-btn" onclick="editTransaction(${t.id})">Bearbeiten</button>
         <button class="link-btn" onclick="deleteTransaction(${t.id})">Löschen</button>
+        <button class="link-btn" onclick="openReturnDeadlineModal(${t.id})">${rd ? "Rückgabe" : "🔄 Rückgabe"}</button>
       </td>`;
     tbody.appendChild(tr);
   });
 }
+
+function openReturnDeadlineModal(transactionId) {
+  const existing = returnDeadlinesCache.find(r => r.transaction_id === transactionId);
+  document.getElementById("return-deadline-modal-title").textContent = existing ? "Rückgabefrist bearbeiten" : "Rückgabefrist anlegen";
+  document.getElementById("return-deadline-modal-sub").textContent = existing?.returned
+    ? "Bereits als zurückgeschickt markiert." : "";
+  document.getElementById("rd-id").value = existing ? existing.id : "";
+  document.getElementById("rd-transaction-id").value = transactionId;
+  document.getElementById("rd-start").value = existing ? existing.start_date : new Date().toISOString().slice(0, 10);
+  document.getElementById("rd-days").value = existing ? existing.deadline_days : 14;
+  document.getElementById("rd-remind").value = existing ? existing.remind_days_before : 3;
+  document.getElementById("rd-delete").classList.toggle("hidden", !existing);
+  document.getElementById("rd-mark-returned").classList.toggle("hidden", !existing || existing.returned);
+  document.getElementById("return-deadline-modal").classList.remove("hidden");
+}
+window.openReturnDeadlineModal = openReturnDeadlineModal;
+
+function closeReturnDeadlineModal() {
+  document.getElementById("return-deadline-modal").classList.add("hidden");
+}
+document.getElementById("return-deadline-modal-close").addEventListener("click", closeReturnDeadlineModal);
+
+document.getElementById("return-deadline-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const id = document.getElementById("rd-id").value;
+  const payload = {
+    transaction_id: parseInt(document.getElementById("rd-transaction-id").value),
+    start_date: document.getElementById("rd-start").value,
+    deadline_days: parseInt(document.getElementById("rd-days").value),
+    remind_days_before: parseInt(document.getElementById("rd-remind").value),
+  };
+  await api(id ? `/return-deadlines/${id}` : "/return-deadlines", {
+    method: id ? "PUT" : "POST", body: JSON.stringify(payload),
+  });
+  closeReturnDeadlineModal();
+  loadTransactions();
+});
+
+document.getElementById("rd-mark-returned").addEventListener("click", async () => {
+  const id = document.getElementById("rd-id").value;
+  if (!id) return;
+  await api(`/return-deadlines/${id}`, { method: "PUT", body: JSON.stringify({ returned: true }) });
+  closeReturnDeadlineModal();
+  loadTransactions();
+});
+
+document.getElementById("rd-delete").addEventListener("click", async () => {
+  const id = document.getElementById("rd-id").value;
+  if (!id || !confirm("Rückgabefrist wirklich löschen?")) return;
+  await api(`/return-deadlines/${id}`, { method: "DELETE" });
+  closeReturnDeadlineModal();
+  loadTransactions();
+});
 
 // ================= ABOS / WIEDERKEHRENDE ZAHLUNGEN =================
 const RECURRING_FREQ_LABELS = {
