@@ -32,7 +32,16 @@ def chat(url: str, model: str, messages: list[dict], timeout: int = 600) -> str:
         json={"model": model, "messages": messages, "stream": False},
         timeout=timeout,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        # Ollama liefert bei 4xx/5xx oft eine erklärende JSON-Fehlermeldung im Body
+        # ("error": "..."), die requests' generische raise_for_status()-Meldung
+        # verschluckt - für die Fehlerdiagnose (siehe Protokoll) ist genau die aber
+        # oft der einzige Hinweis, was am Request falsch war.
+        try:
+            detail = resp.json().get("error")
+        except Exception:
+            detail = resp.text[:300]
+        raise requests.HTTPError(f"{resp.status_code} von Ollama: {detail or resp.reason}", response=resp)
     data = resp.json()
     content = (data.get("message") or {}).get("content")
     if not content:
