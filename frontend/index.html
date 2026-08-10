@@ -1361,6 +1361,16 @@
         </div>
       </header>
 
+      <div class="range-tabs" id="settings-subtabs" style="margin-bottom:20px">
+        <button type="button" class="range-tab active" data-settings-view="allgemein">⚙️ Allgemein</button>
+        <button type="button" class="range-tab" data-settings-view="banken">🏦 Banken &amp; Börsen</button>
+        <button type="button" class="range-tab" data-settings-view="ki">🤖 KI &amp; Automatisierung</button>
+        <button type="button" class="range-tab" data-settings-view="benachrichtigungen">🔔 Benachrichtigungen</button>
+        <button type="button" class="range-tab" data-settings-view="verbindungen">🔌 Weitere Verbindungen</button>
+        <button type="button" class="range-tab" data-settings-view="daten">💾 Daten &amp; Sicherung</button>
+      </div>
+
+      <div id="settings-view-allgemein">
       <div class="panel">
         <h3 class="panel-title">🧩 Einrichtungsstatus</h3>
         <p class="page-sub">Welche Anbindungen einsatzbereit sind und wo noch Zugangsdaten fehlen.</p>
@@ -1412,242 +1422,9 @@
           </table>
         </div>
       </div>
-
-      <div class="panel">
-        <h3 class="panel-title">📤 Export &amp; Import</h3>
-        <p class="page-sub">Buchungen als CSV exportieren oder aus einer CSV-Datei importieren (Spalten: Datum, Betrag, Konto, Kategorie, Beschreibung, Notiz).</p>
-        <div class="filter-row">
-          <button id="export-csv-btn" class="btn-primary">CSV exportieren</button>
-        </div>
-        <div class="filter-row">
-          <input type="file" id="import-csv-file" accept=".csv">
-          <button id="import-csv-btn" class="btn-primary">CSV importieren</button>
-        </div>
-        <p id="import-result" class="import-result"></p>
-
-        <h4 class="panel-subtitle">Investments/Positionen</h4>
-        <p class="page-sub">Spalten: Anlageklasse (aktie/etf/anleihe/krypto/sonstiges), Name, Symbol, Sektor, Stückzahl, Kaufpreis, Kaufdatum. Passt Symbol+Anlageklasse zu einer bestehenden Position, wird ein zusätzlicher Kauf (Lot) angelegt statt einer neuen Position.</p>
-        <div class="filter-row">
-          <button id="export-holdings-csv-btn" class="btn-primary">Positionen exportieren</button>
-        </div>
-        <div class="filter-row">
-          <input type="file" id="import-holdings-csv-file" accept=".csv">
-          <button id="import-holdings-csv-btn" class="btn-primary">Positionen importieren</button>
-        </div>
-        <p id="import-holdings-result" class="import-result"></p>
       </div>
 
-      <div class="panel">
-        <h3 class="panel-title">🗄️ Automatische Backups</h3>
-        <p class="page-sub">Legt täglich zur gewählten Uhrzeit automatisch ein Backup auf der Festplatte ab (im Docker-Volume, unter <code>data/backups</code>). Ältere Backups werden nach der eingestellten Anzahl automatisch gelöscht.</p>
-        <form id="backup-schedule-form" class="form-grid">
-          <label class="checkbox-label"><input type="checkbox" id="backup-enabled"> Aktiv</label>
-          <label>Uhrzeit <select id="backup-hour"></select></label>
-          <label>Aufbewahren (Anzahl) <input type="number" id="backup-retention" min="1" max="365"></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="backup-run-now" class="btn-ghost">Jetzt Backup erstellen</button>
-          </div>
-        </form>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Erstellt</th><th>Größe</th><th></th></tr></thead>
-            <tbody id="backup-list"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3 class="panel-title">💾 Datensicherung</h3>
-        <p class="page-sub">Vollständiges Backup (Datenbank + Belege) als ZIP herunterladen oder wiederherstellen.</p>
-        <div class="filter-row">
-          <button id="backup-btn" class="btn-primary">Backup herunterladen</button>
-        </div>
-        <div class="danger-zone">
-          <h4>Backup wiederherstellen</h4>
-          <p class="page-sub">Achtung: überschreibt alle aktuellen Daten unwiderruflich.</p>
-          <div class="filter-row">
-            <input type="file" id="restore-file" accept=".zip">
-            <button id="restore-btn" class="btn-ghost btn-danger">Wiederherstellen</button>
-          </div>
-          <p id="restore-result" class="import-result"></p>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3 class="panel-title">⏱️ Automatischer Sync</h3>
-        <p class="page-sub">
-          Bank- (FinTS), Bitvavo-, PayPal- und Enable-Banking-Verbindungen werden automatisch einmal täglich
-          zur gewählten Uhrzeit synchronisiert.
-        </p>
-        <form id="sync-schedule-form" class="form-grid">
-          <label>Uhrzeit <select id="sync-hour" required></select></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="panel">
-        <h3 class="panel-title">🤖 Automatisierung</h3>
-        <p class="page-sub">
-          Läuft stündlich: Umbuchungen zwischen deinen eigenen Konten (entgegengesetzter Betrag, wenige Tage
-          Abstand) werden automatisch erkannt und zählen dann nicht mehr als Einnahme/Ausgabe. Ist die
-          Kategorisierung eingeschaltet, ordnet die KI außerdem unkategorisierte Buchungen zu – aber nur, wenn
-          sie sich sicher genug ist; unsichere Buchungen bleiben lieber unkategorisiert liegen statt falsch
-          zugeordnet zu werden.
-        </p>
-        <form id="auto-categorize-form" class="form-grid">
-          <label class="checkbox-label wide">
-            <input type="checkbox" id="auto-categorize-enabled">
-            <span>Buchungen automatisch kategorisieren (nutzt das Standard-Ollama-Modell)</span>
-          </label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="auto-categorize-run-now" class="btn-ghost">Jetzt für diesen Bereich ausführen</button>
-          </div>
-        </form>
-        <p id="auto-categorize-status" class="page-sub"></p>
-      </div>
-
-      <div class="panel" data-integration-key="brave">
-        <h3 class="panel-title">🌐 Web-Suche für KI-Chat</h3>
-        <p class="page-sub">
-          Erlaubt dem schwebenden KI-Chat, bei Bedarf im Internet zu suchen (aktuelle Steuersätze, Rechtslage,
-          Zinssätze, Nachrichten) – Ollama selbst kennt nur seinen Trainingsstand. Braucht einen kostenlosen
-          <a href="https://brave.com/search/api/" target="_blank" rel="noopener">Brave-Search-API-Key</a>
-          (2.000 Anfragen/Monat gratis). Im Chat wird immer angezeigt, wenn gerade gesucht wird.
-        </p>
-        <form id="websearch-settings-form" class="form-grid">
-          <label class="wide">API-Key <input type="password" id="websearch-api-key" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="websearch-remove" class="btn-ghost hidden">Entfernen</button>
-          </div>
-        </form>
-        <p id="websearch-status" class="page-sub"></p>
-      </div>
-
-      <div class="panel" data-integration-key="mail">
-        <h3 class="panel-title">📧 Belege aus E-Mails</h3>
-        <p class="page-sub">
-          Holt stündlich PDF- und Bild-Anhänge aus deinem Postfach, liest Datum und Betrag aus
-          und hängt sie an die passende Buchung. Passt genau eine Buchung, geschieht das
-          automatisch – sonst landet der Beleg im Tab <strong>Buchungen → Beleg-Eingang</strong>.
-          Der Zugriff ist rein lesend: es wird nichts gelöscht, verschoben oder als gelesen markiert.
-          Bei Gmail/GMX brauchst du ein <strong>App-Passwort</strong>, nicht dein normales.
-        </p>
-        <form id="mail-settings-form" class="form-grid">
-          <label>IMAP-Server <input type="text" id="mail-host" placeholder="imap.gmail.com"></label>
-          <label>Port <input type="number" id="mail-port" value="993"></label>
-          <label>Benutzername <input type="text" id="mail-user" placeholder="name@gmail.com" autocomplete="off"></label>
-          <label>Passwort <input type="password" id="mail-password" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
-          <label>Ordner <input type="text" id="mail-folder" value="INBOX"></label>
-          <label class="checkbox-label"><input type="checkbox" id="mail-enabled"> Stündlich automatisch abholen</label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="mail-test" class="btn-ghost">Verbindung testen</button>
-            <button type="button" id="mail-sync-now" class="btn-ghost">Jetzt abholen</button>
-            <button type="button" id="mail-remove" class="btn-ghost hidden">Entfernen</button>
-          </div>
-        </form>
-        <p id="mail-status" class="page-sub"></p>
-      </div>
-
-      <div class="panel" data-integration-key="immich">
-        <h3 class="panel-title">📷 Immich (Fotobibliothek)</h3>
-        <p class="page-sub">
-          Verbindet den Tab „Fotos“ mit deiner Immich-Instanz, um doppelte Aufnahmen zu finden.
-          Den API-Schlüssel erstellst du in Immich unter <strong>Konto-Menü → API-Schlüssel</strong>.
-          Er braucht Rechte zum Lesen und Löschen von Bildern sowie für Duplikate.
-          Ausgewählte Bilder wandern immer nur in Immichs <strong>Papierkorb</strong> und lassen sich
-          dort zurückholen – es wird nie endgültig gelöscht.
-        </p>
-        <form id="immich-settings-form" class="form-grid">
-          <label class="wide">Server-Adresse <input type="text" id="immich-url" placeholder="http://100.72.226.91:32283"></label>
-          <label class="wide">API-Schlüssel <input type="password" id="immich-api-key" placeholder="wird verschlüsselt gespeichert – leer lassen behält den bisherigen" autocomplete="off"></label>
-          <label class="checkbox-label wide">
-            <input type="checkbox" id="immich-skip-confirm">
-            Papierkorb-Aktionen ohne Bestätigungsdialog anwenden
-          </label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="immich-test" class="btn-ghost">Verbindung testen</button>
-            <button type="button" id="immich-remove" class="btn-ghost hidden">Entfernen</button>
-          </div>
-        </form>
-        <p id="immich-status" class="page-sub"></p>
-      </div>
-
-      <div class="panel" data-integration-key="telegram">
-        <h3 class="panel-title">🔔 Benachrichtigungen (Telegram)</h3>
-        <p class="page-sub">
-          Meldet proaktiv per Telegram: Ziel automatisch erreicht, Cashflow-Prognose rutscht ins Minus,
-          Budget überschritten (jeweils höchstens einmal pro Tag bzw. Monat). Läuft mit im täglichen
-          Automatik-Zeitplan von „Automatischer Sync“.
-        </p>
-        <p class="page-sub">
-          <strong>Außerdem kannst du dem Bot direkt in Telegram schreiben</strong> – er antwortet mit demselben
-          KI-Assistenten wie der schwebende Chat in der App (inkl. Websuche bei Bedarf). Er kann aber
-          <strong>nichts</strong> in deine Buchungen/Konten schreiben, nur Auskunft geben – zum Eintragen musst
-          du weiterhin die App öffnen.
-        </p>
-        <p class="page-sub">
-          Einrichtung: Bot bei <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>
-          anlegen (liefert den Bot-Token), dem neuen Bot in Telegram eine beliebige Nachricht schreiben, dann
-          <code>https://api.telegram.org/bot&lt;DEIN-TOKEN&gt;/getUpdates</code> im Browser öffnen – dort steht
-          deine Chat-ID (<code>"chat":{"id":...}</code>).
-        </p>
-        <form id="notifications-settings-form" class="form-grid">
-          <label class="checkbox-label wide">
-            <input type="checkbox" id="notifications-enabled" checked>
-            <span>Benachrichtigungen aktiv</span>
-          </label>
-          <label>Bot-Token <input type="password" id="telegram-bot-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
-          <label>Chat-ID <input type="text" id="telegram-chat-id" placeholder="z.B. 123456789"></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="notifications-test" class="btn-ghost">Testnachricht senden</button>
-            <button type="button" id="telegram-remove" class="btn-ghost hidden">Telegram entfernen</button>
-          </div>
-        </form>
-        <p id="notifications-status" class="page-sub"></p>
-      </div>
-
-      <div class="panel" data-integration-key="twilio">
-        <h3 class="panel-title">📞 Notruf-Anrufe (Twilio)</h3>
-        <p class="page-sub">
-          Für die wirklich zeitkritischen Fälle ruft dich das Finanztool zusätzlich zur Telegram-Meldung
-          <strong>echt an</strong>: wenn der Kontostand laut Cashflow-Prognose in den nächsten 1–3 Tagen ins
-          Minus rutscht, oder wenn ein Ziel automatisch erreicht wurde. Alles andere (Budget überschritten,
-          Cashflow-Warnung außerhalb dieses Fensters) bleibt bei Telegram – ein Anruf ist die Ausnahme.
-        </p>
-        <p class="page-sub">
-          Braucht einen <a href="https://www.twilio.com/try-twilio" target="_blank" rel="noopener">Twilio-Account</a>
-          (kostenpflichtig, ein paar Cent pro Anruf plus Telefonnummer im Abo – ein kostenloses Test-Guthaben gibt's
-          beim Anlegen). Account SID und Auth-Token stehen direkt auf dem Twilio-Dashboard, eine Absender-Nummer
-          bekommst du unter „Phone Numbers“. <strong>Wichtig bei einem Trial-Account:</strong> Twilio darf dann nur
-          Nummern anrufen, die du vorher im Twilio-Konsolen unter „Verified Caller IDs“ bestätigt hast – trag dort
-          also erst deine eigene Handynummer ein, sonst schlägt der Anruf fehl.
-        </p>
-        <form id="calls-settings-form" class="form-grid">
-          <label class="checkbox-label wide">
-            <input type="checkbox" id="calls-enabled">
-            <span>Notruf-Anrufe aktiv</span>
-          </label>
-          <label>Account SID <input type="text" id="twilio-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"></label>
-          <label>Auth-Token <input type="password" id="twilio-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
-          <label>Twilio-Nummer (Absender) <input type="text" id="twilio-from" placeholder="+1xxxxxxxxxx"></label>
-          <label>Deine Handynummer (Ziel) <input type="text" id="twilio-to" placeholder="+49xxxxxxxxxx"></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="calls-test" class="btn-ghost">Testanruf auslösen</button>
-            <button type="button" id="twilio-remove" class="btn-ghost hidden">Twilio entfernen</button>
-          </div>
-        </form>
-        <p id="calls-status" class="page-sub"></p>
-      </div>
-
+      <div id="settings-view-banken" class="hidden">
       <div class="panel" data-integration-key="fints">
         <h3 class="panel-title">🏦 Bank-Anbindung (FinTS)</h3>
         <p class="page-sub">
@@ -1823,6 +1600,172 @@
           </table>
         </div>
       </div>
+      </div>
+
+      <div id="settings-view-ki" class="hidden">
+      <div class="panel">
+        <h3 class="panel-title">🤖 Automatisierung</h3>
+        <p class="page-sub">
+          Läuft stündlich: Umbuchungen zwischen deinen eigenen Konten (entgegengesetzter Betrag, wenige Tage
+          Abstand) werden automatisch erkannt und zählen dann nicht mehr als Einnahme/Ausgabe. Ist die
+          Kategorisierung eingeschaltet, ordnet die KI außerdem unkategorisierte Buchungen zu – aber nur, wenn
+          sie sich sicher genug ist; unsichere Buchungen bleiben lieber unkategorisiert liegen statt falsch
+          zugeordnet zu werden.
+        </p>
+        <form id="auto-categorize-form" class="form-grid">
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="auto-categorize-enabled">
+            <span>Buchungen automatisch kategorisieren (nutzt das Standard-Ollama-Modell)</span>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="auto-categorize-run-now" class="btn-ghost">Jetzt für diesen Bereich ausführen</button>
+          </div>
+        </form>
+        <p id="auto-categorize-status" class="page-sub"></p>
+      </div>
+
+      <div class="panel" data-integration-key="brave">
+        <h3 class="panel-title">🌐 Web-Suche für KI-Chat</h3>
+        <p class="page-sub">
+          Erlaubt dem schwebenden KI-Chat, bei Bedarf im Internet zu suchen (aktuelle Steuersätze, Rechtslage,
+          Zinssätze, Nachrichten) – Ollama selbst kennt nur seinen Trainingsstand. Braucht einen kostenlosen
+          <a href="https://brave.com/search/api/" target="_blank" rel="noopener">Brave-Search-API-Key</a>
+          (2.000 Anfragen/Monat gratis). Im Chat wird immer angezeigt, wenn gerade gesucht wird.
+        </p>
+        <form id="websearch-settings-form" class="form-grid">
+          <label class="wide">API-Key <input type="password" id="websearch-api-key" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="websearch-remove" class="btn-ghost hidden">Entfernen</button>
+          </div>
+        </form>
+        <p id="websearch-status" class="page-sub"></p>
+      </div>
+
+      <div class="panel" data-integration-key="mail">
+        <h3 class="panel-title">📧 Belege aus E-Mails</h3>
+        <p class="page-sub">
+          Holt stündlich PDF- und Bild-Anhänge aus deinem Postfach, liest Datum und Betrag aus
+          und hängt sie an die passende Buchung. Passt genau eine Buchung, geschieht das
+          automatisch – sonst landet der Beleg im Tab <strong>Buchungen → Beleg-Eingang</strong>.
+          Der Zugriff ist rein lesend: es wird nichts gelöscht, verschoben oder als gelesen markiert.
+          Bei Gmail/GMX brauchst du ein <strong>App-Passwort</strong>, nicht dein normales.
+        </p>
+        <form id="mail-settings-form" class="form-grid">
+          <label>IMAP-Server <input type="text" id="mail-host" placeholder="imap.gmail.com"></label>
+          <label>Port <input type="number" id="mail-port" value="993"></label>
+          <label>Benutzername <input type="text" id="mail-user" placeholder="name@gmail.com" autocomplete="off"></label>
+          <label>Passwort <input type="password" id="mail-password" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+          <label>Ordner <input type="text" id="mail-folder" value="INBOX"></label>
+          <label class="checkbox-label"><input type="checkbox" id="mail-enabled"> Stündlich automatisch abholen</label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="mail-test" class="btn-ghost">Verbindung testen</button>
+            <button type="button" id="mail-sync-now" class="btn-ghost">Jetzt abholen</button>
+            <button type="button" id="mail-remove" class="btn-ghost hidden">Entfernen</button>
+          </div>
+        </form>
+        <p id="mail-status" class="page-sub"></p>
+      </div>
+      </div>
+
+      <div id="settings-view-benachrichtigungen" class="hidden">
+      <div class="panel" data-integration-key="telegram">
+        <h3 class="panel-title">🔔 Benachrichtigungen (Telegram)</h3>
+        <p class="page-sub">
+          Meldet proaktiv per Telegram: Ziel automatisch erreicht, Cashflow-Prognose rutscht ins Minus,
+          Budget überschritten (jeweils höchstens einmal pro Tag bzw. Monat). Läuft mit im täglichen
+          Automatik-Zeitplan von „Automatischer Sync“.
+        </p>
+        <p class="page-sub">
+          <strong>Außerdem kannst du dem Bot direkt in Telegram schreiben</strong> – er antwortet mit demselben
+          KI-Assistenten wie der schwebende Chat in der App (inkl. Websuche bei Bedarf). Er kann aber
+          <strong>nichts</strong> in deine Buchungen/Konten schreiben, nur Auskunft geben – zum Eintragen musst
+          du weiterhin die App öffnen.
+        </p>
+        <p class="page-sub">
+          Einrichtung: Bot bei <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>
+          anlegen (liefert den Bot-Token), dem neuen Bot in Telegram eine beliebige Nachricht schreiben, dann
+          <code>https://api.telegram.org/bot&lt;DEIN-TOKEN&gt;/getUpdates</code> im Browser öffnen – dort steht
+          deine Chat-ID (<code>"chat":{"id":...}</code>).
+        </p>
+        <form id="notifications-settings-form" class="form-grid">
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="notifications-enabled" checked>
+            <span>Benachrichtigungen aktiv</span>
+          </label>
+          <label>Bot-Token <input type="password" id="telegram-bot-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+          <label>Chat-ID <input type="text" id="telegram-chat-id" placeholder="z.B. 123456789"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="notifications-test" class="btn-ghost">Testnachricht senden</button>
+            <button type="button" id="telegram-remove" class="btn-ghost hidden">Telegram entfernen</button>
+          </div>
+        </form>
+        <p id="notifications-status" class="page-sub"></p>
+      </div>
+
+      <div class="panel" data-integration-key="twilio">
+        <h3 class="panel-title">📞 Notruf-Anrufe (Twilio)</h3>
+        <p class="page-sub">
+          Für die wirklich zeitkritischen Fälle ruft dich das Finanztool zusätzlich zur Telegram-Meldung
+          <strong>echt an</strong>: wenn der Kontostand laut Cashflow-Prognose in den nächsten 1–3 Tagen ins
+          Minus rutscht, oder wenn ein Ziel automatisch erreicht wurde. Alles andere (Budget überschritten,
+          Cashflow-Warnung außerhalb dieses Fensters) bleibt bei Telegram – ein Anruf ist die Ausnahme.
+        </p>
+        <p class="page-sub">
+          Braucht einen <a href="https://www.twilio.com/try-twilio" target="_blank" rel="noopener">Twilio-Account</a>
+          (kostenpflichtig, ein paar Cent pro Anruf plus Telefonnummer im Abo – ein kostenloses Test-Guthaben gibt's
+          beim Anlegen). Account SID und Auth-Token stehen direkt auf dem Twilio-Dashboard, eine Absender-Nummer
+          bekommst du unter „Phone Numbers“. <strong>Wichtig bei einem Trial-Account:</strong> Twilio darf dann nur
+          Nummern anrufen, die du vorher im Twilio-Konsolen unter „Verified Caller IDs“ bestätigt hast – trag dort
+          also erst deine eigene Handynummer ein, sonst schlägt der Anruf fehl.
+        </p>
+        <form id="calls-settings-form" class="form-grid">
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="calls-enabled">
+            <span>Notruf-Anrufe aktiv</span>
+          </label>
+          <label>Account SID <input type="text" id="twilio-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"></label>
+          <label>Auth-Token <input type="password" id="twilio-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+          <label>Twilio-Nummer (Absender) <input type="text" id="twilio-from" placeholder="+1xxxxxxxxxx"></label>
+          <label>Deine Handynummer (Ziel) <input type="text" id="twilio-to" placeholder="+49xxxxxxxxxx"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="calls-test" class="btn-ghost">Testanruf auslösen</button>
+            <button type="button" id="twilio-remove" class="btn-ghost hidden">Twilio entfernen</button>
+          </div>
+        </form>
+        <p id="calls-status" class="page-sub"></p>
+      </div>
+      </div>
+
+      <div id="settings-view-verbindungen" class="hidden">
+      <div class="panel" data-integration-key="immich">
+        <h3 class="panel-title">📷 Immich (Fotobibliothek)</h3>
+        <p class="page-sub">
+          Verbindet den Tab „Fotos“ mit deiner Immich-Instanz, um doppelte Aufnahmen zu finden.
+          Den API-Schlüssel erstellst du in Immich unter <strong>Konto-Menü → API-Schlüssel</strong>.
+          Er braucht Rechte zum Lesen und Löschen von Bildern sowie für Duplikate.
+          Ausgewählte Bilder wandern immer nur in Immichs <strong>Papierkorb</strong> und lassen sich
+          dort zurückholen – es wird nie endgültig gelöscht.
+        </p>
+        <form id="immich-settings-form" class="form-grid">
+          <label class="wide">Server-Adresse <input type="text" id="immich-url" placeholder="http://100.72.226.91:32283"></label>
+          <label class="wide">API-Schlüssel <input type="password" id="immich-api-key" placeholder="wird verschlüsselt gespeichert – leer lassen behält den bisherigen" autocomplete="off"></label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="immich-skip-confirm">
+            Papierkorb-Aktionen ohne Bestätigungsdialog anwenden
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="immich-test" class="btn-ghost">Verbindung testen</button>
+            <button type="button" id="immich-remove" class="btn-ghost hidden">Entfernen</button>
+          </div>
+        </form>
+        <p id="immich-status" class="page-sub"></p>
+      </div>
 
       <div class="panel" data-integration-key="radicale">
         <h3 class="panel-title">✅ Radicale – To-Dos vom Handy</h3>
@@ -1841,6 +1784,84 @@
           </div>
         </form>
         <p id="radicale-status" class="page-sub"></p>
+      </div>
+      </div>
+
+      <div id="settings-view-daten" class="hidden">
+      <div class="panel">
+        <h3 class="panel-title">📤 Export &amp; Import</h3>
+        <p class="page-sub">Buchungen als CSV exportieren oder aus einer CSV-Datei importieren (Spalten: Datum, Betrag, Konto, Kategorie, Beschreibung, Notiz).</p>
+        <div class="filter-row">
+          <button id="export-csv-btn" class="btn-primary">CSV exportieren</button>
+        </div>
+        <div class="filter-row">
+          <input type="file" id="import-csv-file" accept=".csv">
+          <button id="import-csv-btn" class="btn-primary">CSV importieren</button>
+        </div>
+        <p id="import-result" class="import-result"></p>
+
+        <h4 class="panel-subtitle">Investments/Positionen</h4>
+        <p class="page-sub">Spalten: Anlageklasse (aktie/etf/anleihe/krypto/sonstiges), Name, Symbol, Sektor, Stückzahl, Kaufpreis, Kaufdatum. Passt Symbol+Anlageklasse zu einer bestehenden Position, wird ein zusätzlicher Kauf (Lot) angelegt statt einer neuen Position.</p>
+        <div class="filter-row">
+          <button id="export-holdings-csv-btn" class="btn-primary">Positionen exportieren</button>
+        </div>
+        <div class="filter-row">
+          <input type="file" id="import-holdings-csv-file" accept=".csv">
+          <button id="import-holdings-csv-btn" class="btn-primary">Positionen importieren</button>
+        </div>
+        <p id="import-holdings-result" class="import-result"></p>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">🗄️ Automatische Backups</h3>
+        <p class="page-sub">Legt täglich zur gewählten Uhrzeit automatisch ein Backup auf der Festplatte ab (im Docker-Volume, unter <code>data/backups</code>). Ältere Backups werden nach der eingestellten Anzahl automatisch gelöscht.</p>
+        <form id="backup-schedule-form" class="form-grid">
+          <label class="checkbox-label"><input type="checkbox" id="backup-enabled"> Aktiv</label>
+          <label>Uhrzeit <select id="backup-hour"></select></label>
+          <label>Aufbewahren (Anzahl) <input type="number" id="backup-retention" min="1" max="365"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+            <button type="button" id="backup-run-now" class="btn-ghost">Jetzt Backup erstellen</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Erstellt</th><th>Größe</th><th></th></tr></thead>
+            <tbody id="backup-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">💾 Datensicherung</h3>
+        <p class="page-sub">Vollständiges Backup (Datenbank + Belege) als ZIP herunterladen oder wiederherstellen.</p>
+        <div class="filter-row">
+          <button id="backup-btn" class="btn-primary">Backup herunterladen</button>
+        </div>
+        <div class="danger-zone">
+          <h4>Backup wiederherstellen</h4>
+          <p class="page-sub">Achtung: überschreibt alle aktuellen Daten unwiderruflich.</p>
+          <div class="filter-row">
+            <input type="file" id="restore-file" accept=".zip">
+            <button id="restore-btn" class="btn-ghost btn-danger">Wiederherstellen</button>
+          </div>
+          <p id="restore-result" class="import-result"></p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">⏱️ Automatischer Sync</h3>
+        <p class="page-sub">
+          Bank- (FinTS), Bitvavo-, PayPal- und Enable-Banking-Verbindungen werden automatisch einmal täglich
+          zur gewählten Uhrzeit synchronisiert.
+        </p>
+        <form id="sync-schedule-form" class="form-grid">
+          <label>Uhrzeit <select id="sync-hour" required></select></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </div>
       </div>
     </section>
 

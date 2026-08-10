@@ -4316,6 +4316,17 @@ document.getElementById("todo-list").addEventListener("change", async e => {
   }
 });
 
+const SETTINGS_VIEWS = ["allgemein", "banken", "ki", "benachrichtigungen", "verbindungen", "daten"];
+
+document.getElementById("settings-subtabs").addEventListener("click", e => {
+  const view = e.target.closest("[data-settings-view]")?.dataset.settingsView;
+  if (!view) return;
+  document.querySelectorAll("#settings-subtabs .range-tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.settingsView === view));
+  SETTINGS_VIEWS.forEach(v =>
+    document.getElementById(`settings-view-${v}`).classList.toggle("hidden", v !== view));
+});
+
 // Zeichen und Klasse je Zustand. Das Ausrufezeichen steht bewusst auch bei
 // "partial": halb eingerichtet ist genauso wenig nutzbar wie gar nicht.
 const INTEGRATION_MARKS = {
