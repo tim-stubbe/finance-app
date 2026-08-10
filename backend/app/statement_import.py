@@ -38,7 +38,16 @@ from sqlalchemy.orm import Session
 from . import crud, document_extract, file_sort, models, ollama_client, schemas
 
 MAX_STATEMENT_CHARS = 60000
-OLLAMA_TIMEOUT = 3 * 60 * 60
+# BEWUSST viel kürzer als file_sort.py's 3-Stunden-Timeout (dort gilt er pro
+# Datei mit eigenem, unabhängigem Lauf). Hier teilt sich process_statement_
+# inbox seit dem gemeinsamen _run_lock denselben Lauf-Slot mit der normalen
+# Datei-Sortierung - ein einzelner, auf dieser instabilen Ollama-Box
+# hängender Chat-Aufruf hätte sonst BEIDE Features stundenlang lahmgelegt,
+# live beobachtet (Sperre blieb >1h belegt, nichts lief mehr, nur ein
+# Container-Neustart hat sie wieder freigegeben). 10 Minuten reichen
+# komfortabel (beobachtete erfolgreiche Aufrufe brauchten Sekunden bis
+# wenige Minuten) und der nächste 10-Minuten-Job versucht es ohnehin erneut.
+OLLAMA_TIMEOUT = 10 * 60
 # Live beobachtet: ein einzelner Ollama-Aufruf mit dem ganzen Auszugstext kam
 # auf bis zu 13.289 Tokens - das Server-Kontextfenster lag hier aber nur bei
 # 4096, und ein Versuch, es per num_ctx pro Anfrage hochzusetzen, hat den
