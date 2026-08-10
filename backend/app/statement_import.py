@@ -45,8 +45,13 @@ OLLAMA_TIMEOUT = 3 * 60 * 60
 # Ollama-Prozess auf dieser Maschine sogar abstürzen lassen (zu wenig RAM für
 # den größeren KV-Cache). Deshalb wird der Auszug stattdessen in kleine,
 # zeilenweise Häppchen zerlegt (CHUNK_CHARS), die beim Standard-Kontext sicher
-# bleiben - mehr Ollama-Aufrufe statt mehr Kontext pro Aufruf.
-CHUNK_CHARS = 6000
+# bleiben - mehr Ollama-Aufrufe statt mehr Kontext pro Aufruf. Auch bei
+# 6000 Zeichen/Häppchen kam es live noch zu vereinzelten Server-Abstürzen
+# ("unexpected EOF") bei mehreren Häppchen hintereinander - der Ollama-
+# Container erholt sich zwar selbst (Docker-Restartpolicy) und ein
+# einzelner Absturz kostet nur einen fehlgeschlagenen Abschnitt, aber ein
+# kleinerer Wert senkt das Risiko pro Aufruf weiter.
+CHUNK_CHARS = 3000
 
 _JSON_BLOCK_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
