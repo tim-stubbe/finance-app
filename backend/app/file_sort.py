@@ -90,11 +90,33 @@ def list_inbox_files(source_path: str) -> list[str]:
     )
 
 
+# Live beobachtet: ein 1x30-Pixel-Bild (kaputter Tracking-Pixel aus einer
+# E-Mail, trotz Dateiname "Zahlungsbeleg" kein echtes Foto) brachte Ollamas
+# Bildmodell zuverlässig zum Absturz (Verbindungsabbruch ohne Antwort) - so
+# ein Mini-Bild kann ohnehin kein lesbares Dokument sein, deshalb gar nicht
+# erst an die KI schicken.
+MIN_IMAGE_DIMENSION = 20
+
+
+def _is_degenerate_image(content: bytes) -> bool:
+    try:
+        from PIL import Image
+        from io import BytesIO
+        img = Image.open(BytesIO(content))
+        return img.width < MIN_IMAGE_DIMENSION or img.height < MIN_IMAGE_DIMENSION
+    except Exception:
+        # Nicht als Bild lesbar - kein Fall fuer diese Pruefung, das faellt
+        # spaeter beim eigentlichen Verarbeiten ohnehin auf.
+        return False
+
+
 def _read_content(filename: str, content: bytes) -> tuple[str | None, list[str]]:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".pdf":
         return document_extract.extract_pdf(content)
     if ext in SUPPORTED_EXTENSIONS:
+        if _is_degenerate_image(content):
+            return None, []
         return None, [base64.b64encode(content).decode()]
     return None, []
 
