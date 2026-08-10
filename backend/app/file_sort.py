@@ -41,8 +41,12 @@ from sqlalchemy.orm import Session
 
 from . import models, document_extract, ollama_client
 
-SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp", ".txt", ".docx"}
+SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp", ".txt", ".docx", ".zip"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
+# ZIPs haben keinen fuer Ollama sinnvoll lesbaren Inhalt (Dateiliste statt
+# Text) - hier reicht ein deterministischer Blick auf den Dateinamen, kein
+# KI-Aufruf noetig (siehe _classify_by_filename).
+FILENAME_ONLY_EXTENSIONS = {".zip"}
 UNCERTAIN_MARKER = "UNSICHER"
 # Eindeutig wertloser Datenmüll, der direkt gelöscht wird statt in den
 # "Zum Prüfen"-Ordner zu wandern - AMP-E-Mail-Fragmente enthalten kein
@@ -164,6 +168,19 @@ def _read_content(filename: str, content: bytes) -> tuple[str | None, list[str]]
             return None, []
         return None, [base64.b64encode(content).decode()]
     return None, []
+
+
+def _classify_by_filename(filename: str, categories: list[str]) -> str:
+    """Fuer Dateitypen ohne lesbaren Inhalt (aktuell nur ZIP) reicht ein
+    Blick auf den Dateinamen - ein Ollama-Aufruf mit nichts als dem nackten
+    Dateinamen waere ohnehin nur geraten. Laengste Kategorie zuerst, damit
+    z.B. "Sonstiges" nicht faelschlich in einem laengeren, aehnlich
+    lautenden Namen anschlaegt."""
+    name = filename.lower()
+    for cat in sorted(categories, key=len, reverse=True):
+        if cat.lower() in name:
+            return cat
+    return UNCERTAIN_MARKER
 
 
 def classify_file(ollama_url: str, ollama_model: str, beleg_chat_model: str | None,
@@ -323,13 +340,17 @@ def _process_source(db: Session, settings: models.Settings, source: str, target:
             continue
 
         processed += 1
+        content = None
         try:
-            with open(path, "rb") as fh:
-                content = fh.read()
-            category = classify_file(
-                settings.ollama_url, settings.ollama_model, settings.beleg_chat_model,
-                filename, content, categories, text_model=settings.file_sort_model,
-            )
+            if ext in FILENAME_ONLY_EXTENSIONS:
+                category = _classify_by_filename(filename, categories)
+            else:
+                with open(path, "rb") as fh:
+                    content = fh.read()
+                category = classify_file(
+                    settings.ollama_url, settings.ollama_model, settings.beleg_chat_model,
+                    filename, content, categories, text_model=settings.file_sort_model,
+                )
         except Exception as e:
             _log_once(db, filename, "error", str(e))
             continue
@@ -345,7 +366,7 @@ def _process_source(db: Session, settings: models.Settings, source: str, target:
             continue
 
         target_dir = os.path.join(target, category)
-        if category == subfolder_category:
+        if category == subfolder_category and content is not None:
             try:
                 vendor = detect_vendor(
                     settings.ollama_url, settings.ollama_model, settings.beleg_chat_model,
@@ -373,7 +394,7 @@ def _process_source(db: Session, settings: models.Settings, source: str, target:
         db.commit()
         moved += 1
 
-        if category == subfolder_category:
+        if category == subfolder_category and content is not None:
             receipts.append({"filename": filename, "dest": dest, "rel": rel, "content": content})
 
     return {"processed": processed, "moved": moved, "skipped": skipped, "error": None, "receipts": receipts}
