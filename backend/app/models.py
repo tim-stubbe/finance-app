@@ -158,6 +158,10 @@ class Settings(Base):
     # Host-Pfade auf TrueNAS.
     file_sort_source_path = Column(String, nullable=True)
     file_sort_target_path = Column(String, nullable=True)
+    # Dritter Ordner fuer Dateien, die weder automatisch einsortiert noch
+    # sicher geloescht werden koennen - landet dort statt fuer immer im
+    # Eingang liegen zu bleiben.
+    file_sort_review_path = Column(String, nullable=True)
     # Feste Kategorienliste statt KI-erfundener Ordnernamen - verhindert
     # Ordner-Wildwuchs ("Strom" vs. "Stromrechnung" vs. "Energie").
     file_sort_categories = Column(String, nullable=True, default="Behoerde,Bericht,Rechnung,Sonstiges,Vertrag")

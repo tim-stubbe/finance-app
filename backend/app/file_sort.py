@@ -12,11 +12,13 @@ Sicherheitsprinzipien, analog zu Immich in diesem Projekt:
 - Nichts wird überschrieben - bei einer Namenskollision im Ziel wird ein
   Zähler an den Dateinamen angehängt (wie es der Nutzer selbst schon
   handhabt, siehe "Bundeswehr_Fragebogen (2).pdf" im echten Bestand).
-- Unsichere Einordnungen werden NICHT geraten, sondern übersprungen und im
-  Log als "manuell prüfen" markiert - lieber liegen lassen als falsch
-  einsortieren.
-- Dateitypen, die kein auswertbares Dokument sind (Bilder von Werbebannern,
-  Datenbank-Dumps, u.ä.) werden nicht angefasst, nur protokolliert.
+- Unsichere Einordnungen werden NICHT geraten - landen aber auch nicht für
+  immer im Eingangsordner, sondern in einem dritten "Zum Prüfen"-Ordner
+  (file_sort_review_path), damit der Eingang nicht vermüllt. Lieber dort
+  liegen als falsch einsortiert.
+- Nur eindeutiger, wertloser Datenmüll (bekannte AMP-E-Mail-Fragmente,
+  Windows-Thumbnail-Caches) wird direkt gelöscht - alles andere Unbekannte
+  geht zum manuellen Prüfen in denselben dritten Ordner, nicht in den Papierkorb.
 - Kein hartes Zeitlimit beim Warten auf die KI: der Job läuft ohnehin im
   Hintergrund, ein überlasteter Ollama-Server darf ruhig länger brauchen,
   statt die Datei als Fehler zu verbuchen (siehe OLLAMA_TIMEOUT).
@@ -34,6 +36,11 @@ from . import models, document_extract, ollama_client
 
 SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp"}
 UNCERTAIN_MARKER = "UNSICHER"
+# Eindeutig wertloser Datenmüll, der direkt gelöscht wird statt in den
+# "Zum Prüfen"-Ordner zu wandern - AMP-E-Mail-Fragmente enthalten kein
+# eigenständiges Dokument, Thumbs.db ist ein reiner Windows-Cache.
+JUNK_EXTENSIONS = {".x-amp-html"}
+JUNK_EXACT_NAMES = {"thumbs.db", ".ds_store"}
 # Kein Wert von main.py aus konfigurierbar, bewusst grosszügig statt "kein
 # Limit" (ein echt unbegrenzter Request könnte einen einzelnen Lauf für immer
 # blockieren, falls die Verbindung selbst haengt statt nur langsam zu sein).
@@ -218,9 +225,27 @@ def run(db: Session, settings: models.Settings) -> dict:
         _run_lock.release()
 
 
+def _move_to_review(db: Session, review_path: str, source: str, filename: str, action: str, detail: str) -> None:
+    """Bekommt eine Datei, die weder automatisch einsortiert noch sicher als
+    Müll gelöscht werden kann - landet zum manuellen Prüfen in einem dritten
+    Ordner, statt für immer im Eingang liegen zu bleiben oder riskiert falsch
+    einsortiert zu werden."""
+    if not review_path:
+        _log_once(db, filename, action, detail)
+        return
+    try:
+        os.makedirs(review_path, exist_ok=True)
+        dest = _unique_target(review_path, filename)
+        shutil.move(os.path.join(source, filename), dest)
+        _log_once(db, filename, action, detail)
+    except Exception as e:
+        _log_once(db, filename, "error", f"Verschieben zum Prüfen fehlgeschlagen: {e}")
+
+
 def _run_locked(db: Session, settings: models.Settings) -> dict:
     source = settings.file_sort_source_path
     target = settings.file_sort_target_path
+    review = settings.file_sort_review_path
     categories = [c.strip() for c in (settings.file_sort_categories or "").split(",") if c.strip()]
     subfolder_category = (settings.file_sort_subfolder_category or "").strip()
     if not source or not target or not categories:
@@ -240,8 +265,15 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
         path = os.path.join(source, filename)
 
         if ext not in SUPPORTED_EXTENSIONS:
-            _log_once(db, filename, "skipped_unsupported",
-                      f"Dateityp {ext or '(ohne Endung)'} wird nicht automatisch ausgewertet.")
+            if ext in JUNK_EXTENSIONS or filename.lower() in JUNK_EXACT_NAMES:
+                try:
+                    os.remove(path)
+                    _log_once(db, filename, "deleted", "Erkannter Datenmüll ohne eigenständigen Inhalt.")
+                except Exception as e:
+                    _log_once(db, filename, "error", f"Löschen fehlgeschlagen: {e}")
+                continue
+            _move_to_review(db, review, source, filename, "review",
+                             f"Dateityp {ext or '(ohne Endung)'} wird nicht automatisch ausgewertet.")
             continue
 
         processed += 1
@@ -257,8 +289,8 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
             continue
 
         if category == UNCERTAIN_MARKER:
-            _log_once(db, filename, "skipped_uncertain",
-                      "Keine eindeutige Kategorie erkannt - bitte manuell einsortieren.")
+            _move_to_review(db, review, source, filename, "review",
+                             "Keine eindeutige Kategorie erkannt - bitte manuell einsortieren.")
             skipped += 1
             continue
 

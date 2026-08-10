@@ -3169,6 +3169,7 @@ async function loadFileSortSettings() {
   const s = await api("/settings/file-sort");
   document.getElementById("file-sort-source").value = s.source_path || "";
   document.getElementById("file-sort-target").value = s.target_path || "";
+  document.getElementById("file-sort-review").value = s.review_path || "";
   document.getElementById("file-sort-categories").value = s.categories || "";
   document.getElementById("file-sort-subfolder-category").value = s.subfolder_category || "";
   document.getElementById("file-sort-model").value = s.model || "";
@@ -3179,6 +3180,7 @@ document.getElementById("file-sort-settings-form").addEventListener("submit", as
   const payload = {
     source_path: document.getElementById("file-sort-source").value.trim(),
     target_path: document.getElementById("file-sort-target").value.trim(),
+    review_path: document.getElementById("file-sort-review").value.trim(),
     categories: document.getElementById("file-sort-categories").value.trim(),
     subfolder_category: document.getElementById("file-sort-subfolder-category").value.trim(),
     model: document.getElementById("file-sort-model").value.trim(),
@@ -3194,6 +3196,8 @@ document.getElementById("file-sort-settings-form").addEventListener("submit", as
 
 const FILE_SORT_ACTION_LABELS = {
   moved: "einsortiert",
+  review: "zum Prüfen verschoben",
+  deleted: "gelöscht (Datenmüll)",
   skipped_uncertain: "unsicher – übersprungen",
   skipped_unsupported: "Dateityp übersprungen",
   error: "Fehler",

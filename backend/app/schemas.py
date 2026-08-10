@@ -1258,6 +1258,7 @@ class FileSortSettingsUpdate(BaseModel):
     categories: str
     subfolder_category: Optional[str] = None
     model: Optional[str] = None
+    review_path: Optional[str] = None
 
 
 class FileSortSettingsOut(BaseModel):
@@ -1266,6 +1267,7 @@ class FileSortSettingsOut(BaseModel):
     categories: Optional[str] = None
     subfolder_category: Optional[str] = None
     model: Optional[str] = None
+    review_path: Optional[str] = None
 
 
 class FileSortLogOut(BaseModel):

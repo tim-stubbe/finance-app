@@ -142,6 +142,9 @@ ensure_columns("settings", {
     "file_sort_model": "VARCHAR",
 })
 ensure_columns("settings", {
+    "file_sort_review_path": "VARCHAR",
+})
+ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
     "imap_host": "VARCHAR",
     "imap_port": "INTEGER DEFAULT 993",
@@ -3265,6 +3268,7 @@ def get_file_sort_settings(db: Session = Depends(get_db)):
         categories=settings.file_sort_categories,
         subfolder_category=settings.file_sort_subfolder_category,
         model=settings.file_sort_model,
+        review_path=settings.file_sort_review_path,
     )
 
 
@@ -3276,6 +3280,7 @@ def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session 
     settings.file_sort_categories = data.categories
     settings.file_sort_subfolder_category = data.subfolder_category or None
     settings.file_sort_model = data.model or None
+    settings.file_sort_review_path = data.review_path or None
     settings.file_sort_enabled = True
     db.commit()
     return schemas.FileSortSettingsOut(
@@ -3284,6 +3289,7 @@ def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session 
         categories=settings.file_sort_categories,
         subfolder_category=settings.file_sort_subfolder_category,
         model=settings.file_sort_model,
+        review_path=settings.file_sort_review_path,
     )
 
 
