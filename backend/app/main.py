@@ -3163,7 +3163,10 @@ def test_radicale(db: Session = Depends(get_db)):
     try:
         n = radicale_sync.check_connection(settings.radicale_url, settings.radicale_username, password)
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        # Nur Fehlertyp + Nachricht statt roher Exception-Repraesentation
+        # (koennte interne Details enthalten - CodeQL: py/stack-trace-exposure).
+        # Bleibt fuer die Fehlersuche bei der eigenen Verbindung nuetzlich.
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     return {"ok": True, "todo_count": n}
 
 
