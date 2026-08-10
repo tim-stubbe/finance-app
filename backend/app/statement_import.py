@@ -172,7 +172,14 @@ def process_statement_inbox(db: Session, settings: models.Settings, space_id: in
                 [{"role": "user", "content": prompt}], timeout=OLLAMA_TIMEOUT,
             )
         except Exception as e:
-            file_sort._log_once(db, filename, "error", f"Kontoauszug-Import fehlgeschlagen: {e}")
+            # Bewusst KEIN _log_once (dedupliziert nach Dateiname+Aktion): bei einem
+            # Kontoauszug soll ein sich änderndes Fehlerbild (oder ein späterer
+            # Erfolg) beim nächsten 10-Minuten-Lauf sichtbar bleiben statt hinter
+            # der ersten geloggten Fehlermeldung für immer verschwunden zu sein.
+            db.add(models.FileSortLog(
+                filename=filename, action="error", detail=f"Kontoauszug-Import fehlgeschlagen: {e}",
+            ))
+            db.commit()
             continue
 
         account_name = _extract_account_name(reply, account_names)
