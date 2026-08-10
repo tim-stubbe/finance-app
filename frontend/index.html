@@ -1155,6 +1155,9 @@
           <label>Modell für die Einordnung (leer = Standardmodell)
             <input type="text" id="file-sort-model" placeholder="z.B. qwen3:4b-instruct">
           </label>
+          <label>Kontoauszüge-Unterordner (innerhalb des Eingangsordners, optional)
+            <input type="text" id="file-sort-statements-subfolder" placeholder="z.B. Kontoauszüge">
+          </label>
           <p class="page-sub wide">
             Kleine Modelle unterscheiden sich hier stark in der Zuverlässigkeit - falls vieles
             falsch (z.B. immer in dieselbe Kategorie) einsortiert wird, hilft oft ein anderes
@@ -1165,9 +1168,18 @@
             (z.B. Rechnung/IKEA, Rechnung/McDonald's) - erkannte Rechnungen landen außerdem
             automatisch im Beleg-Eingang (Buchungen-Tab) zur Zuordnung.
           </p>
+          <p class="page-sub wide">
+            PDFs in diesem Unterordner werden NICHT nach Kategorie einsortiert, sondern als
+            Kontoauszug gelesen: erkannte Buchungen werden <strong>sofort automatisch</strong>
+            angelegt (kein Bestätigen nötig), sobald das Konto eindeutig erkannt wurde – bereits
+            vorhandene Buchungen (gleicher Betrag, ±1 Tag) werden dabei übersprungen statt doppelt
+            angelegt. Ist das Konto nicht eindeutig, landet die Datei stattdessen im "Zum
+            Prüfen"-Ordner.
+          </p>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="file-sort-run-now" class="btn-ghost">Jetzt ausführen</button>
+            <button type="button" id="statement-import-run-now" class="btn-ghost">Kontoauszüge jetzt importieren</button>
           </div>
         </form>
         <p id="file-sort-status" class="page-sub"></p>

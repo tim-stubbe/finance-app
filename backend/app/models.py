@@ -175,6 +175,10 @@ class Settings(Base):
     # Standardmodell - kleine Modelle unterscheiden sich hier stark in der
     # Zuverlässigkeit (siehe Kommentar in file_sort.py). Leer = Standardmodell.
     file_sort_model = Column(String, nullable=True)
+    # Unterordner innerhalb von file_sort_source_path, dessen Inhalt nicht nach
+    # Kategorie einsortiert, sondern als Kontoauszug gelesen und automatisch als
+    # Buchungen importiert wird (siehe statement_import.py). Leer = deaktiviert.
+    file_sort_statements_subfolder = Column(String, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)

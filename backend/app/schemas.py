@@ -1292,6 +1292,7 @@ class FileSortSettingsUpdate(BaseModel):
     subfolder_category: Optional[str] = None
     model: Optional[str] = None
     review_path: Optional[str] = None
+    statements_subfolder: Optional[str] = None
 
 
 class FileSortSettingsOut(BaseModel):
@@ -1301,6 +1302,7 @@ class FileSortSettingsOut(BaseModel):
     subfolder_category: Optional[str] = None
     model: Optional[str] = None
     review_path: Optional[str] = None
+    statements_subfolder: Optional[str] = None
 
 
 class FileSortLogOut(BaseModel):
@@ -1319,6 +1321,13 @@ class FileSortRunResult(BaseModel):
     skipped: int
     error: Optional[str] = None
     receipts_added: int = 0
+
+
+class StatementImportRunResult(BaseModel):
+    processed: int
+    imported: int
+    duplicates: int
+    error: Optional[str] = None
 
 
 # ---------- E-Mail-Belege ----------

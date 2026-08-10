@@ -18,11 +18,16 @@ RECEIPT_PARSE_PROMPT = (
 )
 
 
-def extract_pdf(data: bytes) -> tuple[str | None, list[str]]:
+def extract_pdf(data: bytes, max_chars: int = MAX_TEXT_CHARS) -> tuple[str | None, list[str]]:
     """Liest ein PDF aus. Enthält es durchsuchbaren Text (z.B. ein digital
     erzeugter Kontoauszug/eine Wertpapierabrechnung), wird der Text zurückgegeben.
     Andernfalls (z.B. ein eingescannter Beleg) werden die ersten Seiten als
-    PNG-Bilder (base64) gerendert, damit ein Vision-Modell sie lesen kann."""
+    PNG-Bilder (base64) gerendert, damit ein Vision-Modell sie lesen kann.
+
+    `max_chars` ist für die meisten Belege (ein Datum/ein Betrag) großzügig
+    genug - ein mehrseitiger Kontoauszug mit vielen Buchungszeilen braucht
+    dagegen mehr Spielraum, sonst gehen die hinteren Zeilen beim Import
+    einfach verloren (siehe statement_import.py)."""
     doc = pymupdf.open(stream=data, filetype="pdf")
     text_parts = []
     for page in doc:
@@ -31,7 +36,7 @@ def extract_pdf(data: bytes) -> tuple[str | None, list[str]]:
             text_parts.append(page_text)
 
     if text_parts:
-        return "\n".join(text_parts)[:MAX_TEXT_CHARS], []
+        return "\n".join(text_parts)[:max_chars], []
 
     images = []
     for page in doc[:MAX_PDF_PAGES_AS_IMAGES]:

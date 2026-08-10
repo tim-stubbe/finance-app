@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, file_sort, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, file_sort, statement_import, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -144,6 +144,9 @@ ensure_columns("settings", {
 })
 ensure_columns("settings", {
     "file_sort_review_path": "VARCHAR",
+})
+ensure_columns("settings", {
+    "file_sort_statements_subfolder": "VARCHAR",
 })
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
@@ -3312,6 +3315,7 @@ def get_file_sort_settings(db: Session = Depends(get_db)):
         subfolder_category=settings.file_sort_subfolder_category,
         model=settings.file_sort_model,
         review_path=settings.file_sort_review_path,
+        statements_subfolder=settings.file_sort_statements_subfolder,
     )
 
 
@@ -3324,6 +3328,7 @@ def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session 
     settings.file_sort_subfolder_category = data.subfolder_category or None
     settings.file_sort_model = data.model or None
     settings.file_sort_review_path = data.review_path or None
+    settings.file_sort_statements_subfolder = data.statements_subfolder or None
     settings.file_sort_enabled = True
     db.commit()
     return schemas.FileSortSettingsOut(
@@ -3333,6 +3338,7 @@ def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session 
         subfolder_category=settings.file_sort_subfolder_category,
         model=settings.file_sort_model,
         review_path=settings.file_sort_review_path,
+        statements_subfolder=settings.file_sort_statements_subfolder,
     )
 
 
@@ -3390,6 +3396,12 @@ def run_file_sort(db: Session = Depends(get_db)):
     receipts = result.pop("receipts", [])
     added = _create_mail_attachments_from_receipts(db, settings, receipts) if receipts else 0
     return schemas.FileSortRunResult(**result, receipts_added=added)
+
+
+@api_router.post("/file-sort/run-statements", response_model=schemas.StatementImportRunResult)
+def run_statement_import(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    settings = auth.get_or_create_settings(db)
+    return schemas.StatementImportRunResult(**statement_import.process_statement_inbox(db, settings, space_id))
 
 
 # ---------------- Dashboard ----------------
@@ -3957,6 +3969,12 @@ def _scheduled_file_sort():
                 _create_mail_attachments_from_receipts(db, settings, receipts)
         except Exception:
             pass
+        if settings.file_sort_statements_subfolder:
+            try:
+                for space in crud.get_spaces(db):
+                    statement_import.process_statement_inbox(db, settings, space.id)
+            except Exception:
+                pass
     finally:
         db.close()
 

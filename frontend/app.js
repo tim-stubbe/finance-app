@@ -3260,6 +3260,7 @@ async function loadFileSortSettings() {
   document.getElementById("file-sort-categories").value = s.categories || "";
   document.getElementById("file-sort-subfolder-category").value = s.subfolder_category || "";
   document.getElementById("file-sort-model").value = s.model || "";
+  document.getElementById("file-sort-statements-subfolder").value = s.statements_subfolder || "";
 }
 
 document.getElementById("file-sort-settings-form").addEventListener("submit", async e => {
@@ -3271,6 +3272,7 @@ document.getElementById("file-sort-settings-form").addEventListener("submit", as
     categories: document.getElementById("file-sort-categories").value.trim(),
     subfolder_category: document.getElementById("file-sort-subfolder-category").value.trim(),
     model: document.getElementById("file-sort-model").value.trim(),
+    statements_subfolder: document.getElementById("file-sort-statements-subfolder").value.trim(),
   };
   if (!payload.source_path || !payload.target_path || !payload.categories) {
     alert("Bitte Eingangsordner, Zielordner und mindestens eine Kategorie angeben.");
@@ -3288,6 +3290,7 @@ const FILE_SORT_ACTION_LABELS = {
   skipped_uncertain: "unsicher – übersprungen",
   skipped_unsupported: "Dateityp übersprungen",
   error: "Fehler",
+  statement_imported: "Kontoauszug importiert",
 };
 
 async function loadFileSortLog() {
@@ -3323,6 +3326,20 @@ document.getElementById("file-sort-run-now").addEventListener("click", async () 
     statusEl.textContent = r.error
       ? `Fehler: ${r.error}`
       : `${r.processed} geprüft, ${r.moved} einsortiert, ${r.skipped} zur manuellen Prüfung übersprungen.${belegHinweis}`;
+  } catch (e) {
+    statusEl.textContent = "Fehler: " + e.message;
+  }
+  loadFileSortLog();
+});
+
+document.getElementById("statement-import-run-now").addEventListener("click", async () => {
+  const statusEl = document.getElementById("file-sort-status");
+  statusEl.textContent = "Läuft …";
+  try {
+    const r = await api("/file-sort/run-statements", { method: "POST" });
+    statusEl.textContent = r.error
+      ? `Fehler: ${r.error}`
+      : `${r.processed} Kontoauszug/-züge geprüft, ${r.imported} Buchung(en) importiert, ${r.duplicates} Duplikat(e) übersprungen.`;
   } catch (e) {
     statusEl.textContent = "Fehler: " + e.message;
   }
