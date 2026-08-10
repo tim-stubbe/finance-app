@@ -41,7 +41,8 @@ from sqlalchemy.orm import Session
 
 from . import models, document_extract, ollama_client
 
-SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp"}
+SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp", ".txt", ".docx"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
 UNCERTAIN_MARKER = "UNSICHER"
 # Eindeutig wertloser Datenmüll, der direkt gelöscht wird statt in den
 # "Zum Prüfen"-Ordner zu wandern - AMP-E-Mail-Fragmente enthalten kein
@@ -124,11 +125,41 @@ def _is_degenerate_image(content: bytes) -> bool:
         return False
 
 
+def _extract_docx_text(content: bytes) -> str | None:
+    """Liest den Fliesstext aus einer .docx (ist ein ZIP mit XML drin) -
+    kein neues pip-Paket noetig (das haette einen Docker-Rebuild erzwungen),
+    reine Stdlib-Extraktion reicht fuer Klassifizierungszwecke."""
+    try:
+        import zipfile
+        import io
+        import xml.etree.ElementTree as ET
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            xml_bytes = z.read("word/document.xml")
+        ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        root = ET.fromstring(xml_bytes)
+        paragraphs = []
+        for p in root.iter(f"{ns}p"):
+            texts = [node.text for node in p.iter(f"{ns}t") if node.text]
+            if texts:
+                paragraphs.append("".join(texts))
+        text = "\n".join(paragraphs).strip()
+        return text or None
+    except Exception:
+        return None
+
+
 def _read_content(filename: str, content: bytes) -> tuple[str | None, list[str]]:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".pdf":
         return document_extract.extract_pdf(content)
-    if ext in SUPPORTED_EXTENSIONS:
+    if ext == ".txt":
+        try:
+            return content.decode("utf-8"), []
+        except UnicodeDecodeError:
+            return content.decode("latin-1", errors="replace"), []
+    if ext == ".docx":
+        return _extract_docx_text(content), []
+    if ext in IMAGE_EXTENSIONS:
         if _is_degenerate_image(content):
             return None, []
         return None, [base64.b64encode(content).decode()]
