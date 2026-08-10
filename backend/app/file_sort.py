@@ -1,5 +1,12 @@
 """Automatische Einsortierung eines Eingangsordners in Kategorie-Unterordner.
 
+Zwei Eingänge werden verarbeitet: der eigentliche Eingangsordner (z.B. wo
+automatisch E-Mail-Anhänge landen) UND der "Zum Prüfen"-Ordner selbst, den
+der Nutzer von Hand befüllt (z.B. vom Desktop reingezogene Dateien). Im
+Eingangsordner darf aufgeräumt/gelöscht werden, im "Zum Prüfen"-Ordner nie -
+dort wird nur rausverschoben, was sich einordnen lässt, der Rest bleibt
+liegen (siehe _process_source).
+
 Bewusst mit fester Kategorienliste statt KI-erfundener Ordnernamen - das
 verhindert Ordner-Wildwuchs ("Strom" vs. "Stromrechnung" vs. "Energie") und
 übernimmt stattdessen die vom Nutzer bereits von Hand angelegte Struktur.
@@ -247,17 +254,16 @@ def _move_to_review(db: Session, review_path: str, source: str, filename: str, a
         _log_once(db, filename, "error", f"Verschieben zum Prüfen fehlgeschlagen: {e}")
 
 
-def _run_locked(db: Session, settings: models.Settings) -> dict:
-    source = settings.file_sort_source_path
-    target = settings.file_sort_target_path
-    review = settings.file_sort_review_path
-    categories = [c.strip() for c in (settings.file_sort_categories or "").split(",") if c.strip()]
-    subfolder_category = (settings.file_sort_subfolder_category or "").strip()
-    if not source or not target or not categories:
-        return {"processed": 0, "moved": 0, "skipped": 0, "error": "Nicht vollständig eingerichtet", "receipts": []}
-    if not settings.ollama_url or not settings.ollama_model:
-        return {"processed": 0, "moved": 0, "skipped": 0, "error": "Kein Ollama-Server eingerichtet", "receipts": []}
-
+def _process_source(db: Session, settings: models.Settings, source: str, target: str, review: str,
+                     categories: list[str], subfolder_category: str, *, allow_delete: bool,
+                     leave_uncertain_in_place: bool) -> dict:
+    """Sortiert einen Eingangsordner ein. Zwei Quellen nutzen das:
+    - der eigentliche Eingang (allow_delete=True, unsichere Dateien wandern
+      in den "Zum Prüfen"-Ordner).
+    - der "Zum Prüfen"-Ordner selbst als zweiter, vom Nutzer von Hand
+      befüllter Eingang (allow_delete=False, unsichere Dateien bleiben
+      einfach liegen statt in sich selbst "verschoben" zu werden - dort
+      darf laut Nutzer nichts gelöscht werden, nur raus einsortiert)."""
     moved, skipped, processed = 0, 0, 0
     receipts: list[dict] = []
     try:
@@ -270,15 +276,19 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
         path = os.path.join(source, filename)
 
         if ext not in SUPPORTED_EXTENSIONS:
-            if ext in JUNK_EXTENSIONS or filename.lower() in JUNK_EXACT_NAMES:
+            if allow_delete and (ext in JUNK_EXTENSIONS or filename.lower() in JUNK_EXACT_NAMES):
                 try:
                     os.remove(path)
                     _log_once(db, filename, "deleted", "Erkannter Datenmüll ohne eigenständigen Inhalt.")
                 except Exception as e:
                     _log_once(db, filename, "error", f"Löschen fehlgeschlagen: {e}")
                 continue
-            _move_to_review(db, review, source, filename, "review",
-                             f"Dateityp {ext or '(ohne Endung)'} wird nicht automatisch ausgewertet.")
+            if leave_uncertain_in_place:
+                _log_once(db, filename, "skipped_unsupported",
+                          f"Dateityp {ext or '(ohne Endung)'} wird nicht automatisch ausgewertet.")
+            else:
+                _move_to_review(db, review, source, filename, "review",
+                                 f"Dateityp {ext or '(ohne Endung)'} wird nicht automatisch ausgewertet.")
             continue
 
         processed += 1
@@ -294,8 +304,12 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
             continue
 
         if category == UNCERTAIN_MARKER:
-            _move_to_review(db, review, source, filename, "review",
-                             "Keine eindeutige Kategorie erkannt - bitte manuell einsortieren.")
+            if leave_uncertain_in_place:
+                _log_once(db, filename, "skipped_uncertain",
+                          "Keine eindeutige Kategorie erkannt - bleibt hier liegen.")
+            else:
+                _move_to_review(db, review, source, filename, "review",
+                                 "Keine eindeutige Kategorie erkannt - bitte manuell einsortieren.")
             skipped += 1
             continue
 
@@ -313,9 +327,10 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
         os.makedirs(target_dir, exist_ok=True)
         dest = _unique_target(target_dir, filename)
         try:
-            # Gleicher Grund wie bei _move_to_review: copyfile statt copy2,
-            # keine Metadaten-Uebertragung noetig, auf mancher SMB-Freigabe
-            # schlaegt das sonst mit "Operation not permitted" fehl.
+            # copyfile statt des Standards (copy2): copy2 versucht auch
+            # Berechtigungen/Zeitstempel zu uebertragen, was auf mancher
+            # SMB-Freigabe mit "Operation not permitted" fehlschlaegt - dann
+            # blieb die Datei kopiert UND im Eingang liegen.
             shutil.move(path, dest, copy_function=shutil.copyfile)
         except Exception as e:
             db.add(models.FileSortLog(filename=filename, action="error", detail=f"Verschieben fehlgeschlagen: {e}"))
@@ -331,3 +346,39 @@ def _run_locked(db: Session, settings: models.Settings) -> dict:
             receipts.append({"filename": filename, "dest": dest, "rel": rel, "content": content})
 
     return {"processed": processed, "moved": moved, "skipped": skipped, "error": None, "receipts": receipts}
+
+
+def _run_locked(db: Session, settings: models.Settings) -> dict:
+    target = settings.file_sort_target_path
+    review = settings.file_sort_review_path
+    categories = [c.strip() for c in (settings.file_sort_categories or "").split(",") if c.strip()]
+    subfolder_category = (settings.file_sort_subfolder_category or "").strip()
+    if not settings.file_sort_source_path or not target or not categories:
+        return {"processed": 0, "moved": 0, "skipped": 0, "error": "Nicht vollständig eingerichtet", "receipts": []}
+    if not settings.ollama_url or not settings.ollama_model:
+        return {"processed": 0, "moved": 0, "skipped": 0, "error": "Kein Ollama-Server eingerichtet", "receipts": []}
+
+    result = _process_source(
+        db, settings, settings.file_sort_source_path, target, review, categories, subfolder_category,
+        allow_delete=True, leave_uncertain_in_place=False,
+    )
+    if result["error"]:
+        return result
+
+    # Zweite Quelle: der "Zum Prüfen"-Ordner selbst ist auch ein Eingang, den
+    # der Nutzer von Hand befüllt (z.B. vom Desktop reingezogene Dateien) -
+    # wird ebenfalls einsortiert, aber nie etwas darin gelöscht, und
+    # Unklares bleibt einfach liegen statt "in sich selbst verschoben" zu
+    # werden.
+    if review:
+        second = _process_source(
+            db, settings, review, target, review, categories, subfolder_category,
+            allow_delete=False, leave_uncertain_in_place=True,
+        )
+        if not second["error"]:
+            result["processed"] += second["processed"]
+            result["moved"] += second["moved"]
+            result["skipped"] += second["skipped"]
+            result["receipts"] += second["receipts"]
+
+    return result
