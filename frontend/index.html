@@ -1253,11 +1253,15 @@
             Erkannt am Dateinamen – zuverlässiger und schneller, als ein Bildmodell raten zu lassen.
             Älteste zuerst, denn die sind am ehesten entbehrlich.
           </p>
-          <div class="shot-filter" id="shot-filter"></div>
+          <div class="shot-filter-row">
+            <div class="shot-filter" id="shot-filter"></div>
+            <button type="button" class="btn-ghost swipe-toggle" data-swipe-toggle="shot">🔀 Swipe-Modus</button>
+          </div>
         </div>
         <div id="shots-summary" class="photos-summary hidden"></div>
         <div id="shots-grid" class="shot-grid"></div>
         <div id="shots-pager" class="photo-pager"></div>
+        <div id="shot-swipe" class="swipe-view hidden"></div>
       </div>
 
       <div id="photos-view-quality" class="hidden">
@@ -1268,11 +1272,15 @@
             (kein Ratemodell). Ein Hintergrund-Scan arbeitet die Bibliothek seitenweise durch –
             es kann etwas dauern, bis alle erfasst sind.
           </p>
-          <div class="shot-filter" id="quality-filter"></div>
+          <div class="shot-filter-row">
+            <div class="shot-filter" id="quality-filter"></div>
+            <button type="button" class="btn-ghost swipe-toggle" data-swipe-toggle="quality">🔀 Swipe-Modus</button>
+          </div>
         </div>
         <div id="quality-summary" class="photos-summary hidden"></div>
         <div id="quality-grid" class="shot-grid"></div>
         <div id="quality-pager" class="photo-pager"></div>
+        <div id="quality-swipe" class="swipe-view hidden"></div>
       </div>
 
       <div id="photos-view-people" class="hidden">

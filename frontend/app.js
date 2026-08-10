@@ -2461,6 +2461,14 @@ function renderShots() {
 
 document.getElementById("photos-view-screenshots").addEventListener("click", async e => {
   if (checkZoomClick(e)) return;
+  if (e.target.closest("[data-swipe-toggle]")) {
+    activeSwipeKind === "shot" ? exitSwipeMode("shot") : enterSwipeMode("shot");
+    return;
+  }
+  if (e.target.closest("[data-swipe-action]")) {
+    commitSwipe("shot", e.target.closest("[data-swipe-action]").dataset.swipeAction);
+    return;
+  }
   const months = e.target.closest("[data-shot-months]")?.dataset.shotMonths;
   if (months !== undefined) {
     shotState.months = parseInt(months, 10);
@@ -2590,6 +2598,14 @@ function renderQuality() {
 
 document.getElementById("photos-view-quality").addEventListener("click", async e => {
   if (checkZoomClick(e)) return;
+  if (e.target.closest("[data-swipe-toggle]")) {
+    activeSwipeKind === "quality" ? exitSwipeMode("quality") : enterSwipeMode("quality");
+    return;
+  }
+  if (e.target.closest("[data-swipe-action]")) {
+    commitSwipe("quality", e.target.closest("[data-swipe-action]").dataset.swipeAction);
+    return;
+  }
 
   const reason = e.target.closest("[data-quality-reason]")?.dataset.qualityReason;
   if (reason !== undefined) {
@@ -2643,6 +2659,158 @@ document.getElementById("photos-view-quality").addEventListener("click", async e
     }
   }
 });
+
+// ---------- Swipe-Modus (Tinder-artig: rechts=behalten, links=Papierkorb) ----------
+// Bewusst clientseitig auf der schon geladenen Seite (max. 60 Fotos) statt eigenem
+// Backend-Endpunkt - Screenshots/Unnötige Fotos liefern ohnehin nur "Kandidat oder
+// nicht", kein Rank-Algorithmus, den man serverseitig fortschreiben müsste.
+const SWIPE_CONFIG = {
+  shot: {
+    containerId: "shot-swipe", gridId: "shots-grid", pagerId: "shots-pager",
+    getState: () => shotState,
+    loadPage: offset => loadScreenshots(offset),
+    trashUrl: "/immich/screenshots/trash",
+    keepOne: null, // "behalten" heisst hier nur: nicht anfassen, kein eigener Aufruf noetig
+    caption: () => "Bildschirmfoto",
+  },
+  quality: {
+    containerId: "quality-swipe", gridId: "quality-grid", pagerId: "quality-pager",
+    getState: () => qualityState,
+    loadPage: offset => loadQuality(offset),
+    trashUrl: "/immich/quality/trash",
+    keepOne: id => api(`/immich/quality/${id}`, { method: "DELETE" }),
+    caption: a => (a.reason === "blur" ? "Unscharf" : "Leer/einfarbig"),
+  },
+};
+
+let activeSwipeKind = null;
+const swipeQueues = { shot: [], quality: [] };
+
+function enterSwipeMode(kind) {
+  activeSwipeKind = kind;
+  const cfg = SWIPE_CONFIG[kind];
+  swipeQueues[kind] = [...cfg.getState().assets];
+  document.getElementById(cfg.gridId).classList.add("hidden");
+  document.getElementById(cfg.pagerId).classList.add("hidden");
+  document.getElementById(cfg.containerId).classList.remove("hidden");
+  document.querySelector(`[data-swipe-toggle="${kind}"]`).textContent = "🔲 Rasteransicht";
+  renderSwipeStack(kind);
+}
+
+function exitSwipeMode(kind) {
+  activeSwipeKind = null;
+  const cfg = SWIPE_CONFIG[kind];
+  document.getElementById(cfg.gridId).classList.remove("hidden");
+  document.getElementById(cfg.pagerId).classList.remove("hidden");
+  document.getElementById(cfg.containerId).classList.add("hidden");
+  document.querySelector(`[data-swipe-toggle="${kind}"]`).textContent = "🔀 Swipe-Modus";
+}
+
+function renderSwipeStack(kind) {
+  const cfg = SWIPE_CONFIG[kind];
+  const container = document.getElementById(cfg.containerId);
+  const queue = swipeQueues[kind];
+
+  if (!queue.length) {
+    const st = cfg.getState();
+    if (st.hasMore) {
+      container.innerHTML = `<p class="swipe-done">Lade weitere …</p>`;
+      cfg.loadPage(st.offset + 60).then(() => {
+        if (activeSwipeKind !== kind) return;
+        swipeQueues[kind] = [...cfg.getState().assets];
+        renderSwipeStack(kind);
+      });
+      return;
+    }
+    container.innerHTML = `<p class="swipe-done">🎉 Alles durchgesehen.</p>`;
+    return;
+  }
+
+  const top = queue[0];
+  const next = queue[1];
+  container.innerHTML = `
+    <div class="swipe-progress">${queue.length} übrig</div>
+    <div class="swipe-stack">
+      ${next ? `<div class="swipe-card is-behind"><img src="/api/immich/thumbnail/${esc(next.id)}" alt=""></div>` : ""}
+      <div class="swipe-card is-top" id="swipe-top-card" data-swipe-id="${esc(top.id)}">
+        <span class="swipe-hint keep">Behalten</span>
+        <span class="swipe-hint trash">Papierkorb</span>
+        <img src="/api/immich/thumbnail/${esc(top.id)}" alt="" draggable="false">
+        <div class="swipe-card-meta">
+          <span>${top.created_at ? fmtDate(top.created_at.slice(0, 10)) : ""}</span>
+          <span>${cfg.caption(top)} · ${formatBytes(top.size_bytes)}</span>
+        </div>
+      </div>
+    </div>
+    <div class="swipe-actions">
+      <button type="button" class="swipe-action-btn trash" data-swipe-action="trash" title="In den Papierkorb">✕</button>
+      <button type="button" class="swipe-action-btn keep" data-swipe-action="keep" title="Behalten">✓</button>
+    </div>`;
+
+  attachSwipeDrag(kind);
+}
+
+function attachSwipeDrag(kind) {
+  const card = document.getElementById("swipe-top-card");
+  if (!card) return;
+  const keepHint = card.querySelector(".swipe-hint.keep");
+  const trashHint = card.querySelector(".swipe-hint.trash");
+  let startX = 0, dx = 0, dragging = false;
+
+  card.addEventListener("pointerdown", e => {
+    dragging = true;
+    dx = 0;
+    card.classList.add("is-dragging");
+    startX = e.clientX;
+    card.setPointerCapture(e.pointerId);
+  });
+  card.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    const strength = Math.min(Math.abs(dx) / 100, 1);
+    keepHint.style.opacity = dx > 0 ? strength : 0;
+    trashHint.style.opacity = dx < 0 ? strength : 0;
+  });
+  const release = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.classList.remove("is-dragging");
+    if (Math.abs(dx) > 100) {
+      commitSwipe(kind, dx > 0 ? "keep" : "trash");
+    } else {
+      card.classList.add("snap-back");
+      card.style.transform = "";
+      keepHint.style.opacity = 0;
+      trashHint.style.opacity = 0;
+    }
+  };
+  card.addEventListener("pointerup", release);
+  card.addEventListener("pointercancel", release);
+}
+
+async function commitSwipe(kind, direction) {
+  const cfg = SWIPE_CONFIG[kind];
+  const card = document.getElementById("swipe-top-card");
+  const id = card?.dataset.swipeId;
+  if (!id) return;
+  const flyX = direction === "keep" ? 700 : -700;
+  card.classList.add("fly-out");
+  card.style.transform = `translateX(${flyX}px) rotate(${direction === "keep" ? 20 : -20}deg)`;
+
+  swipeQueues[kind].shift();
+  setTimeout(() => { if (activeSwipeKind === kind) renderSwipeStack(kind); }, 220);
+
+  try {
+    if (direction === "trash") {
+      await api(cfg.trashUrl, { method: "POST", body: JSON.stringify({ asset_ids: [id] }) });
+    } else if (cfg.keepOne) {
+      await cfg.keepOne(id);
+    }
+  } catch (err) {
+    toast("Fehler: " + err.message);
+  }
+}
 
 // ---------- Personen (Immichs Gesichtserkennung) ----------
 let peopleCache = [];
