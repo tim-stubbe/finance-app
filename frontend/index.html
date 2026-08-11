@@ -530,10 +530,19 @@
           <input type="hidden" id="cr-id">
           <input type="hidden" id="cr-account-id">
           <input type="hidden" id="cr-description-key">
-          <input type="hidden" id="cr-frequency">
           <label class="wide">Bezeichnung <input type="text" id="cr-label" required></label>
           <label>Verlängert sich am <input type="date" id="cr-renewal" required></label>
           <label>Kündigungsfrist (Tage vorher) <input type="number" step="1" min="0" id="cr-notice" required value="30"></label>
+          <label>Rückt danach automatisch weiter, alle
+            <select id="cr-frequency">
+              <option value="">nicht automatisch (manuell nachtragen)</option>
+              <option value="woechentlich">Woche</option>
+              <option value="zweiwoechentlich">2 Wochen</option>
+              <option value="monatlich">Monat</option>
+              <option value="quartalsweise">Quartal</option>
+              <option value="jaehrlich">Jahr</option>
+            </select>
+          </label>
           <div class="form-actions wide">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="cr-delete" class="btn-ghost hidden">Löschen</button>

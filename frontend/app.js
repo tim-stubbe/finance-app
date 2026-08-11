@@ -1593,9 +1593,27 @@ async function loadTransactions() {
         <button class="link-btn" onclick="editTransaction(${t.id})">Bearbeiten</button>
         <button class="link-btn" onclick="deleteTransaction(${t.id})">Löschen</button>
         <button class="link-btn" onclick="openReturnDeadlineModal(${t.id})">${rd ? "Rückgabe" : "🔄 Rückgabe"}</button>
+        ${!t.is_transfer && t.amount < 0 ? `<button class="link-btn" data-cr-account="${t.account_id}" data-cr-desc="${esc(t.description || "")}">📄 Frist</button>` : ""}
       </td>`;
     tbody.appendChild(tr);
   });
+  tbody.querySelectorAll("[data-cr-account]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const desc = btn.dataset.crDesc;
+      openContractReminderModal(parseInt(btn.dataset.crAccount), normalizeDescriptionKey(desc), desc, null);
+    });
+  });
+}
+
+function normalizeDescriptionKey(desc) {
+  // Muss exakt zu crud._normalize_description() im Backend passen, da
+  // ContractReminder ueber (account_id, description_key) eindeutig ist -
+  // sonst wuerde aus dieser Buchungsliste heraus eine zweite, nicht
+  // zusammengehoerende Erinnerung fuer dieselbe Zahlung entstehen.
+  if (!desc) return "";
+  let text = desc.trim().toLowerCase().replace(/\s+/g, " ");
+  text = text.replace(/\b\d{6,}\b/g, "");
+  return text.trim();
 }
 
 function openReturnDeadlineModal(transactionId) {
