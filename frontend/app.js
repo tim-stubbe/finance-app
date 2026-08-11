@@ -87,6 +87,17 @@ const ICON_PATHS = {
   send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
   "check-circle": '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>',
   map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/><path d="M9 4v14M15 6v14"/>',
+  home: '<path d="M4 11L12 4L20 11"/><path d="M6 10V19a1 1 0 0 0 1 1h4v-5h2v5h4a1 1 0 0 0 1-1V10"/>',
+  "layout-grid": '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+  list: '<path d="M4 7H20M4 12H20M4 17H14"/>',
+  briefcase: '<rect x="4" y="8" width="16" height="12" rx="1.5"/><path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',
+  "banknote-stack": '<path d="M4 6.5h16M4 12h16M4 17.5h9"/><path d="M15 17.5h5"/>',
+  image: '<rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/>',
+  sparkles: '<path d="M12 3L13.8 8.2L19 10L13.8 11.8L12 17L10.2 11.8L5 10L10.2 8.2L12 3Z"/><path d="M19 14L19.8 16.2L22 17L19.8 17.8L19 20L18.2 17.8L16 17L18.2 16.2L19 14Z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  palette: '<path d="M12 2a10 10 0 1 0 0 20c1.5 0 2-1 2-2s-.5-1.5-.5-2.5A2.5 2.5 0 0 1 16 15h2a4 4 0 0 0 4-4c0-5-4.5-9-10-9z"/><circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="16.5" cy="10.5" r="1" fill="currentColor" stroke="none"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"/>',
 };
 
 function svgIcon(name, cls = "empty-icon-svg") {
@@ -5925,3 +5936,146 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+
+// ================= COMMAND-PALETTE (Cmd/Ctrl+K) =================
+// Bewusst eine statische Liste statt eines Live-Index ueber echte Buchungen/
+// Positionen: die Palette soll blitzschnell oeffnen (kein Serveraufruf) und
+// deckt genau zwei Faelle ab, die im Alltag wirklich zaehlen - "wohin will
+// ich" (Seiten) und "was will ich jetzt anlegen" (Schnellaktionen). Eine
+// echte Volltextsuche ueber Buchungen waere ein eigenes, viel groesseres
+// Feature (Server-Query, Pagination, Relevanz-Ranking).
+const CMDK_NAV = [
+  { label: "Hub", tab: "hub", icon: "home" },
+  { label: "Dashboard", tab: "dashboard", icon: "layout-grid" },
+  { label: "Buchungen", tab: "transactions", icon: "list" },
+  { label: "Konten", tab: "accounts", icon: "landmark" },
+  { label: "Abos", tab: "recurring", icon: "repeat" },
+  { label: "Kategorien", tab: "categories", icon: "tag" },
+  { label: "Investments", tab: "investments", icon: "trending-up" },
+  { label: "Geschäftlich", tab: "business", icon: "briefcase" },
+  { label: "Schulden", tab: "debts", icon: "banknote-stack" },
+  { label: "Ziele", tab: "goals", icon: "target" },
+  { label: "KI-Assistent", tab: "ai", icon: "sparkles" },
+  { label: "Fotos", tab: "photos", icon: "image" },
+  { label: "Urlaube", tab: "trips", icon: "map" },
+  { label: "Einstellungen", tab: "settings", icon: "settings" },
+  { label: "Profil", tab: "profile", icon: "user" },
+];
+
+function cmdkGoTo(tab) {
+  return () => goToTab(tab);
+}
+
+const CMDK_ACTIONS = [
+  { label: "Neue Buchung", icon: "plus", run: () => { goToTab("transactions"); setTimeout(() => document.getElementById("tx-new-btn")?.click(), 150); } },
+  { label: "Neues Konto", icon: "plus", run: () => { goToTab("accounts"); setTimeout(() => document.getElementById("acc-name")?.focus(), 150); } },
+  { label: "Neuer Kredit", icon: "plus", run: () => { goToTab("debts"); setTimeout(() => document.getElementById("debt-new-btn")?.click(), 150); } },
+  { label: "Neues Ziel", icon: "plus", run: () => { goToTab("goals"); setTimeout(() => document.getElementById("goal-new-btn")?.click(), 150); } },
+  { label: "Neue Kategorie", icon: "plus", run: () => { goToTab("categories"); setTimeout(() => document.getElementById("cat-name")?.focus(), 150); } },
+  { label: "KI-Assistent öffnen", icon: "sparkles", run: () => document.getElementById("global-ai-fab")?.click() },
+  { label: "Theme: Dunkel", icon: "palette", run: () => applyTheme("dark") },
+  { label: "Theme: Hell", icon: "palette", run: () => applyTheme("light") },
+  { label: "Theme: Gelb", icon: "palette", run: () => applyTheme("yellow") },
+  { label: "Theme: Alpen", icon: "palette", run: () => applyTheme("alpen") },
+];
+
+let cmdkActiveIndex = 0;
+let cmdkCurrentItems = [];
+
+function cmdkFilteredItems(query) {
+  const q = query.trim().toLowerCase();
+  const navItems = CMDK_NAV
+    .filter(n => !q || n.label.toLowerCase().includes(q))
+    .map(n => ({ label: n.label, icon: n.icon, group: "Seiten", run: cmdkGoTo(n.tab) }));
+  const actionItems = CMDK_ACTIONS
+    .filter(a => !q || a.label.toLowerCase().includes(q))
+    .map(a => ({ label: a.label, icon: a.icon, group: "Aktionen", run: a.run }));
+  return [...navItems, ...actionItems];
+}
+
+function cmdkRender() {
+  const el = document.getElementById("cmdk-results");
+  if (!cmdkCurrentItems.length) {
+    el.innerHTML = `<div class="cmdk-empty">Nichts gefunden.</div>`;
+    return;
+  }
+  let lastGroup = null;
+  const rows = [];
+  cmdkCurrentItems.forEach((item, i) => {
+    if (item.group !== lastGroup) {
+      rows.push(`<div class="cmdk-group-label">${esc(item.group)}</div>`);
+      lastGroup = item.group;
+    }
+    rows.push(`<button type="button" class="cmdk-item ${i === cmdkActiveIndex ? "is-active" : ""}" data-cmdk-index="${i}">
+      ${svgIcon(item.icon, "")}
+      <span class="cmdk-item-label">${esc(item.label)}</span>
+    </button>`);
+  });
+  el.innerHTML = rows.join("");
+}
+
+function cmdkOpen() {
+  document.getElementById("cmdk-overlay").classList.remove("hidden");
+  const input = document.getElementById("cmdk-input");
+  input.value = "";
+  cmdkCurrentItems = cmdkFilteredItems("");
+  cmdkActiveIndex = 0;
+  cmdkRender();
+  input.focus();
+}
+
+function cmdkClose() {
+  document.getElementById("cmdk-overlay").classList.add("hidden");
+}
+
+function cmdkRunActive() {
+  const item = cmdkCurrentItems[cmdkActiveIndex];
+  if (!item) return;
+  cmdkClose();
+  item.run();
+}
+
+document.getElementById("cmdk-trigger").addEventListener("click", cmdkOpen);
+document.getElementById("cmdk-overlay").addEventListener("click", e => {
+  if (e.target.id === "cmdk-overlay") cmdkClose();
+});
+document.getElementById("cmdk-input").addEventListener("input", e => {
+  cmdkCurrentItems = cmdkFilteredItems(e.target.value);
+  cmdkActiveIndex = 0;
+  cmdkRender();
+});
+document.getElementById("cmdk-results").addEventListener("click", e => {
+  const idx = e.target.closest("[data-cmdk-index]")?.dataset.cmdkIndex;
+  if (idx === undefined) return;
+  cmdkActiveIndex = parseInt(idx, 10);
+  cmdkRunActive();
+});
+document.getElementById("cmdk-input").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    cmdkActiveIndex = Math.min(cmdkActiveIndex + 1, cmdkCurrentItems.length - 1);
+    cmdkRender();
+    document.querySelector(".cmdk-item.is-active")?.scrollIntoView({ block: "nearest" });
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    cmdkActiveIndex = Math.max(cmdkActiveIndex - 1, 0);
+    cmdkRender();
+    document.querySelector(".cmdk-item.is-active")?.scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    cmdkRunActive();
+  } else if (e.key === "Escape") {
+    cmdkClose();
+  }
+});
+
+document.addEventListener("keydown", e => {
+  const isK = e.key === "k" || e.key === "K";
+  if ((e.metaKey || e.ctrlKey) && isK) {
+    e.preventDefault();
+    const overlay = document.getElementById("cmdk-overlay");
+    overlay.classList.contains("hidden") ? cmdkOpen() : cmdkClose();
+  } else if (e.key === "Escape" && !document.getElementById("cmdk-overlay").classList.contains("hidden")) {
+    cmdkClose();
+  }
+});

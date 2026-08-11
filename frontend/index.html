@@ -149,6 +149,10 @@
         <button type="button" class="currency-toggle-btn active" data-currency="EUR">EUR</button>
         <button type="button" class="currency-toggle-btn" data-currency="CHF">CHF</button>
       </div>
+      <button type="button" id="cmdk-trigger" class="cmdk-trigger" title="Schnellsuche (Cmd/Ctrl+K)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <kbd>⌘K</kbd>
+      </button>
     </div>
 
     <!-- DASHBOARD -->
@@ -2019,6 +2023,18 @@
     <button type="submit" class="btn-primary" id="global-ai-send">Senden</button>
   </form>
   <p id="global-ai-status" class="page-sub"></p>
+</div>
+
+<!-- COMMAND-PALETTE (Cmd/Ctrl+K) -->
+<div id="cmdk-overlay" class="cmdk-overlay hidden">
+  <div class="cmdk-box" id="cmdk-box">
+    <div class="cmdk-input-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="cmdk-input" placeholder="Wohin, oder was tun? (z.B. „Buchung“, „Ziel“, „Theme“)" autocomplete="off">
+      <kbd class="cmdk-esc">Esc</kbd>
+    </div>
+    <div class="cmdk-results" id="cmdk-results"></div>
+  </div>
 </div>
 
 <div id="photo-lightbox" class="modal-overlay hidden">
