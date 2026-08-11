@@ -1728,9 +1728,24 @@ document.querySelectorAll("#cashflow-range-tabs .range-tab").forEach(btn => {
   });
 });
 
+async function loadPriceIncreases() {
+  const increases = await api("/transactions/price-increases");
+  const panel = document.getElementById("price-increase-panel");
+  panel.classList.toggle("hidden", increases.length === 0);
+  document.getElementById("price-increase-list").innerHTML = increases.map(p => `
+    <tr>
+      <td>${esc(p.description || "–")}</td>
+      <td>${esc(p.account_name || "–")}</td>
+      <td>${eur(p.old_amount)}</td>
+      <td class="row-amount-neg">${eur(p.new_amount)}</td>
+      <td class="row-amount-neg">+${p.increase_pct.toFixed(1).replace(".", ",")}%</td>
+      <td>${fmtDate(p.changed_date)}</td>
+    </tr>`).join("");
+}
+
 async function loadRecurringTab() {
   await loadCashflowForecast();
-  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders()]);
+  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders(), loadPriceIncreases()]);
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {

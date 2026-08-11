@@ -453,6 +453,20 @@
 
       <div class="cards" id="recurring-summary-cards"></div>
 
+      <div class="panel hidden" id="price-increase-panel">
+        <h3 class="panel-title">📈 Preiserhöhungen erkannt</h3>
+        <p class="page-sub">
+          Die letzte Abbuchung war spürbar teurer als die üblichen vorherigen Beträge derselben
+          wiederkehrenden Zahlung – reine Auswertung deiner Buchungen, keine Ankündigung des Anbieters.
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Bezeichnung</th><th>Konto</th><th>Bisher</th><th>Jetzt</th><th>Erhöhung</th><th>Seit</th></tr></thead>
+            <tbody id="price-increase-list"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="page-head" style="margin-bottom:10px">
           <h3 class="panel-title" style="margin:0">📉 Cashflow-Prognose</h3>

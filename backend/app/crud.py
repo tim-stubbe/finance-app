@@ -442,6 +442,79 @@ def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
     return results
 
 
+def detect_price_increases(db: Session, space_id: int) -> list[dict]:
+    """Erkennt Abos, deren letzte Abbuchung teurer war als die vorherigen üblichen -
+    reine Auswertung der ohnehin schon vorhandenen Buchungen, kein neuer Datenbestand
+    und keine Bestätigung/Rückfrage bei einer Bank nötig. Braucht mindestens 3
+    vorherige, zeitlich und betragsmäßig konsistente Zahlungen, um eine echte
+    Preiserhöhung von normaler Schwankung (Rundungsdifferenzen, Fremdwährungskurs)
+    zu unterscheiden - dieselbe Heuristik wie detect_recurring_transactions, nur mit
+    Blick auf die letzte Zahlung statt auf den Gesamt-Median."""
+    txs = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(models.Account.space_id == space_id)
+        .order_by(models.Transaction.date)
+        .all()
+    )
+    accounts = {a.id: a.name for a in get_accounts(db, space_id)}
+
+    groups: dict[tuple[int, str], list[models.Transaction]] = {}
+    for tx in txs:
+        norm = _normalize_description(tx.description)
+        if not norm:
+            continue
+        groups.setdefault((tx.account_id, norm), []).append(tx)
+
+    results = []
+    for (account_id, _norm), items in groups.items():
+        if len(items) < 4:
+            continue
+        items.sort(key=lambda t: t.date)
+        prior, last = items[:-1], items[-1]
+
+        gaps = [(prior[i + 1].date - prior[i].date).days for i in range(len(prior) - 1)]
+        if not gaps:
+            continue
+        gap_med = median(gaps)
+        freq_label = next(
+            (label for label, target, tol in _RECURRING_FREQUENCIES if abs(gap_med - target) <= tol), None,
+        )
+        if not freq_label:
+            continue
+        # Letzte Zahlung muss zeitlich noch zur Serie passen - sonst vermutlich
+        # gekündigt oder ein neues, unabhängiges Muster, keine "Erhöhung".
+        if (last.date - prior[-1].date).days > RECURRING_INTERVAL_DAYS[freq_label] * 1.5:
+            continue
+
+        prior_amounts = [t.amount for t in prior]
+        prior_median = median(prior_amounts)
+        if prior_median >= 0 or last.amount >= 0:
+            continue  # nur Ausgaben, keine wiederkehrenden Einnahmen (z.B. Gehalt)
+
+        consistent = sum(1 for a in prior_amounts if abs(a - prior_median) <= max(abs(prior_median) * 0.1, 1.0))
+        if consistent / len(prior_amounts) < 0.8:
+            continue  # vorher schon nicht stabil genug fuer eine verlaessliche Aussage
+
+        increase_pct = (abs(last.amount) - abs(prior_median)) / abs(prior_median)
+        if increase_pct < 0.05:
+            continue
+
+        results.append({
+            "description": last.description,
+            "account_id": account_id,
+            "account_name": accounts.get(account_id),
+            "frequency": freq_label,
+            "old_amount": round(prior_median, 2),
+            "new_amount": round(last.amount, 2),
+            "increase_pct": round(increase_pct * 100, 1),
+            "changed_date": last.date,
+        })
+
+    results.sort(key=lambda r: -r["increase_pct"])
+    return results
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 def _contract_reminder_out(r: models.ContractReminder, account_name: str | None) -> schemas.ContractReminderOut:
     reminder_date = r.renewal_date - timedelta(days=r.notice_period_days)

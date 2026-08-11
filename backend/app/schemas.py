@@ -557,6 +557,17 @@ class RecurringPaymentOut(BaseModel):
     total_amount: float
 
 
+class PriceIncreaseOut(BaseModel):
+    description: Optional[str] = None
+    account_id: int
+    account_name: Optional[str] = None
+    frequency: str
+    old_amount: float
+    new_amount: float
+    increase_pct: float
+    changed_date: date
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 class ContractReminderCreate(BaseModel):
     account_id: int
