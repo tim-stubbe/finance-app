@@ -4767,26 +4767,27 @@ async function loadHubTab() {
   const cardsEl = document.getElementById("hub-finance-cards");
   try {
     const [dash, nw] = await Promise.all([api("/dashboard"), api("/net-worth")]);
+    const hasDebts = nw.debts_total > 0;
     cardsEl.innerHTML = `
-      <button type="button" class="card card-pos" data-hub-jump="dashboard">
+      <button type="button" class="card hub-hero" data-hub-jump="investments">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><h3>Nettovermögen</h3><p>${eur(nw.total)}</p></div>
+      </button>
+      <button type="button" class="card card-pos hub-tile" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div><h3>Einnahmen (Jahr)</h3><p class="pos">${eur(dash.total_income)}</p></div>
       </button>
-      <button type="button" class="card card-neg" data-hub-jump="dashboard">
+      <button type="button" class="card card-neg hub-tile" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div><h3>Ausgaben (Jahr)</h3><p class="neg">${eur(dash.total_expense)}</p></div>
       </button>
-      <button type="button" class="card card-bal" data-hub-jump="dashboard">
+      <button type="button" class="card card-bal hub-tile ${hasDebts ? "" : "hub-tile-wide"}" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8 12H16M12 8V16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
         <div><h3>Saldo (Jahr)</h3><p>${eur(dash.balance)}</p></div>
-      </button>
-      <button type="button" class="card" data-hub-jump="investments">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div><h3>Nettovermögen</h3><p>${eur(nw.total)}</p></div>
       </button>`;
-    if (nw.debts_total > 0) {
+    if (hasDebts) {
       cardsEl.innerHTML += `
-        <button type="button" class="card card-neg" data-hub-jump="debts">
+        <button type="button" class="card card-neg hub-tile" data-hub-jump="debts">
           <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5h16M4 12h16M4 17.5h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
           <div><h3>Restschulden</h3><p class="neg">${eur(nw.debts_total)}</p></div>
         </button>`;
