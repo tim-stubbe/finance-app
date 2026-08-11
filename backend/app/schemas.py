@@ -769,6 +769,7 @@ class BelegChatApplyResult(BaseModel):
     ok: bool
     transaction_id: Optional[int] = None
     holding_id: Optional[int] = None
+    debt_id: Optional[int] = None
     message: str
 
 

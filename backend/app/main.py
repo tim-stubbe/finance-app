@@ -1509,6 +1509,70 @@ def beleg_chat_apply(data: schemas.BelegChatApply, db: Session = Depends(get_db)
         db.commit()
         return schemas.BelegChatApplyResult(ok=True, transaction_id=tx.id, message=f"Kategorie auf „{match.name}“ gesetzt.")
 
+    if data.type == "create_debt":
+        try:
+            original_amount = float(payload.get("original_amount"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Ungültiger oder fehlender finanzierter Betrag")
+        name = (_beleg_field_as_str(payload.get("name")) or "").strip()
+        if not name:
+            raise HTTPException(400, "Name fehlt")
+
+        def _opt_date(key: str) -> Optional[date]:
+            val = payload.get(key)
+            try:
+                return date.fromisoformat(str(val)) if val else None
+            except ValueError:
+                return None
+
+        def _opt_float(key: str) -> Optional[float]:
+            val = payload.get(key)
+            try:
+                return float(val) if val is not None and val != "" else None
+            except (TypeError, ValueError):
+                return None
+
+        debt = crud.create_debt(db, schemas.DebtCreate(
+            name=name,
+            lender=_beleg_field_as_str(payload.get("lender")),
+            original_amount=original_amount,
+            interest_rate_percent=_opt_float("interest_rate_percent") or 0.0,
+            monthly_payment=_opt_float("monthly_payment"),
+            start_date=_opt_date("start_date"),
+            planned_end_date=_opt_date("planned_end_date"),
+            account_id=payload.get("resolved_account_id"),
+            notes=_beleg_field_as_str(payload.get("notes")),
+        ), space_id)
+
+        payments_created = 0
+        for pay in payload.get("payments") or []:
+            if not isinstance(pay, dict):
+                continue
+            try:
+                pay_date = date.fromisoformat(str(pay.get("date")))
+                pay_amount = float(pay.get("total_amount"))
+            except (TypeError, ValueError):
+                continue
+            interest_val = pay.get("interest_amount")
+            try:
+                interest_amount = float(interest_val) if interest_val is not None and interest_val != "" else None
+            except (TypeError, ValueError):
+                interest_amount = None
+            crud.create_debt_payment(db, debt.id, space_id, schemas.DebtPaymentCreate(
+                date=pay_date,
+                total_amount=pay_amount,
+                interest_amount=interest_amount,
+                transaction_id=pay.get("resolved_transaction_id"),
+                notes=_beleg_field_as_str(pay.get("notes")),
+            ))
+            payments_created += 1
+
+        db.refresh(debt)
+        return schemas.BelegChatApplyResult(
+            ok=True, debt_id=debt.id,
+            message=f"Schuld „{debt.name}“ angelegt ({payments_created} Zahlung(en) verknüpft, Restschuld {debt.current_balance:.2f} EUR).",
+        )
+
     if data.type == "mark_transfer":
         tx_id = payload.get("transaction_id")
         tx = crud.get_transaction(db, tx_id, space_id) if tx_id else None
@@ -1527,7 +1591,7 @@ ASSISTANT_CHAT_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem priva
 auf jeder Seite der App. Der Nutzer gibt dir Anweisungen oder Fragen in normaler Sprache. Antworte immer kurz \
 und freundlich auf Deutsch.
 
-Du kannst DREI Arten von Vorschlägen machen, wenn eindeutig danach gefragt wird - dafür gibst du am Ende \
+Du kannst VIER Arten von Vorschlägen machen, wenn eindeutig danach gefragt wird - dafür gibst du am Ende \
 deiner Antwort einen JSON-Block in dreifachen Backticks mit "json" aus:
 
 1. Neue Buchung anlegen:
@@ -1547,6 +1611,29 @@ Einnahme/Ausgabe):
 ```json
 {"type": "mark_transfer", "date": "YYYY-MM-DD", "amount": -500.00, "description": "Überweisung"}
 ```
+
+4. Eine Schuld/Ratenkauf anlegen (z.B. "PayPal Später bezahlen", Ratenkredit, Kleinkredit) - typischerweise, \
+wenn der Nutzer einen Einkauf beschreibt, den er in festen Raten abbezahlt. Die eigentliche Kaufbuchung (der \
+volle Betrag) ist meist schon als normale Buchung importiert - lass die unangetastet, hier geht es NUR um die \
+Ratenzahlungsvereinbarung und die bereits geleisteten Raten:
+```json
+{"type": "create_debt", "name": "PayPal Später bezahlen – <Händler>", "lender": "PayPal",
+ "account_description": "<Kontoname, über das die Raten laufen>", "original_amount": 604.98,
+ "interest_rate_percent": 11.8, "monthly_payment": 28.42, "start_date": "2026-06-25",
+ "planned_end_date": "2028-06-25", "notes": "24 Raten à 28,42€, gesamt 682,10€.",
+ "payments": [
+   {"date": "2026-07-09", "total_amount": 0.18, "notes": "Manuelle Zahlung"},
+   {"date": "2026-07-25", "total_amount": 28.42, "interest_amount": 5.95, "notes": "Automatischer Einzug"}
+ ]}
+```
+Regeln dafür: "original_amount" ist der tatsächliche Kaufpreis/finanzierte Betrag OHNE künftige Zinsen (nicht \
+die Summe aller Raten). "interest_rate_percent" ist der effektive Jahreszins, falls genannt; ist nur der \
+Zinsanteil EINER Zahlung bekannt (nicht der Jahreszins selbst), rechne ihn hoch (Zinsanteil × 12 ÷ original_amount \
+× 100) und weise im Fließtext darauf hin, dass das eine Schätzung ist. Ist gar nichts zur Verzinsung bekannt, lass \
+"interest_rate_percent" weg. "payments" enthält nur bereits tatsächlich geleistete Zahlungen (kann eine leere \
+Liste sein) - "interest_amount" pro Zahlung nur setzen, wenn der Nutzer den Zinsanteil dieser konkreten Zahlung \
+explizit genannt hat, sonst weglassen. Erfinde keine Zahlen, die nicht genannt wurden oder sich nicht eindeutig \
+herleiten lassen - frag im Zweifel nach.
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben) nutze NUR die unten mitgelieferten Fakten und \
 antworte im Fließtext OHNE JSON-Block - erfinde keine Zahlen. Bist du dir bei einer Aktion nicht sicher oder \
@@ -1578,13 +1665,53 @@ def _assistant_context(db: Session, space_id: int) -> str:
     if nw.debts_total:
         lines.append(f"- Offene Schulden: {nw.debts_total:.2f} EUR")
     lines.append(f"- Nettovermögen: {nw.total:.2f} EUR")
+    debts = crud.get_debts(db, space_id)
+    if debts:
+        lines.append("Vorhandene Schulden/Ratenkäufe: " + ", ".join(
+            f"„{d.name}“ ({d.current_balance:.2f} EUR offen)" for d in debts if d.status == models.DebtStatus.active
+        ))
     categories = crud.get_categories(db)
     if categories:
         lines.append("Vorhandene Kategorien: " + ", ".join(c.name for c in categories))
     return "\n".join(lines)
 
 
-ASSISTANT_PROPOSAL_TYPES = ("transaction", "update_category", "mark_transfer")
+ASSISTANT_PROPOSAL_TYPES = ("transaction", "update_category", "mark_transfer", "create_debt")
+
+
+def _resolve_debt_proposal(db: Session, space_id: int, p: dict) -> None:
+    """Löst account_description auf ein echtes Konto auf und versucht, jede
+    genannte Zahlung einer bereits importierten Buchung zuzuordnen (die KI kennt
+    keine internen Konto-/Buchungs-IDs). Buchungen ohne eindeutigen Treffer werden
+    trotzdem angelegt, nur ohne Verknüpfung."""
+    account_desc = (p.get("account_description") or "").strip().lower()
+    account = None
+    if account_desc:
+        account = next(
+            (a for a in crud.get_accounts(db, space_id) if account_desc in a.name.lower() or a.name.lower() in account_desc),
+            None,
+        )
+    p["resolved_account_id"] = account.id if account else None
+    p["resolved_account_name"] = account.name if account else None
+
+    for payment in p.get("payments") or []:
+        if not isinstance(payment, dict):
+            continue
+        try:
+            pay_date = date.fromisoformat(str(payment.get("date")))
+            amount = float(payment.get("total_amount"))
+        except (TypeError, ValueError):
+            continue
+        candidates = [
+            t for t in crud.get_transactions(db, space_id)
+            if (not account or t.account_id == account.id)
+            and abs(abs(t.amount) - abs(amount)) < 0.01
+            and abs((t.date - pay_date).days) <= 3
+        ]
+        if len(candidates) == 1:
+            t = candidates[0]
+            payment["resolved_transaction_id"] = t.id
+            payment["resolved_transaction_label"] = f"{t.date.isoformat()} · {t.amount:.2f} EUR · {t.description or 'ohne Beschreibung'}"
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
 
 
@@ -1663,6 +1790,8 @@ def assistant_chat(
             duplicate_matches = _find_duplicate_matches(db, space_id, p_amount, p_date)
             if duplicate_matches:
                 p["duplicate_matches"] = duplicate_matches
+        elif p.get("type") == "create_debt":
+            _resolve_debt_proposal(db, space_id, p)
 
     reply_clean = _SEARCH_BLOCK_RE.sub("", _JSON_BLOCK_RE.sub("", reply_raw)).strip()
     if not reply_clean:
