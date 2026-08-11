@@ -129,21 +129,82 @@ def sync(db: Session, conn: models.EnableBankingConnection, app_id: str, private
         return {"imported": 0, "skipped": 0, "error": str(e)}
 
 
+def _account_uid(acc) -> str | None:
+    if isinstance(acc, dict):
+        return acc.get("uid")
+    return str(acc) if acc else None
+
+
+def _account_label(index: int, acc: dict) -> str:
+    """Ein PSU kann bei einer Bank mehrere Konten gleichzeitig freigeben (live
+    beobachtet: 3 C24-Konten in einer Autorisierung) - jedes zusätzliche Konto
+    braucht einen eigenen, unterscheidbaren Namen, da wir dafür automatisch ein
+    neues Konto anlegen (siehe finalize_connection). Enable Bankings genaue
+    Feldbenennung variiert je Bank, deshalb mehrere gängige Felder probieren
+    statt eins fest anzunehmen."""
+    name = acc.get("name") or acc.get("product") or acc.get("cash_account_type")
+    account_id = acc.get("account_id")
+    iban = (account_id.get("iban") if isinstance(account_id, dict) else None) or acc.get("iban")
+    if name and iban:
+        return f"{name} ({iban[-4:]})"
+    if name:
+        return str(name)
+    if iban:
+        return f"Konto ({iban[-4:]})"
+    return f"Konto {index}"
+
+
 def finalize_connection(db: Session, conn: models.EnableBankingConnection, app_id: str, private_key_pem: str, code: str) -> dict:
+    """Eine Autorisierung kann MEHRERE Konten gleichzeitig freigeben (z.B. Haupt-,
+    Investment- und Urlaubskonto bei C24 in einer einzigen Freigabe) - die ID des
+    Nutzers, die vorab für GENAU EIN Konto in der App angelegte `conn`, deckt aber
+    nur das erste ab. Für jedes weitere Konto wird automatisch ein neues Konto samt
+    eigener Verbindung angelegt (gleiche Sitzung, eigene Konto-ID) statt die
+    zusätzlichen Konten stillschweigend zu verwerfen - das ist live beobachtet
+    tatsächlich passiert, bevor dieser Fix kam."""
     try:
         session = create_session(app_id, private_key_pem, code)
         accounts = session.get("accounts") or []
         if not accounts:
             raise ValueError("Keine Konten von der Bank zurückgegeben")
-        first = accounts[0]
-        eb_account_id = first.get("uid") if isinstance(first, dict) else str(first)
+
+        eb_account_id = _account_uid(accounts[0])
         if not eb_account_id:
             raise ValueError("Konnte Konto-ID aus der Enable-Banking-Antwort nicht auslesen")
         conn.session_id = session.get("session_id")
         conn.eb_account_id = eb_account_id
         conn.status = "linked"
         db.commit()
-        return sync(db, conn, app_id, private_key_pem)
+        result = sync(db, conn, app_id, private_key_pem)
+        total_imported, total_skipped = result["imported"], result["skipped"]
+
+        extra_linked = 0
+        for i, acc in enumerate(accounts[1:], start=2):
+            extra_eb_account_id = _account_uid(acc if isinstance(acc, dict) else {})
+            if not extra_eb_account_id:
+                continue
+            new_account = models.Account(
+                name=_account_label(i, acc if isinstance(acc, dict) else {}),
+                type=models.AccountType.girokonto, initial_balance=0.0, space_id=conn.space_id,
+            )
+            db.add(new_account)
+            db.commit()
+            db.refresh(new_account)
+            extra_conn = models.EnableBankingConnection(
+                space_id=conn.space_id, account_id=new_account.id,
+                aspsp_name=conn.aspsp_name, aspsp_country=conn.aspsp_country,
+                state=f"{conn.state}:{i}", session_id=conn.session_id,
+                eb_account_id=extra_eb_account_id, status="linked",
+            )
+            db.add(extra_conn)
+            db.commit()
+            db.refresh(extra_conn)
+            extra_result = sync(db, extra_conn, app_id, private_key_pem)
+            total_imported += extra_result["imported"]
+            total_skipped += extra_result["skipped"]
+            extra_linked += 1
+
+        return {"imported": total_imported, "skipped": total_skipped, "error": None, "extra_accounts_linked": extra_linked}
     except Exception as e:
         # Session nach fehlgeschlagenem Flush freigeben, sonst wirft das commit() erneut.
         db.rollback()
