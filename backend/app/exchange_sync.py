@@ -1,12 +1,12 @@
 import hashlib
 import hmac
 import time
-from datetime import datetime
+from datetime import date, datetime
 
 import requests
 from sqlalchemy.orm import Session
 
-from . import models, crud, prices
+from . import models, crud, prices, schemas
 
 BASE_URL = "https://api.bitvavo.com/v2"
 
@@ -48,6 +48,20 @@ def fetch_balance(api_key: str, api_secret: str) -> list[dict]:
     return resp.json()
 
 
+def fetch_trades(api_key: str, api_secret: str, market: str, limit: int = 1000) -> list[dict]:
+    """Echte, mit Datum versehene Käufe/Verkäufe für einen Markt (z.B. "BTC-EUR") -
+    im Gegensatz zu /balance (nur der aktuelle Gesamtbestand) lässt sich damit
+    tatsächlich nachvollziehen, WANN und ZU WELCHEM Kurs gehandelt wurde. Live
+    beobachtet: Bitvavo hat keinen öffentlichen Endpunkt für Staking-/Lending-
+    Erträge (/staking, /lending -> 404) - die Differenz zwischen dem hier
+    ermittelten Handelsbestand und dem tatsächlichen /balance-Bestand wird
+    deshalb in sync() als Ertrag behandelt (siehe dort)."""
+    url_path = f"/v2/trades?market={market}&limit={limit}"
+    resp = requests.get(f"https://api.bitvavo.com{url_path}", headers=_headers(api_key, api_secret, "GET", url_path), timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def sync(db: Session, conn: models.BitvavoConnection, api_key: str, api_secret: str, space_id: int) -> dict:
     try:
         balances = fetch_balance(api_key, api_secret)
@@ -84,7 +98,7 @@ def sync(db: Session, conn: models.BitvavoConnection, api_key: str, api_secret: 
         price_by_id = {}
         price_fetch_error = str(e)
 
-    created, updated, failed = 0, 0, []
+    created, updated, failed, trade_lots_added, reward_amount_total = 0, 0, [], 0, 0.0
     for symbol, qty, coingecko_id in relevant:
         current_price = price_by_id.get(coingecko_id)
         if current_price is None:
@@ -93,25 +107,70 @@ def sync(db: Session, conn: models.BitvavoConnection, api_key: str, api_secret: 
 
         existing = holdings_by_symbol.get(coingecko_id.lower())
         if existing:
-            existing.quantity = qty
-            if current_price is not None:
-                existing.current_price = current_price
-                existing.price_updated_at = datetime.utcnow()
+            holding = existing
             updated += 1
         else:
-            db.add(models.Holding(
-                space_id=space_id,
-                asset_type=models.AssetType.krypto,
-                name=symbol,
-                symbol=coingecko_id,
-                quantity=qty,
-                purchase_price=current_price if current_price is not None else 0.0,
-                current_price=current_price,
-                price_updated_at=datetime.utcnow() if current_price is not None else None,
-            ))
+            # Bewusst mit quantity=0 anlegen statt wie frueher direkt mit dem
+            # aktuellen Bestand - die Stueckzahl soll ausschliesslich aus echten
+            # Lots (siehe unten) hervorgehen, sonst entsteht wieder ein einzelner
+            # "Kauf"-Lot fuer den kompletten Bestand (crud.create_holding legt bei
+            # quantity>0 automatisch genau so einen Lot an).
+            holding = crud.create_holding(db, schemas.HoldingCreate(
+                asset_type=models.AssetType.krypto, name=symbol, symbol=coingecko_id,
+                quantity=0, purchase_price=0.0,
+            ), space_id)
+            holdings_by_symbol[coingecko_id.lower()] = holding
             created += 1
 
+        # Echte Käufe/Verkäufe aus der Handelshistorie übernehmen (korrekte Daten
+        # und Kurse statt "heute" zu unterstellen) - bereits importierte Trades
+        # anhand (Datum, Menge, Preis) nicht doppelt anlegen.
+        try:
+            trades = fetch_trades(api_key, api_secret, f"{symbol}-EUR")
+        except Exception:
+            trades = []
+        known = {
+            (l.date, round(l.quantity, 8), round(l.price_per_unit, 8))
+            for l in holding.lots if l.type in (models.LotType.kauf, models.LotType.verkauf)
+        }
+        for t in trades:
+            amount = float(t.get("amount") or 0)
+            price = float(t.get("price") or 0)
+            ts = t.get("timestamp")
+            if amount <= 0 or not ts:
+                continue
+            trade_date = datetime.utcfromtimestamp(ts / 1000).date()
+            key = (trade_date, round(amount, 8), round(price, 8))
+            if key in known:
+                continue
+            lot_type = models.LotType.kauf if t.get("side") == "buy" else models.LotType.verkauf
+            crud.create_lot(db, holding.id, space_id, schemas.HoldingLotCreate(
+                date=trade_date, type=lot_type, quantity=amount, price_per_unit=price,
+            ))
+            trade_lots_added += 1
+        db.refresh(holding)
+
+        # Rest zwischen dem echten Bitvavo-Gesamtbestand und dem, was die
+        # Handelshistorie erklärt, sind Staking-/Lending-Erträge (Bitvavo hat dafür
+        # öffentlich keine eigene Historie, siehe fetch_trades-Docstring) - als
+        # eigener Lot mit Einstandspreis 0 verbucht statt als "Kauf" mitgezählt.
+        reward_amount = round(qty - holding.quantity, 8)
+        if reward_amount > 1e-8:
+            crud.create_lot(db, holding.id, space_id, schemas.HoldingLotCreate(
+                date=date.today(), type=models.LotType.staking, quantity=reward_amount, price_per_unit=0.0,
+            ))
+            reward_amount_total += reward_amount
+            db.refresh(holding)
+
+        if current_price is not None:
+            holding.current_price = current_price
+            holding.price_updated_at = datetime.utcnow()
+
     conn.last_sync_at = datetime.utcnow()
-    conn.last_sync_status = f"OK: {created} neu, {updated} aktualisiert" + (f", {len(failed)} ohne Kurs" if failed else "")
+    conn.last_sync_status = (
+        f"OK: {created} neu, {updated} aktualisiert, {trade_lots_added} Trade(s) importiert"
+        + (f", Staking/Lending-Ertrag verbucht" if reward_amount_total > 0 else "")
+        + (f", {len(failed)} ohne Kurs" if failed else "")
+    )
     db.commit()
     return {"created": created, "updated": updated, "failed": failed, "error": None}
