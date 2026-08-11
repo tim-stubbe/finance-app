@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models, crud
@@ -44,6 +45,24 @@ def list_aspsps(app_id: str, private_key_pem: str, country: str) -> list[dict]:
     return data.get("aspsps", data if isinstance(data, list) else [])
 
 
+def _supported_psu_type(app_id: str, private_key_pem: str, aspsp_name: str, aspsp_country: str) -> str:
+    """Manche ASPSPs unterstützen NUR "business" (live beobachtet: Finom, das gibt
+    es nur als Geschäftskonto) - das bisher fest verdrahtete "personal" ließ den
+    /auth-Aufruf für solche Banken mit der irreführenden Meldung "Wrong ASPSP name
+    provided" fehlschlagen (der eigentliche Fehler war der psu_type, nicht der
+    Name). "personal" bevorzugt, wenn unterstützt (deckt die große Mehrheit der
+    Banken ab), sonst der erste von der ASPSP selbst gemeldete Typ. Schlägt die
+    Abfrage fehl, bleibt "personal" als bisheriges Verhalten erhalten."""
+    try:
+        for a in list_aspsps(app_id, private_key_pem, aspsp_country):
+            if a.get("name") == aspsp_name:
+                supported = a.get("psu_types") or ["personal"]
+                return "personal" if "personal" in supported else supported[0]
+    except Exception:
+        pass
+    return "personal"
+
+
 def start_auth(app_id: str, private_key_pem: str, aspsp_name: str, aspsp_country: str, redirect_url: str, state: str) -> str:
     valid_until = (datetime.now(timezone.utc) + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
     body = {
@@ -51,7 +70,7 @@ def start_auth(app_id: str, private_key_pem: str, aspsp_name: str, aspsp_country
         "aspsp": {"name": aspsp_name, "country": aspsp_country},
         "state": state,
         "redirect_url": redirect_url,
-        "psu_type": "personal",
+        "psu_type": _supported_psu_type(app_id, private_key_pem, aspsp_name, aspsp_country),
     }
     resp = requests.post(f"{BASE_URL}/auth", json=body, headers=_headers(app_id, private_key_pem), timeout=15)
     resp.raise_for_status()
@@ -124,10 +143,41 @@ def import_transactions(db: Session, account_id: int, transactions: list[dict]) 
     return {"imported": imported, "skipped": skipped}
 
 
+def fetch_account_balance(app_id: str, private_key_pem: str, eb_account_id: str, currency: str = "EUR") -> float | None:
+    url_path = f"/accounts/{eb_account_id}/balances"
+    resp = requests.get(f"{BASE_URL}{url_path}", headers=_headers(app_id, private_key_pem), timeout=15)
+    resp.raise_for_status()
+    for b in resp.json().get("balances", []):
+        if b.get("name") == currency:
+            return float(b["balance_amount"]["amount"])
+    return None
+
+
 def sync(db: Session, conn: models.EnableBankingConnection, app_id: str, private_key_pem: str) -> dict:
     try:
         transactions = get_transactions(app_id, private_key_pem, conn.eb_account_id)
         result = import_transactions(db, conn.account_id, transactions)
+
+        # Echten Kontostand von der Bank abgleichen, statt ihn blind aus der Summe
+        # der importierten Buchungen abzuleiten. Bei einem klassischen Bankkonto
+        # stimmt "Summe aller Buchungen ab Start" mit dem Saldo überein - bei einem
+        # Zahlungsdienst wie PayPal NICHT: live beobachtet 0,00 € echter Saldo
+        # gegen -3.565,46 € aus reiner Buchungssumme, weil viel Geld nur
+        # durchfließt, ohne dass PayPal es tatsächlich dauerhaft hält. initial_balance
+        # wird deshalb bei jedem Sync so nachjustiert, dass initial_balance + Summe
+        # aller Buchungen wieder exakt dem von der Bank gemeldeten Saldo entspricht.
+        try:
+            real_balance = fetch_account_balance(app_id, private_key_pem, conn.eb_account_id)
+            if real_balance is not None:
+                account = db.get(models.Account, conn.account_id)
+                if account:
+                    tx_sum = db.query(func.coalesce(func.sum(models.Transaction.amount), 0.0)).filter(
+                        models.Transaction.account_id == account.id
+                    ).scalar() or 0.0
+                    account.initial_balance = round(real_balance - tx_sum, 2)
+        except Exception:
+            pass  # Saldo-Abgleich ist ein Bonus - darf den Sync nicht scheitern lassen
+
         conn.last_sync_at = datetime.utcnow()
         conn.last_sync_status = f"OK: {result['imported']} neu, {result['skipped']} bereits vorhanden"
         db.commit()
