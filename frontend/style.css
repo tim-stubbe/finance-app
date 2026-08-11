@@ -1798,6 +1798,18 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .brand-name { display: none; }
   .nav { flex-direction: row; flex: 1; overflow-x: auto; }
   .nav-btn { flex-direction: column; gap: 4px; font-size: 11px; padding: 8px 10px; white-space: nowrap; }
+  /* Abschnitts-Labels ergeben in der waagrechten Icon-Leiste keinen Sinn -
+     ausblenden statt als schmale, gequetschte Spalte mitzuscrollen. Der
+     abgepinnte Bereich (Einstellungen/Profil) wird hier Teil derselben
+     Reihe statt eines eigenen, durch einen Trenner abgesetzten Blocks. */
+  .nav-section-label { display: none; }
+  .nav-bottom {
+    flex-direction: row;
+    flex-shrink: 0;
+    padding-top: 0;
+    margin-top: 0;
+    border-top: none;
+  }
   /* max-width/margin:auto hier zuruecknehmen: in der Spalten-Flexbox schaltet
      ein automatischer Seitenrand das Dehnen auf die Containerbreite ab, main
      bemisst sich dann am Inhalt und wird breiter als der Bildschirm. */
@@ -1808,6 +1820,16 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .form-grid { grid-template-columns: 1fr; }
   .modal-box { padding: 20px; max-height: none; }
   .modal-overlay { padding: 16px 10px; }
+
+  /* Tabellen sind auf dem Handy fast immer breiter als der Bildschirm und
+     scrollen waagrecht (siehe .table-wrap oben) - ohne sichtbaren Hinweis
+     sieht das aber wie hart abgeschnittener Inhalt statt wie "wischen fuer
+     mehr" aus. Die Maske blendet den rechten Rand aus, unabhaengig vom
+     Theme (wirkt auf die Deckkraft, nicht auf eine Ueberlagerungsfarbe). */
+  .table-wrap {
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 26px), transparent);
+  }
 }
 
 /* ---------- Einrichtungsstatus der Anbindungen ---------- */
