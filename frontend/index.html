@@ -1325,6 +1325,7 @@
 
       <div class="range-tabs" id="photos-subtabs" style="margin-bottom:20px">
         <button type="button" class="range-tab active" data-photos-view="duplicates"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 15l-5-5L5 19"/></svg> Duplikate</button>
+        <button type="button" class="range-tab" data-photos-view="all"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg> Alle Fotos</button>
         <button type="button" class="range-tab" data-photos-view="screenshots"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg> Screenshots</button>
         <button type="button" class="range-tab" data-photos-view="quality"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16a4 4 0 1 1 1-7.9A5 5 0 0 1 17 10a3.5 3.5 0 0 1-.5 7H6z"/></svg> Unnötige Fotos</button>
         <button type="button" class="range-tab" data-photos-view="people"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 13c2.8 0 5 2 5 5"/></svg> Personen</button>
@@ -1333,6 +1334,17 @@
       <div id="photos-view-duplicates">
         <div id="photos-summary" class="photos-summary hidden"></div>
         <div id="photos-groups"></div>
+      </div>
+
+      <div id="photos-view-all" class="hidden">
+        <div class="panel">
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg> Alle Fotos durchwischen</h3>
+          <p class="page-sub">
+            Ohne Filter, ohne Vorauswahl – wirklich jedes Foto der Bibliothek, der Reihe nach.
+            Nach rechts wischen = behalten, nach links = Papierkorb.
+          </p>
+        </div>
+        <div id="all-swipe" class="swipe-view"></div>
       </div>
 
       <div id="photos-view-screenshots" class="hidden">

@@ -2630,6 +2630,65 @@ def immich_trash_screenshots(data: schemas.ImmichTrashRequest, db: Session = Dep
     return schemas.ImmichTrashResult(trashed=len(data.asset_ids), freed_bytes=freed)
 
 
+PHOTOS_PAGE_SIZE = 60
+
+
+@api_router.get("/immich/photos", response_model=schemas.ImmichPhotosOut)
+def immich_photos(offset: int = 0, limit: int = PHOTOS_PAGE_SIZE, db: Session = Depends(get_db)):
+    """Blaettert ohne jeden Filter durch die gesamte Bibliothek - fuer den
+    Swipe-Modus 'Alle Fotos', der bewusst nicht wie Screenshots/Unschaerfe auf
+    einen engeren Kandidaten-Ausschnitt beschraenkt ist, sondern wirklich jedes
+    Foto zeigt."""
+    url, key = _immich_credentials(db)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    # Immichs eigene Seitenzaehlung ist 1-basiert und pro Seite fest an `limit`
+    # gebunden - offset muss daher ein Vielfaches von limit sein. Das ist die
+    # einzige Art, wie das Frontend diesen Endpunkt tatsaechlich aufruft
+    # (0, 60, 120, ... - siehe SWIPE_CONFIG).
+    page_num = offset // limit + 1
+    try:
+        raw, has_more = immich.list_assets_page(url, key, page_num, size=limit)
+    except Exception as e:
+        raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception:
+        trash = {"enabled": True, "days": None}
+    return schemas.ImmichPhotosOut(
+        assets=[schemas.ImmichAssetOut(**immich.asset_summary(a)) for a in raw],
+        offset=offset, limit=limit, has_more=has_more,
+        trash_enabled=trash["enabled"], trash_days=trash["days"],
+    )
+
+
+@api_router.post("/immich/photos/trash", response_model=schemas.ImmichTrashResult)
+def immich_trash_photos(data: schemas.ImmichTrashRequest, db: Session = Depends(get_db)):
+    """Wirft Fotos aus dem Swipe-Modus 'Alle Fotos' weg. Anders als bei
+    Screenshots/Unschaerfe gibt es hier keinen engeren Kandidatenkreis, gegen
+    den sich die IDs serverseitig gegenpruefen liessen - jedes Foto der
+    Bibliothek ist hier ein gueltiges Ziel, genau wie beim Aufloesen einer
+    Duplikat-Gruppe."""
+    url, key = _immich_credentials(db)
+    if not data.asset_ids:
+        raise HTTPException(400, "Es wurde nichts ausgewählt.")
+    try:
+        trash = immich.trash_config(url, key)
+    except Exception as e:
+        raise HTTPException(502, f"Papierkorb-Einstellung nicht prüfbar, abgebrochen: {e}")
+    if not trash["enabled"]:
+        raise HTTPException(
+            400,
+            "Abgebrochen: In Immich ist der Papierkorb abgeschaltet. Aussortierte "
+            "Bilder wären sofort unwiderruflich gelöscht. Es wurde nichts geändert.",
+        )
+    try:
+        immich.trash_assets(url, key, data.asset_ids)
+    except Exception as e:
+        raise HTTPException(502, f"Immich hat die Änderung abgelehnt: {e}")
+    return schemas.ImmichTrashResult(trashed=len(data.asset_ids), freed_bytes=0)
+
+
 QUALITY_PAGE_SIZE = 60
 
 

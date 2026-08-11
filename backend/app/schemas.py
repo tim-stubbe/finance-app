@@ -1140,6 +1140,15 @@ class ImmichSimilarityOut(BaseModel):
     error: Optional[str] = None
 
 
+class ImmichPhotosOut(BaseModel):
+    assets: List[ImmichAssetOut]
+    offset: int
+    limit: int
+    has_more: bool
+    trash_enabled: bool = True
+    trash_days: Optional[int] = None
+
+
 class ImmichTrashRequest(BaseModel):
     asset_ids: List[str]
 

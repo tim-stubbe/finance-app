@@ -2232,8 +2232,6 @@ async function loadPhotosTab(offset = 0) {
     g.assets.sort((a, b) => (b.id === suggested) - (a.id === suggested));
     photoTrash.set(g.duplicate_id, new Set(g.assets.filter(a => a.id !== suggested).map(a => a.id)));
   });
-  photoGroupsCache = data.groups;
-
   summary.classList.remove("hidden");
   if (data.total_groups === 0) {
     summary.innerHTML = `<strong>Keine Duplikate gefunden.</strong> Deine Bibliothek ist sauber.`;
@@ -2254,8 +2252,28 @@ async function loadPhotosTab(offset = 0) {
     Wähle je Gruppe, welche Bilder in den Papierkorb sollen – jedes Bild einzeln,
     auch alle oder keins. ${trashNote}`;
 
+  // Auf Wunsch zuerst die staerksten Uebereinstimmungen zeigen (100% zuerst,
+  // absteigend) statt Immichs eigener Reihenfolge - dafuer muss die
+  // Uebereinstimmung schon VOR dem ersten Rendern je Gruppe feststehen, die
+  // Seite wartet also kurz laenger (nur die eine geladene Seite von 20
+  // Gruppen, dank Hash-Cache in immich.py bei erneutem Besuch sofort da).
+  wrap.innerHTML = `<p class="page-sub loading-pulse">Vergleiche Aufnahmen …</p>`;
+  await loadSimilarities(data.groups);
+  data.groups.sort((a, b) => groupMaxSimilarity(b.duplicate_id) - groupMaxSimilarity(a.duplicate_id));
+  photoGroupsCache = data.groups;
+
   renderPhotoGroups();
-  loadSimilarities(data.groups);
+}
+
+function groupMaxSimilarity(duplicateId) {
+  const pairs = photoSimilarity.get(duplicateId) || {};
+  let max = 0;
+  for (const inner of Object.values(pairs)) {
+    for (const pct of Object.values(inner)) {
+      if (pct > max) max = pct;
+    }
+  }
+  return max;
 }
 
 // Nacheinander statt alle gleichzeitig: jede Gruppe bedeutet mehrere
@@ -2270,14 +2288,6 @@ async function loadSimilarities(groups) {
     } catch (e) {
       photoSimilarity.set(g.duplicate_id, {});
     }
-    // Nur die eine betroffene Gruppe aktualisieren, NICHT renderPhotoGroups()
-    // (kompletter Neuaufbau der Liste) aufrufen. Das lief bisher bei jedem
-    // einzelnen nachkommenden Ergebnis, oft mehrfach pro Sekunde bei vielen
-    // Gruppen - ein Klick, der genau in diesem Moment stattfand, traf dann
-    // eine Karte, die der Browser gerade durch eine neue ersetzt hatte
-    // ("Element is not attached to the DOM"). Sichtbar als kurzes Aufflackern
-    // ohne jede Wirkung.
-    updateSimilarityBadges(g.duplicate_id);
   }
 }
 
@@ -2647,6 +2657,28 @@ document.getElementById("photos-goto-settings").addEventListener("click", () => 
   document.querySelector('.nav-btn[data-tab="settings"]').click();
 });
 
+// ---------- Alle Fotos (ungefiltert, nur Swipe-Modus) ----------
+let allPhotosState = { offset: 0, hasMore: true, assets: [], trashEnabled: true };
+
+async function loadAllPhotos(offset = 0) {
+  let d;
+  try {
+    d = await api(`/immich/photos?offset=${offset}&limit=60`);
+  } catch (e) {
+    toast("Fehler: " + e.message);
+    allPhotosState = { ...allPhotosState, hasMore: false };
+    return;
+  }
+  allPhotosState = { offset: d.offset, hasMore: d.has_more, assets: d.assets, trashEnabled: d.trash_enabled };
+}
+
+document.getElementById("photos-view-all").addEventListener("click", e => {
+  if (checkZoomClick(e)) return;
+  if (e.target.closest("[data-swipe-action]")) {
+    commitSwipe("all", e.target.closest("[data-swipe-action]").dataset.swipeAction);
+  }
+});
+
 // ---------- Screenshots ----------
 const shotSelection = new Set();
 let shotState = { months: 12, offset: 0, hasMore: false, assets: [], trashEnabled: true };
@@ -2664,12 +2696,18 @@ document.getElementById("photos-subtabs").addEventListener("click", e => {
   document.querySelectorAll("#photos-subtabs .range-tab").forEach(b =>
     b.classList.toggle("active", b.dataset.photosView === view));
   document.getElementById("photos-view-duplicates").classList.toggle("hidden", view !== "duplicates");
+  document.getElementById("photos-view-all").classList.toggle("hidden", view !== "all");
   document.getElementById("photos-view-screenshots").classList.toggle("hidden", view !== "screenshots");
   document.getElementById("photos-view-quality").classList.toggle("hidden", view !== "quality");
   document.getElementById("photos-view-people").classList.toggle("hidden", view !== "people");
   if (view === "screenshots" && !shotState.assets.length) loadScreenshots();
   if (view === "quality" && !qualityState.assets.length) loadQuality();
   if (view === "people" && !peopleCache.length) loadPeople();
+  if (view === "all") {
+    if (activeSwipeKind !== "all") enterSwipeMode("all");
+  } else if (activeSwipeKind === "all") {
+    activeSwipeKind = null;
+  }
 });
 
 async function loadScreenshots(offset = 0) {
@@ -2949,6 +2987,9 @@ document.getElementById("photos-view-quality").addEventListener("click", async e
 // Bewusst clientseitig auf der schon geladenen Seite (max. 60 Fotos) statt eigenem
 // Backend-Endpunkt - Screenshots/Unnötige Fotos liefern ohnehin nur "Kandidat oder
 // nicht", kein Rank-Algorithmus, den man serverseitig fortschreiben müsste.
+const ICON_SWIPE = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>';
+const ICON_GRID = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>';
+
 const SWIPE_CONFIG = {
   shot: {
     containerId: "shot-swipe", gridId: "shots-grid", pagerId: "shots-pager",
@@ -2966,29 +3007,42 @@ const SWIPE_CONFIG = {
     keepOne: id => api(`/immich/quality/${id}`, { method: "DELETE" }),
     caption: a => (a.reason === "blur" ? "Unscharf" : "Leer/einfarbig"),
   },
+  // Kein Grid/Pager - dieser Tab zeigt ausschliesslich den Swipe-Stack, ohne
+  // Umschalt-Button (siehe photos-subtabs-Handler, der enterSwipeMode direkt
+  // beim Reinklicken in den Tab aufruft statt erst auf einen Klick zu warten).
+  all: {
+    containerId: "all-swipe", gridId: null, pagerId: null,
+    getState: () => allPhotosState,
+    loadPage: offset => loadAllPhotos(offset),
+    trashUrl: "/immich/photos/trash",
+    keepOne: null,
+    caption: () => "",
+  },
 };
 
 let activeSwipeKind = null;
-const swipeQueues = { shot: [], quality: [] };
+const swipeQueues = { shot: [], quality: [], all: [] };
 
 function enterSwipeMode(kind) {
   activeSwipeKind = kind;
   const cfg = SWIPE_CONFIG[kind];
   swipeQueues[kind] = [...cfg.getState().assets];
-  document.getElementById(cfg.gridId).classList.add("hidden");
-  document.getElementById(cfg.pagerId).classList.add("hidden");
+  document.getElementById(cfg.gridId)?.classList.add("hidden");
+  document.getElementById(cfg.pagerId)?.classList.add("hidden");
   document.getElementById(cfg.containerId).classList.remove("hidden");
-  document.querySelector(`[data-swipe-toggle="${kind}"]`).textContent = "🔲 Rasteransicht";
+  const toggleBtn = document.querySelector(`[data-swipe-toggle="${kind}"]`);
+  if (toggleBtn) toggleBtn.innerHTML = ICON_GRID + " Rasteransicht";
   renderSwipeStack(kind);
 }
 
 function exitSwipeMode(kind) {
   activeSwipeKind = null;
   const cfg = SWIPE_CONFIG[kind];
-  document.getElementById(cfg.gridId).classList.remove("hidden");
-  document.getElementById(cfg.pagerId).classList.remove("hidden");
+  document.getElementById(cfg.gridId)?.classList.remove("hidden");
+  document.getElementById(cfg.pagerId)?.classList.remove("hidden");
   document.getElementById(cfg.containerId).classList.add("hidden");
-  document.querySelector(`[data-swipe-toggle="${kind}"]`).textContent = "🔀 Swipe-Modus";
+  const toggleBtn = document.querySelector(`[data-swipe-toggle="${kind}"]`);
+  if (toggleBtn) toggleBtn.innerHTML = ICON_SWIPE + " Swipe-Modus";
 }
 
 function renderSwipeStack(kind) {
