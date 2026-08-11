@@ -260,6 +260,12 @@ class Holding(Base):
     purchase_date = Column(Date, nullable=True)
     current_price = Column(Float, nullable=True)
     price_updated_at = Column(DateTime, nullable=True)
+    # Fuer welchen GESCHAETZTEN Dividendentermin schon per Telegram erinnert wurde
+    # (siehe crud.upcoming_dividend_estimates) - verhindert taegliche Wiederholungen,
+    # solange derselbe Termin noch bevorsteht. Aendert sich der geschaetzte Termin
+    # (z.B. nach der naechsten tatsaechlichen Zahlung neu berechnet), wird wieder
+    # frisch erinnert.
+    next_dividend_notified_for = Column(Date, nullable=True)
 
     space = relationship("Space", back_populates="holdings")
     lots = relationship("HoldingLot", back_populates="holding", cascade="all, delete-orphan", order_by="HoldingLot.date")

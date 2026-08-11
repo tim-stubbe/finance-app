@@ -334,6 +334,14 @@ class PortfolioDividendsOut(BaseModel):
     holdings: List[HoldingDividendsOut]
 
 
+class UpcomingDividendOut(BaseModel):
+    holding_id: int
+    name: str
+    symbol: str
+    estimated_date: date
+    estimated_amount: float
+
+
 # ---------- KI-Assistent (Ollama) ----------
 class OllamaSettingsUpdate(BaseModel):
     url: str

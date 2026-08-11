@@ -762,7 +762,19 @@ async function loadInvestmentsTab() {
 let dividendHistoryChart = null;
 
 async function loadDividendsTab() {
-  const data = await api("/portfolio/dividends");
+  const [data, upcoming] = await Promise.all([
+    api("/portfolio/dividends"),
+    api("/portfolio/dividends/upcoming"),
+  ]);
+
+  const upcomingPanel = document.getElementById("div-upcoming-panel");
+  upcomingPanel.classList.toggle("hidden", upcoming.length === 0);
+  document.getElementById("div-upcoming-list").innerHTML = upcoming.map(u => `
+    <tr>
+      <td>${esc(u.name)}</td>
+      <td>${fmtDate(u.estimated_date)}</td>
+      <td class="row-amount-pos">${eur(u.estimated_amount)}</td>
+    </tr>`).join("");
 
   document.getElementById("div-summary-cards").innerHTML = `
     <div class="card card-pos">

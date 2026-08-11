@@ -39,6 +39,9 @@ ensure_columns("holdings", {
     "country": "VARCHAR",
     "currency": "VARCHAR",
 })
+ensure_columns("holdings", {
+    "next_dividend_notified_for": "DATE",
+})
 ensure_columns("settings", {
     "ollama_url": "VARCHAR",
     "ollama_model": "VARCHAR",
@@ -1046,6 +1049,11 @@ def get_portfolio_volatility(db: Session = Depends(get_db), space_id: int = Depe
 @api_router.get("/portfolio/dividends", response_model=schemas.PortfolioDividendsOut)
 def get_portfolio_dividends(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.portfolio_dividends(db, space_id)
+
+
+@api_router.get("/portfolio/dividends/upcoming", response_model=List[schemas.UpcomingDividendOut])
+def get_upcoming_dividends(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.estimate_next_dividends(db, space_id)
 
 
 # ---------------- Steuer (Vorabpauschale / realisierte Gewinne) ----------------
@@ -4015,6 +4023,18 @@ def _check_daily_alerts():
                     elif balance >= 0 and acc.dispo_alert_sent:
                         acc.dispo_alert_sent = False
                         db.commit()
+            except Exception:
+                db.rollback()
+
+            try:
+                for est in crud.evaluate_dividend_reminders(db, space.id):
+                    notifications.notify(
+                        settings,
+                        f"💰 Dividende erwartet ({space.name}): „{est['name']}“ ca. am "
+                        f"{est['estimated_date'].strftime('%d.%m.%Y')} - geschätzt "
+                        f"{est['estimated_amount']:.2f} EUR (Schätzung aus dem bisherigen "
+                        f"Zahlungsmuster, keine Zusage des Unternehmens).",
+                    )
             except Exception:
                 db.rollback()
     finally:

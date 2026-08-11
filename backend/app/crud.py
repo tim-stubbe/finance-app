@@ -1325,6 +1325,77 @@ def portfolio_dividends(db: Session, space_id: int) -> schemas.PortfolioDividend
     )
 
 
+def estimate_next_dividends(db: Session, space_id: int) -> list[dict]:
+    """Schätzt je Position den nächsten Zahlungstermin aus dem Abstand der
+    letzten Zahlungen (z.B. quartalsweise alle ~91 Tage) - Yahoo liefert nur
+    VERGANGENE Zahlungstermine, keine offizielle Ankündigung künftiger. Bewusst
+    als Schätzung behandelt (im Aufrufer klar so kommuniziert), nicht als
+    Zusage - Unternehmen können Termine verschieben oder Dividenden aussetzen,
+    anders als eine Bank-Lastschrift also spürbar unsicherer als
+    detect_recurring_transactions."""
+    results = []
+    for h in get_holdings(db, space_id):
+        if h.asset_type not in (models.AssetType.aktie, models.AssetType.etf):
+            continue
+        try:
+            div_points = get_cached_dividends(db, h.symbol)
+        except Exception:
+            continue
+        if len(div_points) < 2:
+            continue
+
+        dated = sorted((date.fromisoformat(d), amt) for d, amt in div_points)
+        dates = [d for d, _ in dated]
+        gaps = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
+        # nur die juengsten Abstaende - ein Wechsel von jaehrlich auf
+        # quartalsweise (oder umgekehrt) soll nicht von alten Abstaenden verwaesert werden.
+        recent_gaps = gaps[-4:]
+        avg_gap = sum(recent_gaps) / len(recent_gaps)
+        if avg_gap < 25:
+            continue  # zu unregelmaessig/haeufig fuer eine sinnvolle Schaetzung
+
+        last_date, last_amount_per_share = dated[-1]
+        next_estimate = last_date + timedelta(days=round(avg_gap))
+        while next_estimate < date.today():
+            next_estimate += timedelta(days=round(avg_gap))
+
+        qty, _ = _position_at(sorted(h.lots, key=lambda l: (l.date, l.id)), date.today())
+        if qty <= 0:
+            continue
+
+        results.append({
+            "holding_id": h.id,
+            "name": h.name,
+            "symbol": h.symbol,
+            "estimated_date": next_estimate,
+            "estimated_amount": round(qty * last_amount_per_share, 2),
+        })
+
+    results.sort(key=lambda r: r["estimated_date"])
+    return results
+
+
+def evaluate_dividend_reminders(db: Session, space_id: int, days_before: int = 7) -> list[dict]:
+    """Läuft täglich (siehe main._check_daily_alerts): gibt Positionen zurück,
+    deren geschätzter nächster Dividendentermin jetzt in den nächsten
+    `days_before` Tagen liegt und für GENAU diesen Termin noch nicht erinnert
+    wurde. next_dividend_notified_for verhindert eine tägliche Wiederholung,
+    solange derselbe geschätzte Termin bevorsteht - verschiebt sich die
+    Schätzung nach der nächsten echten Zahlung, wird wieder frisch erinnert."""
+    due = []
+    today = date.today()
+    for est in estimate_next_dividends(db, space_id):
+        holding = db.get(models.Holding, est["holding_id"])
+        if not holding:
+            continue
+        days_left = (est["estimated_date"] - today).days
+        if 0 <= days_left <= days_before and holding.next_dividend_notified_for != est["estimated_date"]:
+            holding.next_dividend_notified_for = est["estimated_date"]
+            due.append(est)
+    db.commit()
+    return due
+
+
 # ---------- KI-Assistent: fehlende Belege ----------
 def transactions_missing_receipt(db: Session, space_id: int, min_amount: float = 0.0):
     return (
