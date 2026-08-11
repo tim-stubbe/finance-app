@@ -9,6 +9,7 @@
   --text: #ffffff;
   --text-secondary: #c3c2b7;
   --muted: #898781;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23898781' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 
   --accent: #3987e5;
   --accent-strong: #5aa0ee;
@@ -55,6 +56,7 @@
   --text: #191b20;
   --text-secondary: #52565f;
   --muted: #7b7f89;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237b7f89' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 
   --accent: #2f6fd6;
   --accent-strong: #1f5bc0;
@@ -101,6 +103,7 @@
   --text: #3a2f0b;
   --text-secondary: #6b5d24;
   --muted: #8a7b3f;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a7b3f' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 
   --accent: #d98c0f;
   --accent-strong: #9c5c00;
@@ -147,6 +150,7 @@
   --text: #f5f2ec;
   --text-secondary: #c9d3e0;
   --muted: #8a97ad;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a97ad' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 
   --accent: #d52b1e;
   --accent-strong: #ef4136;
@@ -928,6 +932,22 @@ input, select, textarea, button {
 input, select, textarea {
   min-width: 0;
   box-sizing: border-box;
+}
+
+/* Native Select-Pfeile sehen je Browser/Betriebssystem unterschiedlich (und
+   neben den handgezeichneten SVG-Icons im Rest der App ziemlich fremd) aus -
+   eigener, einheitlicher Pfeil statt appearance:auto. Die Pfeilfarbe ist pro
+   Theme fest kodiert (--select-arrow), weil currentColor in einer als
+   background-image eingebundenen SVG nicht zuverlaessig die Textfarbe des
+   <select> uebernimmt. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 13px;
+  padding-right: 32px;
 }
 
 .form-grid label > input, .form-grid label > select, .form-grid label > textarea {
