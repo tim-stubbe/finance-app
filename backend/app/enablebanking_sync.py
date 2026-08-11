@@ -74,23 +74,29 @@ def get_transactions(app_id: str, private_key_pem: str, eb_account_id: str) -> l
 
 
 def _parse_transaction(tx: dict) -> tuple[float, str | None, str | None] | None:
-    amt_info = tx.get("transactionAmount") or {}
+    """Feldnamen live gegen die echte Enable-Banking-API verifiziert (snake_case,
+    NICHT das ursprünglich angenommene camelCase eines typischen PSD2/NextGenPSD2-
+    Schemas) - reale Antwort z.B.: {"transaction_amount": {"amount": "0.84",
+    "currency": "EUR"}, "credit_debit_indicator": "DBIT", "booking_date": "...",
+    "remittance_information": ["..."], "creditor": {"name": "..."}, ...}. Die
+    ursprüngliche camelCase-Version hat dadurch jede einzelne Buchung stillschweigend
+    übersprungen (0 importiert, 0 übersprungen) - live mit 726 echten Buchungen auf
+    3 C24-Konten reproduziert und gefixt."""
+    amt_info = tx.get("transaction_amount") or {}
     raw_amount = amt_info.get("amount")
     if raw_amount is None:
         return None
     amount = float(raw_amount)
-    if (tx.get("creditDebitIndicator") or "").upper() == "DBIT" and amount > 0:
+    if (tx.get("credit_debit_indicator") or "").upper() == "DBIT" and amount > 0:
         amount = -amount
 
-    purpose = tx.get("remittanceInformationUnstructured")
-    if not purpose:
-        arr = tx.get("remittanceInformationUnstructuredArray") or []
-        purpose = " ".join(arr) if arr else None
+    remittance = tx.get("remittance_information") or []
+    purpose = " ".join(remittance) if isinstance(remittance, list) else remittance
 
     if amount < 0:
-        applicant = tx.get("creditorName") or (tx.get("creditor") or {}).get("name")
+        applicant = (tx.get("creditor") or {}).get("name")
     else:
-        applicant = tx.get("debtorName") or (tx.get("debtor") or {}).get("name")
+        applicant = (tx.get("debtor") or {}).get("name")
 
     return round(amount, 2), (applicant or "").strip() or None, (purpose or "").strip() or None
 
@@ -98,7 +104,7 @@ def _parse_transaction(tx: dict) -> tuple[float, str | None, str | None] | None:
 def import_transactions(db: Session, account_id: int, transactions: list[dict]) -> dict:
     imported, skipped = 0, 0
     for tx in transactions:
-        tx_date = tx.get("bookingDate") or tx.get("valueDate")
+        tx_date = tx.get("booking_date") or tx.get("value_date")
         if not tx_date:
             continue
         parsed = _parse_transaction(tx)
