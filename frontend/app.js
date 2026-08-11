@@ -4735,7 +4735,7 @@ async function loadHubTab() {
   // Letzte Buchungen - neueste zuerst.
   const txBody = document.getElementById("hub-transactions-body");
   try {
-    const tx = (await api("/transactions"))
+    const tx = (await api("/transactions?hide_transfers=true"))
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5);
     txBody.innerHTML = tx.length
