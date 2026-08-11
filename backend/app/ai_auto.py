@@ -39,7 +39,7 @@ def _extract_json_array(text: str) -> list:
 
 def _prompt(categories: list[models.Category], batch: list[models.Transaction]) -> str:
     lines = [
-        "Du ordnest Kontobuchungen eines privaten Finanztools bestehenden Kategorien zu.",
+        "Du ordnest Kontobuchungen von Kies, einem privaten Finanztool, bestehenden Kategorien zu.",
         "Antworte NUR mit einem JSON-Array, ein Objekt pro Buchung, keine Erklärung außenrum:",
         '[{"id": 123, "category": "Lebensmittel", "confidence": 0.9}]',
         "- confidence: deine Sicherheit zwischen 0 und 1 (0 = geraten, 1 = eindeutig).",

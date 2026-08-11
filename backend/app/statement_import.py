@@ -71,7 +71,7 @@ CHUNK_CHARS = 3000
 _JSON_BLOCK_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 # Erster Abschnitt: Konto erkennen + Buchungen dieses Abschnitts.
-STATEMENT_PROMPT = """Das Folgende ist der Anfang eines Kontoauszugs. Bekannte Konten in diesem Finanztool:
+STATEMENT_PROMPT = """Das Folgende ist der Anfang eines Kontoauszugs. Bekannte Konten in Kies:
 {account_names}
 
 Antworte in zwei Schritten:

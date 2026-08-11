@@ -85,7 +85,7 @@ class Settings(Base):
     __tablename__ = "settings"
 
     id = Column(Integer, primary_key=True, default=1)
-    display_name = Column(String, nullable=False, default="Mein Finanztool")
+    display_name = Column(String, nullable=False, default="Kies")
     secret_key = Column(String, nullable=False)
     fints_product_id = Column(String, nullable=True)
     enablebanking_app_id = Column(String, nullable=True)

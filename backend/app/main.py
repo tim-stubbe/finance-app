@@ -189,7 +189,7 @@ for _h in _bootstrap_db.query(models.Holding).all():
 _bootstrap_db.commit()
 _bootstrap_db.close()
 
-app = FastAPI(title="Privates Finanztool", version="1.0.0")
+app = FastAPI(title="Kies", version="1.0.0")
 
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 
@@ -1124,7 +1124,7 @@ def _build_portfolio_insight_prompt(db: Session, space_id: int) -> str:
     diversification = crud.portfolio_diversification(db, space_id)
 
     lines = [
-        "Du bist ein nüchterner, hilfreicher Finanzassistent für ein privates Finanztool.",
+        "Du bist ein nüchterner, hilfreicher Finanzassistent für Kies, ein privates Finanztool.",
         "Gib eine kurze Einschätzung auf Deutsch (max. 180 Wörter, Fließtext oder kurze Stichpunkte).",
         "Keine Anlageberatung, keine Kauf-/Verkaufsempfehlungen - nur Beobachtungen zu Struktur, Konzentration und Entwicklung.",
         "",
@@ -1168,7 +1168,7 @@ def missing_receipts(min_amount: float = 20.0, db: Session = Depends(get_db), sp
     settings = auth.get_or_create_settings(db)
     if settings.ollama_url and settings.ollama_model and transactions:
         lines = [
-            "Du bist ein freundlicher Finanzassistent für ein privates Finanztool.",
+            "Du bist ein freundlicher Finanzassistent für Kies, ein privates Finanztool.",
             f"Der Nutzer hat {len(transactions)} Ausgabe(n) ohne hinterlegten Beleg im Gesamtwert von {total:.2f} EUR.",
             "Hier die Liste (Datum, Betrag, Beschreibung):",
         ]
@@ -1188,7 +1188,7 @@ def missing_receipts(min_amount: float = 20.0, db: Session = Depends(get_db), sp
 
 
 # ---------------- Beleg-Chat (Bild/PDF/Text -> Buchung oder Investment-Position) ----------------
-BELEG_CHAT_SYSTEM_PROMPT = """Du bist ein Assistent in einem privaten Finanztool, der Belege, Kassenbons, \
+BELEG_CHAT_SYSTEM_PROMPT = """Du bist ein Assistent in Kies, einem privaten Finanztool, der Belege, Kassenbons, \
 Wertpapier-Abrechnungen und Kontoauszüge ausliest, die der Nutzer als Bild, PDF oder Text schickt. \
 Antworte immer kurz und freundlich auf Deutsch.
 
@@ -1498,7 +1498,7 @@ def beleg_chat_apply(data: schemas.BelegChatApply, db: Session = Depends(get_db)
 
 
 # ---------------- Assistant-Chat (schwebender KI-Button, allgemeine Anweisungen) ----------------
-ASSISTANT_CHAT_SYSTEM_PROMPT = """Du bist der KI-Assistent eines privaten Finanztools, erreichbar per Chat-Button \
+ASSISTANT_CHAT_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, erreichbar per Chat-Button \
 auf jeder Seite der App. Der Nutzer gibt dir Anweisungen oder Fragen in normaler Sprache. Antworte immer kurz \
 und freundlich auf Deutsch.
 
@@ -2979,7 +2979,7 @@ def send_test_notification(db: Session = Depends(get_db)):
         return schemas.NotificationTestResult(ok=False, message="Bot-Token und Chat-ID zuerst speichern.")
     try:
         token = bank_sync.decrypt_secret(settings.secret_key, settings.telegram_bot_token_encrypted)
-        notifications.send_telegram(token, settings.telegram_chat_id, "🔔 Testnachricht vom Finanztool - Telegram ist korrekt eingerichtet.")
+        notifications.send_telegram(token, settings.telegram_chat_id, "🔔 Testnachricht von Kies - Telegram ist korrekt eingerichtet.")
     except Exception as e:
         return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
     return schemas.NotificationTestResult(ok=True, message="Gesendet - schau in Telegram nach.")
@@ -3041,7 +3041,7 @@ def send_test_call(db: Session = Depends(get_db)):
         token = bank_sync.decrypt_secret(settings.secret_key, settings.twilio_auth_token_encrypted)
         calls.make_call(
             settings.twilio_account_sid, token, settings.twilio_from_number, settings.twilio_to_number,
-            "Testanruf vom Finanztool. Wenn du das hörst, ist Twilio korrekt eingerichtet.",
+            "Testanruf von Kies. Wenn du das hörst, ist Twilio korrekt eingerichtet.",
         )
     except Exception as e:
         return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
@@ -3864,7 +3864,7 @@ def _scheduled_goal_evaluation():
                 # Genau der Moment des Statuswechsels - feuert also nur einmal pro Ziel.
                 if was_open and goal.status == models.GoalStatus.completed:
                     notifications.notify(settings, f"🎉 Ziel erreicht: „{goal.title}“")
-                    calls.call(settings, f"Finanztool: Glückwunsch, du hast dein Ziel {goal.title} erreicht.")
+                    calls.call(settings, f"Kies: Glückwunsch, du hast dein Ziel {goal.title} erreicht.")
                 db.commit()
             except Exception:
                 db.rollback()
@@ -3902,7 +3902,7 @@ def _check_daily_alerts():
                         if (first_negative - today).days <= 3:
                             calls.call(
                                 settings,
-                                f"Finanztool Notruf: Dein Kontostand könnte spätestens am "
+                                f"Kies-Notruf: Dein Kontostand könnte spätestens am "
                                 f"{first_negative.strftime('%-d. %-m.')} ins Minus rutschen. Bitte prüfe die App.",
                             )
                         settings.last_cashflow_alert_date = today

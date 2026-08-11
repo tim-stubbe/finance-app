@@ -1,4 +1,4 @@
-# Finanztool
+# Kies
 
 Selbst gehostetes Finanztool für Privat- und Geschäftsfinanzen in einem. Läuft
 komplett auf eigener Hardware, ohne Cloud-Dienst und ohne Konto bei einem

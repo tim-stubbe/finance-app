@@ -1,7 +1,7 @@
 {
-  "name": "Finanztool",
-  "short_name": "Finanztool",
-  "description": "Privates Finanztool – Buchungen, Investments, Ziele, KI-Assistent",
+  "name": "Kies",
+  "short_name": "Kies",
+  "description": "Kies – privates Finanztool für Buchungen, Investments, Ziele, KI-Assistent",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

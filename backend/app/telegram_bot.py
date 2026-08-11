@@ -29,7 +29,7 @@ MAX_HISTORY = 20  # Nachrichten (User+Assistant zusammen); nur im Prozessspeiche
 
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
 
-TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent eines privaten Finanztools, hier per Telegram erreichbar. \
+TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
 
 Du kannst HIER NICHTS in die Buchungen/Konten schreiben oder ändern - du gibst nur Auskunft, machst Recherche \
