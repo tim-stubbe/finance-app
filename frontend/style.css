@@ -947,6 +947,17 @@ input, select, textarea {
 
 input::placeholder { color: var(--muted); }
 
+/* Native Checkboxen sehen je nach Betriebssystem sehr unterschiedlich (und
+   ziemlich datiert) aus - accent-color faerbt sie einheitlich im Akzentton
+   des aktiven Themes ein, ohne dass wir die komplette Box selbst nachbauen
+   muessen. */
+input[type="checkbox"], input[type="radio"] {
+  accent-color: var(--accent-strong);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
@@ -1699,6 +1710,18 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dezentes Pulsieren statt starrem "Lädt ..."-Text an Stellen, die auf einen
+   Chart/eine Liste warten - kein echtes Skeleton (dafuer muesste man die
+   Zielform je Stelle nachbauen), aber zeigt sofort "hier tut sich was". */
+.loading-pulse { animation: loading-pulse 1.3s ease-in-out infinite; }
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-pulse { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -558,13 +558,16 @@ async function loadPortfolioHistoryChart(range) {
   document.querySelectorAll("#portfolio-range-tabs .range-tab").forEach(b => b.classList.toggle("active", b.dataset.range === portfolioRange));
   const noteEl = document.getElementById("portfolio-history-note");
   noteEl.textContent = "Lädt …";
+  noteEl.classList.add("loading-pulse");
   let data;
   try {
     data = await api(`/portfolio/history?range=${portfolioRange}`);
   } catch (e) {
     noteEl.textContent = "Portfolio-Verlauf konnte nicht geladen werden.";
+    noteEl.classList.remove("loading-pulse");
     return;
   }
+  noteEl.classList.remove("loading-pulse");
   noteEl.textContent = data.partial
     ? "Hinweis: mindestens eine Position konnte nicht einbezogen werden (Kurshistorie nicht verfügbar)."
     : "";
@@ -1043,6 +1046,7 @@ async function loadHoldingDetail(id, range) {
 
   const noteEl = document.getElementById("hm-history-note");
   noteEl.textContent = "Lädt …";
+  noteEl.classList.add("loading-pulse");
   try {
     const history = await api(`/holdings/${id}/history?range=${range}`);
     noteEl.textContent = "";
@@ -1050,6 +1054,8 @@ async function loadHoldingDetail(id, range) {
   } catch (e) {
     noteEl.textContent = "Kurshistorie konnte nicht geladen werden (Symbol prüfen, ggf. über 'Position bearbeiten' korrigieren).";
     if (holdingHistoryChart) { holdingHistoryChart.destroy(); holdingHistoryChart = null; }
+  } finally {
+    noteEl.classList.remove("loading-pulse");
   }
 }
 
@@ -1284,11 +1290,14 @@ document.getElementById("ollama-settings-form").addEventListener("submit", async
 document.getElementById("ai-portfolio-btn").addEventListener("click", async () => {
   const resultEl = document.getElementById("ai-portfolio-result");
   resultEl.textContent = "Analyse wird erstellt …";
+  resultEl.classList.add("loading-pulse");
   try {
     const result = await api("/ai/portfolio-insight", { method: "POST" });
     resultEl.textContent = result.error ? `Fehler: ${result.error}` : result.text;
   } catch (e) {
     resultEl.textContent = "Analyse fehlgeschlagen.";
+  } finally {
+    resultEl.classList.remove("loading-pulse");
   }
 });
 
@@ -2182,7 +2191,7 @@ async function loadPhotosTab(offset = 0) {
   hint.classList.add("hidden");
   loadPhotoStats();
 
-  wrap.innerHTML = `<p class="page-sub">Suche doppelte Aufnahmen …</p>`;
+  wrap.innerHTML = `<p class="page-sub loading-pulse">Suche doppelte Aufnahmen …</p>`;
   let data;
   try {
     data = await api(`/immich/duplicates?offset=${offset}&limit=20`);
