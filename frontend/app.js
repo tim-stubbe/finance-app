@@ -1344,6 +1344,20 @@ function appendChatBubble(role, text, logId = "beleg-chat-log") {
   log.scrollTop = log.scrollHeight;
 }
 
+function showChatTyping(logId = "beleg-chat-log") {
+  const log = document.getElementById(logId);
+  const div = document.createElement("div");
+  div.className = "chat-typing";
+  div.id = `${logId}-typing`;
+  div.innerHTML = "<span></span><span></span><span></span>";
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function hideChatTyping(logId = "beleg-chat-log") {
+  document.getElementById(`${logId}-typing`)?.remove();
+}
+
 function renderBelegProposal(proposal, attachmentFilename, attachmentBase64, logId = "beleg-chat-log") {
   const wrap = document.createElement("div");
   wrap.className = "beleg-proposal";
@@ -1579,8 +1593,9 @@ document.getElementById("beleg-chat-form").addEventListener("submit", async e =>
   appendChatBubble("user", message || `📎 ${file.name}`);
   const statusEl = document.getElementById("beleg-chat-status");
   const sendBtn = document.getElementById("beleg-chat-send");
-  statusEl.textContent = "KI liest/denkt nach …";
+  statusEl.textContent = "";
   sendBtn.disabled = true;
+  showChatTyping("beleg-chat-log");
 
   const fd = new FormData();
   fd.append("message", message);
@@ -1589,6 +1604,7 @@ document.getElementById("beleg-chat-form").addEventListener("submit", async e =>
 
   try {
     const result = await api("/ai/beleg-chat", { method: "POST", body: fd });
+    hideChatTyping("beleg-chat-log");
     if (result.error) {
       appendChatBubble("assistant", "Fehler: " + result.error);
     } else {
@@ -1600,6 +1616,7 @@ document.getElementById("beleg-chat-form").addEventListener("submit", async e =>
       });
     }
   } catch (e) {
+    hideChatTyping("beleg-chat-log");
     // api() zeigt den Fehler bereits per alert() an
   }
   statusEl.textContent = "";
@@ -5409,9 +5426,10 @@ document.getElementById("global-ai-form").addEventListener("submit", async e => 
   appendChatBubble("user", message, "global-ai-log");
   const statusEl = document.getElementById("global-ai-status");
   const sendBtn = document.getElementById("global-ai-send");
-  statusEl.textContent = "KI denkt nach …";
+  statusEl.textContent = "";
   sendBtn.disabled = true;
   input.value = "";
+  showChatTyping("global-ai-log");
 
   const fd = new FormData();
   fd.append("message", message);
@@ -5419,6 +5437,7 @@ document.getElementById("global-ai-form").addEventListener("submit", async e => 
 
   try {
     const result = await api("/ai/assistant-chat", { method: "POST", body: fd });
+    hideChatTyping("global-ai-log");
     if (result.error) {
       appendChatBubble("assistant", "Fehler: " + result.error, "global-ai-log");
     } else {
@@ -5433,6 +5452,7 @@ document.getElementById("global-ai-form").addEventListener("submit", async e => 
       });
     }
   } catch (e) {
+    hideChatTyping("global-ai-log");
     // api() zeigt den Fehler bereits per alert() an
   }
   statusEl.textContent = "";
