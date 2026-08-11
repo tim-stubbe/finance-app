@@ -1251,6 +1251,28 @@ document.getElementById("ollama-load-models").addEventListener("click", async ()
   }
 });
 
+document.getElementById("ollama-pull-btn").addEventListener("click", async () => {
+  const url = document.getElementById("ollama-url").value;
+  const model = document.getElementById("ollama-pull-model").value.trim();
+  const statusEl = document.getElementById("ollama-pull-status");
+  const btn = document.getElementById("ollama-pull-btn");
+  if (!url) { statusEl.textContent = "Bitte zuerst die Server-URL eintragen und speichern."; return; }
+  if (!model) { statusEl.textContent = "Bitte einen Modellnamen angeben (z.B. llama3.2:1b)."; return; }
+  btn.disabled = true;
+  statusEl.textContent = `„${model}“ wird heruntergeladen … das kann je nach Modellgröße mehrere Minuten dauern, bitte warten.`;
+  try {
+    const result = await api("/ollama/pull", { method: "POST", body: JSON.stringify({ url, model }) });
+    statusEl.textContent = `„${model}“ ist bereit (${result.status}).`;
+    document.getElementById("ollama-pull-model").value = "";
+    document.getElementById("ollama-load-models").click();
+    toast(`Modell „${model}“ heruntergeladen.`);
+  } catch (e) {
+    statusEl.textContent = `Fehlgeschlagen: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById("ollama-settings-form").addEventListener("submit", async e => {
   e.preventDefault();
   const url = document.getElementById("ollama-url").value;

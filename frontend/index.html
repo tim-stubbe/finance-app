@@ -1459,6 +1459,15 @@
           </div>
         </form>
         <p id="ollama-status" class="page-sub"></p>
+
+        <p class="page-sub" style="margin-top:18px">Neues Modell von der <a href="https://ollama.com/library" target="_blank" rel="noopener">Ollama-Bibliothek</a> auf den Server laden (z.B. <code>llama3.2:1b</code> für ein kleines, schnelles Modell).</p>
+        <div class="form-grid">
+          <label>Modellname <input type="text" id="ollama-pull-model" placeholder="z.B. llama3.2:1b"></label>
+          <div class="form-actions">
+            <button type="button" id="ollama-pull-btn" class="btn-ghost">Herunterladen</button>
+          </div>
+        </div>
+        <p id="ollama-pull-status" class="page-sub"></p>
       </div>
 
       <div class="panel">

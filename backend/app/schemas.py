@@ -359,6 +359,16 @@ class OllamaModelsOut(BaseModel):
     models: List[str]
 
 
+class OllamaPullRequest(BaseModel):
+    model: str
+    url: Optional[str] = None
+
+
+class OllamaPullResult(BaseModel):
+    ok: bool
+    status: str
+
+
 class AiTextResult(BaseModel):
     text: Optional[str] = None
     error: Optional[str] = None

@@ -1143,6 +1143,22 @@ def get_ollama_models(url: Optional[str] = None, db: Session = Depends(get_db)):
         raise HTTPException(400, f"Ollama nicht erreichbar: {e}")
 
 
+@api_router.post("/ollama/pull", response_model=schemas.OllamaPullResult)
+def pull_ollama_model(data: schemas.OllamaPullRequest, db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    target = data.url or settings.ollama_url
+    if not target:
+        raise HTTPException(400, "Bitte zuerst eine Ollama-Server-URL angeben")
+    model = data.model.strip()
+    if not model:
+        raise HTTPException(400, "Bitte einen Modellnamen angeben (z.B. llama3.2:1b)")
+    try:
+        status = ollama_client.pull_model(target, model)
+        return schemas.OllamaPullResult(ok=True, status=status)
+    except Exception as e:
+        raise HTTPException(400, f"Herunterladen fehlgeschlagen: {e}")
+
+
 def _build_portfolio_insight_prompt(db: Session, space_id: int) -> str:
     net_worth = crud.net_worth(db, space_id)
     holdings = [crud.holding_out(h) for h in crud.get_holdings(db, space_id)]

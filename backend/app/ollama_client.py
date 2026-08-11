@@ -26,6 +26,29 @@ def generate(url: str, model: str, prompt: str, timeout: int = 600) -> str:
     return text.strip()
 
 
+def pull_model(url: str, model: str, timeout: int = 1800) -> str:
+    """Lädt ein Modell aus der Ollama-Bibliothek auf den Server. Nicht-streamend
+    (stream: false) - blockiert bis fertig, dafür kein SSE/WebSocket-Aufwand nötig.
+    Bei kleinen Modellen (~1-2GB) dauert das typischerweise 1-5 Minuten, deshalb
+    ein deutlich längeres Timeout als bei normalen Chat-Anfragen."""
+    resp = requests.post(
+        f"{_base(url)}/api/pull",
+        json={"name": model, "stream": False},
+        timeout=timeout,
+    )
+    if not resp.ok:
+        try:
+            detail = resp.json().get("error")
+        except Exception:
+            detail = resp.text[:300]
+        raise requests.HTTPError(f"{resp.status_code} von Ollama: {detail or resp.reason}", response=resp)
+    data = resp.json()
+    status = data.get("status", "")
+    if "error" in data:
+        raise ValueError(data["error"])
+    return status or "erfolgreich"
+
+
 def chat(url: str, model: str, messages: list[dict], timeout: int = 600) -> str:
     resp = requests.post(
         f"{_base(url)}/api/chat",
