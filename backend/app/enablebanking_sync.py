@@ -104,7 +104,13 @@ def _parse_transaction(tx: dict) -> tuple[float, str | None, str | None] | None:
 def import_transactions(db: Session, account_id: int, transactions: list[dict]) -> dict:
     imported, skipped = 0, 0
     for tx in transactions:
-        tx_date = tx.get("booking_date") or tx.get("value_date")
+        # Live beobachtet: bei PayPal als Enable-Banking-Quelle sind booking_date
+        # UND value_date beide null, nur transaction_date ist gesetzt - bei
+        # klassischen Banken (z.B. C24) ist es umgekehrt der Fall. Alle drei
+        # probieren statt bei den ersten beiden aufzugeben, sonst wird jede
+        # einzelne Buchung dieser Quelle still übersprungen (0 importiert,
+        # 0 übersprungen - sieht wie ein stiller Erfolg aus, ist aber keiner).
+        tx_date = tx.get("booking_date") or tx.get("value_date") or tx.get("transaction_date")
         if not tx_date:
             continue
         parsed = _parse_transaction(tx)
