@@ -64,12 +64,43 @@ function toast(message, kind = "ok") {
   }, 2600);
 }
 
-function emptyRow(colspan, icon, text) {
-  return `<tr class="empty-row"><td colspan="${colspan}"><div class="empty-state"><span class="empty-icon">${icon}</span><span>${text}</span></div></td></tr>`;
+// Zentrale Icon-Bibliothek (Lucide-artige Strichzeichnungen) statt bunter Emoji -
+// einheitlicher Look, unabhaengig von Betriebssystem/Emoji-Font.
+const ICON_PATHS = {
+  landmark: '<path d="M3 21h18M4 21V10M20 21V10M12 3L21 8H3z"/><path d="M8 10v7M12 10v7M16 10v7"/>',
+  banknote: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 9v.01M18 15v.01"/>',
+  wallet: '<path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2h1a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><circle cx="16" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
+  "trending-up": '<path d="M3 17L9 11L13 15L21 6"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
+  coins: '<circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/>',
+  receipt: '<path d="M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5V3z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+  tag: '<path d="M12 2H4a2 2 0 0 0-2 2v8l11 11 10-10L12 2z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/>',
+  "file-text": '<path d="M6 2h9l5 5v15H6V2z"/><path d="M14 2v5h5"/><path d="M9 13h6M9 17h6"/>',
+  repeat: '<path d="M4 7h13l-3-3M20 17H7l3 3"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
+  database: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12a8 3 0 0 0 16 0V6"/><path d="M4 12a8 3 0 0 0 16 0"/>',
+  "alert-triangle": '<path d="M12 3l9 16H3z"/><path d="M12 9v4M12 16h.01"/>',
+  "credit-card": '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 10H21"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  "shopping-cart": '<circle cx="9" cy="21" r="1.3"/><circle cx="18" cy="21" r="1.3"/><path d="M2 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 7H6"/>',
+  flame: '<path d="M12 22a6 6 0 0 0 6-6c0-2.5-1.5-4-2.5-5.5C14.5 9 14 7 14 5c-2 1.5-3.5 4-3.5 6.5C9 10 8.5 8.5 8.5 7 7 8.5 6 11 6 13.5A6 6 0 0 0 12 22z"/>',
+  send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+  "check-circle": '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>',
+  map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/><path d="M9 4v14M15 6v14"/>',
+};
+
+function svgIcon(name, cls = "empty-icon-svg") {
+  const inner = ICON_PATHS[name];
+  if (!inner) return "";
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
 }
 
-const ACCOUNT_TYPE_ICONS = { girokonto: "🏦", bargeld: "💵", sparkonto: "🐷", depot: "📈", sonstiges: "📁" };
-const CATEGORY_TYPE_ICONS = { einnahme: "💰", ausgabe: "🧾" };
+function emptyRow(colspan, iconName, text) {
+  return `<tr class="empty-row"><td colspan="${colspan}"><div class="empty-state"><span class="empty-icon">${svgIcon(iconName)}</span><span>${text}</span></div></td></tr>`;
+}
+
+const ACCOUNT_TYPE_ICONS = { girokonto: "landmark", bargeld: "banknote", sparkonto: "wallet", depot: "trending-up", sonstiges: "folder" };
+const CATEGORY_TYPE_ICONS = { einnahme: "coins", ausgabe: "receipt" };
 async function api(path, options = {}) {
   const res = await fetch(API + path, {
     headers: options.body instanceof FormData ? {} : { "Content-Type": "application/json" },
@@ -200,12 +231,12 @@ async function loadAccounts() {
   const tbody = document.getElementById("acc-list");
   tbody.innerHTML = "";
   if (accountsCache.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🏦", "Noch keine Konten angelegt. Leg dein erstes Konto an!");
+    tbody.innerHTML = emptyRow(4, "landmark", "Noch keine Konten angelegt. Leg dein erstes Konto an!");
   }
   accountsCache.forEach(a => {
     const tr = document.createElement("tr");
-    const icon = ACCOUNT_TYPE_ICONS[a.type] || "📁";
-    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${icon}</span>${a.name}${a.is_business ? ' <span class="goal-chip">💼 Geschäftlich</span>' : ""}</span></td><td>${a.type}</td>
+    const icon = ACCOUNT_TYPE_ICONS[a.type] || "folder";
+    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${svgIcon(icon)}</span>${a.name}${a.is_business ? ' <span class="goal-chip">💼 Geschäftlich</span>' : ""}</span></td><td>${a.type}</td>
       <td class="${a.current_balance >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(a.current_balance)}</td>
       <td>
         <button class="link-btn" onclick="editAccount(${a.id})">Bearbeiten</button>
@@ -277,13 +308,13 @@ async function loadCategories() {
   const tbody = document.getElementById("cat-list");
   tbody.innerHTML = "";
   if (categoriesCache.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🏷️", "Noch keine Kategorien angelegt.");
+    tbody.innerHTML = emptyRow(4, "tag", "Noch keine Kategorien angelegt.");
   }
   categoriesCache.forEach(c => {
     const parent = categoriesCache.find(p => p.id === c.parent_id);
     const tr = document.createElement("tr");
-    const icon = CATEGORY_TYPE_ICONS[c.type] || "🏷️";
-    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${icon}</span>${c.name}</span></td><td>${c.type}</td><td>${parent ? parent.name : "–"}</td>
+    const icon = CATEGORY_TYPE_ICONS[c.type] || "tag";
+    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${svgIcon(icon)}</span>${c.name}</span></td><td>${c.type}</td><td>${parent ? parent.name : "–"}</td>
       <td>
         <button class="link-btn" onclick="editCategory(${c.id})">Bearbeiten</button>
         <button class="link-btn" onclick="deleteCategory(${c.id})">Löschen</button>
@@ -430,7 +461,7 @@ function renderHoldingsTable() {
   const tbody = document.getElementById("holding-list");
   tbody.innerHTML = "";
   if (holdingsCache.length === 0) {
-    tbody.innerHTML = emptyRow(9, "📈", "Noch keine Positionen angelegt.");
+    tbody.innerHTML = emptyRow(9, "trending-up", "Noch keine Positionen angelegt.");
     return;
   }
   let rows = [...holdingsCache];
@@ -714,7 +745,7 @@ async function loadHeatmap() {
   const grid = document.getElementById("heatmap-grid");
   grid.innerHTML = "";
   if (holdingsCache.length === 0) {
-    grid.innerHTML = '<div class="empty-state"><span class="empty-icon">🔥</span><span>Noch keine Positionen für die Heatmap.</span></div>';
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">${svgIcon("flame")}</span><span>Noch keine Positionen für die Heatmap.</span></div>`;
     return;
   }
   holdingsCache.forEach(h => {
@@ -823,7 +854,7 @@ async function loadDividendsTab() {
   tbody.innerHTML = "";
   const withDividends = data.holdings.filter(h => h.history.length > 0 || h.annual_rate_per_share > 0);
   if (withDividends.length === 0) {
-    tbody.innerHTML = emptyRow(5, "💰", "Keine Dividenden-Positionen gefunden (Aktien/ETFs mit Ausschüttung).");
+    tbody.innerHTML = emptyRow(5, "coins", "Keine Dividenden-Positionen gefunden (Aktien/ETFs mit Ausschüttung).");
   }
   withDividends.forEach(h => {
     const last = h.history[h.history.length - 1];
@@ -890,7 +921,7 @@ async function loadTaxTab() {
   const vorabTbody = document.getElementById("tax-vorab-list");
   vorabTbody.innerHTML = "";
   if (vorab.rows.length === 0) {
-    vorabTbody.innerHTML = emptyRow(7, "📄", "Keine ETF-Positionen mit Basiszins für dieses Jahr.");
+    vorabTbody.innerHTML = emptyRow(7, "file-text", "Keine ETF-Positionen mit Basiszins für dieses Jahr.");
   }
   vorab.rows.forEach(r => {
     const tr = document.createElement("tr");
@@ -908,7 +939,7 @@ async function loadTaxTab() {
   const realizedTbody = document.getElementById("tax-realized-list");
   realizedTbody.innerHTML = "";
   if (realized.rows.length === 0) {
-    realizedTbody.innerHTML = emptyRow(6, "💹", "Keine Verkäufe in diesem Jahr.");
+    realizedTbody.innerHTML = emptyRow(6, "trending-up", "Keine Verkäufe in diesem Jahr.");
   }
   realized.rows.forEach(r => {
     const tr = document.createElement("tr");
@@ -1117,7 +1148,7 @@ function renderLotList() {
   const tbody = document.getElementById("lot-list");
   tbody.innerHTML = "";
   if (lotsCache.length === 0) {
-    tbody.innerHTML = emptyRow(7, "🧾", "Noch keine Transaktionen erfasst.");
+    tbody.innerHTML = emptyRow(7, "receipt", "Noch keine Transaktionen erfasst.");
   }
   lotsCache.forEach(l => {
     const tr = document.createElement("tr");
@@ -1249,7 +1280,7 @@ document.getElementById("ai-receipts-btn").addEventListener("click", async () =>
   summaryEl.textContent = result.summary
     || `${result.transactions.length} Buchung(en) ohne Beleg, ${eur(result.total_amount)} insgesamt.`;
   if (result.transactions.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🧾", "Keine fehlenden Belege gefunden.");
+    tbody.innerHTML = emptyRow(4, "receipt", "Keine fehlenden Belege gefunden.");
   }
   if (!accountsCache.length) await loadAccounts();
   result.transactions.forEach(t => {
@@ -1584,14 +1615,14 @@ async function loadTrips() {
   const grid = document.getElementById("trip-grid");
   grid.innerHTML = "";
   if (tripsCache.length === 0) {
-    grid.innerHTML = '<div class="empty-state"><span class="empty-icon">✈️</span><span>Noch keine Urlaube angelegt.</span></div>';
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">${svgIcon("map")}</span><span>Noch keine Urlaube angelegt.</span></div>`;
   }
   tripsCache.forEach(t => {
     const card = document.createElement("div");
     card.className = "trip-card";
     const hasDates = t.start_date || t.end_date;
     card.innerHTML = `
-      <h4><span class="row-icon">🧳</span>${t.name}</h4>
+      <h4><span class="row-icon"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/><path d="M9 4v14M15 6v14"/></svg></span>${t.name}</h4>
       ${hasDates ? `<p class="trip-dates">${fmtDate(t.start_date)} – ${fmtDate(t.end_date)}</p>` : ""}
       <div class="trip-total">${eur(t.total_spent)}</div>
       <p class="trip-meta">${t.transaction_count} Buchung(en)</p>
@@ -1659,7 +1690,7 @@ async function loadTransactions() {
   const tbody = document.getElementById("tx-list");
   tbody.innerHTML = "";
   if (txs.length === 0) {
-    tbody.innerHTML = emptyRow(7, "🧾", "Keine Buchungen gefunden.");
+    tbody.innerHTML = emptyRow(7, "receipt", "Keine Buchungen gefunden.");
   }
   txs.forEach(t => {
     const acc = accountsCache.find(a => a.id === t.account_id);
@@ -1854,7 +1885,7 @@ async function loadRecurringTab() {
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {
-    tbody.innerHTML = emptyRow(8, "🔁", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
+    tbody.innerHTML = emptyRow(8, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
   }
   let monthlyTotal = 0;
   items.forEach(it => {
@@ -1895,7 +1926,7 @@ async function loadContractReminders() {
   const tbody = document.getElementById("contract-reminder-list");
   tbody.innerHTML = "";
   if (contractRemindersCache.length === 0) {
-    tbody.innerHTML = emptyRow(5, "📄", "Noch keine Kündigungsfrist hinterlegt – bei einem Abo unten auf „📄 Frist“ klicken.");
+    tbody.innerHTML = emptyRow(5, "file-text", "Noch keine Kündigungsfrist hinterlegt – bei einem Abo unten auf „📄 Frist“ klicken.");
     return;
   }
   contractRemindersCache.forEach(r => {
@@ -3487,7 +3518,7 @@ async function loadBudgets() {
   const tbody = document.getElementById("budget-list");
   tbody.innerHTML = "";
   if (budgets.length === 0) {
-    tbody.innerHTML = emptyRow(3, "🎯", "Noch keine Budgets festgelegt.");
+    tbody.innerHTML = emptyRow(3, "target", "Noch keine Budgets festgelegt.");
   }
   budgets.forEach(b => {
     const tr = document.createElement("tr");
@@ -3582,7 +3613,7 @@ async function loadBackupsList() {
   const tbody = document.getElementById("backup-list");
   tbody.innerHTML = "";
   if (backups.length === 0) {
-    tbody.innerHTML = emptyRow(3, "🗄️", "Noch kein automatisches Backup erstellt.");
+    tbody.innerHTML = emptyRow(3, "database", "Noch kein automatisches Backup erstellt.");
   }
   backups.forEach(b => {
     const tr = document.createElement("tr");
@@ -3692,12 +3723,12 @@ async function loadFileSortLog() {
   try {
     log = await api("/file-sort/log?limit=50");
   } catch (e) {
-    tbody.innerHTML = emptyRow(4, "⚠️", e.message);
+    tbody.innerHTML = emptyRow(4, "alert-triangle", e.message);
     return;
   }
   tbody.innerHTML = "";
   if (log.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🗂️", "Noch keine Einträge.");
+    tbody.innerHTML = emptyRow(4, "folder", "Noch keine Einträge.");
   }
   log.forEach(l => {
     const tr = document.createElement("tr");
@@ -3953,7 +3984,7 @@ async function loadBankConnections() {
   const tbody = document.getElementById("bank-conn-list");
   tbody.innerHTML = "";
   if (conns.length === 0) {
-    tbody.innerHTML = emptyRow(5, "🏦", "Noch keine Bank-Verbindung angelegt.");
+    tbody.innerHTML = emptyRow(5, "landmark", "Noch keine Bank-Verbindung angelegt.");
   }
   conns.forEach(c => {
     const tr = document.createElement("tr");
@@ -4040,7 +4071,7 @@ async function loadBitvavoConnections() {
   const tbody = document.getElementById("bitvavo-conn-list");
   tbody.innerHTML = "";
   if (conns.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🪙", "Noch keine Bitvavo-Verbindung angelegt.");
+    tbody.innerHTML = emptyRow(4, "coins", "Noch keine Bitvavo-Verbindung angelegt.");
   }
   conns.forEach(c => {
     const tr = document.createElement("tr");
@@ -4105,7 +4136,7 @@ async function loadPaypalConnections() {
   const tbody = document.getElementById("paypal-conn-list");
   tbody.innerHTML = "";
   if (conns.length === 0) {
-    tbody.innerHTML = emptyRow(4, "💳", "Noch keine PayPal-Verbindung angelegt.");
+    tbody.innerHTML = emptyRow(4, "credit-card", "Noch keine PayPal-Verbindung angelegt.");
   }
   conns.forEach(c => {
     const tr = document.createElement("tr");
@@ -4217,7 +4248,7 @@ async function loadEnableBankingConnections() {
   const tbody = document.getElementById("eb-conn-list");
   tbody.innerHTML = "";
   if (conns.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🏦", "Noch keine Verbindung angelegt.");
+    tbody.innerHTML = emptyRow(4, "landmark", "Noch keine Verbindung angelegt.");
   }
   conns.forEach(c => {
     const tr = document.createElement("tr");
@@ -4329,7 +4360,7 @@ async function loadEbayConnections() {
   const tbody = document.getElementById("ebay-conn-list");
   tbody.innerHTML = "";
   if (conns.length === 0) {
-    tbody.innerHTML = emptyRow(4, "🛒", "Noch keine Verbindung angelegt.");
+    tbody.innerHTML = emptyRow(4, "shopping-cart", "Noch keine Verbindung angelegt.");
   }
   conns.forEach(c => {
     const account = accountsCache.find(a => a.id === c.account_id);
@@ -4770,12 +4801,12 @@ async function loadDashboard() {
   const tbody = document.querySelector("#account-balances tbody");
   tbody.innerHTML = "";
   if (data.account_balances.length === 0) {
-    tbody.innerHTML = emptyRow(2, "🏦", "Keine Konten.");
+    tbody.innerHTML = emptyRow(2, "landmark", "Keine Konten.");
   }
   data.account_balances.forEach(a => {
     const tr = document.createElement("tr");
-    const icon = ACCOUNT_TYPE_ICONS[a.type] || "📁";
-    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${icon}</span>${a.name}</span></td><td class="${a.current_balance >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(a.current_balance)}</td>`;
+    const icon = ACCOUNT_TYPE_ICONS[a.type] || "folder";
+    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${svgIcon(icon)}</span>${a.name}</span></td><td class="${a.current_balance >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(a.current_balance)}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -4798,7 +4829,7 @@ async function loadDashboard() {
       row.className = "budget-row";
       row.innerHTML = `
         <div class="budget-row-head">
-          <span class="budget-name"><span class="row-icon">🎯</span>${b.category_name}</span>
+          <span class="budget-name"><span class="row-icon"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span>${b.category_name}</span>
           <span class="budget-amounts">${eur(b.spent)} von ${eur(b.limit)} (${b.percent.toFixed(0)}%)</span>
         </div>
         <div class="budget-track"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>
@@ -4814,7 +4845,7 @@ async function loadDashboard() {
   anomalyListEl.innerHTML = anomalies.map(a => `
     <div class="budget-row">
       <div class="budget-row-head">
-        <span class="budget-name"><span class="row-icon">📊</span>${esc(a.category_name)}</span>
+        <span class="budget-name"><span class="row-icon"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="13" width="4" height="7" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg></span>${esc(a.category_name)}</span>
         <span class="budget-amounts">${eur(a.current_spent)} bisher – Ø sonst ${eur(a.avg_prior_months)}/Monat</span>
       </div>
       <span class="budget-projection">bei diesem Tempo: ~${eur(a.projected_spent)} am Monatsende (+${a.deviation_pct.toFixed(0)}%)</span>
@@ -4951,8 +4982,8 @@ async function loadBusinessTab() {
   tbody.innerHTML = "";
   data.account_balances.forEach(a => {
     const tr = document.createElement("tr");
-    const icon = ACCOUNT_TYPE_ICONS[a.type] || "📁";
-    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${icon}</span>${a.name}</span></td><td class="${a.current_balance >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(a.current_balance)}</td>`;
+    const icon = ACCOUNT_TYPE_ICONS[a.type] || "folder";
+    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${svgIcon(icon)}</span>${a.name}</span></td><td class="${a.current_balance >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(a.current_balance)}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -5034,13 +5065,13 @@ async function loadDebtsTab() {
   const activeGrid = document.getElementById("debt-active-grid");
   activeGrid.innerHTML = active.length
     ? ""
-    : '<div class="empty-state"><span class="empty-icon">🏦</span><span>Keine laufenden Kredite. Gut so.</span></div>';
+    : `<div class="empty-state"><span class="empty-icon">${svgIcon("landmark")}</span><span>Keine laufenden Kredite. Gut so.</span></div>`;
   active.forEach(d => activeGrid.appendChild(renderDebtCard(d)));
 
   const doneGrid = document.getElementById("debt-done-grid");
   doneGrid.innerHTML = done.length
     ? ""
-    : '<div class="empty-state"><span class="empty-icon">✅</span><span>Noch nichts abbezahlt.</span></div>';
+    : `<div class="empty-state"><span class="empty-icon">${svgIcon("check-circle")}</span><span>Noch nichts abbezahlt.</span></div>`;
   done.forEach(d => doneGrid.appendChild(renderDebtCard(d)));
   document.getElementById("debt-done-count").textContent = done.length;
 }
@@ -5145,7 +5176,7 @@ async function loadDebtDetail(d) {
 
   // Zahlungs-Ledger
   const tbody = document.getElementById("debt-payment-list");
-  tbody.innerHTML = payments.length ? "" : emptyRow(7, "💸", "Noch keine Zahlungen erfasst.");
+  tbody.innerHTML = payments.length ? "" : emptyRow(7, "coins", "Noch keine Zahlungen erfasst.");
   payments.forEach(p => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -5165,7 +5196,7 @@ async function loadDebtDetail(d) {
 
   // Tilgungsplan
   const schedBody = document.getElementById("debt-schedule-list");
-  schedBody.innerHTML = schedule.rows.length ? "" : emptyRow(7, "📅", schedule.note || "Kein Tilgungsplan berechenbar.");
+  schedBody.innerHTML = schedule.rows.length ? "" : emptyRow(7, "calendar", schedule.note || "Kein Tilgungsplan berechenbar.");
   let markedSwitch = false;
   schedule.rows.forEach(r => {
     const tr = document.createElement("tr");
@@ -5438,13 +5469,13 @@ async function loadGoalsTab() {
   const openGrid = document.getElementById("goal-open-grid");
   openGrid.innerHTML = open.length
     ? ""
-    : '<div class="empty-state"><span class="empty-icon">🎯</span><span>Noch keine offenen Ziele. Leg oben rechts eins an.</span></div>';
+    : `<div class="empty-state"><span class="empty-icon">${svgIcon("target")}</span><span>Noch keine offenen Ziele. Leg oben rechts eins an.</span></div>`;
   open.forEach(g => openGrid.appendChild(renderGoalCard(g)));
 
   const doneGrid = document.getElementById("goal-done-grid");
   doneGrid.innerHTML = done.length
     ? ""
-    : '<div class="empty-state"><span class="empty-icon">✅</span><span>Noch nichts abgeschlossen.</span></div>';
+    : `<div class="empty-state"><span class="empty-icon">${svgIcon("check-circle")}</span><span>Noch nichts abgeschlossen.</span></div>`;
   done.forEach(g => doneGrid.appendChild(renderGoalCard(g)));
   document.getElementById("goal-done-count").textContent = done.length;
 
