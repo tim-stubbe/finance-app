@@ -457,11 +457,13 @@ class SyncScheduleUpdate(BaseModel):
 class EnableBankingSettingsUpdate(BaseModel):
     app_id: str
     private_key: str
+    redirect_base_url: Optional[str] = None
 
 
 class EnableBankingSettingsOut(BaseModel):
     app_id: Optional[str] = None
     private_key_set: bool = False
+    redirect_base_url: Optional[str] = None
 
 
 class AspspOut(BaseModel):

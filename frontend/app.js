@@ -4014,21 +4014,24 @@ window.deletePaypalConnection = async id => {
 async function loadEnableBankingSettings() {
   const s = await api("/settings/enablebanking");
   document.getElementById("eb-app-id").value = s.app_id || "";
+  document.getElementById("eb-redirect-base").value = s.redirect_base_url || "";
   document.getElementById("eb-key-status").textContent = s.private_key_set
     ? "Privater Schlüssel ist hinterlegt (wird aus Sicherheitsgründen nicht wieder angezeigt)."
     : "Noch kein privater Schlüssel hinterlegt.";
-  document.getElementById("eb-redirect-hint").textContent = location.origin + "/api/enablebanking/callback";
+  const base = s.redirect_base_url || location.origin;
+  document.getElementById("eb-redirect-hint").textContent = base + "/api/enablebanking/callback";
 }
 
 document.getElementById("eb-settings-form").addEventListener("submit", async e => {
   e.preventDefault();
   const app_id = document.getElementById("eb-app-id").value;
   const private_key = document.getElementById("eb-private-key").value;
+  const redirect_base_url = document.getElementById("eb-redirect-base").value.trim();
   if (!private_key.trim()) {
     alert("Bitte den privaten Schlüssel (PEM) einfügen.");
     return;
   }
-  await api("/settings/enablebanking", { method: "PUT", body: JSON.stringify({ app_id, private_key }) });
+  await api("/settings/enablebanking", { method: "PUT", body: JSON.stringify({ app_id, private_key, redirect_base_url: redirect_base_url || null }) });
   document.getElementById("eb-private-key").value = "";
   loadEnableBankingSettings();
   toast("Enable-Banking-Zugang gespeichert.");

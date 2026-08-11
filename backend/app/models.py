@@ -90,6 +90,12 @@ class Settings(Base):
     fints_product_id = Column(String, nullable=True)
     enablebanking_app_id = Column(String, nullable=True)
     enablebanking_private_key_encrypted = Column(Text, nullable=True)
+    # Überschreibt die automatisch aus der aufgerufenen Adresse abgeleitete
+    # Redirect-URL für den OAuth-Rücksprung (z.B. "https://100.72.226.91:8444"
+    # bei einem separaten HTTPS-Proxy, da Enable Banking für Live-Apps eine
+    # https-Redirect-URL verlangt, die App selbst aber nur über http läuft).
+    # Leer = wie bisher aus der aufrufenden Anfrage abgeleitet.
+    enablebanking_redirect_base_url = Column(String, nullable=True)
     ollama_url = Column(String, nullable=True)
     ollama_model = Column(String, nullable=True)
     beleg_chat_model = Column(String, nullable=True)

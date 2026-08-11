@@ -31,6 +31,9 @@ ensure_columns("settings", {
     "enablebanking_app_id": "VARCHAR",
     "enablebanking_private_key_encrypted": "TEXT",
 })
+ensure_columns("settings", {
+    "enablebanking_redirect_base_url": "VARCHAR",
+})
 ensure_columns("holdings", {
     "sector": "VARCHAR",
     "country": "VARCHAR",
@@ -3055,6 +3058,7 @@ def get_enablebanking_settings(db: Session = Depends(get_db)):
     return schemas.EnableBankingSettingsOut(
         app_id=settings.enablebanking_app_id,
         private_key_set=bool(settings.enablebanking_private_key_encrypted),
+        redirect_base_url=settings.enablebanking_redirect_base_url,
     )
 
 
@@ -3063,8 +3067,12 @@ def update_enablebanking_settings(data: schemas.EnableBankingSettingsUpdate, db:
     settings = auth.get_or_create_settings(db)
     settings.enablebanking_app_id = data.app_id
     settings.enablebanking_private_key_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.private_key)
+    settings.enablebanking_redirect_base_url = data.redirect_base_url.strip().rstrip("/") if data.redirect_base_url else None
     db.commit()
-    return schemas.EnableBankingSettingsOut(app_id=settings.enablebanking_app_id, private_key_set=True)
+    return schemas.EnableBankingSettingsOut(
+        app_id=settings.enablebanking_app_id, private_key_set=True,
+        redirect_base_url=settings.enablebanking_redirect_base_url,
+    )
 
 
 @api_router.get("/enablebanking/aspsps", response_model=List[schemas.AspspOut])
@@ -3099,7 +3107,13 @@ def create_enablebanking_connection(data: schemas.EnableBankingConnectionCreate,
 
     state = uuid.uuid4().hex
     conn = crud.create_enablebanking_connection(db, space_id, data.account_id, data.aspsp_name, data.aspsp_country, state)
-    redirect_url = str(request.base_url) + "api/enablebanking/callback"
+    # Enable Banking verlangt für Live-Apps eine https-Redirect-URL, die exakt mit
+    # der im Portal hinterlegten übereinstimmt - die App selbst läuft aber nur über
+    # http. redirect_base_url erlaubt eine feste Override-Adresse (z.B. einen
+    # separaten https-Proxy), statt sich auf die zufällig aufgerufene Adresse zu
+    # verlassen, die nie https sein wird.
+    base = settings.enablebanking_redirect_base_url or str(request.base_url).rstrip("/")
+    redirect_url = f"{base}/api/enablebanking/callback"
     try:
         url = enablebanking_sync.start_auth(
             settings.enablebanking_app_id, private_key, data.aspsp_name, data.aspsp_country, redirect_url, state,

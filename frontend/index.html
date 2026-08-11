@@ -1534,6 +1534,9 @@
           <label class="wide">Privater Schlüssel (PEM)
             <textarea id="eb-private-key" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" rows="4"></textarea>
           </label>
+          <label class="wide">Redirect-Basis-URL (optional – nur nötig, falls die App selbst nur über http erreichbar ist, Enable Banking für Live-Apps aber https verlangt; z.B. ein separater https-Proxy)
+            <input type="text" id="eb-redirect-base" placeholder="z.B. https://100.72.226.91:8444">
+          </label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
           </div>
