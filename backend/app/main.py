@@ -82,6 +82,9 @@ ensure_columns("settings", {
 ensure_columns("accounts", {
     "is_business": "BOOLEAN DEFAULT 0",
 })
+ensure_columns("accounts", {
+    "dispo_alert_sent": "BOOLEAN DEFAULT 0",
+})
 ensure_columns("settings", {
     "brave_search_api_key_encrypted": "VARCHAR",
 })
@@ -3990,6 +3993,28 @@ def _check_daily_alerts():
                         f"🔄 Rückgabefrist ({space.name}): „{r['label']}“ läuft am "
                         f"{r['deadline_date'].strftime('%d.%m.%Y')} ab (noch {r['days_left']} Tag(e)).",
                     )
+            except Exception:
+                db.rollback()
+
+            try:
+                # Sofortmeldung bei negativem Saldo, unabhängig von der 90-Tage-
+                # Cashflow-Prognose (die nur die schon erkannten wiederkehrenden
+                # Zahlungen fortschreibt und einen echten, plötzlichen Dispo-Rutsch
+                # erst Tage später "sehen" würde). dispo_alert_sent verhindert eine
+                # taegliche Wiederholung, solange das Konto im Minus bleibt.
+                for acc in crud.get_accounts(db, space.id):
+                    balance = crud.account_balance(db, acc)
+                    if balance < 0 and not acc.dispo_alert_sent:
+                        notifications.notify(
+                            settings,
+                            f"🔴 Dispo ({space.name}): „{acc.name}“ ist ins Minus gerutscht "
+                            f"({balance:.2f} EUR).",
+                        )
+                        acc.dispo_alert_sent = True
+                        db.commit()
+                    elif balance >= 0 and acc.dispo_alert_sent:
+                        acc.dispo_alert_sent = False
+                        db.commit()
             except Exception:
                 db.rollback()
     finally:

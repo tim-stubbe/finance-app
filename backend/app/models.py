@@ -62,6 +62,12 @@ class Account(Base):
     is_business = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    # True, solange der Saldo negativ ist UND dafür schon einmal per Telegram
+    # gewarnt wurde - verhindert taegliche Wiederholmeldungen, waehrend das Konto
+    # im Minus bleibt. Wird zurueckgesetzt, sobald der Saldo wieder >= 0 ist, damit
+    # ein spaeterer erneuter Dispo-Rutsch wieder frisch meldet (siehe
+    # main._check_daily_alerts).
+    dispo_alert_sent = Column(Boolean, nullable=False, default=False)
 
     space = relationship("Space", back_populates="accounts")
     transactions = relationship(
