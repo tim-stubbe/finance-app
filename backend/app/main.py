@@ -3361,6 +3361,7 @@ def get_file_sort_settings(db: Session = Depends(get_db)):
         model=settings.file_sort_model,
         review_path=settings.file_sort_review_path,
         statements_subfolder=settings.file_sort_statements_subfolder,
+        enabled=settings.file_sort_enabled,
     )
 
 
@@ -3384,6 +3385,29 @@ def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session 
         model=settings.file_sort_model,
         review_path=settings.file_sort_review_path,
         statements_subfolder=settings.file_sort_statements_subfolder,
+        enabled=settings.file_sort_enabled,
+    )
+
+
+@api_router.put("/settings/file-sort/enabled", response_model=schemas.FileSortSettingsOut)
+def toggle_file_sort_enabled(data: schemas.FileSortEnabledUpdate, db: Session = Depends(get_db)):
+    """Eigener, schneller Ein/Aus-Schalter unabhängig vom restlichen Formular -
+    "Alles stoppen" soll mit einem Klick greifen, ohne dass dafür erst alle
+    Pfade/Kategorien im Formular korrekt ausgefüllt sein müssen. Stoppt sowohl
+    die normale Kategorie-Einsortierung als auch den Kontoauszug-Import, beide
+    hängen am selben Schalter (siehe _scheduled_file_sort)."""
+    settings = auth.get_or_create_settings(db)
+    settings.file_sort_enabled = data.enabled
+    db.commit()
+    return schemas.FileSortSettingsOut(
+        source_path=settings.file_sort_source_path,
+        target_path=settings.file_sort_target_path,
+        categories=settings.file_sort_categories,
+        subfolder_category=settings.file_sort_subfolder_category,
+        model=settings.file_sort_model,
+        review_path=settings.file_sort_review_path,
+        statements_subfolder=settings.file_sort_statements_subfolder,
+        enabled=settings.file_sort_enabled,
     )
 
 

@@ -3483,6 +3483,14 @@ document.getElementById("backup-btn").addEventListener("click", () => {
 });
 
 // ---------- Datei-Sortierung ----------
+let fileSortEnabled = false;
+
+function renderFileSortToggle() {
+  const btn = document.getElementById("file-sort-stop-toggle");
+  btn.textContent = fileSortEnabled ? "⏹ Alles stoppen" : "▶️ Wieder aktivieren";
+  btn.classList.toggle("btn-danger", fileSortEnabled);
+}
+
 async function loadFileSortSettings() {
   const s = await api("/settings/file-sort");
   document.getElementById("file-sort-source").value = s.source_path || "";
@@ -3492,7 +3500,18 @@ async function loadFileSortSettings() {
   document.getElementById("file-sort-subfolder-category").value = s.subfolder_category || "";
   document.getElementById("file-sort-model").value = s.model || "";
   document.getElementById("file-sort-statements-subfolder").value = s.statements_subfolder || "";
+  fileSortEnabled = s.enabled;
+  renderFileSortToggle();
 }
+
+document.getElementById("file-sort-stop-toggle").addEventListener("click", async () => {
+  const next = !fileSortEnabled;
+  if (fileSortEnabled && !confirm("Automatische Datei-Sortierung und Kontoauszug-Import wirklich stoppen? Der 10-Minuten-Hintergrundjob läuft dann nicht mehr, bis du hier wieder aktivierst.")) return;
+  const s = await api("/settings/file-sort/enabled", { method: "PUT", body: JSON.stringify({ enabled: next }) });
+  fileSortEnabled = s.enabled;
+  renderFileSortToggle();
+  toast(fileSortEnabled ? "Datei-Sortierung wieder aktiv." : "Datei-Sortierung gestoppt - läuft nicht mehr automatisch.");
+});
 
 document.getElementById("file-sort-settings-form").addEventListener("submit", async e => {
   e.preventDefault();

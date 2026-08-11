@@ -1333,6 +1333,11 @@ class FileSortSettingsOut(BaseModel):
     model: Optional[str] = None
     review_path: Optional[str] = None
     statements_subfolder: Optional[str] = None
+    enabled: bool = False
+
+
+class FileSortEnabledUpdate(BaseModel):
+    enabled: bool
 
 
 class FileSortLogOut(BaseModel):
