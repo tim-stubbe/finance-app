@@ -568,6 +568,15 @@ class PriceIncreaseOut(BaseModel):
     changed_date: date
 
 
+class SpendingAnomalyOut(BaseModel):
+    category_id: int
+    category_name: str
+    current_spent: float
+    projected_spent: float
+    avg_prior_months: float
+    deviation_pct: float
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 class ContractReminderCreate(BaseModel):
     account_id: int

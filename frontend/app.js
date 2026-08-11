@@ -4679,6 +4679,19 @@ async function loadDashboard() {
     });
   }
 
+  const anomalies = await api("/transactions/spending-anomalies");
+  const anomalyPanel = document.getElementById("spending-anomaly-panel");
+  const anomalyListEl = document.getElementById("spending-anomaly-list");
+  anomalyPanel.classList.toggle("hidden", anomalies.length === 0);
+  anomalyListEl.innerHTML = anomalies.map(a => `
+    <div class="budget-row">
+      <div class="budget-row-head">
+        <span class="budget-name"><span class="row-icon">📊</span>${esc(a.category_name)}</span>
+        <span class="budget-amounts">${eur(a.current_spent)} bisher – Ø sonst ${eur(a.avg_prior_months)}/Monat</span>
+      </div>
+      <span class="budget-projection">bei diesem Tempo: ~${eur(a.projected_spent)} am Monatsende (+${a.deviation_pct.toFixed(0)}%)</span>
+    </div>`).join("");
+
   const ctx = document.getElementById("chart-categories");
   const labels = data.by_category.map(c => c.category_name);
   const values = data.by_category.map(c => Math.abs(c.total));

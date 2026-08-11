@@ -515,6 +515,79 @@ def detect_price_increases(db: Session, space_id: int) -> list[dict]:
     return results
 
 
+def detect_spending_anomalies(db: Session, space_id: int, lookback_months: int = 3, threshold_pct: float = 30.0) -> list[dict]:
+    """Vergleicht die Ausgaben je Kategorie im laufenden Monat mit dem Durchschnitt
+    der letzten `lookback_months` abgeschlossenen Monate derselben Kategorie - anders
+    als budget_progress() unabhängig davon, ob überhaupt ein Budget-Limit gesetzt
+    wurde, deckt also auch Kategorien ohne Budget ab. Der laufende Monat wird auf
+    einen vollen Monat hochgerechnet (gleiches Vorgehen wie budget_progress.
+    projected_total), sonst wirkt er an den ersten Tagen immer künstlich niedrig -
+    braucht deshalb mindestens 5 vergangene Tage im Monat, um überhaupt zu werten."""
+    today = date.today()
+    if today.day < 5:
+        return []
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+
+    rows = (
+        db.query(
+            models.Transaction.category_id,
+            extract("year", models.Transaction.date).label("y"),
+            extract("month", models.Transaction.date).label("m"),
+            func.sum(models.Transaction.amount).label("total"),
+        )
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.category_id.isnot(None),
+            models.Transaction.is_transfer.is_(False),
+        )
+        .group_by(models.Transaction.category_id, "y", "m")
+        .all()
+    )
+    by_cat_month = {(r.category_id, int(r.y), int(r.m)): r.total for r in rows}
+    category_names = {c.id: c.name for c in db.query(models.Category).all()}
+    cat_ids = {cid for cid, _, _ in by_cat_month.keys()}
+
+    results = []
+    for cat_id in cat_ids:
+        current_total = by_cat_month.get((cat_id, today.year, today.month))
+        if current_total is None or current_total >= 0:
+            continue
+        current_spent = abs(current_total)
+        projected_spent = current_spent / today.day * days_in_month
+
+        prior_totals = []
+        yy, mm = today.year, today.month
+        for _ in range(lookback_months):
+            mm -= 1
+            if mm == 0:
+                mm, yy = 12, yy - 1
+            t = by_cat_month.get((cat_id, yy, mm))
+            if t is not None and t < 0:
+                prior_totals.append(abs(t))
+        if len(prior_totals) < 2:
+            continue  # zu wenig Historie fuer einen verlaesslichen Vergleich
+
+        avg_prior = sum(prior_totals) / len(prior_totals)
+        if avg_prior <= 0:
+            continue
+        deviation_pct = (projected_spent - avg_prior) / avg_prior * 100
+        if deviation_pct < threshold_pct:
+            continue
+
+        results.append({
+            "category_id": cat_id,
+            "category_name": category_names.get(cat_id, "Unbekannt"),
+            "current_spent": round(current_spent, 2),
+            "projected_spent": round(projected_spent, 2),
+            "avg_prior_months": round(avg_prior, 2),
+            "deviation_pct": round(deviation_pct, 1),
+        })
+
+    results.sort(key=lambda r: -r["deviation_pct"])
+    return results
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 def _contract_reminder_out(r: models.ContractReminder, account_name: str | None) -> schemas.ContractReminderOut:
     reminder_date = r.renewal_date - timedelta(days=r.notice_period_days)
