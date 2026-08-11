@@ -1026,6 +1026,32 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .data-table tbody tr, .simple-table tbody tr {
   transition: background 0.15s var(--ease);
+  animation: row-in 0.4s var(--ease-spring) backwards;
+}
+
+/* Kaskadierendes Einblenden statt hartem Aufpoppen bei jedem Neu-Rendern
+   einer Liste (Filterwechsel, Datenabruf) - die ersten ~14 Zeilen bekommen
+   eine steigende Verzoegerung, danach (lange Listen) ohne weitere Staffelung,
+   sonst wirkt es bei 100+ Zeilen zaeh statt elegant. */
+.data-table tbody tr:nth-child(1) { animation-delay: 0.01s; }
+.data-table tbody tr:nth-child(2) { animation-delay: 0.03s; }
+.data-table tbody tr:nth-child(3) { animation-delay: 0.05s; }
+.data-table tbody tr:nth-child(4) { animation-delay: 0.07s; }
+.data-table tbody tr:nth-child(5) { animation-delay: 0.09s; }
+.data-table tbody tr:nth-child(6) { animation-delay: 0.11s; }
+.data-table tbody tr:nth-child(7) { animation-delay: 0.13s; }
+.data-table tbody tr:nth-child(8) { animation-delay: 0.15s; }
+.data-table tbody tr:nth-child(9) { animation-delay: 0.17s; }
+.data-table tbody tr:nth-child(10) { animation-delay: 0.19s; }
+.data-table tbody tr:nth-child(n+11) { animation-delay: 0.2s; }
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-table tbody tr, .simple-table tbody tr { animation: none; }
 }
 
 .data-table tbody tr:hover { background: var(--surface-2); }
@@ -1435,6 +1461,17 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   justify-content: center;
   overflow-y: auto;
   padding: 40px 20px;
+  animation: overlay-in 0.25s var(--ease);
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
+  to { opacity: 1; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modal-box {
@@ -1447,7 +1484,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   width: 100%;
   position: relative;
   opacity: 0;
-  animation: rise-in 0.3s var(--ease-spring) forwards;
+  animation: modal-in 0.38s var(--ease-spring) forwards;
 }
 
 .modal-close {
@@ -1732,7 +1769,9 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   border-top: 1px solid var(--border);
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+  transition: transform 0.25s var(--ease-spring), box-shadow 0.25s var(--ease);
 }
+.integration-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 
 .integration-mark {
   font-size: 22px;
