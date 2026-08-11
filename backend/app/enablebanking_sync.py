@@ -245,13 +245,35 @@ def finalize_connection(db: Session, conn: models.EnableBankingConnection, app_i
             extra_eb_account_id = _account_uid(acc if isinstance(acc, dict) else {})
             if not extra_eb_account_id:
                 continue
-            new_account = models.Account(
-                name=_account_label(i, acc if isinstance(acc, dict) else {}),
-                type=models.AccountType.girokonto, initial_balance=0.0, space_id=conn.space_id,
+            # Nutzer legen bei Banken mit mehreren Konten (z.B. Finom Handel + Management)
+            # oft schon leere Platzhalterkonten passend zum ASPSP-Namen an, bevor sie die
+            # Verbindung starten - die sollen hier wiederverwendet werden statt live
+            # (Finom) beobachtet ein weiteres, redundantes Konto anzulegen.
+            reusable = (
+                db.query(models.Account)
+                .filter(
+                    models.Account.space_id == conn.space_id,
+                    models.Account.name.ilike(f"%{conn.aspsp_name}%"),
+                    ~db.query(models.EnableBankingConnection)
+                    .filter(models.EnableBankingConnection.account_id == models.Account.id)
+                    .exists(),
+                    ~db.query(models.Transaction)
+                    .filter(models.Transaction.account_id == models.Account.id)
+                    .exists(),
+                )
+                .order_by(models.Account.id)
+                .first()
             )
-            db.add(new_account)
-            db.commit()
-            db.refresh(new_account)
+            if reusable:
+                new_account = reusable
+            else:
+                new_account = models.Account(
+                    name=_account_label(i, acc if isinstance(acc, dict) else {}),
+                    type=models.AccountType.girokonto, initial_balance=0.0, space_id=conn.space_id,
+                )
+                db.add(new_account)
+                db.commit()
+                db.refresh(new_account)
             extra_conn = models.EnableBankingConnection(
                 space_id=conn.space_id, account_id=new_account.id,
                 aspsp_name=conn.aspsp_name, aspsp_country=conn.aspsp_country,
