@@ -221,6 +221,7 @@ def get_transactions(
     month: int | None = None,
     search: str | None = None,
     trip_id: int | None = None,
+    hide_transfers: bool = False,
 ):
     query = db.query(models.Transaction).join(models.Account).filter(models.Account.space_id == space_id)
     if account_id:
@@ -233,6 +234,8 @@ def get_transactions(
         query = query.filter(extract("month", models.Transaction.date) == month)
     if trip_id:
         query = query.filter(models.Transaction.trip_id == trip_id)
+    if hide_transfers:
+        query = query.filter(models.Transaction.is_transfer.is_(False))
     if search:
         like = f"%{search}%"
         query = query.filter(

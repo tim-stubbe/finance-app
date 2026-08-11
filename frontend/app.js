@@ -200,12 +200,12 @@ async function loadAccounts() {
   const tbody = document.getElementById("acc-list");
   tbody.innerHTML = "";
   if (accountsCache.length === 0) {
-    tbody.innerHTML = emptyRow(5, "🏦", "Noch keine Konten angelegt. Leg dein erstes Konto an!");
+    tbody.innerHTML = emptyRow(4, "🏦", "Noch keine Konten angelegt. Leg dein erstes Konto an!");
   }
   accountsCache.forEach(a => {
     const tr = document.createElement("tr");
     const icon = ACCOUNT_TYPE_ICONS[a.type] || "📁";
-    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${icon}</span>${a.name}${a.is_business ? ' <span class="goal-chip">💼 Geschäftlich</span>' : ""}</span></td><td>${a.type}</td><td>${eur(a.initial_balance)}</td>
+    tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${icon}</span>${a.name}${a.is_business ? ' <span class="goal-chip">💼 Geschäftlich</span>' : ""}</span></td><td>${a.type}</td>
       <td class="${a.current_balance >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(a.current_balance)}</td>
       <td>
         <button class="link-btn" onclick="editAccount(${a.id})">Bearbeiten</button>
@@ -1572,10 +1572,13 @@ async function loadTransactions() {
   const accId = document.getElementById("tx-filter-account").value;
   const catId = document.getElementById("tx-filter-category").value;
   const tripId = document.getElementById("tx-filter-trip").value;
+  const hideTransfers = document.getElementById("tx-hide-transfers").checked;
   if (search) params.set("search", search);
   if (accId) params.set("account_id", accId);
   if (catId) params.set("category_id", catId);
   if (tripId) params.set("trip_id", tripId);
+  if (hideTransfers) params.set("hide_transfers", "true");
+  localStorage.setItem("txHideTransfers", hideTransfers ? "1" : "0");
 
   const [txs] = await Promise.all([
     api("/transactions?" + params.toString()),
@@ -1896,6 +1899,11 @@ document.getElementById("cr-delete").addEventListener("click", async () => {
 
 document.getElementById("tx-filter-btn").addEventListener("click", loadTransactions);
 document.getElementById("tx-search").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); loadTransactions(); } });
+document.getElementById("tx-hide-transfers").addEventListener("change", loadTransactions);
+{
+  const saved = localStorage.getItem("txHideTransfers");
+  if (saved !== null) document.getElementById("tx-hide-transfers").checked = saved === "1";
+}
 
 document.getElementById("tx-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -1924,9 +1932,17 @@ document.getElementById("tx-form").addEventListener("submit", async e => {
   }
 
   resetTxForm();
+  closeTxModal();
   loadTransactions();
   loadAccounts();
 });
+
+function openTxModal() {
+  document.getElementById("tx-modal").classList.remove("hidden");
+}
+function closeTxModal() {
+  document.getElementById("tx-modal").classList.add("hidden");
+}
 
 window.editTransaction = async id => {
   const txs = await api("/transactions");
@@ -1939,16 +1955,26 @@ window.editTransaction = async id => {
   document.getElementById("tx-trip").value = t.trip_id || "";
   document.getElementById("tx-description").value = t.description || "";
   document.getElementById("tx-notes").value = t.notes || "";
-  document.getElementById("tx-cancel").style.display = "inline-block";
+  document.getElementById("tx-cancel").classList.remove("hidden");
   document.getElementById("tx-submit").textContent = "Änderungen speichern";
-  window.scrollTo(0, 0);
+  document.getElementById("tx-modal-title").textContent = "Buchung bearbeiten";
+  openTxModal();
 };
-document.getElementById("tx-cancel").addEventListener("click", resetTxForm);
+document.getElementById("tx-new-btn").addEventListener("click", () => {
+  resetTxForm();
+  document.getElementById("tx-modal-title").textContent = "Neue Buchung";
+  openTxModal();
+});
+document.getElementById("tx-modal-close").addEventListener("click", closeTxModal);
+document.getElementById("tx-cancel").addEventListener("click", () => {
+  resetTxForm();
+  closeTxModal();
+});
 function resetTxForm() {
   editingTxId = null;
   document.getElementById("tx-form").reset();
   document.getElementById("tx-date").value = new Date().toISOString().slice(0, 10);
-  document.getElementById("tx-cancel").style.display = "none";
+  document.getElementById("tx-cancel").classList.add("hidden");
   document.getElementById("tx-submit").textContent = "Buchen";
 }
 window.deleteTransaction = async id => {

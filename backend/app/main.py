@@ -433,10 +433,11 @@ def list_transactions(
     month: Optional[int] = None,
     search: Optional[str] = None,
     trip_id: Optional[int] = None,
+    hide_transfers: bool = False,
     db: Session = Depends(get_db),
     space_id: int = Depends(auth.get_active_space_id),
 ):
-    return crud.get_transactions(db, space_id, account_id, category_id, year, month, search, trip_id)
+    return crud.get_transactions(db, space_id, account_id, category_id, year, month, search, trip_id, hide_transfers)
 
 
 @api_router.get("/transactions/recurring", response_model=List[schemas.RecurringPaymentOut])

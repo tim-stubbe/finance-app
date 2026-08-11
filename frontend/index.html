@@ -349,7 +349,31 @@
       </div>
 
       <div class="panel">
-        <h3 class="panel-title">🧾 Neue Buchung</h3>
+        <h3 class="panel-title">📋 Übersicht</h3>
+        <div class="filter-row">
+          <input type="text" id="tx-search" placeholder="Suche...">
+          <select id="tx-filter-account"><option value="">Alle Konten</option></select>
+          <select id="tx-filter-category"><option value="">Alle Kategorien</option></select>
+          <select id="tx-filter-trip"><option value="">Alle Urlaube</option></select>
+          <label class="filter-checkbox"><input type="checkbox" id="tx-hide-transfers" checked> Umbuchungen zwischen eigenen Konten ausblenden</label>
+          <button id="tx-filter-btn" class="btn-primary">Filtern</button>
+          <button type="button" id="tx-new-btn" class="btn-primary">➕ Neue Buchung</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th>Beschreibung</th><th>Konto</th><th>Kategorie</th><th>Betrag</th><th>Beleg</th><th></th></tr></thead>
+            <tbody id="tx-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div id="tx-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="tx-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="tx-modal-title">Neue Buchung</h2>
+        </div>
         <form id="tx-form" class="form-grid">
           <input type="hidden" id="tx-id">
           <label>Datum <input type="date" id="tx-date" required></label>
@@ -360,30 +384,13 @@
           <label class="wide">Beschreibung <input type="text" id="tx-description"></label>
           <label class="wide">Notiz <textarea id="tx-notes"></textarea></label>
           <label>Beleg <input type="file" id="tx-receipt"></label>
-          <div class="form-actions">
+          <div class="form-actions wide">
             <button type="submit" id="tx-submit" class="btn-primary">Buchen</button>
-            <button type="button" id="tx-cancel" class="btn-ghost" style="display:none">Abbrechen</button>
+            <button type="button" id="tx-cancel" class="btn-ghost hidden">Abbrechen</button>
           </div>
         </form>
       </div>
-
-      <div class="panel">
-        <h3 class="panel-title">📋 Übersicht</h3>
-        <div class="filter-row">
-          <input type="text" id="tx-search" placeholder="Suche...">
-          <select id="tx-filter-account"><option value="">Alle Konten</option></select>
-          <select id="tx-filter-category"><option value="">Alle Kategorien</option></select>
-          <select id="tx-filter-trip"><option value="">Alle Urlaube</option></select>
-          <button id="tx-filter-btn" class="btn-primary">Filtern</button>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Datum</th><th>Beschreibung</th><th>Konto</th><th>Kategorie</th><th>Betrag</th><th>Beleg</th><th></th></tr></thead>
-            <tbody id="tx-list"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    </div>
 
     <div id="return-deadline-modal" class="modal-overlay hidden">
       <div class="modal-box">
@@ -444,7 +451,7 @@
       <div class="panel">
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Name</th><th>Typ</th><th>Startsaldo</th><th>Aktueller Saldo</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Typ</th><th>Aktueller Saldo</th><th></th></tr></thead>
             <tbody id="acc-list"></tbody>
           </table>
         </div>
