@@ -94,6 +94,25 @@ def fetch_crypto_price_eur(coingecko_id: str) -> float:
     return float(data[coingecko_id]["eur"])
 
 
+def fetch_crypto_prices_eur(coingecko_ids: list[str]) -> dict[str, float]:
+    """Holt Kurse für MEHRERE Kryptos in einem einzigen Aufruf statt einem pro
+    Position - CoinGeckos anonymes Free-Tier limitiert sehr knapp, mehrere
+    Positionen kurz hintereinander einzeln abzufragen (z.B. beim Bitvavo-Sync)
+    hat live zuverlässig 429 Too Many Requests ausgelöst, obwohl /simple/price
+    beliebig viele kommagetrennte IDs auf einmal unterstützt."""
+    if not coingecko_ids:
+        return {}
+    resp = requests.get(
+        COINGECKO_PRICE_URL,
+        params={"ids": ",".join(sorted(set(coingecko_ids))), "vs_currencies": "eur"},
+        headers=HEADERS,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return {cid: float(info["eur"]) for cid, info in data.items() if "eur" in info}
+
+
 def fetch_price_eur(asset_type: str, symbol: str) -> float:
     """Liefert den aktuellen Kurs in EUR pro Einheit, unabhängig von der Ursprungswährung."""
     if asset_type == "krypto":

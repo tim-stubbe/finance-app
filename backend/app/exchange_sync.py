@@ -22,6 +22,7 @@ SYMBOL_TO_COINGECKO = {
     "BCH": "bitcoin-cash", "ETC": "ethereum-classic", "UNI": "uniswap",
     "USDT": "tether", "USDC": "usd-coin", "DAI": "dai", "SHIB": "shiba-inu",
     "NEAR": "near", "APT": "aptos", "ARB": "arbitrum", "OP": "optimism",
+    "BNB": "binancecoin",
 }
 
 
@@ -62,7 +63,11 @@ def sync(db: Session, conn: models.BitvavoConnection, api_key: str, api_secret: 
         h.symbol.lower(): h for h in crud.get_holdings(db, space_id) if h.asset_type == models.AssetType.krypto
     }
 
-    created, updated, failed = 0, 0, []
+    # Erst alle relevanten Positionen einsammeln, dann die Kurse in EINEM
+    # Sammelaufruf holen (statt einem CoinGecko-Aufruf je Position) - mehrere
+    # Einzelaufrufe kurz hintereinander haben live zuverlässig 429 Too Many
+    # Requests auf CoinGeckos strikt limitiertem Free-Tier ausgelöst.
+    relevant = []
     for entry in balances:
         symbol = (entry.get("symbol") or "").upper()
         if not symbol or symbol == "EUR":
@@ -70,13 +75,21 @@ def sync(db: Session, conn: models.BitvavoConnection, api_key: str, api_secret: 
         qty = float(entry.get("available", 0) or 0) + float(entry.get("inOrder", 0) or 0)
         if qty <= 0:
             continue
-        coingecko_id = SYMBOL_TO_COINGECKO.get(symbol, symbol.lower())
+        relevant.append((symbol, qty, SYMBOL_TO_COINGECKO.get(symbol, symbol.lower())))
 
-        current_price = None
-        try:
-            current_price = prices.fetch_crypto_price_eur(coingecko_id)
-        except Exception as e:
-            failed.append(f"{symbol}: kein Kurs für '{coingecko_id}' gefunden ({e}) - Symbol ggf. manuell in der Position korrigieren")
+    try:
+        price_by_id = prices.fetch_crypto_prices_eur([cid for _, _, cid in relevant])
+        price_fetch_error = None
+    except Exception as e:
+        price_by_id = {}
+        price_fetch_error = str(e)
+
+    created, updated, failed = 0, 0, []
+    for symbol, qty, coingecko_id in relevant:
+        current_price = price_by_id.get(coingecko_id)
+        if current_price is None:
+            reason = price_fetch_error or f"kein Kurs für '{coingecko_id}' im Sammelaufruf enthalten"
+            failed.append(f"{symbol}: kein Kurs für '{coingecko_id}' gefunden ({reason}) - Symbol ggf. manuell in der Position korrigieren")
 
         existing = holdings_by_symbol.get(coingecko_id.lower())
         if existing:
