@@ -1203,6 +1203,53 @@ def delete_budget(db: Session, space_id: int, category_id: int):
     return budget
 
 
+def suggest_budgets(db: Session, space_id: int, months: int = 3) -> list[dict]:
+    """Schlägt ein Monatslimit für Ausgaben-Kategorien vor, die noch kein
+    Budget haben - Durchschnitt der letzten `months` Monate plus 10% Puffer
+    (auf 5 EUR gerundet), damit normale Schwankungen nicht sofort als
+    überschritten gemeldet werden. Bewusst konservativ: nur Kategorien mit
+    Buchungen in mindestens 2 verschiedenen Monaten UND mindestens 3
+    Buchungen insgesamt - eine einzelne Anschaffung in einem Monat soll kein
+    dauerhaftes Budget vorschlagen."""
+    existing_category_ids = {b.category_id for b in get_budgets(db, space_id)}
+    cutoff = date.today() - timedelta(days=months * 31)
+
+    rows = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.category_id.isnot(None),
+            models.Transaction.is_transfer.is_(False),
+            models.Transaction.amount < 0,
+            models.Transaction.date >= cutoff,
+        )
+        .all()
+    )
+    by_category: dict[int, list[models.Transaction]] = {}
+    for t in rows:
+        by_category.setdefault(t.category_id, []).append(t)
+
+    categories = {c.id: c for c in db.query(models.Category).filter(models.Category.type == models.CategoryType.ausgabe).all()}
+    suggestions = []
+    for category_id, txs in by_category.items():
+        if category_id in existing_category_ids or category_id not in categories:
+            continue
+        distinct_months = {(t.date.year, t.date.month) for t in txs}
+        if len(distinct_months) < 2 or len(txs) < 3:
+            continue
+        total = sum(abs(t.amount) for t in txs)
+        avg_monthly = total / len(distinct_months)
+        suggested = round((avg_monthly * 1.1) / 5) * 5
+        suggestions.append({
+            "category_id": category_id, "category_name": categories[category_id].name,
+            "suggested_limit": float(suggested), "months_used": len(distinct_months),
+            "avg_monthly_spend": round(avg_monthly, 2),
+        })
+    suggestions.sort(key=lambda s: -s["avg_monthly_spend"])
+    return suggestions
+
+
 def budget_progress(db: Session, space_id: int, year: int, month: int | None = None):
     budgets = get_budgets(db, space_id)
     result = []

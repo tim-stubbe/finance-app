@@ -171,6 +171,14 @@ class BudgetOut(BaseModel):
     monthly_limit: float
 
 
+class BudgetSuggestionOut(BaseModel):
+    category_id: int
+    category_name: str
+    suggested_limit: float
+    months_used: int
+    avg_monthly_spend: float
+
+
 class BudgetProgress(BaseModel):
     category_id: int
     category_name: str

@@ -3930,6 +3930,40 @@ async function loadBudgets() {
       <td><button class="link-btn" onclick="deleteBudget(${b.category_id})">Löschen</button></td>`;
     tbody.appendChild(tr);
   });
+  loadBudgetSuggestions();
+}
+
+async function loadBudgetSuggestions() {
+  const wrap = document.getElementById("budget-suggestions-wrap");
+  let suggestions = [];
+  try {
+    suggestions = await api("/budgets/suggestions");
+  } catch (e) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.toggle("hidden", suggestions.length === 0);
+  if (!suggestions.length) return;
+  document.getElementById("budget-suggestions-list").innerHTML = suggestions.map(s => `
+    <tr>
+      <td>${esc(s.category_name)}</td>
+      <td>${eur(s.avg_monthly_spend)}</td>
+      <td>${eur(s.suggested_limit)}</td>
+      <td><button type="button" class="link-btn" data-apply-budget="${s.category_id}" data-apply-limit="${s.suggested_limit}">Übernehmen</button></td>
+    </tr>`).join("");
+  document.querySelectorAll("[data-apply-budget]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await api("/budgets", {
+        method: "POST",
+        body: JSON.stringify({
+          category_id: parseInt(btn.dataset.applyBudget, 10),
+          monthly_limit: parseFloat(btn.dataset.applyLimit),
+        }),
+      });
+      toast("Budget übernommen.");
+      loadBudgets();
+    });
+  });
 }
 
 document.getElementById("budget-form").addEventListener("submit", async e => {

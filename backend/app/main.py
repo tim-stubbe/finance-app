@@ -444,6 +444,11 @@ def list_budgets(db: Session = Depends(get_db), space_id: int = Depends(auth.get
     ]
 
 
+@api_router.get("/budgets/suggestions", response_model=List[schemas.BudgetSuggestionOut])
+def get_budget_suggestions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.suggest_budgets(db, space_id)
+
+
 @api_router.post("/budgets", response_model=schemas.BudgetOut)
 def save_budget(data: schemas.BudgetCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     if not crud.get_category(db, data.category_id):
