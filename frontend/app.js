@@ -2117,11 +2117,12 @@ async function loadRecurringTab() {
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {
-    tbody.innerHTML = emptyRow(8, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
+    tbody.innerHTML = emptyRow(9, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
   }
   let monthlyTotal = 0;
   items.forEach(it => {
-    monthlyTotal += Math.abs(it.avg_amount) * (RECURRING_MONTHLY_FACTOR[it.frequency] || 0);
+    const monthlyCost = Math.abs(it.avg_amount) * (RECURRING_MONTHLY_FACTOR[it.frequency] || 0);
+    monthlyTotal += monthlyCost;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${it.description || "–"}</td>
@@ -2129,6 +2130,7 @@ async function loadRecurringTab() {
       <td>${it.category_name || "–"}</td>
       <td>${RECURRING_FREQ_LABELS[it.frequency] || it.frequency}</td>
       <td class="${it.avg_amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(it.avg_amount)}</td>
+      <td>${eur(monthlyCost * 12)}</td>
       <td>${fmtDate(it.next_expected_date)}</td>
       <td>${eur(it.total_amount)}</td>
       <td><button type="button" class="btn-ghost btn-sm" data-cr-account="${it.account_id}" data-cr-key="${esc(it.description_key)}" data-cr-label="${esc(it.description || "")}" data-cr-freq="${it.frequency}">📄 Frist</button></td>`;
@@ -2165,7 +2167,7 @@ async function loadContractReminders() {
     const tr = document.createElement("tr");
     if (r.due) tr.classList.add("row-warning");
     tr.innerHTML = `
-      <td>${esc(r.label)}</td>
+      <td>${r.should_cancel ? "🔴 " : ""}${esc(r.label)}${r.notes ? `<br><span class="page-sub">${esc(r.notes)}</span>` : ""}</td>
       <td>${r.account_name || "–"}</td>
       <td>${fmtDate(r.renewal_date)}</td>
       <td>${r.notice_period_days} Tage</td>
@@ -2196,6 +2198,8 @@ function openContractReminderModal(accountId, descriptionKey, label, frequency, 
   document.getElementById("cr-label").value = existing ? existing.label : label;
   document.getElementById("cr-renewal").value = existing ? existing.renewal_date : "";
   document.getElementById("cr-notice").value = existing ? existing.notice_period_days : 30;
+  document.getElementById("cr-should-cancel").checked = existing ? existing.should_cancel : false;
+  document.getElementById("cr-notes").value = existing?.notes || "";
   document.getElementById("cr-delete").classList.toggle("hidden", !existing);
   document.getElementById("contract-reminder-modal").classList.remove("hidden");
 }
@@ -2215,6 +2219,8 @@ document.getElementById("contract-reminder-form").addEventListener("submit", asy
     renewal_date: document.getElementById("cr-renewal").value,
     notice_period_days: parseInt(document.getElementById("cr-notice").value),
     auto_advance_frequency: document.getElementById("cr-frequency").value || null,
+    should_cancel: document.getElementById("cr-should-cancel").checked,
+    notes: document.getElementById("cr-notes").value.trim() || null,
   };
   await api(id ? `/contract-reminders/${id}` : "/contract-reminders", {
     method: id ? "PUT" : "POST",

@@ -734,6 +734,8 @@ class ContractReminderCreate(BaseModel):
     notice_period_days: int
     renewal_date: date
     auto_advance_frequency: Optional[str] = None
+    notes: Optional[str] = None
+    should_cancel: bool = False
 
 
 class ContractReminderUpdate(BaseModel):
@@ -741,6 +743,8 @@ class ContractReminderUpdate(BaseModel):
     notice_period_days: Optional[int] = None
     renewal_date: Optional[date] = None
     auto_advance_frequency: Optional[str] = None
+    notes: Optional[str] = None
+    should_cancel: Optional[bool] = None
 
 
 class ContractReminderOut(BaseModel):
@@ -756,6 +760,8 @@ class ContractReminderOut(BaseModel):
     reminder_date: date
     days_until_reminder: int
     due: bool
+    notes: Optional[str] = None
+    should_cancel: bool = False
 
 
 # ---------- Rückgabefristen ----------

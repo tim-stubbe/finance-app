@@ -164,6 +164,10 @@ ensure_columns("calendar_events", {
 ensure_columns("todos", {
     "completed_at": "DATETIME",
 })
+ensure_columns("contract_reminders", {
+    "notes": "TEXT",
+    "should_cancel": "BOOLEAN DEFAULT 0",
+})
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
     "imap_host": "VARCHAR",

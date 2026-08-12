@@ -858,6 +858,7 @@ def _contract_reminder_out(r: models.ContractReminder, account_name: str | None)
         auto_advance_frequency=r.auto_advance_frequency, reminder_date=reminder_date,
         days_until_reminder=(reminder_date - date.today()).days,
         due=date.today() >= reminder_date,
+        notes=r.notes, should_cancel=r.should_cancel,
     )
 
 

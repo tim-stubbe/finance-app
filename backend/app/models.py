@@ -917,6 +917,11 @@ class ContractReminder(Base):
     renewal_date = Column(Date, nullable=False)
     auto_advance_frequency = Column(String, nullable=True)
     last_reminded_for = Column(Date, nullable=True)
+    # Freitext-Notiz ("eigentlich kündigen", ein Link zum Kündigungsformular,
+    # ...) und eine einfache Ja/Nein-Markierung, die die Zeile in der Abo-
+    # Übersicht hervorhebt - beides rein informativ, löst nichts automatisch aus.
+    notes = Column(Text, nullable=True)
+    should_cancel = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
