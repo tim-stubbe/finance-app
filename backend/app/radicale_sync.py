@@ -16,7 +16,7 @@ CalDAV-Grundlagen, die hier genutzt werden:
 
 import re
 import uuid
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree as ET
 
@@ -174,7 +174,10 @@ def build_vevent(
 ) -> str:
     if all_day:
         dtstart = f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}"
-        dtend = f"DTEND;VALUE=DATE:{(end or start).strftime('%Y%m%d')}"
+        # DTEND ist bei VEVENT exklusiv (RFC 5545) - ohne explizites Ende auf
+        # start+1 Tag setzen, sonst waere DTSTART==DTEND ein Termin mit
+        # Dauer null, den manche CalDAV-Clients seltsam oder gar nicht anzeigen.
+        dtend = f"DTEND;VALUE=DATE:{(end or start + timedelta(days=1)).strftime('%Y%m%d')}"
     else:
         dtstart = f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}"
         dtend = f"DTEND:{(end or start).strftime('%Y%m%dT%H%M%S')}" if end else None
