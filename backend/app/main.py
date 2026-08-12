@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time, weather
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -4681,12 +4681,25 @@ def _scheduled_travel_reminder():
                 continue
             if minutes is None:
                 continue
-            leave_by = ev.start - timedelta(minutes=minutes + TRAVEL_PREP_BUFFER_MINUTES)
+
+            buffer_minutes = TRAVEL_PREP_BUFFER_MINUTES
+            rain_note = ""
+            try:
+                rain_pct = weather.precipitation_probability_percent(*home_coords, ev.start)
+            except Exception:
+                rain_pct = None
+            # Bei Regenwahrscheinlichkeit ab 50% etwas mehr Puffer (langsamerer
+            # Verkehr, Parkplatzsuche im Regen usw.) statt nur die reine Fahrzeit.
+            if rain_pct is not None and rain_pct >= 50:
+                buffer_minutes += 10
+                rain_note = f" 🌧 Regenwahrscheinlichkeit {rain_pct}%, etwas mehr Puffer eingeplant."
+
+            leave_by = ev.start - timedelta(minutes=minutes + buffer_minutes)
             if now >= leave_by:
                 notifications.notify(
                     settings,
                     f"🚗 Los geht's: Fahrzeit ca. {minutes} Min zu „{ev.title}“ um "
-                    f"{ev.start.strftime('%H:%M')}. Jetzt losfahren, um pünktlich zu sein.",
+                    f"{ev.start.strftime('%H:%M')}. Jetzt losfahren, um pünktlich zu sein.{rain_note}",
                 )
                 ev.travel_reminder_sent = True
                 db.commit()
