@@ -4523,6 +4523,49 @@ def _scheduled_ai_maintenance():
         db.close()
 
 
+def _scheduled_anomaly_check():
+    """Alle 30 Minuten: Preiserhöhungen bei Abos und Ausgaben-Ausreißer sofort
+    per Telegram melden, statt nur im 3-Stunden-Digest aufzutauchen - beides
+    nutzt die schon vorhandenen Auswertungen (detect_price_increases/
+    detect_spending_anomalies, sonst nur passiv in der App sichtbar).
+    NotifiedAnomaly verhindert, dieselbe Auffälligkeit bei jedem Lauf erneut
+    zu schicken (siehe dort für die Begründung)."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        for space in crud.get_spaces(db):
+            try:
+                for inc in crud.detect_price_increases(db, space.id):
+                    key = f"price:{space.id}:{inc['account_id']}:{inc['description']}:{inc['new_amount']}"
+                    if crud.is_anomaly_notified(db, space.id, key):
+                        continue
+                    notifications.notify(
+                        settings,
+                        f"💸 Preiserhöhung erkannt: „{inc['description']}“ ({inc['account_name']}) "
+                        f"{inc['old_amount']:.2f} € → {inc['new_amount']:.2f} € ({inc['increase_pct']:.0f}% mehr).",
+                    )
+                    crud.mark_anomaly_notified(db, space.id, key)
+
+                today = date.today()
+                for an in crud.detect_spending_anomalies(db, space.id):
+                    key = f"spend:{space.id}:{an['category_id']}:{today.year}:{today.month}"
+                    if crud.is_anomaly_notified(db, space.id, key):
+                        continue
+                    notifications.notify(
+                        settings,
+                        f"📈 Ausgaben-Ausreißer: „{an['category_name']}“ liegt diesen Monat hochgerechnet bei "
+                        f"{an['projected_spent']:.2f} € (sonst ø {an['avg_prior_months']:.2f} €, "
+                        f"+{an['deviation_pct']:.0f}%).",
+                    )
+                    crud.mark_anomaly_notified(db, space.id, key)
+            except Exception:
+                db.rollback()
+    finally:
+        db.close()
+
+
 def _scheduled_net_worth_snapshot():
     """Einmal taeglich kurz vor Mitternacht: Nettovermoegen je Bereich
     festhalten. Einzige Quelle fuer eine echte Verlaufskurve - siehe
@@ -4720,6 +4763,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_radicale_sync, CronTrigger(minute="*/3"),
     id="radicale_sync", misfire_grace_time=300,
+)
+scheduler.add_job(
+    _scheduled_anomaly_check, CronTrigger(minute="*/30"),
+    id="anomaly_check", misfire_grace_time=900,
 )
 scheduler.add_job(
     _scheduled_net_worth_snapshot, CronTrigger(hour=23, minute=55),

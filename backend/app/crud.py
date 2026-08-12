@@ -741,6 +741,20 @@ def detect_spending_anomalies(db: Session, space_id: int, lookback_months: int =
     return results
 
 
+def is_anomaly_notified(db: Session, space_id: int, key: str) -> bool:
+    return (
+        db.query(models.NotifiedAnomaly)
+        .filter(models.NotifiedAnomaly.space_id == space_id, models.NotifiedAnomaly.key == key)
+        .first()
+        is not None
+    )
+
+
+def mark_anomaly_notified(db: Session, space_id: int, key: str) -> None:
+    db.add(models.NotifiedAnomaly(space_id=space_id, key=key))
+    db.commit()
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 def _contract_reminder_out(r: models.ContractReminder, account_name: str | None) -> schemas.ContractReminderOut:
     reminder_date = r.renewal_date - timedelta(days=r.notice_period_days)

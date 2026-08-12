@@ -98,6 +98,21 @@ class AccountBalanceLog(Base):
     debt = relationship("Debt")
 
 
+class NotifiedAnomaly(Base):
+    """Merkt sich, welche Preiserhöhungen/Ausgaben-Ausreißer schon per Telegram
+    gemeldet wurden, damit dieselbe Auffälligkeit nicht bei jedem Scheduler-Lauf
+    erneut geschickt wird - reine Dedupe-Tabelle, kein fachlicher Wert
+    (detect_price_increases/detect_spending_anomalies bleiben die Quelle der
+    Wahrheit, hier steht nur "wurde für DIESEN key schon benachrichtigt")."""
+
+    __tablename__ = "notified_anomalies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    key = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Category(Base):
     __tablename__ = "categories"
 
