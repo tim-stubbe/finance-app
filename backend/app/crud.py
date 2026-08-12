@@ -3364,3 +3364,60 @@ def find_life_area_by_name(db: Session, name_query: str) -> tuple[models.LifeAre
         namen = ", ".join(a.name for a in matches)
         return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
     return matches[0], None
+
+
+# ---------- Wunschliste ----------
+def get_wishlist_items(db: Session, include_inactive: bool = False) -> list[models.WishlistItem]:
+    query = db.query(models.WishlistItem)
+    if not include_inactive:
+        query = query.filter(models.WishlistItem.active.is_(True))
+    return query.order_by(models.WishlistItem.created_at.desc()).all()
+
+
+def get_wishlist_item(db: Session, item_id: int) -> models.WishlistItem | None:
+    return db.query(models.WishlistItem).filter(models.WishlistItem.id == item_id).first()
+
+
+def create_wishlist_item(db: Session, data: schemas.WishlistItemCreate) -> models.WishlistItem:
+    item = models.WishlistItem(
+        name=data.name, category=data.category, target_price=data.target_price, url=data.url,
+        notes=data.notes, check_interval_days=data.check_interval_days,
+        auto_check_enabled=data.auto_check_enabled,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def update_wishlist_item(db: Session, item: models.WishlistItem, data: schemas.WishlistItemUpdate) -> models.WishlistItem:
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(item, key, value)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def mark_wishlist_item_checked(db: Session, item: models.WishlistItem) -> models.WishlistItem:
+    item.last_checked_at = datetime.utcnow()
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def find_wishlist_item_by_name(db: Session, name_query: str) -> tuple[models.WishlistItem | None, str | None]:
+    """Analog zu find_business_project_by_name/find_life_area_by_name."""
+    q = name_query.strip().lower()
+    if not q:
+        return None, "Kein Name angegeben."
+    items = db.query(models.WishlistItem).filter(
+        models.WishlistItem.active.is_(True), models.WishlistItem.purchased.is_(False),
+    ).all()
+    matches = [i for i in items if q in i.name.lower()]
+    if not matches:
+        namen = ", ".join(i.name for i in items) or "noch nichts auf der Wunschliste"
+        return None, f"Nichts mit „{name_query}“ auf der Wunschliste gefunden. Vorhanden: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(i.name for i in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    return matches[0], None

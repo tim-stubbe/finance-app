@@ -120,6 +120,10 @@
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 5 6.5 5c2 0 3.5 1.2 5.5 3.5C14 6.2 15.5 5 17.5 5 21 5 23.5 8.5 21.5 12.5 19 16.65 12 21 12 21z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
         <span>Leben</span>
       </button>
+      <button class="nav-btn" data-tab="wishlist">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="21" r="1.3"/><circle cx="18" cy="21" r="1.3"/><path d="M2 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Wunschliste</span>
+      </button>
     </nav>
 
     <div class="nav-bottom">
@@ -1652,6 +1656,67 @@
           <label class="wide">Notiz <input type="text" id="life-checkin-note" required placeholder="z.B. Heute 5km gelaufen"></label>
           <label>Neuer Fortschritt (%, optional) <input type="number" min="0" max="100" id="life-checkin-progress"></label>
           <div class="form-actions wide">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- WUNSCHLISTE (Deal-Wecker) -->
+    <section id="tab-wishlist" class="tab-content">
+      <header class="page-head">
+        <div>
+          <h1>Wunschliste</h1>
+          <p class="page-sub">
+            Dinge, die du kaufen willst, wenn sie günstig sind (Flüge, Produkte, ...). Kies erinnert dich
+            regelmäßig, selbst nachzuschauen. Optional: experimentelle automatische Einschätzung per KI-Websuche –
+            <strong>keine echten Preisdaten, kann Deals verpassen oder falsch Alarm schlagen.</strong>
+            Neue Einträge gehen auch per Telegram in normaler Sprache oder per <code>/wunsch Name</code>.
+          </p>
+        </div>
+        <button id="wishlist-new-btn" class="btn-primary">+ Neuer Wunsch</button>
+      </header>
+
+      <div class="panel">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Kategorie</th><th>Zielpreis</th><th>Zuletzt geprüft</th><th>Auto-Check</th><th></th></tr></thead>
+            <tbody id="wishlist-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div id="wishlist-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="wishlist-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="wishlist-modal-title">Neuer Wunsch</h2>
+        </div>
+        <form id="wishlist-form" class="form-grid">
+          <input type="hidden" id="wishlist-id">
+          <label class="wide">Name <input type="text" id="wishlist-name" required placeholder="z.B. Flug nach London"></label>
+          <label>Kategorie <input type="text" id="wishlist-category" placeholder="z.B. Flug, Produkt"></label>
+          <label>Zielpreis (€, optional) <input type="number" step="0.01" min="0" id="wishlist-target-price"></label>
+          <label class="wide">Link (optional) <input type="url" id="wishlist-url" placeholder="https://…"></label>
+          <label class="wide">Notiz <input type="text" id="wishlist-notes" placeholder="optional"></label>
+          <label>Erinnerung alle
+            <select id="wishlist-interval">
+              <option value="">keine Erinnerung</option>
+              <option value="1">Tag</option>
+              <option value="3">3 Tage</option>
+              <option value="7">Woche</option>
+              <option value="14">2 Wochen</option>
+              <option value="30">Monat</option>
+            </select>
+          </label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="wishlist-auto-check">
+            <span>Experimentelle Auto-Prüfung per KI-Websuche aktivieren (keine echten Preisdaten, kann irren)</span>
+          </label>
+          <div class="form-actions wide">
+            <button type="button" id="wishlist-purchased" class="btn-ghost hidden">Als gekauft markieren</button>
+            <button type="button" id="wishlist-archive" class="btn-ghost hidden">Löschen</button>
             <button type="submit" class="btn-primary">Speichern</button>
           </div>
         </form>

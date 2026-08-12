@@ -1077,3 +1077,35 @@ class LifeCheckIn(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     area = relationship("LifeArea")
+
+
+class WishlistItem(Base):
+    """Ein Wunsch (Flug, Produkt, ...), den der Nutzer kaufen will, sobald er
+    günstig ist - "jeder hat dieselben 24 Stunden", das manuelle Nachschauen
+    soll Kies abnehmen. Zwei Ebenen, die unabhängig voneinander funktionieren:
+    1) check_interval_days/last_checked_at/last_reminded_date - zuverlässige
+       Erinnerung, selbst nachzuschauen (wie bei BusinessProject/LifeArea).
+    2) auto_check_enabled - EXPERIMENTELL: main._scheduled_wishlist_auto_check
+       nutzt die ohnehin vorhandene Brave-Suche + Ollama, um einzuschätzen, ob
+       gerade ein Deal vorliegt. Keine echten Preisdaten (keine Flug-/Preis-
+       API angebunden, dafür gibt's keine freie/generische Lösung) - kann
+       Deals verpassen oder fälschlich Alarm schlagen. Bewusst standardmäßig
+       AUS (nutzerentscheidung erst beim Anlegen), jede Meldung sagt klar
+       dazu, dass es eine KI-Einschätzung ist, kein verifizierter Preis."""
+
+    __tablename__ = "wishlist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    category = Column(String, nullable=True)
+    target_price = Column(Float, nullable=True)
+    url = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    check_interval_days = Column(Integer, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    last_reminded_date = Column(Date, nullable=True)
+    auto_check_enabled = Column(Boolean, nullable=False, default=False)
+    last_auto_check_at = Column(DateTime, nullable=True)
+    purchased = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

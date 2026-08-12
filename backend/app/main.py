@@ -569,6 +569,33 @@ def create_life_checkin(data: schemas.LifeCheckInCreate, db: Session = Depends(g
     return crud.create_life_checkin(db, data.area_id, data.note, data.progress_percent)
 
 
+# ---------------- Wunschliste (Deal-Wecker) ----------------
+@api_router.get("/wishlist", response_model=List[schemas.WishlistItemOut])
+def list_wishlist_items(include_inactive: bool = False, db: Session = Depends(get_db)):
+    return crud.get_wishlist_items(db, include_inactive)
+
+
+@api_router.post("/wishlist", response_model=schemas.WishlistItemOut)
+def create_wishlist_item(data: schemas.WishlistItemCreate, db: Session = Depends(get_db)):
+    return crud.create_wishlist_item(db, data)
+
+
+@api_router.patch("/wishlist/{item_id}", response_model=schemas.WishlistItemOut)
+def update_wishlist_item(item_id: int, data: schemas.WishlistItemUpdate, db: Session = Depends(get_db)):
+    item = crud.get_wishlist_item(db, item_id)
+    if not item:
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return crud.update_wishlist_item(db, item, data)
+
+
+@api_router.post("/wishlist/{item_id}/checked", response_model=schemas.WishlistItemOut)
+def mark_wishlist_item_checked(item_id: int, db: Session = Depends(get_db)):
+    item = crud.get_wishlist_item(db, item_id)
+    if not item:
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return crud.mark_wishlist_item_checked(db, item)
+
+
 # ---------------- Eigene Regeln (Sofort-Alarme) ----------------
 @api_router.get("/alert-rules", response_model=List[schemas.AlertRuleOut])
 def list_alert_rules(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
@@ -4968,6 +4995,105 @@ def _scheduled_life_check_reminder():
         db.close()
 
 
+def _scheduled_wishlist_reminder():
+    """Einmal täglich: Wunschlisten-Einträge mit Prüf-Intervall erinnern,
+    selbst nachzuschauen - die zuverlässige Grundfunktion (kein Preis-
+    Versprechen, nur eine Erinnerung), unabhängig von der experimentellen
+    Auto-Prüfung unten."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        today = date.today()
+        now = datetime.utcnow()
+        items = db.query(models.WishlistItem).filter(
+            models.WishlistItem.active.is_(True), models.WishlistItem.purchased.is_(False),
+            models.WishlistItem.check_interval_days.isnot(None),
+        ).all()
+        for i in items:
+            if i.last_reminded_date == today:
+                continue
+            reference = i.last_checked_at or i.created_at
+            if not reference or (now - reference).days < i.check_interval_days:
+                continue
+            preis = f" (Zielpreis {i.target_price:.2f} EUR)" if i.target_price else ""
+            notifications.notify(
+                settings,
+                f"🛒 Schau mal nach: „{i.name}“{preis} - seit {(now - reference).days} Tagen nicht geprüft.",
+            )
+            i.last_reminded_date = today
+            db.commit()
+    finally:
+        db.close()
+
+
+WISHLIST_AUTO_CHECK_BATCH_SIZE = 3
+WISHLIST_AUTO_CHECK_MIN_HOURS = 20  # nicht öfter als ~1x/Tag pro Eintrag, Suchanfragen sind begrenzt
+
+
+def _scheduled_wishlist_auto_check():
+    """EXPERIMENTELL, täglich: für Wunschlisten-Einträge mit auto_check_enabled
+    per Brave-Suche + Ollama grob einschätzen, ob gerade ein Deal vorliegt -
+    siehe models.WishlistItem für die ausführliche Begründung (keine echte
+    Preis-API angebunden, kann Deals verpassen oder falsch Alarm schlagen).
+    Läuft in kleinen Batches wie main._scheduled_receipt_indexing, um die
+    Suchanfragen zu begrenzen. Jede Meldung sagt klar, dass es eine
+    KI-Einschätzung ist, kein verifizierter Preis."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled or not settings.brave_search_api_key_encrypted:
+            return
+        chat_model = settings.ollama_model or settings.beleg_chat_model
+        if not settings.ollama_url or not chat_model:
+            return
+        api_key = bank_sync.decrypt_secret(settings.secret_key, settings.brave_search_api_key_encrypted)
+
+        cutoff = datetime.utcnow() - timedelta(hours=WISHLIST_AUTO_CHECK_MIN_HOURS)
+        items = (
+            db.query(models.WishlistItem)
+            .filter(
+                models.WishlistItem.active.is_(True), models.WishlistItem.purchased.is_(False),
+                models.WishlistItem.auto_check_enabled.is_(True),
+                (models.WishlistItem.last_auto_check_at.is_(None)) | (models.WishlistItem.last_auto_check_at < cutoff),
+            )
+            .limit(WISHLIST_AUTO_CHECK_BATCH_SIZE)
+            .all()
+        )
+        for item in items:
+            item.last_auto_check_at = datetime.utcnow()
+            db.commit()
+            try:
+                query = f"{item.name} günstig Angebot Preis"
+                if item.target_price:
+                    query += f" unter {item.target_price:.0f} Euro"
+                results = websearch.search(api_key, query)
+                if not results:
+                    continue
+                prompt = (
+                    "Du bekommst Web-Suchergebnisse zu einem Wunsch-Artikel. Schätze NUR anhand dieser "
+                    "Ergebnisse ein, ob gerade ein besonders günstiges Angebot/ein Deal vorliegt "
+                    f"(Zielpreis, falls genannt: {item.target_price} EUR). Wenn ja, nenne kurz Preis/Quelle. "
+                    "Wenn unklar oder kein echter Deal erkennbar, antworte NUR mit 'NEIN'. Antworte NUR mit "
+                    "'NEIN' oder einem kurzen Satz auf Deutsch, sonst nichts.\n\n"
+                    + websearch.format_for_prompt(query, results)
+                )
+                antwort = ollama_client.chat(settings.ollama_url, chat_model, [{"role": "user", "content": prompt}], timeout=120)
+                antwort = antwort.strip()
+                if antwort and not antwort.upper().startswith("NEIN"):
+                    notifications.notify(
+                        settings,
+                        f"🤖💸 Möglicher Deal bei „{item.name}“ (KI-Einschätzung, KEIN verifizierter Preis - "
+                        f"selbst prüfen!): {antwort}",
+                    )
+            except Exception:
+                db.rollback()
+                continue
+    finally:
+        db.close()
+
+
 def _scheduled_net_worth_snapshot():
     """Einmal taeglich kurz vor Mitternacht: Nettovermoegen je Bereich
     festhalten. Einzige Quelle fuer eine echte Verlaufskurve - siehe
@@ -5287,6 +5413,14 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_life_check_reminder, CronTrigger(hour=8, minute=30),
     id="life_check_reminder", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_wishlist_reminder, CronTrigger(hour=8, minute=45),
+    id="wishlist_reminder", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_wishlist_auto_check, CronTrigger(hour=9, minute=0),
+    id="wishlist_auto_check", misfire_grace_time=3600,
 )
 scheduler.add_job(
     _scheduled_travel_reminder, CronTrigger(minute="*/5"),

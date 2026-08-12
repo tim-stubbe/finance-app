@@ -18,9 +18,13 @@ nehmen) - die KI antwortet dafür mit einem ```action```-Block
 (_ACTION_BLOCK_RE, siehe _execute_action), den der Bot statt der KI ausführt
 und danach IMMER eine Bestätigung mit dem tatsächlich verstandenen Ergebnis
 zurückschickt, damit ein Missverständnis sofort auffällt (und sich korrigieren
-lässt). Die festen Kommandos (/todo, /erledigt, /termin, /termin_absagen,
-/projekt, /projekt_erledigt, /projekt_geprueft, /leben) bleiben parallel
-nutzbar, wenn Präzision wichtiger ist als Bequemlichkeit. /status schickt
+lässt). Für die Wunschliste (models.WishlistItem) darf die KI sogar einen
+neuen Eintrag anlegen, wenn eindeutig genannt - einziger Unterschied zu
+Projekten/Lebensbereichen, weil hier nichts Falsches passieren kann außer
+einem überflüssigen Listeneintrag. Die festen Kommandos (/todo, /erledigt,
+/termin, /termin_absagen, /projekt, /projekt_erledigt, /projekt_geprueft,
+/leben, /wunsch, /wunsch_geprueft) bleiben parallel nutzbar, wenn Präzision
+wichtiger ist als Bequemlichkeit. /status schickt
 außerdem den sonst nur alle 3 Stunden automatisch verschickten Digest sofort
 auf Zuruf.
 
@@ -40,7 +44,7 @@ from datetime import date, datetime
 
 import requests
 
-from . import auth, bank_sync, crud, models, ollama_client, radicale_sync, websearch
+from . import auth, bank_sync, crud, models, ollama_client, radicale_sync, schemas, websearch
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
@@ -82,6 +86,11 @@ _PROJECT_CHECKED_CMD_RE = re.compile(r"^/projekt_geprueft\s+(.+)$", re.IGNORECAS
 # Format: /leben <Bereich>; <Notiz> - Check-in bei einem persönlichen
 # Lebensbereich (siehe models.LifeArea).
 _LIFE_CHECKIN_CMD_RE = re.compile(r"^/leben\s+(.+?)\s*;\s*(.+)$", re.IGNORECASE)
+# Format: /wunsch <Name> - legt einen Wunschlisten-Eintrag an (siehe
+# models.WishlistItem). Feineres (Zielpreis, Link, Auto-Prüfung) über die App.
+_WISHLIST_ADD_CMD_RE = re.compile(r"^/wunsch\s+(.+)$", re.IGNORECASE)
+# Format: /wunsch_geprueft <Name> - bestätigt "gerade nachgeschaut".
+_WISHLIST_CHECKED_CMD_RE = re.compile(r"^/wunsch_geprueft\s+(.+)$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -125,6 +134,18 @@ Bereiche aus der unten mitgelieferten Liste verwenden:
 ```action
 {"type": "life_checkin", "area": "<Bereichsname oder Stichwort davon>", "note": "<worum es geht/was passiert ist>", "progress_percent": <0-100 oder weglassen, wenn nicht genannt>}
 ```
+
+Und die Wunschliste (Dinge, die der Nutzer kaufen will, wenn sie günstig sind, z.B. ein Flug oder ein Produkt) - \
+hier DARFST du (anders als bei Projekten/Lebensbereichen) auch einen neuen Eintrag erfinden, wenn der Nutzer klar \
+etwas Neues nennt, das noch nicht in der Liste steht:
+```action
+{"type": "add_wishlist_item", "name": "<worum es geht>", "target_price": <Zahl in EUR oder weglassen>}
+```
+```action
+{"type": "mark_wishlist_checked", "name": "<Name oder Stichwort aus der Wunschliste>"}
+```
+Wichtig: Kies hat KEINE echten Preisdaten (keine Flug-/Preis-API) - sag dem Nutzer nie, dass etwas gerade günstig \
+ist, außer er hat das selbst gesagt oder es kommt so aus den unten mitgelieferten Fakten.
 
 Rechne relative Datumsangaben anhand des unten mitgelieferten heutigen Datums IMMER selbst in JJJJ-MM-TT um, auch \
 bei einem To-Do - lass due_date/date NIE auf null, wenn der Nutzer irgendeine Zeitangabe genannt hat. "morgen" = \
@@ -203,6 +224,13 @@ def _context_facts(db, space_id: int) -> str:
         for a in life_areas:
             fortschritt = f" ({a.progress_percent}%)" if a.progress_percent is not None else ""
             lines.append(f"- „{a.name}“{fortschritt}")
+
+    wishlist = crud.get_wishlist_items(db)
+    if wishlist:
+        lines.append("\nWunschliste:")
+        for w in wishlist:
+            preis = f" (Zielpreis {w.target_price:.2f} EUR)" if w.target_price else ""
+            lines.append(f"- „{w.name}“{preis}")
 
     return "\n".join(lines)
 
@@ -435,6 +463,39 @@ def _handle_life_checkin_command(db, settings, token: str, chat_id: str, text: s
     return True
 
 
+def _add_wishlist_item(db, name: str, target_price: float | None = None) -> str:
+    name = name.strip()
+    if not name:
+        return "Kein Name erkannt."
+    item = crud.create_wishlist_item(db, schemas.WishlistItemCreate(name=name, target_price=target_price))
+    preis = f" (Zielpreis {target_price:.2f} EUR)" if target_price else ""
+    return f"✓ „{item.name}“ auf die Wunschliste{preis}."
+
+
+def _mark_wishlist_checked(db, name: str) -> str:
+    item, error = crud.find_wishlist_item_by_name(db, name)
+    if error:
+        return error
+    crud.mark_wishlist_item_checked(db, item)
+    return f"✓ „{item.name}“ als geprüft bestätigt."
+
+
+def _handle_wishlist_add_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _WISHLIST_ADD_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    _send(token, chat_id, _add_wishlist_item(db, match.group(1)))
+    return True
+
+
+def _handle_wishlist_checked_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _WISHLIST_CHECKED_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    _send(token, chat_id, _mark_wishlist_checked(db, match.group(1)))
+    return True
+
+
 def _execute_action(db, settings, action: dict) -> str:
     """Führt einen von der KI erkannten Aktions-Block aus und gibt die
     Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
@@ -561,6 +622,23 @@ def _execute_action(db, settings, action: dict) -> str:
                     pass
         return result
 
+    if action_type == "add_wishlist_item":
+        name = (action.get("name") or "").strip()
+        if not name:
+            return "Konnte nicht erkennen, was auf die Wunschliste soll."
+        price = action.get("target_price")
+        try:
+            price = float(price) if price is not None else None
+        except (TypeError, ValueError):
+            price = None
+        return _add_wishlist_item(db, name, price)
+
+    if action_type == "mark_wishlist_checked":
+        name = (action.get("name") or "").strip()
+        if not name:
+            return "Konnte nicht erkennen, welcher Wunschlisten-Eintrag gemeint ist."
+        return _mark_wishlist_checked(db, name)
+
     return "Konnte die Anfrage nicht eindeutig einer Aktion zuordnen."
 
 
@@ -584,6 +662,10 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_project_issue_command(db, settings, token, chat_id, text):
         return
     if _handle_life_checkin_command(db, settings, token, chat_id, text):
+        return
+    if _handle_wishlist_checked_command(db, settings, token, chat_id, text):
+        return
+    if _handle_wishlist_add_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model

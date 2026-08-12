@@ -1759,3 +1759,41 @@ class LifeCheckInOut(BaseModel):
     area_name: Optional[str] = None
     note: str
     created_at: datetime
+
+
+# ---------- Wunschliste (Deal-Wecker) ----------
+class WishlistItemCreate(BaseModel):
+    name: str
+    category: Optional[str] = None
+    target_price: Optional[float] = None
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    check_interval_days: Optional[int] = None
+    auto_check_enabled: bool = False
+
+
+class WishlistItemUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    target_price: Optional[float] = None
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    check_interval_days: Optional[int] = None
+    auto_check_enabled: Optional[bool] = None
+    purchased: Optional[bool] = None
+    active: Optional[bool] = None
+
+
+class WishlistItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    category: Optional[str] = None
+    target_price: Optional[float] = None
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    check_interval_days: Optional[int] = None
+    last_checked_at: Optional[datetime] = None
+    auto_check_enabled: bool = False
+    purchased: bool = False
+    active: bool
