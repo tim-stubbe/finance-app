@@ -1454,6 +1454,35 @@ class CalendarEventOut(BaseModel):
     end: Optional[datetime] = None
     location: Optional[str] = None
     all_day: bool = False
+    calendar_url: Optional[str] = None
+
+
+class CalendarEventCreate(BaseModel):
+    title: str
+    start: datetime
+    end: Optional[datetime] = None
+    location: Optional[str] = None
+    all_day: bool = False
+    calendar_url: Optional[str] = None
+
+
+class CalendarEventUpdate(BaseModel):
+    title: Optional[str] = None
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    location: Optional[str] = None
+    all_day: Optional[bool] = None
+
+
+class CalendarSyncResult(BaseModel):
+    pushed: int
+    pulled: int
+    errors: List[str] = []
+
+
+class CalendarCollectionOut(BaseModel):
+    url: str
+    name: str
 
 
 class TravelSettingsOut(BaseModel):

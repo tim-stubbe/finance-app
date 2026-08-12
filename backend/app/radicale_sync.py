@@ -1,13 +1,16 @@
-"""To-Dos zweiseitig mit einem Radicale/CalDAV-Server synchronisieren.
+"""To-Dos UND Kalender-Termine zweiseitig mit einem Radicale/CalDAV-Server
+synchronisieren.
 
 Bewusst keine CalDAV-Bibliothek (z.B. `caldav`/`icalendar`) - die hier
-gebrauchte VTODO-Teilmenge (UID/SUMMARY/STATUS/DUE/LAST-MODIFIED) ist klein
-genug, um sie direkt per HTTP zu lesen und zu schreiben, passend zum Rest der
-App (Immich/PayPal/eBay laufen ebenfalls ohne SDK direkt gegen die HTTP-APIs).
+gebrauchten VTODO-/VEVENT-Teilmengen (UID/SUMMARY/STATUS/DUE/DTSTART/DTEND/
+LOCATION/LAST-MODIFIED) sind klein genug, um sie direkt per HTTP zu lesen und
+zu schreiben, passend zum Rest der App (Immich/PayPal/eBay laufen ebenfalls
+ohne SDK direkt gegen die HTTP-APIs). Keine RRULE-Unterstützung - wiederkehrende
+Termine werden nur als einzelne Instanz behandelt, nicht als Serie.
 
 CalDAV-Grundlagen, die hier genutzt werden:
-- PROPFIND (Depth: 1) auf die Todo-Liste -> Liste aller Ressourcen + ETag.
-- GET je Ressource -> iCalendar-Text (VCALENDAR mit einem VTODO).
+- PROPFIND (Depth: 1) auf die Liste -> alle Ressourcen + ETag.
+- GET je Ressource -> iCalendar-Text (VCALENDAR mit einem VTODO/VEVENT).
 - PUT (neu oder geändert) / DELETE einer Ressource.
 """
 
@@ -166,6 +169,34 @@ def build_vtodo(uid: str, title: str, done: bool, due_date: date | None) -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
+def build_vevent(
+    uid: str, title: str, start: datetime, end: datetime | None, location: str | None, all_day: bool
+) -> str:
+    if all_day:
+        dtstart = f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}"
+        dtend = f"DTEND;VALUE=DATE:{(end or start).strftime('%Y%m%d')}"
+    else:
+        dtstart = f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}"
+        dtend = f"DTEND:{(end or start).strftime('%Y%m%dT%H%M%S')}" if end else None
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//finance-app//calendar//DE",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{_now_stamp()}",
+        f"LAST-MODIFIED:{_now_stamp()}",
+        dtstart,
+    ]
+    if dtend:
+        lines.append(dtend)
+    lines.append(f"SUMMARY:{_escape_text(title)}")
+    if location:
+        lines.append(f"LOCATION:{_escape_text(location)}")
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return "\r\n".join(lines) + "\r\n"
+
+
 def _escape_text(value: str) -> str:
     return re.sub(r"([,;\\])", r"\\\1", value).replace("\n", "\\n")
 
@@ -226,25 +257,70 @@ def parse_vevent(ics: str) -> dict | None:
 
 
 def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
-    """Nur lesend: Termine der nächsten Zeit von Radicale abholen und lokal
-    spiegeln. Kein Push, keine Konfliktbehandlung - der echte Kalender bleibt
-    die alleinige Quelle. Vergangene Termine werden beim Abgleich mit entfernt
-    (siehe main._scheduled_radicale_sync, ruft das mit der ganzen Liste auf -
-    das haelt die Tabelle klein, Digest/Hub interessieren sich ohnehin nur
-    für die Zukunft)."""
-    pulled, errors = 0, []
+    """Zweiseitig, analog zu sync() für Todos (siehe dort für die Begründung
+    der Push-vor-Pull-Reihenfolge). Alle Schritte sind auf DIESEN Kalender
+    beschraenkt (Pfad-Praefix aus der URL) - der Nutzer bindet mehrere
+    Kalender-Collections gleichzeitig ein (main.py ruft sync_calendar
+    entsprechend mehrfach auf), alle landen in derselben calendar_events-
+    Tabelle. Ohne diese Eingrenzung wuerde jeder Aufruf faelschlich Termine
+    der JEWEILS ANDEREN Kalender pushen/loeschen. Keine RRULE-Unterstuetzung -
+    wiederkehrende Termine werden nur als einzelne Instanz behandelt."""
+    pushed, pulled, errors = 0, 0, []
+    calendar_path = urlparse(url).path
+
+    def in_this_calendar(event: models.CalendarEvent) -> bool:
+        if event.calendar_url:
+            return event.calendar_url == url
+        return bool(event.href) and event.href.startswith(calendar_path)
+
+    # 1) Lokale Löschungen hochladen.
+    for event in db.query(models.CalendarEvent).filter(models.CalendarEvent.pending_delete.is_(True)).all():
+        if not in_this_calendar(event):
+            continue
+        try:
+            if event.href:
+                delete_ics(urljoin(url, event.href), username, password)
+            db.delete(event)
+            pushed += 1
+        except Exception as e:
+            errors.append(f"Löschen von '{event.title}': {e}")
+    db.commit()
+
+    # 2) Lokale Neuanlagen/Änderungen hochladen.
+    to_push = (
+        db.query(models.CalendarEvent)
+        .filter(
+            models.CalendarEvent.calendar_url == url,
+            (models.CalendarEvent.href.is_(None)) |
+            (models.CalendarEvent.last_synced_at.is_(None)) |
+            (models.CalendarEvent.updated_at > models.CalendarEvent.last_synced_at),
+        )
+        .all()
+    )
+    for event in to_push:
+        try:
+            ics = build_vevent(event.uid, event.title, event.start, event.end, event.location, event.all_day)
+            if event.href:
+                new_etag = put_ics(urljoin(url, event.href), username, password, ics, event.etag)
+            else:
+                href = url.rstrip("/") + f"/{event.uid}.ics"
+                new_etag = put_ics(href, username, password, ics)
+                event.href = href
+            if new_etag:
+                event.etag = new_etag
+            event.last_synced_at = datetime.utcnow()
+            pushed += 1
+        except Exception as e:
+            errors.append(f"Speichern von '{event.title}': {e}")
+    db.commit()
+
+    # 3) Serverstand holen und mit lokal abgleichen.
     try:
         remote = list_resources(url, username, password)
     except Exception as e:
-        return {"pulled": 0, "errors": [f"Kalender nicht erreichbar: {e}"]}
+        errors.append(f"Kalender nicht erreichbar: {e}")
+        return {"pushed": pushed, "pulled": pulled, "errors": errors}
 
-    # Auf DIESEN Kalender beschraenkt (Pfad-Praefix aus der URL) - der Nutzer
-    # kann mehrere Kalender-Collections gleichzeitig einbinden (main.py ruft
-    # sync_calendar entsprechend mehrfach auf), alle landen in derselben
-    # calendar_events-Tabelle. Ohne diese Eingrenzung wuerde jeder Aufruf
-    # faelschlich die Termine der JEWEILS ANDEREN Kalender als "am Server
-    # verschwunden" loeschen.
-    calendar_path = urlparse(url).path
     local_by_href = {
         e.href: e for e in db.query(models.CalendarEvent)
         .filter(models.CalendarEvent.href.isnot(None), models.CalendarEvent.href.like(f"{calendar_path}%"))
@@ -266,27 +342,37 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
             continue
         existing = db.query(models.CalendarEvent).filter(models.CalendarEvent.uid == parsed["uid"]).first()
         if existing:
+            # Nur übernehmen, wenn seit dem letzten Sync keine lokale Änderung
+            # aussteht - die wäre gerade eben in Schritt 2 schon hochgeladen
+            # worden und hätte denselben ETag zur Folge gehabt.
+            if existing.last_synced_at and existing.updated_at > existing.last_synced_at:
+                continue
             existing.title = parsed["title"]
             existing.start = parsed["start"]
             existing.end = parsed["end"]
             existing.location = parsed["location"]
             existing.all_day = parsed["all_day"]
+            existing.calendar_url = url
             existing.href = item["href"]
             existing.etag = item["etag"]
+            existing.last_synced_at = datetime.utcnow()
         else:
             db.add(models.CalendarEvent(
                 uid=parsed["uid"], title=parsed["title"], start=parsed["start"], end=parsed["end"],
-                location=parsed["location"], all_day=parsed["all_day"], href=item["href"], etag=item["etag"],
+                location=parsed["location"], all_day=parsed["all_day"], calendar_url=url,
+                href=item["href"], etag=item["etag"], last_synced_at=datetime.utcnow(),
             ))
         pulled += 1
     db.commit()
 
+    # 4) Am Server gelöschte Termine auch lokal entfernen (nur bei bereits
+    # synchronisierten Einträgen).
     for href, local in local_by_href.items():
-        if href not in seen_hrefs:
+        if href not in seen_hrefs and local.last_synced_at:
             db.delete(local)
     db.commit()
 
-    return {"pulled": pulled, "errors": errors}
+    return {"pushed": pushed, "pulled": pulled, "errors": errors}
 
 
 # ---------- Zwei-Wege-Abgleich ----------

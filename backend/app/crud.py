@@ -2338,6 +2338,68 @@ def delete_todo(db: Session, todo: models.Todo):
     db.commit()
 
 
+def get_calendar_events(db: Session, start: datetime, end: datetime) -> list[models.CalendarEvent]:
+    return (
+        db.query(models.CalendarEvent)
+        .filter(
+            models.CalendarEvent.pending_delete.is_(False),
+            models.CalendarEvent.start >= start,
+            models.CalendarEvent.start <= end,
+        )
+        .order_by(models.CalendarEvent.start)
+        .all()
+    )
+
+
+def get_calendar_event(db: Session, event_id: int):
+    return (
+        db.query(models.CalendarEvent)
+        .filter(models.CalendarEvent.id == event_id, models.CalendarEvent.pending_delete.is_(False))
+        .first()
+    )
+
+
+def create_calendar_event(db: Session, title, start, end, location, all_day, calendar_url):
+    event = models.CalendarEvent(
+        uid=radicale_sync.new_uid(), title=title, start=start, end=end,
+        location=location, all_day=all_day, calendar_url=calendar_url,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def update_calendar_event(db: Session, event: models.CalendarEvent, title=None, start=None, end=None, location=None, all_day=None):
+    if title is not None:
+        event.title = title
+    if start is not None:
+        event.start = start
+    if end is not None:
+        event.end = end
+    if location is not None:
+        event.location = location or None
+    if all_day is not None:
+        event.all_day = all_day
+    event.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def delete_calendar_event(db: Session, event: models.CalendarEvent):
+    # Wie bei Todo: erst markieren, damit der nächste Sync die Löschung noch
+    # auf den Server überträgt, statt die Radicale-Ressource verwaist zurück-
+    # zulassen. Ein Termin ohne calendar_url (nie synchronisiert) kann direkt
+    # gelöscht werden.
+    if event.calendar_url and event.href:
+        event.pending_delete = True
+        db.commit()
+    else:
+        db.delete(event)
+        db.commit()
+
+
 # ---------- eBay-Verbindungen ----------
 def get_ebay_connections(db: Session, space_id: int):
     return db.query(models.EbayConnection).filter(models.EbayConnection.space_id == space_id).all()

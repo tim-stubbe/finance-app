@@ -11,6 +11,7 @@ import uuid
 import zipfile
 from datetime import date, datetime, timedelta
 from typing import Optional, List
+from urllib.parse import urlparse
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -154,6 +155,10 @@ ensure_columns("settings", {
 ensure_columns("calendar_events", {
     "lat": "FLOAT",
     "lon": "FLOAT",
+    "calendar_url": "VARCHAR",
+    "updated_at": "DATETIME",
+    "last_synced_at": "DATETIME",
+    "pending_delete": "BOOLEAN DEFAULT 0",
 })
 ensure_columns("todos", {
     "completed_at": "DATETIME",
@@ -3761,6 +3766,77 @@ def _radicale_credentials(db: Session) -> tuple[str, str, str]:
 @api_router.get("/calendar/upcoming", response_model=List[schemas.CalendarEventOut])
 def get_upcoming_calendar_events(days: int = 7, db: Session = Depends(get_db)):
     return crud.get_upcoming_calendar_events(db, days=days)
+
+
+def _calendar_urls(db: Session) -> list[str]:
+    settings = auth.get_or_create_settings(db)
+    if not settings.radicale_calendar_url:
+        return []
+    return [u.strip() for u in settings.radicale_calendar_url.split(",") if u.strip()]
+
+
+def _sync_all_calendars(db: Session) -> None:
+    urls = _calendar_urls(db)
+    if not urls:
+        return
+    settings = auth.get_or_create_settings(db)
+    password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
+    for cal_url in urls:
+        try:
+            radicale_sync.sync_calendar(db, cal_url, settings.radicale_username, password)
+        except Exception:
+            pass
+
+
+@api_router.get("/calendar/collections", response_model=List[schemas.CalendarCollectionOut])
+def get_calendar_collections(db: Session = Depends(get_db)):
+    collections = []
+    for url in _calendar_urls(db):
+        segment = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+        name = segment.replace("_", " ").replace("-", " ").strip().title() or url
+        collections.append(schemas.CalendarCollectionOut(url=url, name=name))
+    return collections
+
+
+@api_router.get("/calendar-events", response_model=List[schemas.CalendarEventOut])
+def list_calendar_events(start: datetime, end: datetime, sync: bool = True, db: Session = Depends(get_db)):
+    # Beim Öffnen des Kalender-Tabs direkt abgleichen statt auf den nächsten
+    # Hintergrund-Sync zu warten (analog zu den Todos) - kann per sync=false
+    # übersprungen werden (z.B. beim reinen Monat-weiterklicken).
+    if sync:
+        _sync_all_calendars(db)
+    return crud.get_calendar_events(db, start, end)
+
+
+@api_router.post("/calendar-events", response_model=schemas.CalendarEventOut)
+def create_calendar_event(data: schemas.CalendarEventCreate, db: Session = Depends(get_db)):
+    urls = _calendar_urls(db)
+    calendar_url = data.calendar_url or (urls[0] if urls else None)
+    if data.calendar_url and data.calendar_url not in urls:
+        raise HTTPException(400, "Unbekannter Kalender")
+    event = crud.create_calendar_event(db, data.title, data.start, data.end, data.location, data.all_day, calendar_url)
+    _sync_all_calendars(db)
+    return event
+
+
+@api_router.put("/calendar-events/{event_id}", response_model=schemas.CalendarEventOut)
+def update_calendar_event(event_id: int, data: schemas.CalendarEventUpdate, db: Session = Depends(get_db)):
+    event = crud.get_calendar_event(db, event_id)
+    if not event:
+        raise HTTPException(404, "Termin nicht gefunden")
+    event = crud.update_calendar_event(db, event, data.title, data.start, data.end, data.location, data.all_day)
+    _sync_all_calendars(db)
+    return event
+
+
+@api_router.delete("/calendar-events/{event_id}")
+def remove_calendar_event(event_id: int, db: Session = Depends(get_db)):
+    event = crud.get_calendar_event(db, event_id)
+    if not event:
+        raise HTTPException(404, "Termin nicht gefunden")
+    crud.delete_calendar_event(db, event)
+    _sync_all_calendars(db)
+    return {"ok": True}
 
 
 @api_router.get("/todos", response_model=List[schemas.TodoOut])

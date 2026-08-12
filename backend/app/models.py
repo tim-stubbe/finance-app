@@ -804,10 +804,12 @@ class Todo(Base):
 
 
 class CalendarEvent(Base):
-    """Echter Kalender-Termin (VEVENT), NUR lesend von Radicale abgeholt -
-    anders als Todo kein Zwei-Wege-Sync: Termine werden im echten
-    Kalender/Handy angelegt, Kies zeigt sie nur an (Hub/Digest), damit der
-    Nutzer sie nicht doppelt pflegen muss. Kein space_id, analog zu Todo."""
+    """Echter Kalender-Termin (VEVENT), zweiseitig mit Radicale synchronisiert -
+    analog zu Todo (siehe dort für die Begründung: kein SDK, kleine iCal-
+    Teilmenge direkt gelesen/geschrieben). Anders als Todo aber potenziell
+    mehrere Ziel-Kalender (calendar_url), da der Nutzer Termine in getrennte
+    Collections einsortiert (z.B. Privat/Arbeit/Urlaub) - Todo kennt nur eine
+    Liste. Kein space_id, Termine sind persönlich/bereichsübergreifend."""
 
     __tablename__ = "calendar_events"
 
@@ -824,8 +826,16 @@ class CalendarEvent(Base):
     lat = Column(Float, nullable=True)
     lon = Column(Float, nullable=True)
     all_day = Column(Boolean, nullable=False, default=False)
+    # Welche Kalender-Collection dieser Termin gehoert bzw. bekommen soll (bei
+    # neu angelegten) - noetig, weil main.py mehrere Kalender-URLs gleichzeitig
+    # synct (siehe radicale_sync.sync_calendar), anders als bei Todo mit nur
+    # einer Liste muss klar sein, WOHIN ein neuer Termin gepusht wird.
+    calendar_url = Column(String, nullable=True)
     href = Column(String, nullable=True)
     etag = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced_at = Column(DateTime, nullable=True)
+    pending_delete = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

@@ -2580,6 +2580,18 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .todo-row .todo-due { font-size: 12px; color: var(--muted); }
 .todo-row input[type="checkbox"] { width: 18px; height: 18px; }
 
+/* ---------- Kalender ---------- */
+.calendar-day-group { margin-bottom: 8px; }
+.calendar-day-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin: 14px 0 2px;
+}
+.calendar-day-group:first-child .calendar-day-label { margin-top: 0; }
+
 .photo-pager {
   display: flex;
   justify-content: center;

@@ -1182,7 +1182,48 @@
         </form>
         <div id="todo-list"></div>
       </div>
+
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10H21M8 3V7M16 3V7"/></svg> Kalender</h3>
+          <button type="button" id="calendar-new-btn" class="btn-primary">+ Neuer Termin</button>
+        </div>
+        <p class="page-sub">Zweiseitig mit deinen Radicale-Kalendern synchronisiert – Änderungen hier landen auch am Handy. Wiederkehrende Termine werden nur als Einzeltermin angezeigt, nicht als Serie.</p>
+        <label class="checkbox-label" style="margin-bottom:12px">
+          <input type="checkbox" id="calendar-show-past">
+          <span>Vergangene Termine auch anzeigen (letzte 30 Tage)</span>
+        </label>
+        <div id="calendar-event-list"></div>
+      </div>
     </section>
+
+    <!-- TERMIN ANLEGEN/BEARBEITEN -->
+    <div id="calendar-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="calendar-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="calendar-modal-title">Neuer Termin</h2>
+        </div>
+        <form id="calendar-form" class="form-grid">
+          <input type="hidden" id="calendar-event-id">
+          <label class="wide">Titel <input type="text" id="calendar-title" required placeholder="z.B. Zahnarzt"></label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="calendar-all-day">
+            <span>Ganztägig</span>
+          </label>
+          <label>Beginn (Datum) <input type="date" id="calendar-start-date" required></label>
+          <label id="calendar-start-time-wrap">Beginn (Uhrzeit) <input type="time" id="calendar-start-time"></label>
+          <label>Ende (Datum) <input type="date" id="calendar-end-date"></label>
+          <label id="calendar-end-time-wrap">Ende (Uhrzeit) <input type="time" id="calendar-end-time"></label>
+          <label class="wide">Ort <input type="text" id="calendar-location" placeholder="optional – für Fahrzeit-Anzeige im Digest"></label>
+          <label class="wide">Kalender <select id="calendar-collection"></select></label>
+          <div class="form-actions wide">
+            <button type="button" id="calendar-delete-btn" class="btn-danger hidden">Löschen</button>
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- ZIEL ANLEGEN/BEARBEITEN -->
     <div id="goal-modal" class="modal-overlay hidden">
