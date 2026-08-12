@@ -3287,3 +3287,80 @@ def find_open_business_issue(db: Session, project_id: int, title_query: str) -> 
         namen = ", ".join(i.title for i in matches)
         return None, f"„{title_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
     return matches[0], None
+
+
+# ---------- Leben (persönliche Lebensbereiche) ----------
+def get_life_areas(db: Session, include_inactive: bool = False) -> list[models.LifeArea]:
+    query = db.query(models.LifeArea)
+    if not include_inactive:
+        query = query.filter(models.LifeArea.active.is_(True))
+    return query.order_by(models.LifeArea.name).all()
+
+
+def get_life_area(db: Session, area_id: int) -> models.LifeArea | None:
+    return db.query(models.LifeArea).filter(models.LifeArea.id == area_id).first()
+
+
+def create_life_area(db: Session, data: schemas.LifeAreaCreate) -> models.LifeArea:
+    area = models.LifeArea(
+        name=data.name, description=data.description, target_date=data.target_date,
+        progress_percent=data.progress_percent, check_interval_days=data.check_interval_days,
+    )
+    db.add(area)
+    db.commit()
+    db.refresh(area)
+    return area
+
+
+def update_life_area(db: Session, area: models.LifeArea, data: schemas.LifeAreaUpdate) -> models.LifeArea:
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(area, key, value)
+    db.commit()
+    db.refresh(area)
+    return area
+
+
+def _life_checkin_out(checkin: models.LifeCheckIn) -> schemas.LifeCheckInOut:
+    return schemas.LifeCheckInOut(
+        id=checkin.id, area_id=checkin.area_id,
+        area_name=checkin.area.name if checkin.area else None,
+        note=checkin.note, created_at=checkin.created_at,
+    )
+
+
+def get_life_checkins(db: Session, area_id: int | None = None, limit: int = 50) -> list[schemas.LifeCheckInOut]:
+    query = db.query(models.LifeCheckIn)
+    if area_id:
+        query = query.filter(models.LifeCheckIn.area_id == area_id)
+    rows = query.order_by(models.LifeCheckIn.created_at.desc()).limit(limit).all()
+    return [_life_checkin_out(r) for r in rows]
+
+
+def create_life_checkin(db: Session, area_id: int, note: str, progress_percent: int | None = None) -> schemas.LifeCheckInOut:
+    checkin = models.LifeCheckIn(area_id=area_id, note=note)
+    db.add(checkin)
+    area = db.query(models.LifeArea).filter(models.LifeArea.id == area_id).first()
+    if area:
+        area.last_checked_at = datetime.utcnow()
+        if progress_percent is not None:
+            area.progress_percent = max(0, min(100, progress_percent))
+    db.commit()
+    db.refresh(checkin)
+    return _life_checkin_out(checkin)
+
+
+def find_life_area_by_name(db: Session, name_query: str) -> tuple[models.LifeArea | None, str | None]:
+    """Sucht einen aktiven Lebensbereich per (Teil-)Name - fürs Telegram-
+    Freitext-Check-in, analog zu find_business_project_by_name."""
+    q = name_query.strip().lower()
+    if not q:
+        return None, "Kein Bereichsname angegeben."
+    areas = db.query(models.LifeArea).filter(models.LifeArea.active.is_(True)).all()
+    matches = [a for a in areas if q in a.name.lower()]
+    if not matches:
+        namen = ", ".join(a.name for a in areas) or "noch keine Lebensbereiche angelegt"
+        return None, f"Kein Lebensbereich mit „{name_query}“ gefunden. Vorhanden: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(a.name for a in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    return matches[0], None

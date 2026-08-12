@@ -217,6 +217,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "ai") loadAiTab();
     if (btn.dataset.tab === "trips") loadTrips();
     if (btn.dataset.tab === "projects") loadProjectsTab();
+    if (btn.dataset.tab === "life") loadLifeTab();
     if (btn.dataset.tab === "photos") loadPhotosTab();
     if (btn.dataset.tab === "settings") loadSettingsTab();
     if (btn.dataset.tab === "profile") loadProfile();
@@ -1944,6 +1945,150 @@ async function refreshProjectsBadge() {
     // Beim App-Start unkritisch
   }
 }
+
+// ================= LEBEN (persönliche Lebensbereiche) =================
+let lifeAreasCache = [];
+
+async function loadLifeTab() {
+  const [areas, checkins] = await Promise.all([
+    api("/life-areas"),
+    api("/life-checkins"),
+  ]);
+  lifeAreasCache = areas;
+  const checkinsByArea = new Map();
+  checkins.forEach(c => {
+    if (!checkinsByArea.has(c.area_id)) checkinsByArea.set(c.area_id, []);
+    checkinsByArea.get(c.area_id).push(c);
+  });
+
+  const list = document.getElementById("life-areas-list");
+  if (!areas.length) {
+    list.innerHTML = `<div class="empty-state"><span class="empty-icon">${svgIcon("target")}</span><span>Noch keine Lebensbereiche angelegt. Leg oben rechts einen an.</span></div>`;
+    return;
+  }
+  list.innerHTML = "";
+  areas.forEach(a => list.appendChild(renderLifeAreaCard(a, (checkinsByArea.get(a.id) || []).slice(0, 5))));
+}
+
+function lifeAreaIsOverdue(a) {
+  if (!a.check_interval_days) return false;
+  const reference = a.last_checked_at ? new Date(a.last_checked_at) : null;
+  if (!reference) return true;
+  const days = (Date.now() - reference.getTime()) / (1000 * 60 * 60 * 24);
+  return days >= a.check_interval_days;
+}
+
+function renderLifeAreaCard(a, recentCheckins) {
+  const card = document.createElement("div");
+  card.className = "goal-card";
+  const overdue = lifeAreaIsOverdue(a);
+  const lastChecked = a.last_checked_at
+    ? new Date(a.last_checked_at).toLocaleDateString("de-DE")
+    : "noch kein Check-in";
+  const progress = a.progress_percent != null ? a.progress_percent : null;
+  card.innerHTML = `
+    <div class="goal-card-head">
+      <h4>${esc(a.name)}</h4>
+      ${a.target_date ? `<span class="goal-chip">bis ${fmtDate(a.target_date)}</span>` : ""}
+    </div>
+    ${a.description ? `<p class="goal-desc">${esc(a.description)}</p>` : ""}
+    ${progress != null ? `
+      <div class="budget-track"><div class="goal-fill${progress >= 100 ? " done" : ""}" style="width:${Math.min(progress, 100)}%"></div></div>
+      <p class="goal-values">${progress}%</p>
+    ` : ""}
+    <p class="goal-meta ${overdue ? "goal-error" : ""}">
+      ${overdue ? "⚠️ " : ""}Letzter Check-in: ${lastChecked}${a.check_interval_days ? ` · Intervall ${a.check_interval_days} Tage` : ""}
+    </p>
+    <div class="todo-row-list">
+      ${recentCheckins.map(c => `
+        <div class="todo-row">
+          <span class="todo-title">${esc(c.note)}</span>
+          <span class="page-sub">${new Date(c.created_at).toLocaleDateString("de-DE")}</span>
+        </div>
+      `).join("")}
+    </div>
+    <div class="filter-row" style="margin-top:4px">
+      <button type="button" class="btn-ghost btn-sm" data-life-checkin="${a.id}">+ Check-in</button>
+      <button type="button" class="link-btn" data-life-edit="${a.id}">Bearbeiten</button>
+    </div>
+  `;
+  return card;
+}
+
+document.getElementById("life-areas-list").addEventListener("click", e => {
+  const checkinId = e.target.closest("[data-life-checkin]")?.dataset.lifeCheckin;
+  if (checkinId) {
+    document.getElementById("life-checkin-area-id").value = checkinId;
+    document.getElementById("life-checkin-form").reset();
+    document.getElementById("life-checkin-modal").classList.remove("hidden");
+    return;
+  }
+  const editId = e.target.closest("[data-life-edit]")?.dataset.lifeEdit;
+  if (editId) {
+    openLifeAreaModal(lifeAreasCache.find(a => a.id === parseInt(editId)));
+  }
+});
+
+function openLifeAreaModal(area) {
+  document.getElementById("life-area-modal-title").textContent = area ? "Lebensbereich bearbeiten" : "Neuer Lebensbereich";
+  document.getElementById("life-area-id").value = area ? area.id : "";
+  document.getElementById("life-area-name").value = area ? area.name : "";
+  document.getElementById("life-area-description").value = area?.description || "";
+  document.getElementById("life-area-target-date").value = area?.target_date || "";
+  document.getElementById("life-area-progress").value = area?.progress_percent ?? "";
+  document.getElementById("life-area-interval").value = area?.check_interval_days || "";
+  document.getElementById("life-area-archive").classList.toggle("hidden", !area);
+  document.getElementById("life-area-modal").classList.remove("hidden");
+}
+document.getElementById("life-area-new-btn").addEventListener("click", () => openLifeAreaModal(null));
+document.getElementById("life-area-modal-close").addEventListener("click", () => {
+  document.getElementById("life-area-modal").classList.add("hidden");
+});
+document.getElementById("life-checkin-modal-close").addEventListener("click", () => {
+  document.getElementById("life-checkin-modal").classList.add("hidden");
+});
+
+document.getElementById("life-area-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const id = document.getElementById("life-area-id").value;
+  const progressVal = document.getElementById("life-area-progress").value;
+  const payload = {
+    name: document.getElementById("life-area-name").value,
+    description: document.getElementById("life-area-description").value || null,
+    target_date: document.getElementById("life-area-target-date").value || null,
+    progress_percent: progressVal !== "" ? parseInt(progressVal) : null,
+    check_interval_days: document.getElementById("life-area-interval").value
+      ? parseInt(document.getElementById("life-area-interval").value) : null,
+  };
+  if (id) {
+    await api(`/life-areas/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+  } else {
+    await api("/life-areas", { method: "POST", body: JSON.stringify(payload) });
+  }
+  document.getElementById("life-area-modal").classList.add("hidden");
+  loadLifeTab();
+});
+
+document.getElementById("life-area-archive").addEventListener("click", async () => {
+  const id = document.getElementById("life-area-id").value;
+  if (!id || !confirm("Lebensbereich archivieren? Der Verlauf bleibt erhalten, der Bereich verschwindet aber aus der Liste.")) return;
+  await api(`/life-areas/${id}`, { method: "PATCH", body: JSON.stringify({ active: false }) });
+  document.getElementById("life-area-modal").classList.add("hidden");
+  loadLifeTab();
+});
+
+document.getElementById("life-checkin-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const progressVal = document.getElementById("life-checkin-progress").value;
+  const payload = {
+    area_id: parseInt(document.getElementById("life-checkin-area-id").value),
+    note: document.getElementById("life-checkin-note").value,
+    progress_percent: progressVal !== "" ? parseInt(progressVal) : null,
+  };
+  await api("/life-checkins", { method: "POST", body: JSON.stringify(payload) });
+  document.getElementById("life-checkin-modal").classList.add("hidden");
+  loadLifeTab();
+});
 
 // ================= TRANSACTIONS =================
 let returnDeadlinesCache = [];

@@ -537,6 +537,38 @@ def resolve_business_issue(issue_id: int, db: Session = Depends(get_db)):
     return crud.resolve_business_issue(db, issue)
 
 
+# ---------------- Leben (persönliche Lebensbereiche) ----------------
+@api_router.get("/life-areas", response_model=List[schemas.LifeAreaOut])
+def list_life_areas(include_inactive: bool = False, db: Session = Depends(get_db)):
+    return crud.get_life_areas(db, include_inactive)
+
+
+@api_router.post("/life-areas", response_model=schemas.LifeAreaOut)
+def create_life_area(data: schemas.LifeAreaCreate, db: Session = Depends(get_db)):
+    return crud.create_life_area(db, data)
+
+
+@api_router.patch("/life-areas/{area_id}", response_model=schemas.LifeAreaOut)
+def update_life_area(area_id: int, data: schemas.LifeAreaUpdate, db: Session = Depends(get_db)):
+    area = crud.get_life_area(db, area_id)
+    if not area:
+        raise HTTPException(404, "Lebensbereich nicht gefunden")
+    return crud.update_life_area(db, area, data)
+
+
+@api_router.get("/life-checkins", response_model=List[schemas.LifeCheckInOut])
+def list_life_checkins(area_id: Optional[int] = None, db: Session = Depends(get_db)):
+    return crud.get_life_checkins(db, area_id)
+
+
+@api_router.post("/life-checkins", response_model=schemas.LifeCheckInOut)
+def create_life_checkin(data: schemas.LifeCheckInCreate, db: Session = Depends(get_db)):
+    area = crud.get_life_area(db, data.area_id)
+    if not area:
+        raise HTTPException(404, "Lebensbereich nicht gefunden")
+    return crud.create_life_checkin(db, data.area_id, data.note, data.progress_percent)
+
+
 # ---------------- Eigene Regeln (Sofort-Alarme) ----------------
 @api_router.get("/alert-rules", response_model=List[schemas.AlertRuleOut])
 def list_alert_rules(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
@@ -4900,6 +4932,42 @@ def _scheduled_business_check_reminder():
         db.close()
 
 
+def _scheduled_life_check_reminder():
+    """Einmal täglich: persönliche Lebensbereiche mit hinterlegtem Check-
+    Intervall erinnern, wenn seit dem letzten Check-in zu lange nichts kam -
+    exakt dasselbe Prinzip wie _scheduled_business_check_reminder, nur für
+    models.LifeArea statt BusinessProject (Nutzerwunsch nach aktivem
+    Nachhaken, nicht nur passivem Anzeigen - "strenger Vater"-Prinzip)."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        today = date.today()
+        now = datetime.utcnow()
+        areas = db.query(models.LifeArea).filter(
+            models.LifeArea.active.is_(True),
+            models.LifeArea.check_interval_days.isnot(None),
+        ).all()
+        for a in areas:
+            if a.last_reminded_date == today:
+                continue
+            reference = a.last_checked_at or a.created_at
+            if not reference or (now - reference).days < a.check_interval_days:
+                continue
+            days_ago = (now - reference).days
+            fortschritt = f" · Fortschritt {a.progress_percent}%" if a.progress_percent is not None else ""
+            notifications.notify(
+                settings,
+                f"🎯 Check-in fällig: „{a.name}“ seit {days_ago} Tagen nichts eingetragen{fortschritt}. "
+                f"Per /leben {a.name}; <Notiz> eintragen, sonst kommst du vom Kurs ab.",
+            )
+            a.last_reminded_date = today
+            db.commit()
+    finally:
+        db.close()
+
+
 def _scheduled_net_worth_snapshot():
     """Einmal taeglich kurz vor Mitternacht: Nettovermoegen je Bereich
     festhalten. Einzige Quelle fuer eine echte Verlaufskurve - siehe
@@ -5215,6 +5283,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_business_check_reminder, CronTrigger(hour=8, minute=15),
     id="business_check_reminder", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_life_check_reminder, CronTrigger(hour=8, minute=30),
+    id="life_check_reminder", misfire_grace_time=3600,
 )
 scheduler.add_job(
     _scheduled_travel_reminder, CronTrigger(minute="*/5"),

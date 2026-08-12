@@ -5,21 +5,24 @@ Saldo bleibt bewusst ausschließlich über das feste Kommando /saldo (Regex,
 _BALANCE_CMD_RE, keine KI-Interpretation) änderbar, bei Geld soll nichts
 geraten werden. Jede Saldo-Änderung landet nachvollziehbar in AccountBalanceLog.
 
-Termine, To-Dos und offene Punkte zu Business-Projekten (Nebenprojekte
-außerhalb der Finanzverwaltung, siehe models.BusinessProject - Kies hat
-keinen Datenzugriff auf z.B. Roblox/Kundensysteme, sammelt aber die vom
-Nutzer gemeldeten offenen Punkte an einem Ort und erinnert per
-main._scheduled_business_check_reminder, wenn ein Projekt lange nicht
-bestätigt wurde) dürfen dagegen auch in normaler Sprache angelegt/abgehakt/
-abgesagt werden (Nutzerentscheidung, das Risiko einer Fehlinterpretation hier
-in Kauf zu nehmen) - die KI antwortet dafür mit einem ```action```-Block
+Termine, To-Dos, offene Punkte zu Business-Projekten (Nebenprojekte außerhalb
+der Finanzverwaltung, siehe models.BusinessProject - Kies hat keinen
+Datenzugriff auf z.B. Roblox/Kundensysteme, sammelt aber die vom Nutzer
+gemeldeten offenen Punkte an einem Ort und erinnert per main.
+_scheduled_business_check_reminder, wenn ein Projekt lange nicht bestätigt
+wurde) und Check-ins zu persönlichen Lebensbereichen (models.LifeArea -
+gleiches Prinzip, nur für Fitness/Auftreten/... statt Geschäftliches) dürfen
+dagegen auch in normaler Sprache angelegt/abgehakt/abgesagt werden
+(Nutzerentscheidung, das Risiko einer Fehlinterpretation hier in Kauf zu
+nehmen) - die KI antwortet dafür mit einem ```action```-Block
 (_ACTION_BLOCK_RE, siehe _execute_action), den der Bot statt der KI ausführt
 und danach IMMER eine Bestätigung mit dem tatsächlich verstandenen Ergebnis
 zurückschickt, damit ein Missverständnis sofort auffällt (und sich korrigieren
 lässt). Die festen Kommandos (/todo, /erledigt, /termin, /termin_absagen,
-/projekt, /projekt_erledigt, /projekt_geprueft) bleiben parallel nutzbar,
-wenn Präzision wichtiger ist als Bequemlichkeit. /status schickt außerdem den
-sonst nur alle 3 Stunden automatisch verschickten Digest sofort auf Zuruf.
+/projekt, /projekt_erledigt, /projekt_geprueft, /leben) bleiben parallel
+nutzbar, wenn Präzision wichtiger ist als Bequemlichkeit. /status schickt
+außerdem den sonst nur alle 3 Stunden automatisch verschickten Digest sofort
+auf Zuruf.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
 weil die App nur über Tailscale erreichbar ist, kein öffentlicher HTTPS-Endpunkt
@@ -76,6 +79,9 @@ _PROJECT_RESOLVE_CMD_RE = re.compile(r"^/projekt_erledigt\s+(.+?)\s*;\s*(.+)$", 
 # Format: /projekt_geprueft <Name> - setzt den "zuletzt geprüft"-Zeitpunkt
 # zurück, ohne einen neuen offenen Punkt anzulegen.
 _PROJECT_CHECKED_CMD_RE = re.compile(r"^/projekt_geprueft\s+(.+)$", re.IGNORECASE)
+# Format: /leben <Bereich>; <Notiz> - Check-in bei einem persönlichen
+# Lebensbereich (siehe models.LifeArea).
+_LIFE_CHECKIN_CMD_RE = re.compile(r"^/leben\s+(.+?)\s*;\s*(.+)$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -113,6 +119,12 @@ Genauso darfst du offene Punkte zu einem Business-Projekt (Nebenprojekte außerh
 ```
 Nutze diese NUR für eines der unten mitgelieferten, bereits angelegten Projekte - erfinde kein neues Projekt, das \
 muss der Nutzer erst in der App anlegen. Ist unklar, welches Projekt gemeint ist, frag lieber nach.
+
+Genauso gibt es persönliche Lebensbereiche (Fitness/Körper, Auftreten, ...), auch dafür NUR bereits angelegte \
+Bereiche aus der unten mitgelieferten Liste verwenden:
+```action
+{"type": "life_checkin", "area": "<Bereichsname oder Stichwort davon>", "note": "<worum es geht/was passiert ist>", "progress_percent": <0-100 oder weglassen, wenn nicht genannt>}
+```
 
 Rechne relative Datumsangaben anhand des unten mitgelieferten heutigen Datums IMMER selbst in JJJJ-MM-TT um, auch \
 bei einem To-Do - lass due_date/date NIE auf null, wenn der Nutzer irgendeine Zeitangabe genannt hat. "morgen" = \
@@ -184,6 +196,13 @@ def _context_facts(db, space_id: int) -> str:
             lines.append("\nOffene Punkte in Business-Projekten:")
             for i in open_issues:
                 lines.append(f"- [{i.project_name}] {i.title}")
+
+    life_areas = crud.get_life_areas(db)
+    if life_areas:
+        lines.append("\nPersönliche Lebensbereiche (für life_checkin NUR diese Namen verwenden):")
+        for a in life_areas:
+            fortschritt = f" ({a.progress_percent}%)" if a.progress_percent is not None else ""
+            lines.append(f"- „{a.name}“{fortschritt}")
 
     return "\n".join(lines)
 
@@ -396,6 +415,26 @@ def _handle_project_checked_command(db, settings, token: str, chat_id: str, text
     return True
 
 
+def _create_life_checkin(db, area_name: str, note: str) -> str:
+    area, error = crud.find_life_area_by_name(db, area_name)
+    if error:
+        return error
+    note = note.strip()
+    if not note:
+        return "Keine Notiz für den Check-in erkannt."
+    crud.create_life_checkin(db, area.id, note)
+    return f"✓ Check-in bei „{area.name}“ gespeichert: „{note}“."
+
+
+def _handle_life_checkin_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _LIFE_CHECKIN_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    area_name, note = match.groups()
+    _send(token, chat_id, _create_life_checkin(db, area_name, note))
+    return True
+
+
 def _execute_action(db, settings, action: dict) -> str:
     """Führt einen von der KI erkannten Aktions-Block aus und gibt die
     Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
@@ -504,6 +543,24 @@ def _execute_action(db, settings, action: dict) -> str:
             return "Konnte nicht erkennen, welches Projekt gemeint ist."
         return _mark_project_checked(db, project)
 
+    if action_type == "life_checkin":
+        area = (action.get("area") or "").strip()
+        note = (action.get("note") or "").strip()
+        if not area or not note:
+            return "Konnte Lebensbereich oder Notiz nicht eindeutig erkennen - bitte genauer beschreiben."
+        result = _create_life_checkin(db, area, note)
+        percent = action.get("progress_percent")
+        if percent is not None and result.startswith("✓"):
+            life_area, error = crud.find_life_area_by_name(db, area)
+            if life_area and not error:
+                try:
+                    life_area.progress_percent = max(0, min(100, int(percent)))
+                    db.commit()
+                    result += f" Fortschritt auf {life_area.progress_percent}% gesetzt."
+                except (TypeError, ValueError):
+                    pass
+        return result
+
     return "Konnte die Anfrage nicht eindeutig einer Aktion zuordnen."
 
 
@@ -525,6 +582,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_project_checked_command(db, settings, token, chat_id, text):
         return
     if _handle_project_issue_command(db, settings, token, chat_id, text):
+        return
+    if _handle_life_checkin_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model

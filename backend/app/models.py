@@ -1037,3 +1037,43 @@ class BusinessIssue(Base):
     resolved_at = Column(DateTime, nullable=True)
 
     project = relationship("BusinessProject")
+
+
+class LifeArea(Base):
+    """Ein persönlicher Lebensbereich außerhalb der Finanzen (Fitness/Körper,
+    Auftreten/Kommunikation, ...) - bewusst getrennt von den finanziellen
+    Zielen (models.Goal), weil hier keine automatisch messbare Kennzahl
+    dahintersteckt, sondern eine selbst eingeschätzte Fortschrittsangabe plus
+    ein lockeres Tagebuch aus Check-ins (siehe LifeCheckIn). check_interval_
+    days/last_checked_at/last_reminded_date funktionieren wie bei
+    BusinessProject - Nutzerwunsch nach aktivem Nachhaken statt nur
+    passivem Anzeigen ("strenger Vater"-Prinzip: nicht vom Kurs abkommen)."""
+
+    __tablename__ = "life_areas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    target_date = Column(Date, nullable=True)
+    progress_percent = Column(Integer, nullable=True)
+    check_interval_days = Column(Integer, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    last_reminded_date = Column(Date, nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LifeCheckIn(Base):
+    """Ein Tagebuch-Eintrag zu einem LifeArea - "heute 5km gelaufen", "bewusst
+    langsamer gesprochen heute". Reine Notiz, kein "erledigt/offen"-Zustand
+    wie bei BusinessIssue, da es hier nicht um abzuarbeitende Punkte geht,
+    sondern um einen fortlaufenden Verlauf."""
+
+    __tablename__ = "life_checkins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    area_id = Column(Integer, ForeignKey("life_areas.id"), nullable=False)
+    note = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    area = relationship("LifeArea")

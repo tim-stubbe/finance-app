@@ -1714,3 +1714,48 @@ class WebhookIssueCreate(BaseModel):
     project: str
     title: str
     notes: Optional[str] = None
+
+
+# ---------- Leben (persönliche Lebensbereiche, außerhalb der Finanzen) ----------
+class LifeAreaCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    target_date: Optional[date] = None
+    progress_percent: Optional[int] = None
+    check_interval_days: Optional[int] = None
+
+
+class LifeAreaUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    target_date: Optional[date] = None
+    progress_percent: Optional[int] = None
+    check_interval_days: Optional[int] = None
+    active: Optional[bool] = None
+
+
+class LifeAreaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    description: Optional[str] = None
+    target_date: Optional[date] = None
+    progress_percent: Optional[int] = None
+    check_interval_days: Optional[int] = None
+    last_checked_at: Optional[datetime] = None
+    active: bool
+
+
+class LifeCheckInCreate(BaseModel):
+    area_id: int
+    note: str
+    progress_percent: Optional[int] = None
+
+
+class LifeCheckInOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    area_id: int
+    area_name: Optional[str] = None
+    note: str
+    created_at: datetime
