@@ -129,7 +129,7 @@ function emptyRow(colspan, iconName, text) {
   return `<tr class="empty-row"><td colspan="${colspan}"><div class="empty-state"><span class="empty-icon">${svgIcon(iconName)}</span><span>${text}</span></div></td></tr>`;
 }
 
-const ACCOUNT_TYPE_ICONS = { girokonto: "landmark", bargeld: "banknote", sparkonto: "wallet", depot: "trending-up", sonstiges: "folder" };
+const ACCOUNT_TYPE_ICONS = { girokonto: "landmark", bargeld: "banknote", sparkonto: "wallet", tagesgeldkonto: "coins", depot: "trending-up", sonstiges: "folder" };
 const CATEGORY_TYPE_ICONS = { einnahme: "coins", ausgabe: "receipt" };
 async function api(path, options = {}) {
   const res = await fetch(API + path, {

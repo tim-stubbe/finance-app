@@ -11,6 +11,7 @@ class AccountType(str, enum.Enum):
     girokonto = "girokonto"
     bargeld = "bargeld"
     sparkonto = "sparkonto"
+    tagesgeldkonto = "tagesgeldkonto"
     depot = "depot"
     sonstiges = "sonstiges"
 
