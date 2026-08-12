@@ -197,6 +197,23 @@ if os.environ.get("DEV_NO_CACHE"):
         return response
 
 
+# style.css/app.js bekommen ohne eigenes Cache-Control nur Starlettes
+# heuristisches Browser-Caching (ueber Last-Modified) - gerade bei der als PWA
+# installierten App (eigener Service Worker, siehe sw.js) hat das live dazu
+# gefuehrt, dass ein Geraet nach einem Deploy tagelang eine veraltete CSS-
+# Fassung ausgeliefert bekam (fehlende Icon-Styles wirkten wie ein Bug, waren
+# aber nur ein Cache-Stand von vor dem Fix). "no-cache" (nicht "no-store")
+# erlaubt Caching weiterhin, erzwingt aber immer eine ETag-Revalidierung beim
+# Server - im Regelfall ein guenstiges 304, aber garantiert nie unbemerkt
+# veraltet.
+@app.middleware("http")
+async def no_cache_static_shell(request, call_next):
+    response = await call_next(request)
+    if request.url.path in ("/style.css", "/app.js", "/sw.js"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
