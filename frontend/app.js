@@ -2468,6 +2468,10 @@ function renderBigSimHtml(g, refId) {
   return `<span class="photo-sim-big ${cls}">${pct}% Übereinstimmung</span>`;
 }
 
+function videoBadgeHtml(type) {
+  return type === "VIDEO" ? `<span class="photo-video-badge" title="Video">▶</span>` : "";
+}
+
 function renderPhotoGroups() {
   const wrap = document.getElementById("photos-groups");
   wrap.innerHTML = photoGroupsCache.map(g => {
@@ -2483,7 +2487,7 @@ function renderPhotoGroups() {
       const simBadge = pct === undefined || pct === null ? "" :
         `<span class="photo-sim ${pct >= 95 ? "sim-high" : pct >= 80 ? "sim-mid" : "sim-low"}"
            title="${pct >= 95 ? "praktisch identisch" : pct >= 80 ? "sehr ähnlich" : "nur ähnliche Aufnahme"}">${pct}%</span>`;
-      const videoBadge = a.type === "VIDEO" ? `<span class="photo-video-badge" title="Video">🎥</span>` : "";
+      const videoBadge = videoBadgeHtml(a.type);
       return `<button type="button" class="photo-card ${isTrash ? "is-trash" : "is-keep"}"
                 data-group="${esc(g.duplicate_id)}" data-asset="${esc(a.id)}">
         <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
@@ -2551,6 +2555,7 @@ function renderPhotoGroups() {
 // damit sich sowohl das einzelne Vergrößern als auch der Nebeneinander-
 // Vergleich (jetzt bis zu 4 Aufnahmen) dieselbe Funktion teilen.
 let lightboxAssetIds = [];
+let lightboxGroupId = null;
 
 function renderLightbox(items) {
   const box = document.getElementById("lightbox-images");
@@ -2558,20 +2563,24 @@ function renderLightbox(items) {
       <img id="lightbox-img-${i}" alt="" src="/api/immich/thumbnail/${encodeURIComponent(it.id)}?size=preview">
       <figcaption class="lightbox-caption">${esc(it.caption || "")}</figcaption>
     </figure>`).join("");
-  document.getElementById("lightbox-box").classList.toggle("is-compare", items.length > 1);
+  const isCompare = items.length > 1;
+  document.getElementById("lightbox-box").classList.toggle("is-compare", isCompare);
+  document.getElementById("lightbox-delete-all").classList.toggle("hidden", !isCompare);
   document.getElementById("photo-lightbox").classList.remove("hidden");
   lightboxAssetIds = items.map(it => it.id);
   document.getElementById("lightbox-ai-result").textContent = "";
 }
 
 function openLightbox(assetId, caption) {
+  lightboxGroupId = null;
   renderLightbox([{ id: assetId, caption }]);
 }
 
 // Bei bis zu vier Aufnahmen lohnt sich ein direkter Nebeneinander-Vergleich
 // besonders - bei mehr wäre die Übersicht zu unruhig, um noch zu erkennen,
 // welche Details sich unterscheiden.
-function openLightboxCompare(items) {
+function openLightboxCompare(items, groupId = null) {
+  lightboxGroupId = groupId;
   renderLightbox(items);
 }
 
@@ -2579,7 +2588,25 @@ function closeLightbox() {
   document.getElementById("photo-lightbox").classList.add("hidden");
   document.getElementById("lightbox-images").innerHTML = "";
   lightboxAssetIds = [];
+  lightboxGroupId = null;
 }
+
+document.getElementById("lightbox-delete-all").addEventListener("click", async () => {
+  if (!lightboxAssetIds.length) return;
+  if (!confirm(`${lightboxAssetIds.length} Aufnahme(n) in den Papierkorb verschieben?\n\nSie bleiben in Immich wiederherstellbar.`)) return;
+  try {
+    const res = await api("/immich/photos/trash", {
+      method: "POST",
+      body: JSON.stringify({ asset_ids: lightboxAssetIds }),
+    });
+    toast(`${res.trashed} Aufnahme(n) in den Papierkorb verschoben.`);
+    const groupId = lightboxGroupId;
+    closeLightbox();
+    if (groupId) removePhotoGroupLocally(groupId);
+  } catch (err) {
+    toast("Fehler: " + err.message);
+  }
+});
 document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
 document.getElementById("photo-lightbox").addEventListener("click", e => {
   if (e.target.id === "photo-lightbox") closeLightbox();
@@ -2625,7 +2652,7 @@ document.getElementById("photos-groups").addEventListener("click", async e => {
     if (group) {
       // Nebeneinander passen nur bis zu 4 Bilder - bei mehr werden nur die
       // ersten 4 gezeigt (siehe Kommentar bei compareBtn oben).
-      openLightboxCompare(group.assets.slice(0, 4).map(a => ({ id: a.id, caption: a.file_name })));
+      openLightboxCompare(group.assets.slice(0, 4).map(a => ({ id: a.id, caption: a.file_name })), compareId);
     }
     return;
   }
@@ -2978,6 +3005,7 @@ function renderQuality() {
     const label = a.reason === "blur" ? "Unscharf" : "Leer";
     return `<button type="button" class="shot-card ${sel ? "is-selected" : ""}" data-quality="${esc(a.id)}">
       <img loading="lazy" src="/api/immich/thumbnail/${esc(a.id)}" alt="">
+      ${videoBadgeHtml(a.type)}
       <span class="photo-zoom" data-zoom="${esc(a.id)}" data-caption="${esc(a.file_name || "")}" title="Vergrößern">🔍</span>
       <span class="shot-check">${sel ? "✓" : ""}</span>
       <span class="photo-badge" style="left:auto;right:8px;background:var(--warn)">${label}</span>
@@ -3159,11 +3187,12 @@ function renderSwipeStack(kind) {
   container.innerHTML = `
     <div class="swipe-progress">${queue.length} übrig</div>
     <div class="swipe-stack">
-      ${next ? `<div class="swipe-card is-behind"><img src="/api/immich/thumbnail/${esc(next.id)}" alt=""></div>` : ""}
+      ${next ? `<div class="swipe-card is-behind"><img src="/api/immich/thumbnail/${esc(next.id)}" alt="">${videoBadgeHtml(next.type)}</div>` : ""}
       <div class="swipe-card is-top" id="swipe-top-card" data-swipe-id="${esc(top.id)}">
         <span class="swipe-hint keep">Behalten</span>
         <span class="swipe-hint trash">Papierkorb</span>
         <img src="/api/immich/thumbnail/${esc(top.id)}" alt="" draggable="false">
+        ${videoBadgeHtml(top.type)}
         <div class="swipe-card-meta">
           <span>${top.created_at ? fmtDate(top.created_at.slice(0, 10)) : ""}</span>
           <span>${cfg.caption(top)} · ${formatBytes(top.size_bytes)}</span>

@@ -2765,12 +2765,21 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .photo-video-badge {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-size: 12px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 18px;
+  padding-left: 3px; /* optisch zentrieren, das Play-Dreieck ist nicht symmetrisch */
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* ---------- Beleg-Eingang aus E-Mails ---------- */
@@ -2914,6 +2923,22 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
      untereinander als zwei winzige Spalten. */
   .lightbox-box.is-compare .lightbox-images { flex-direction: column; }
 }
+
+.lightbox-delete-all {
+  display: block;
+  margin: 0 auto 14px;
+  padding: 12px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--neg);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--neg) 40%, transparent);
+}
+.lightbox-delete-all:hover { filter: brightness(1.1); }
+.lightbox-delete-all.hidden { display: none; }
 
 .lightbox-ai {
   margin-top: 12px;

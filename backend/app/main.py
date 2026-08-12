@@ -2413,6 +2413,13 @@ def immich_duplicates(
     except Exception as e:
         raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
 
+    # Byte-identische Gruppen (checksum-Duplikate, "100% Übereinstimmung") zuerst,
+    # der Rest in Immichs eigener Reihenfolge dahinter - stabil sortiert, damit
+    # Gruppen ohne exaktes Duplikat ihre relative Reihenfolge behalten. Das
+    # passiert VOR der Seiten-Aufteilung, damit die Sortierung über die ganze
+    # Bibliothek gilt und nicht nur innerhalb der gerade geladenen Seite.
+    raw.sort(key=lambda g: not immich.has_exact_duplicate(g.get("assets") or []))
+
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     total_assets = sum(len(g.get("assets") or []) for g in raw)

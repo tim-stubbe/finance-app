@@ -124,6 +124,24 @@ def list_duplicates(url: str, api_key: str) -> list[dict]:
     return resp.json() or []
 
 
+def has_exact_duplicate(assets: list[dict]) -> bool:
+    """Prüft, ob eine Duplikat-Gruppe zwei byte-identische Dateien enthält
+    (gleicher `checksum`, den Immich für jedes Asset ohnehin schon mitliefert -
+    kein zusätzlicher Abruf nötig). Das ist die einzig eindeutige Definition
+    von "100% Übereinstimmung": zwei verschiedene Fotos derselben Szene können
+    beliebig ähnlich aussehen, aber nur bei identischem Checksum handelt es
+    sich wirklich um dieselbe Datei."""
+    seen = set()
+    for a in assets:
+        checksum = a.get("checksum")
+        if not checksum:
+            continue
+        if checksum in seen:
+            return True
+        seen.add(checksum)
+    return False
+
+
 def fetch_thumbnail(url: str, api_key: str, asset_id: str, size: str = THUMBNAIL_SIZE) -> tuple[bytes, str]:
     """Lädt ein Vorschaubild und gibt Bytes + Content-Type zurück.
 
