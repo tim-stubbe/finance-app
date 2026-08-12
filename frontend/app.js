@@ -1,6 +1,7 @@
 const API = "/api";
 let accountsCache = [];
 let categoriesCache = [];
+let txListCache = [];
 let editingTxId = null;
 let editingAccId = null;
 let editingCatId = null;
@@ -1782,14 +1783,43 @@ async function loadTransactions() {
     api("/transactions?" + params.toString()),
     api("/return-deadlines").then(d => { returnDeadlinesCache = d; }),
   ]);
-  const tbody = document.getElementById("tx-list");
-  tbody.innerHTML = "";
-  if (txs.length === 0) {
-    tbody.innerHTML = emptyRow(7, "receipt", "Keine Buchungen gefunden.");
-  }
   txs.forEach(t => {
     const acc = accountsCache.find(a => a.id === t.account_id);
     const cat = categoriesCache.find(c => c.id === t.category_id);
+    t._account_name = acc ? acc.name : "";
+    t._category_name = t.is_transfer ? "Umbuchung" : (cat ? cat.name : "");
+    t._has_receipt = t.receipt_filename ? 1 : 0;
+  });
+  txListCache = txs;
+  renderTransactionsTable();
+}
+
+let txSortKey = "date";
+let txSortDir = -1;
+
+function renderTransactionsTable() {
+  const tbody = document.getElementById("tx-list");
+  tbody.innerHTML = "";
+  if (txListCache.length === 0) {
+    tbody.innerHTML = emptyRow(7, "receipt", "Keine Buchungen gefunden.");
+    return;
+  }
+  const rows = [...txListCache];
+  if (txSortKey) {
+    rows.sort((a, b) => {
+      let va = a[txSortKey];
+      let vb = b[txSortKey];
+      if (typeof va === "string" || typeof vb === "string") {
+        va = (va ?? "").toString().toLowerCase();
+        vb = (vb ?? "").toString().toLowerCase();
+        return va < vb ? -txSortDir : va > vb ? txSortDir : 0;
+      }
+      va = va ?? -Infinity;
+      vb = vb ?? -Infinity;
+      return (va - vb) * txSortDir;
+    });
+  }
+  rows.forEach(t => {
     const rd = returnDeadlinesCache.find(r => r.transaction_id === t.id && !r.returned);
     const rdBadge = rd
       ? ` <span class="goal-chip ${rd.due ? "is-warn" : ""}" title="Rückgabefrist ${fmtDate(rd.deadline_date)}">🔄 ${rd.days_left >= 0 ? `noch ${rd.days_left} Tag(e)` : "abgelaufen"}</span>`
@@ -1798,8 +1828,8 @@ async function loadTransactions() {
     tr.innerHTML = `
       <td>${t.date}</td>
       <td>${t.description || ""}${rdBadge}</td>
-      <td>${acc ? acc.name : ""}</td>
-      <td>${t.is_transfer ? '<span class="goal-chip">🔁 Umbuchung</span>' : (cat ? cat.name : "–")}</td>
+      <td>${t._account_name}</td>
+      <td>${t.is_transfer ? '<span class="goal-chip">🔁 Umbuchung</span>' : (t._category_name || "–")}</td>
       <td class="${t.is_transfer ? "" : (t.amount >= 0 ? "row-amount-pos" : "row-amount-neg")}">${eur(t.amount)}</td>
       <td>${t.receipt_filename ? `<a href="/api/receipts/${t.receipt_filename}" target="_blank">Beleg</a>` : "–"}</td>
       <td>
@@ -1817,6 +1847,21 @@ async function loadTransactions() {
     });
   });
 }
+
+document.querySelectorAll("#tx-list-head [data-sort-key]").forEach(th => {
+  th.addEventListener("click", () => {
+    const key = th.dataset.sortKey;
+    if (txSortKey === key) {
+      txSortDir *= -1;
+    } else {
+      txSortKey = key;
+      txSortDir = 1;
+    }
+    document.querySelectorAll("#tx-list-head [data-sort-key]").forEach(el => el.classList.remove("sort-asc", "sort-desc"));
+    th.classList.add(txSortDir === 1 ? "sort-asc" : "sort-desc");
+    renderTransactionsTable();
+  });
+});
 
 function normalizeDescriptionKey(desc) {
   // Muss exakt zu crud._normalize_description() im Backend passen, da

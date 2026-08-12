@@ -402,7 +402,15 @@
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Datum</th><th>Beschreibung</th><th>Konto</th><th>Kategorie</th><th>Betrag</th><th>Beleg</th><th></th></tr></thead>
+            <thead><tr id="tx-list-head">
+              <th data-sort-key="date" class="sort-desc">Datum</th>
+              <th data-sort-key="description">Beschreibung</th>
+              <th data-sort-key="_account_name">Konto</th>
+              <th data-sort-key="_category_name">Kategorie</th>
+              <th data-sort-key="amount">Betrag</th>
+              <th data-sort-key="_has_receipt">Beleg</th>
+              <th></th>
+            </tr></thead>
             <tbody id="tx-list"></tbody>
           </table>
         </div>
