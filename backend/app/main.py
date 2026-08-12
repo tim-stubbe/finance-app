@@ -706,6 +706,21 @@ def get_net_worth(db: Session = Depends(get_db), space_id: int = Depends(auth.ge
     return crud.net_worth(db, space_id)
 
 
+@api_router.get("/net-worth/history", response_model=schemas.NetWorthHistoryOut)
+def get_net_worth_history(days: int = 365, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Echte Vermoegens-Historie aus taeglichen Snapshots (siehe
+    _scheduled_net_worth_snapshot) - waechst erst ab dem Tag, an dem dieser
+    Job zum ersten Mal lief, keine rueckwirkende Rekonstruktion."""
+    days = max(1, min(days, 1825))
+    snapshots = crud.net_worth_history(db, space_id, days)
+    return schemas.NetWorthHistoryOut(points=[
+        schemas.NetWorthHistoryPoint(
+            date=s.date, accounts_total=s.accounts_total, investments_total=s.investments_total,
+            debts_total=s.debts_total, total=s.total,
+        ) for s in snapshots
+    ])
+
+
 @api_router.put("/settings/birth-year", response_model=schemas.BirthYearUpdate)
 def update_birth_year(data: schemas.BirthYearUpdate, db: Session = Depends(get_db)):
     if data.birth_year is not None:
@@ -4309,6 +4324,21 @@ def _scheduled_ai_maintenance():
         db.close()
 
 
+def _scheduled_net_worth_snapshot():
+    """Einmal taeglich kurz vor Mitternacht: Nettovermoegen je Bereich
+    festhalten. Einzige Quelle fuer eine echte Verlaufskurve - siehe
+    NetWorthSnapshot-Modell fuer die Begruendung, warum es vorher keine gab."""
+    db = SessionLocal()
+    try:
+        for space in crud.get_spaces(db):
+            try:
+                crud.record_net_worth_snapshot(db, space.id)
+            except Exception:
+                db.rollback()
+    finally:
+        db.close()
+
+
 def _scheduled_radicale_sync():
     """Alle paar Minuten mit dem Radicale-Server abgleichen - läuft öfter als
     die anderen Sync-Jobs, weil To-Dos, die man gerade am Handy einträgt, sich
@@ -4450,7 +4480,17 @@ scheduler.add_job(
     _scheduled_file_sort, CronTrigger(minute="*/10"),
     id="file_sort", misfire_grace_time=600,
 )
+scheduler.add_job(
+    _scheduled_net_worth_snapshot, CronTrigger(hour=23, minute=55),
+    id="net_worth_snapshot", misfire_grace_time=3600,
+)
 scheduler.start()
+# Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es
+# nach der Einfuehrung dieses Features fast einen ganzen Tag lang noch gar
+# keinen ersten Snapshot. record_net_worth_snapshot ist idempotent (ueberspringt,
+# wenn heute schon einer existiert), ein Neustart am selben Tag legt also nichts
+# doppelt an.
+_scheduled_net_worth_snapshot()
 
 # Läuft dauerhaft im Hintergrund (kein Cron-Job, da Long-Polling blockiert) -
 # prüft selbst bei jedem Durchlauf, ob Telegram überhaupt konfiguriert ist.

@@ -4820,15 +4820,24 @@ async function loadHubTab() {
   document.getElementById("hub-todos-body").innerHTML = skelRows(3);
   document.getElementById("hub-transactions-body").innerHTML = skelRows(5);
   try {
-    const [dash, nw, trend] = await Promise.all([api("/dashboard"), api("/net-worth"), api("/dashboard/trend?months=6")]);
+    const [dash, nw, trend, nwHistory] = await Promise.all([
+      api("/dashboard"), api("/net-worth"), api("/dashboard/trend?months=6"), api("/net-worth/history?days=180"),
+    ]);
     const hasDebts = nw.debts_total > 0;
     const incomeSpark = sparklineSvg(trend.points.map(p => p.income));
     const expenseSpark = sparklineSvg(trend.points.map(p => Math.abs(p.expense)));
     const balanceSpark = sparklineSvg(trend.points.map(p => p.income + p.expense));
+    // Erst ab 2 Snapshots gibt es ueberhaupt eine Linie zu zeichnen - der
+    // taegliche Snapshot-Job (siehe Backend) wurde gerade erst eingefuehrt,
+    // die Historie waechst also gemaechlich statt sofort voll da zu sein.
+    const heroSpark = nwHistory.points.length >= 2
+      ? `<span class="card-sparkline" title="Echte Vermögens-Historie">${sparklineSvg(nwHistory.points.map(p => p.total))}</span>`
+      : "";
     cardsEl.innerHTML = `
       <button type="button" class="card hub-hero" data-hub-jump="investments">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div><h3>Nettovermögen</h3><p>${eur(nw.total)}</p></div>
+        ${heroSpark}
       </button>
       <button type="button" class="card card-pos hub-tile" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -4851,6 +4860,28 @@ async function loadHubTab() {
           <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5h16M4 12h16M4 17.5h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
           <div><h3>Restschulden</h3><p class="neg">${eur(nw.debts_total)}</p></div>
         </button>`;
+    }
+
+    // Notgroschen-Reichweite: liquide Mittel (Konten, keine Investments - die
+    // sind im Notfall nicht sofort ohne Verlustrisiko verfuegbar) geteilt durch
+    // den durchschnittlichen Monatsausgaben-Schnitt der letzten 6 Monate
+    // (derselbe Zeitraum wie die Sparklines oben, fuer Konsistenz).
+    const runwayPanel = document.getElementById("hub-runway-panel");
+    const monthsWithExpense = trend.points.filter(p => p.expense !== 0);
+    const avgMonthlyExpense = monthsWithExpense.length
+      ? Math.abs(monthsWithExpense.reduce((sum, p) => sum + p.expense, 0)) / monthsWithExpense.length
+      : 0;
+    if (avgMonthlyExpense > 0) {
+      const months = nw.accounts_total / avgMonthlyExpense;
+      const cls = months >= 3 ? "pos" : months >= 1 ? "" : "neg";
+      runwayPanel.classList.remove("hidden");
+      document.getElementById("hub-runway-body").innerHTML = `
+        <p style="font-size:32px;font-weight:800;margin:0 0 6px" class="${cls}">${months.toFixed(1).replace(".", ",")} Monate</p>
+        <p class="page-sub">Dein Kontostand (${eur(nw.accounts_total)}) deckt bei durchschnittlich ${eur(avgMonthlyExpense)}/Monat
+          Ausgaben rechnerisch ${months.toFixed(1).replace(".", ",")} Monate – ohne Investments, die sind im Notfall nicht
+          verlustfrei sofort verfügbar.</p>`;
+    } else {
+      runwayPanel.classList.add("hidden");
     }
   } catch (e) {
     cardsEl.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;

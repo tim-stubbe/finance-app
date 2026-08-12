@@ -213,6 +213,18 @@ class NetWorthOut(BaseModel):
     total: float
 
 
+class NetWorthHistoryPoint(BaseModel):
+    date: date
+    accounts_total: float
+    investments_total: float
+    debts_total: float
+    total: float
+
+
+class NetWorthHistoryOut(BaseModel):
+    points: List[NetWorthHistoryPoint]
+
+
 class PriceRefreshResult(BaseModel):
     updated: int
     failed: List[str]

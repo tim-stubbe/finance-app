@@ -810,3 +810,29 @@ class ReturnDeadline(Base):
     reminded = Column(Boolean, nullable=False, default=False)
     returned = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class NetWorthSnapshot(Base):
+    """Eine taegliche Momentaufnahme des Nettovermoegens - einzige Quelle fuer
+    eine ECHTE Vermoegens-Verlaufskurve. Vorher konnte net_worth() nur den
+    aktuellen Stand liefern, keine Historie; die Hub-Sparklines und der
+    Jahresrueckblick haben deshalb bewusst auf eine Vermoegenskurve verzichtet
+    statt sie aus Buchungen zu erraten. Ein taeglicher Job (siehe main.py)
+    schreibt ab jetzt einen Eintrag pro Tag und Bereich - es gibt keine
+    rueckwirkende Rekonstruktion, die Historie waechst also erst ab dem
+    Einfuehrungsdatum."""
+
+    __tablename__ = "net_worth_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    accounts_total = Column(Float, nullable=False)
+    investments_total = Column(Float, nullable=False)
+    debts_total = Column(Float, nullable=False)
+    total = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("space_id", "date", name="uq_net_worth_snapshot_space_date"),
+    )

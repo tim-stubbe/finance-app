@@ -1556,6 +1556,37 @@ def net_worth(db: Session, space_id: int) -> schemas.NetWorthOut:
     )
 
 
+def record_net_worth_snapshot(db: Session, space_id: int) -> None:
+    """Schreibt einen Nettovermoegen-Snapshot fuer heute, falls noch keiner
+    existiert - idempotent, damit ein Neustart des Schedulers am selben Tag
+    keinen doppelten Eintrag erzeugt (siehe UniqueConstraint am Modell)."""
+    today = date.today()
+    existing = (
+        db.query(models.NetWorthSnapshot)
+        .filter(models.NetWorthSnapshot.space_id == space_id, models.NetWorthSnapshot.date == today)
+        .first()
+    )
+    if existing:
+        return
+    nw = net_worth(db, space_id)
+    db.add(models.NetWorthSnapshot(
+        space_id=space_id, date=today,
+        accounts_total=nw.accounts_total, investments_total=nw.investments_total,
+        debts_total=nw.debts_total, total=nw.total,
+    ))
+    db.commit()
+
+
+def net_worth_history(db: Session, space_id: int, days: int = 365) -> list[models.NetWorthSnapshot]:
+    start = date.today() - timedelta(days=days)
+    return (
+        db.query(models.NetWorthSnapshot)
+        .filter(models.NetWorthSnapshot.space_id == space_id, models.NetWorthSnapshot.date >= start)
+        .order_by(models.NetWorthSnapshot.date)
+        .all()
+    )
+
+
 # ---------- Schulden ----------
 def get_debts(db: Session, space_id: int):
     return (
