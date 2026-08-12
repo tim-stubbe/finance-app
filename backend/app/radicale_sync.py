@@ -14,7 +14,7 @@ CalDAV-Grundlagen, die hier genutzt werden:
 import re
 import uuid
 from datetime import datetime, date, timezone
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree as ET
 
 import requests
@@ -238,7 +238,18 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
     except Exception as e:
         return {"pulled": 0, "errors": [f"Kalender nicht erreichbar: {e}"]}
 
-    local_by_href = {e.href: e for e in db.query(models.CalendarEvent).filter(models.CalendarEvent.href.isnot(None)).all()}
+    # Auf DIESEN Kalender beschraenkt (Pfad-Praefix aus der URL) - der Nutzer
+    # kann mehrere Kalender-Collections gleichzeitig einbinden (main.py ruft
+    # sync_calendar entsprechend mehrfach auf), alle landen in derselben
+    # calendar_events-Tabelle. Ohne diese Eingrenzung wuerde jeder Aufruf
+    # faelschlich die Termine der JEWEILS ANDEREN Kalender als "am Server
+    # verschwunden" loeschen.
+    calendar_path = urlparse(url).path
+    local_by_href = {
+        e.href: e for e in db.query(models.CalendarEvent)
+        .filter(models.CalendarEvent.href.isnot(None), models.CalendarEvent.href.like(f"{calendar_path}%"))
+        .all()
+    }
     seen_hrefs = set()
     for item in remote:
         seen_hrefs.add(item["href"])

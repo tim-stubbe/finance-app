@@ -4548,10 +4548,14 @@ def _scheduled_radicale_sync():
         except Exception:
             pass
         if settings.radicale_calendar_url:
-            try:
-                radicale_sync.sync_calendar(db, settings.radicale_calendar_url, settings.radicale_username, password)
-            except Exception:
-                pass
+            # Mehrere Kalender-Collections, kommagetrennt (z.B. Privat, Arbeit,
+            # Urlaub getrennt gefuehrt) - jede einzeln syncen, damit sync_calendar
+            # seine Loeschung nur auf den jeweils eigenen Pfad-Praefix begrenzt.
+            for cal_url in [u.strip() for u in settings.radicale_calendar_url.split(",") if u.strip()]:
+                try:
+                    radicale_sync.sync_calendar(db, cal_url, settings.radicale_username, password)
+                except Exception:
+                    pass
             _geocode_missing_event_locations(db)
     finally:
         db.close()

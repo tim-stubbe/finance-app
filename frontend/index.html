@@ -1908,12 +1908,13 @@
           <label class="wide">Adresse der Todo-Liste <input type="text" id="radicale-url" placeholder="https://…/user/todo-list/"></label>
           <label>Benutzername <input type="text" id="radicale-username"></label>
           <label>Passwort <input type="password" id="radicale-password" placeholder="wird verschlüsselt gespeichert"></label>
-          <label class="wide">Adresse des Termin-Kalenders (optional)
-            <input type="text" id="radicale-calendar-url" placeholder="https://…/user/calendar/">
+          <label class="wide">Adresse(n) der Termin-Kalender (optional, mehrere mit Komma trennen)
+            <input type="text" id="radicale-calendar-url" placeholder="https://…/user/kalender1/, https://…/user/kalender2/">
           </label>
           <p class="page-sub wide">
             Nur lesend: zeigt anstehende Termine im Status-Update/Hub, legt aber nichts im Kalender an
-            oder ändert dort etwas – dieselben Zugangsdaten wie oben.
+            oder ändert dort etwas – dieselben Zugangsdaten wie oben. Mehrere Kalender (z.B. Privat, Arbeit,
+            Urlaub getrennt geführt) einfach kommagetrennt eintragen.
           </p>
           <div class="form-actions">
             <button type="button" id="radicale-test" class="btn-ghost">Verbindung testen</button>
