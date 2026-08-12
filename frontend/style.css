@@ -2627,8 +2627,8 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .swipe-stack {
   position: relative;
-  width: min(340px, 90vw);
-  height: 440px;
+  width: min(560px, 92vw);
+  height: min(680px, 72vh);
   touch-action: none;
 }
 
@@ -2663,8 +2663,8 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 
 .swipe-card-meta {
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
   color: var(--muted);
   display: flex;
   justify-content: space-between;
@@ -2674,11 +2674,11 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .swipe-hint {
   position: absolute;
   top: 20px;
-  padding: 6px 14px;
+  padding: 7px 16px;
   border-radius: 8px;
   border: 3px solid;
   font-weight: 800;
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0;
@@ -2689,15 +2689,15 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .swipe-hint.keep { right: 16px; color: var(--pos); border-color: var(--pos); transform: rotate(8deg); }
 .swipe-hint.trash { left: 16px; color: var(--neg); border-color: var(--neg); transform: rotate(-8deg); }
 
-.swipe-actions { display: flex; gap: 22px; }
+.swipe-actions { display: flex; gap: 26px; }
 
 .swipe-action-btn {
-  width: 58px;
-  height: 58px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   border: 2px solid var(--border-strong);
   background: var(--surface);
-  font-size: 24px;
+  font-size: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
