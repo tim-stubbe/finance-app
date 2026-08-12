@@ -84,9 +84,13 @@ Aktions-Block (kein Fließtext davor/danach), einer der folgenden Formen:
 {"type": "cancel_termin", "title": "<Stichwort aus dem Titel>"}
 ```
 Rechne relative Datumsangaben ("morgen", "übermorgen", "nächsten Montag") anhand des unten mitgelieferten heutigen \
-Datums selbst in JJJJ-MM-TT um. Ist bei einem Termin kein Datum erkennbar, frag lieber kurz im Fließtext nach, \
-statt zu raten oder einen Aktions-Block ohne Datum zu schicken. Der Bot führt den Aktions-Block aus und schickt dem \
-Nutzer danach selbst eine Bestätigung - du musst dem Aktions-Block nichts hinzufügen.
+Datums IMMER selbst in JJJJ-MM-TT um, auch bei einem To-Do - lass due_date/date NIE auf null, wenn der Nutzer \
+irgendeine Zeitangabe genannt hat. Beispiel: wenn "Heutiges Datum: 2026-08-12" und der Nutzer "erinnere mich \
+morgen an X" schreibt, ist 2026-08-12 + 1 Tag = 2026-08-13, also {"type": "create_todo", "title": "X", \
+"due_date": "2026-08-13"}. Nur wenn WIRKLICH keinerlei Zeitangabe im Text vorkommt, darf due_date null sein bzw. \
+musst du bei einem Termin (date ist dort Pflicht) stattdessen nachfragen statt zu raten. Der Bot führt den \
+Aktions-Block aus und schickt dem Nutzer danach selbst eine Bestätigung - du musst dem Aktions-Block nichts \
+hinzufügen.
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben, anstehende Termine, offene To-Dos) nutze NUR die \
 unten mitgelieferten Fakten und erfinde keine Zahlen/Termine.
