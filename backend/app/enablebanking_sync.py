@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -92,6 +93,30 @@ def get_transactions(app_id: str, private_key_pem: str, eb_account_id: str) -> l
     return resp.json().get("transactions", [])
 
 
+_MERCHANT_IN_PURPOSE_RE = re.compile(r"Ihr Einkauf bei (.+?)(?:\s+ABBUCHUNG\b|$)", re.IGNORECASE)
+
+
+def _better_applicant_name(applicant: str | None, purpose: str | None) -> str | None:
+    """Bei PayPal-Buchungen ist `creditor.name` oft nur "PayPal (Europe) S.a r.l.
+    ..." - der eigentliche Händler (z.B. "DPD Deutschland GmbH") steht
+    stattdessen im Verwendungszweck ("... Ihr Einkauf bei DPD Deutschland
+    GmbH"). Live beobachtet: dadurch liefen Handler-Angaben komplett unter
+    "PayPal" zusammen, obwohl der echte Empfänger bekannt war - schlecht für
+    Kategorisierung und "Wo dein Geld hingeht". Nur ersetzen, wenn der
+    Applicant-Name selbst nach PayPal aussieht UND der gefundene Händlername
+    nicht wieder nur "PayPal" ist (dann steckt wirklich keine bessere
+    Information drin, z.B. bei einer PayPal-eigenen Gebühr)."""
+    if not applicant or "paypal" not in applicant.lower() or not purpose:
+        return applicant
+    match = _MERCHANT_IN_PURPOSE_RE.search(purpose)
+    if not match:
+        return applicant
+    merchant = match.group(1).strip().rstrip(",")
+    if not merchant or "paypal" in merchant.lower():
+        return applicant
+    return merchant
+
+
 def _parse_transaction(tx: dict) -> tuple[float, str | None, str | None] | None:
     """Feldnamen live gegen die echte Enable-Banking-API verifiziert (snake_case,
     NICHT das ursprünglich angenommene camelCase eines typischen PSD2/NextGenPSD2-
@@ -116,6 +141,7 @@ def _parse_transaction(tx: dict) -> tuple[float, str | None, str | None] | None:
         applicant = (tx.get("creditor") or {}).get("name")
     else:
         applicant = (tx.get("debtor") or {}).get("name")
+    applicant = _better_applicant_name(applicant, purpose)
 
     return round(amount, 2), (applicant or "").strip() or None, (purpose or "").strip() or None
 

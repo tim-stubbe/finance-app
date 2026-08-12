@@ -51,7 +51,14 @@ def _prompt(categories: list[models.Category], batch: list[models.Transaction]) 
         "Buchungen:",
     ]
     for t in batch:
-        lines.append(f'- id={t.id}, Betrag={t.amount:.2f} EUR, Beschreibung="{t.description or ""}"')
+        line = f'- id={t.id}, Betrag={t.amount:.2f} EUR, Beschreibung="{t.description or ""}"'
+        # Notiz zusaetzlich mitgeben, wenn sie ueber die Beschreibung hinaus
+        # etwas hergibt - bei manchen Quellen (z.B. PayPal-Buchungen ueber die
+        # Bank) steht der eigentliche Haendler nur im Verwendungszweck, nicht
+        # im Beschreibungsfeld selbst.
+        if t.notes and t.notes.strip() and t.notes.strip() != (t.description or "").strip():
+            line += f', Verwendungszweck="{t.notes.strip()[:200]}"'
+        lines.append(line)
     return "\n".join(lines)
 
 
