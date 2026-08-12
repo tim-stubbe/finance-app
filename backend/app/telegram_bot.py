@@ -5,9 +5,10 @@ bewusste Nutzerentscheidung, um das Risiko bei einem geleakten Bot-Token gering
 zu halten. Ausnahmen sind ausschließlich fest kodierte, deterministische
 Kommandos (Regex, keine KI-Interpretation): /saldo (Kontostand setzen,
 _BALANCE_CMD_RE), /todo (To-Do anlegen, _TODO_CMD_RE), /erledigt (To-Do
-abhaken, _DONE_CMD_RE) und /termin (Kalender-Termin anlegen, _TERMIN_CMD_RE) -
-bei Geld/Terminen/Aufgaben soll nichts geraten werden. Jede Saldo-Änderung
-landet nachvollziehbar in AccountBalanceLog.
+abhaken, _DONE_CMD_RE), /termin (Kalender-Termin anlegen, _TERMIN_CMD_RE) und
+/termin_absagen (Termin absagen, _CANCEL_TERMIN_CMD_RE) - bei Geld/Terminen/
+Aufgaben soll nichts geraten werden. Jede Saldo-Änderung landet
+nachvollziehbar in AccountBalanceLog.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
 weil die App nur über Tailscale erreichbar ist, kein öffentlicher HTTPS-Endpunkt
@@ -41,6 +42,8 @@ _BALANCE_CMD_RE = re.compile(r"^/saldo\s+(.+?)\s+(-?\d+(?:[.,]\d{1,2})?)\s*€?\
 _TODO_CMD_RE = re.compile(r"^/todo\s+(.+?)(?:\s+(\d{1,2})\.(\d{1,2})\.(\d{4})?)?\s*$", re.IGNORECASE)
 # Format: /erledigt <Text> - hakt ein offenes To-Do per (Teil-)Name ab.
 _DONE_CMD_RE = re.compile(r"^/erledigt\s+(.+)$", re.IGNORECASE)
+# Format: /termin_absagen <Text> - sagt einen anstehenden Termin per (Teil-)Name ab.
+_CANCEL_TERMIN_CMD_RE = re.compile(r"^/termin_absagen\s+(.+)$", re.IGNORECASE)
 # Format: /termin <Titel>; TT.MM.[JJJJ] [HH:MM][; Ort] - ohne Uhrzeit gilt der
 # Termin als ganztägig, ohne Jahr wird das laufende Jahr angenommen.
 _TERMIN_CMD_RE = re.compile(
@@ -54,13 +57,14 @@ TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Fi
 Antworte immer kurz und freundlich auf Deutsch.
 
 Du kannst hier nichts in Buchungen schreiben oder Konten anlegen/löschen - dafür sag dem Nutzer freundlich, dass \
-er das in der App (schwebender KI-Chat oder direkt) erledigen soll. Es gibt vier feste Ausnahmen, jeweils über ein \
+er das in der App (schwebender KI-Chat oder direkt) erledigen soll. Es gibt fünf feste Ausnahmen, jeweils über ein \
 exaktes Kommando (nicht selbst als Fließtext nachbauen, sondern dem Nutzer das Kommando nennen):
 - Saldo setzen: "/saldo <Name> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - für Konten UND Schulden/Kreditlinien.
 - To-Do anlegen: "/todo <Text> [TT.MM.[JJJJ]]" (z.B. "/todo Wäsche waschen" oder "/todo Steuererklärung 15.09.").
 - To-Do abhaken: "/erledigt <Text>" (z.B. "/erledigt Wäsche").
 - Termin anlegen: "/termin <Titel>; TT.MM.[JJJJ] [HH:MM][; Ort]" (z.B. "/termin Zahnarzt; 20.08. 14:30; Praxis Müller" \
 oder ganztägig ohne Uhrzeit: "/termin Urlaub Start; 01.09.").
+- Termin absagen: "/termin_absagen <Text>" (z.B. "/termin_absagen Zahnarzt").
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben, anstehende Termine, offene To-Dos) nutze NUR die \
 unten mitgelieferten Fakten und erfinde keine Zahlen/Termine.
@@ -220,12 +224,34 @@ def _handle_termin_command(db, settings, token: str, chat_id: str, text: str) ->
     return True
 
 
+def _handle_cancel_termin_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _CANCEL_TERMIN_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    name_query = match.group(1)
+    event, error = crud.cancel_calendar_event_by_name(db, name_query)
+    if error:
+        _send(token, chat_id, error)
+        return True
+    calendar_url = event.calendar_url or _first_calendar_url(settings)
+    if calendar_url:
+        try:
+            radicale_sync.sync_calendar(db, calendar_url, settings.radicale_username,
+                                         bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted))
+        except Exception:
+            pass
+    _send(token, chat_id, f"✓ Termin „{event.title}“ am {event.start.strftime('%d.%m.%Y')} abgesagt.")
+    return True
+
+
 def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_balance_command(db, token, chat_id, text):
         return
     if _handle_todo_command(db, settings, token, chat_id, text):
         return
     if _handle_done_command(db, settings, token, chat_id, text):
+        return
+    if _handle_cancel_termin_command(db, settings, token, chat_id, text):
         return
     if _handle_termin_command(db, settings, token, chat_id, text):
         return

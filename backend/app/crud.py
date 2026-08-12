@@ -2458,6 +2458,26 @@ def update_calendar_event(db: Session, event: models.CalendarEvent, title=None, 
     return event
 
 
+def cancel_calendar_event_by_name(db: Session, name_query: str):
+    """Sagt einen zukünftigen Termin über einen (Teil-)Namen ab - fürs
+    Telegram-Kommando /termin_absagen, analog zu set_balance_by_name/
+    complete_todo_by_name. Gibt (event, error) zurück: error ist None bei
+    Erfolg, sonst ein Text zum direkten Zurücksenden (kein Treffer /
+    mehrdeutig)."""
+    upcoming = get_upcoming_calendar_events(db, days=365, limit=1000)
+    q = name_query.strip().lower()
+    matches = [e for e in upcoming if q in e.title.lower()]
+    if not matches:
+        namen = ", ".join(e.title for e in upcoming[:10]) or "keine anstehenden Termine"
+        return None, f"Nichts mit „{name_query}“ gefunden. Anstehend: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(e.title for e in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    event = matches[0]
+    delete_calendar_event(db, event)
+    return event, None
+
+
 def delete_calendar_event(db: Session, event: models.CalendarEvent):
     # Wie bei Todo: erst markieren, damit der nächste Sync die Löschung noch
     # auf den Server überträgt, statt die Radicale-Ressource verwaist zurück-
