@@ -2319,6 +2319,11 @@ def complete_todo_by_name(db: Session, name_query: str):
     Zurücksenden (kein Treffer / mehrdeutig)."""
     open_todos = get_todos(db, include_done=False)
     q = name_query.strip().lower()
+    if not q:
+        # Ein leerer Suchbegriff waere Teilstring von jedem Titel und wuerde
+        # sonst bei genau einem offenen To-Do dieses ohne echten Treffer
+        # abhaken - lieber explizit "kein Treffer" als das.
+        return None, "Kein Suchbegriff angegeben."
     matches = [t for t in open_todos if q in t.title.lower()]
     if not matches:
         namen = ", ".join(t.title for t in open_todos) or "keine offenen To-Dos"
@@ -2466,6 +2471,11 @@ def cancel_calendar_event_by_name(db: Session, name_query: str):
     mehrdeutig)."""
     upcoming = get_upcoming_calendar_events(db, days=365, limit=1000)
     q = name_query.strip().lower()
+    if not q:
+        # Siehe complete_todo_by_name: ein leerer Suchbegriff waere sonst
+        # Teilstring von jedem Titel und wuerde bei genau einem anstehenden
+        # Termin diesen ohne echten Treffer absagen.
+        return None, "Kein Suchbegriff angegeben."
     matches = [e for e in upcoming if q in e.title.lower()]
     if not matches:
         namen = ", ".join(e.title for e in upcoming[:10]) or "keine anstehenden Termine"

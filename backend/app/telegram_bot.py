@@ -330,6 +330,12 @@ def _execute_action(db, settings, action: dict) -> str:
 
     if action_type == "complete_todo":
         title = (action.get("title") or "").strip()
+        if not title:
+            # Leerer Suchbegriff wuerde in complete_todo_by_name jedes offene
+            # To-Do treffen (leerer String ist Teilstring von allem) - bei
+            # genau einem offenen To-Do sonst ein stiller Fehltreffer ohne
+            # echte Nutzerabsicht.
+            return "Konnte nicht erkennen, welches To-Do gemeint ist - bitte den Titel nennen."
         todo, error = crud.complete_todo_by_name(db, title)
         db.commit()
         return error or f"✓ „{todo.title}“ abgehakt."
@@ -365,6 +371,11 @@ def _execute_action(db, settings, action: dict) -> str:
 
     if action_type == "cancel_termin":
         title = (action.get("title") or "").strip()
+        if not title:
+            # Dieselbe Absicherung wie bei complete_todo oben - leerer Titel
+            # wuerde sonst bei genau einem anstehenden Termin diesen ohne
+            # echten Treffer stumm absagen.
+            return "Konnte nicht erkennen, welcher Termin gemeint ist - bitte den Titel nennen."
         event, error = crud.cancel_calendar_event_by_name(db, title)
         if error:
             return error
