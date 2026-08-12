@@ -338,6 +338,11 @@ def delete_account(account_id: int, db: Session = Depends(get_db), space_id: int
     return {"ok": True}
 
 
+@api_router.get("/accounts/balance-log", response_model=List[schemas.AccountBalanceLogOut])
+def get_balance_log(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.recent_balance_changes(db, space_id)
+
+
 # ---------------- Categories (global) ----------------
 @api_router.get("/categories", response_model=List[schemas.CategoryOut])
 def list_categories(db: Session = Depends(get_db)):

@@ -147,15 +147,60 @@ def create_account(db: Session, account: schemas.AccountCreate, space_id: int):
     return db_account
 
 
-def update_account(db: Session, account_id: int, space_id: int, data: schemas.AccountUpdate):
+def update_account(db: Session, account_id: int, space_id: int, data: schemas.AccountUpdate, source: str = "app"):
     db_account = get_account(db, account_id, space_id)
     if not db_account:
         return None
-    for key, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    if "initial_balance" in changes and changes["initial_balance"] != db_account.initial_balance:
+        old_balance = account_balance(db, db_account)
+        new_balance = old_balance - db_account.initial_balance + changes["initial_balance"]
+        db.add(models.AccountBalanceLog(
+            account_id=db_account.id, old_balance=old_balance, new_balance=new_balance, source=source,
+        ))
+    for key, value in changes.items():
         setattr(db_account, key, value)
     db.commit()
     db.refresh(db_account)
     return db_account
+
+
+def set_account_balance_by_name(db: Session, space_id: int, name_query: str, new_balance: float, source: str = "telegram"):
+    """Setzt den aktuellen Kontostand über einen (Teil-)Namen statt einer ID -
+    fürs Telegram-Kommando gedacht, wo der Nutzer den Kontonamen eintippt statt
+    ihn aus einer Liste auszuwählen. Gibt (account, error) zurück: error ist
+    None bei Erfolg, sonst ein Text zum direkten Zurücksenden (kein Treffer /
+    mehrdeutig - bewusst KEIN Rateversuch bei einer Geldsumme)."""
+    accounts = get_accounts(db, space_id)
+    q = name_query.strip().lower()
+    matches = [a for a in accounts if q in a.name.lower()]
+    if not matches:
+        namen = ", ".join(a.name for a in accounts)
+        return None, f"Kein Konto mit „{name_query}“ gefunden. Vorhandene Konten: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(a.name for a in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    account = matches[0]
+    updated = update_account(db, account.id, space_id, schemas.AccountUpdate(
+        initial_balance=round(account.initial_balance - account_balance(db, account) + new_balance, 2),
+    ), source=source)
+    return updated, None
+
+
+def recent_balance_changes(db: Session, space_id: int, limit: int = 20) -> list[dict]:
+    rows = (
+        db.query(models.AccountBalanceLog)
+        .join(models.Account, models.AccountBalanceLog.account_id == models.Account.id)
+        .filter(models.Account.space_id == space_id)
+        .order_by(models.AccountBalanceLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [{
+        "account_name": r.account.name if r.account else "",
+        "old_balance": r.old_balance, "new_balance": r.new_balance,
+        "source": r.source, "created_at": r.created_at,
+    } for r in rows]
 
 
 def delete_account(db: Session, account_id: int, space_id: int):

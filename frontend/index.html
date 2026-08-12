@@ -516,6 +516,17 @@
           </table>
         </div>
       </div>
+
+      <div class="panel hidden" id="balance-log-panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg> Änderungsprotokoll</h3>
+        <p class="page-sub">Manuelle Kontostand-Änderungen, auch per Telegram-Kommando (<code>/saldo Kontoname Betrag</code>).</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Konto</th><th>Von</th><th>Auf</th><th>Quelle</th><th>Zeit</th></tr></thead>
+            <tbody id="balance-log-list"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- WIEDERKEHRENDE ZAHLUNGEN -->

@@ -1,8 +1,10 @@
 """Long-Polling-Bot: beantwortet Nachrichten an den konfigurierten Telegram-Bot
 über denselben Ollama-Assistenten wie der schwebende Web-Chat (inkl. Websuche
-und Steuer-Einschätzungen), kann aber NICHTS in die Buchungen/Konten schreiben -
+und Steuer-Einschätzungen). Reiner Lesezugriff/Auskunft über die KI-Chat-Runde -
 bewusste Nutzerentscheidung, um das Risiko bei einem geleakten Bot-Token gering
-zu halten (reiner Lesezugriff/Auskunft).
+zu halten. EINZIGE Ausnahme: das explizite Kommando /saldo (siehe
+_BALANCE_CMD_RE) setzt den Kontostand direkt, an der KI vorbei (kein Raten bei
+einer Geldsumme) - jede Änderung landet nachvollziehbar in AccountBalanceLog.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
 weil die App nur über Tailscale erreichbar ist, kein öffentlicher HTTPS-Endpunkt
@@ -28,13 +30,17 @@ ERROR_BACKOFF_SECONDS = 15
 MAX_HISTORY = 20  # Nachrichten (User+Assistant zusammen); nur im Prozessspeicher
 
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
+# Bewusst ein explizites Kommando statt Freitext-Interpretation durch die KI -
+# bei einer Geldsumme soll nichts geraten werden. Format: /saldo <Kontoname> <Betrag>
+_BALANCE_CMD_RE = re.compile(r"^/saldo\s+(.+?)\s+(-?\d+(?:[.,]\d{1,2})?)\s*€?\s*$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
 
-Du kannst HIER NICHTS in die Buchungen/Konten schreiben oder ändern - du gibst nur Auskunft, machst Recherche \
-und Einschätzungen. Will der Nutzer etwas eintragen oder ändern, sag ihm freundlich, dass er das in der App \
-(schwebender KI-Chat oder direkt) erledigen soll.
+Du kannst hier nichts in Buchungen schreiben oder Konten anlegen/löschen - dafür sag dem Nutzer freundlich, dass \
+er das in der App (schwebender KI-Chat oder direkt) erledigen soll. EINZIGE Ausnahme: einen Kontostand setzen \
+kann der Nutzer direkt hier mit dem Kommando "/saldo <Kontoname> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - \
+weise bei einer entsprechenden Bitte auf genau dieses Kommando hin, statt es selbst als Fließtext zu versuchen.
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben) nutze NUR die unten mitgelieferten Fakten und \
 erfinde keine Zahlen.
@@ -77,7 +83,34 @@ def _send(token: str, chat_id: str, text: str) -> None:
     resp.raise_for_status()
 
 
+def _handle_balance_command(db, token: str, chat_id: str, text: str) -> bool:
+    """Erkennt und verarbeitet /saldo <Kontoname> <Betrag>. Gibt True zurück,
+    wenn die Nachricht als dieses Kommando erkannt wurde (dann ist sie
+    abschließend behandelt, egal ob erfolgreich) - sonst False, damit der
+    normale KI-Chat-Weg weiterläuft."""
+    match = _BALANCE_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    name_query, amount_raw = match.groups()
+    try:
+        new_balance = float(amount_raw.replace(",", "."))
+    except ValueError:
+        _send(token, chat_id, f"„{amount_raw}“ ist kein gültiger Betrag.")
+        return True
+    space = crud.get_spaces(db)[0]
+    account, error = crud.set_account_balance_by_name(db, space.id, name_query, new_balance, source="telegram")
+    db.commit()
+    if error:
+        _send(token, chat_id, error)
+    else:
+        _send(token, chat_id, f"✓ „{account.name}“ auf {new_balance:.2f} € gesetzt.")
+    return True
+
+
 def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
+    if _handle_balance_command(db, token, chat_id, text):
+        return
+
     chat_model = settings.ollama_model or settings.beleg_chat_model
     if not settings.ollama_url or not chat_model:
         _send(token, chat_id, "Ollama ist in der App noch nicht unter Einstellungen eingerichtet.")

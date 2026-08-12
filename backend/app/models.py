@@ -76,6 +76,24 @@ class Account(Base):
     )
 
 
+class AccountBalanceLog(Base):
+    """Protokoll jeder manuellen Kontostand-Änderung (Startsaldo) - Nachvollzieh-
+    barkeit als Ersatz für eine Bestätigung, ähnlich wie bei FileSortLog frueher:
+    per Telegram gesetzte Werte laufen ohne Rückfrage direkt durch, bleiben aber
+    immer sichtbar, wer/was den Stand wann geändert hat."""
+
+    __tablename__ = "account_balance_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    old_balance = Column(Float, nullable=False)
+    new_balance = Column(Float, nullable=False)
+    source = Column(String, nullable=False)  # "app" oder "telegram"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account")
+
+
 class Category(Base):
     __tablename__ = "categories"
 

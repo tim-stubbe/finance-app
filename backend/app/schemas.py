@@ -34,6 +34,14 @@ class AccountOut(AccountBase):
     current_balance: float = 0.0
 
 
+class AccountBalanceLogOut(BaseModel):
+    account_name: str
+    old_balance: float
+    new_balance: float
+    source: str
+    created_at: datetime
+
+
 # ---------- Category ----------
 class CategoryBase(BaseModel):
     name: str

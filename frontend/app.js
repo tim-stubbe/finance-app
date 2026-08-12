@@ -276,6 +276,29 @@ async function loadAccounts() {
     tbody.appendChild(tr);
   });
   populateAccountSelects();
+  loadBalanceLog();
+}
+
+async function loadBalanceLog() {
+  const panel = document.getElementById("balance-log-panel");
+  let log = [];
+  try {
+    log = await api("/accounts/balance-log");
+  } catch (e) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.toggle("hidden", log.length === 0);
+  if (!log.length) return;
+  const sourceLabel = { app: "App", telegram: "Telegram" };
+  document.getElementById("balance-log-list").innerHTML = log.map(l => `
+    <tr>
+      <td>${esc(l.account_name)}</td>
+      <td>${eur(l.old_balance)}</td>
+      <td>${eur(l.new_balance)}</td>
+      <td>${sourceLabel[l.source] || l.source}</td>
+      <td>${new Date(l.created_at).toLocaleString("de-DE")}</td>
+    </tr>`).join("");
 }
 
 function populateAccountSelects() {
