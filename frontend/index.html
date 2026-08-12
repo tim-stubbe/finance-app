@@ -591,6 +591,23 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg> Was-wäre-wenn?</h3>
+        <p class="page-sub">
+          Vergleicht die normale Prognose oben mit einer einfachen Variante: ein Abo kündigen und/oder eine
+          zusätzliche monatliche Sparrate bzw. Ausgabe einrechnen. Grobe Orientierung, keine exakte Simulation.
+        </p>
+        <form id="cashflow-scenario-form" class="form-grid">
+          <label class="wide">Abo kündigen <select id="scenario-cancel"><option value="">– keins –</option></select></label>
+          <label>Zusätzliche Sparrate (€/Monat) <input type="number" step="1" min="0" id="scenario-saving" value="0"></label>
+          <label>Zusätzliche Ausgabe (€/Monat) <input type="number" step="1" min="0" id="scenario-expense" value="0"></label>
+          <div class="form-actions wide">
+            <button type="submit" class="btn-primary">Szenario berechnen</button>
+          </div>
+        </form>
+        <p id="scenario-result" class="page-sub"></p>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6V2z"/><path d="M14 2v5h5"/><path d="M9 13h6M9 17h6"/></svg> Kündigungsfristen</h3>
         <p class="page-sub">
           Trag bei Abos mit automatischer Verlängerung ein, bis wann du kündigen musst – du wirst rechtzeitig per

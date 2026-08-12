@@ -2078,6 +2078,41 @@ document.querySelectorAll("#cashflow-range-tabs .range-tab").forEach(btn => {
   });
 });
 
+document.getElementById("cashflow-scenario-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const payload = {
+    horizon_days: cashflowDays,
+    cancel_description_key: document.getElementById("scenario-cancel").value || null,
+    extra_monthly_saving: parseFloat(document.getElementById("scenario-saving").value) || 0,
+    extra_monthly_expense: parseFloat(document.getElementById("scenario-expense").value) || 0,
+  };
+  const result = document.getElementById("scenario-result");
+  result.textContent = "Berechne …";
+  const data = await api("/forecast/cashflow/scenario", { method: "POST", body: JSON.stringify(payload) });
+
+  if (cashflowChart) {
+    cashflowChart.data.datasets = cashflowChart.data.datasets.slice(0, 1);
+    cashflowChart.data.datasets.push({
+      data: data.scenario.points.map(p => p.balance),
+      borderColor: cssVar("--pos"),
+      backgroundColor: "transparent",
+      borderDash: [6, 4],
+      fill: false,
+      tension: 0.25,
+      pointRadius: 0,
+      borderWidth: 2,
+    });
+    cashflowChart.update();
+  }
+
+  const delta = data.scenario.points.at(-1).balance - data.baseline.points.at(-1).balance;
+  const sign = delta >= 0 ? "+" : "";
+  result.innerHTML = `Endstand normal: <strong>${eur(data.baseline.points.at(-1).balance)}</strong> · ` +
+    `Szenario (gestrichelt): <strong>${eur(data.scenario.points.at(-1).balance)}</strong> ` +
+    `(${sign}${eur(delta)}) · Tiefststand Szenario: ${eur(data.scenario.lowest_balance)}` +
+    (data.scenario.goes_negative ? " ⚠️ rutscht ins Minus" : "");
+});
+
 async function loadPriceIncreases() {
   const increases = await api("/transactions/price-increases");
   const panel = document.getElementById("price-increase-panel");
@@ -2111,9 +2146,16 @@ async function loadOverlappingContracts() {
     </div>`).join("");
 }
 
+let recurringItemsCache = [];
+
 async function loadRecurringTab() {
   await loadCashflowForecast();
   const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders(), loadPriceIncreases(), loadOverlappingContracts()]);
+  recurringItemsCache = items;
+  document.getElementById("scenario-cancel").innerHTML = '<option value="">– keins –</option>' +
+    items.filter(it => it.avg_amount < 0).map(it =>
+      `<option value="${esc(it.description_key)}">${esc(it.description || "?")} (${eur(it.avg_amount)}/${RECURRING_FREQ_LABELS[it.frequency] || it.frequency})</option>`
+    ).join("");
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {

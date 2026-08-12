@@ -817,6 +817,18 @@ class CashflowForecastOut(BaseModel):
     first_negative_date: Optional[str] = None
 
 
+class CashflowScenarioRequest(BaseModel):
+    horizon_days: int = 90
+    cancel_description_key: Optional[str] = None
+    extra_monthly_saving: float = 0.0
+    extra_monthly_expense: float = 0.0
+
+
+class CashflowScenarioOut(BaseModel):
+    baseline: CashflowForecastOut
+    scenario: CashflowForecastOut
+
+
 # ---------- Automatische Backups ----------
 class BackupSettingsOut(BaseModel):
     enabled: bool

@@ -409,25 +409,12 @@ def detect_and_mark_transfers(db: Session, space_id: int) -> int:
 RECURRING_INTERVAL_DAYS = {label: target for label, target, _tol in _RECURRING_FREQUENCIES}
 
 
-def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> schemas.CashflowForecastOut:
-    """Projiziert den Gesamtkontostand nach vorne, indem die erkannten wiederkehrenden
-    Zahlungen (Abos, Miete, Gehalt, ...) und die laufenden Kreditraten (siehe unten)
-    im gewählten Zeitraum weitergeschrieben werden. Bewusst begrenzt: nur Muster,
-    die crud.detect_recurring_transactions bereits als wiederkehrend erkannt hat,
-    fließen ein - einmalige/unregelmäßige Ausgaben (z.B. spontane Einkäufe) werden
-    NICHT vorhergesagt, die Kurve bleibt zwischen zwei Terminen flach. Das ist eine
-    bewusste Einschränkung, keine Wettervorhersage für Spontanausgaben - im Frontend
-    entsprechend kommuniziert.
-
-    Kreditraten fließen NUR mit der monatlichen Rate ein, nicht mit der gesamten
-    Restschuld (Nutzerwunsch: eine Ratenzahlung über z.B. 24 Monate darf den
-    Kontostand nicht so behandeln, als würde die ganze Schuld sofort fällig)."""
-    accounts = get_accounts(db, space_id)
-    start_balance = round(sum(account_balance(db, a) for a in accounts), 2)
-
+def _cashflow_events(db: Session, space_id: int, end: date) -> list[dict]:
+    """Baut die Liste künftiger Zahlungsereignisse (erkannte wiederkehrende
+    Zahlungen + laufende Kreditraten) bis `end` - gemeinsame Grundlage für
+    cashflow_forecast UND cashflow_scenario, damit beide exakt dieselbe
+    Heuristik verwenden und nicht auseinanderlaufen können."""
     today = date.today()
-    end = today + timedelta(days=horizon_days)
-
     events: list[dict] = []
     for r in detect_recurring_transactions(db, space_id):
         interval = RECURRING_INTERVAL_DAYS.get(r["frequency"])
@@ -439,7 +426,10 @@ def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> sch
         while occ_date < today:
             occ_date += timedelta(days=interval)
         while occ_date <= end:
-            events.append({"date": occ_date, "amount": r["avg_amount"], "description": r["description"]})
+            events.append({
+                "date": occ_date, "amount": r["avg_amount"], "description": r["description"],
+                "description_key": r["description_key"],
+            })
             occ_date += timedelta(days=interval)
 
     # Laufende Kreditraten fließen mit ein - bewusst nur die monatliche Rate
@@ -454,10 +444,16 @@ def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> sch
         for row in rows:
             if row.date > end:
                 break
-            events.append({"date": row.date, "amount": -abs(row.payment), "description": f"Kredit: {d.name}"})
+            events.append({
+                "date": row.date, "amount": -abs(row.payment), "description": f"Kredit: {d.name}",
+                "description_key": None,
+            })
 
     events.sort(key=lambda e: e["date"])
+    return events
 
+
+def _cashflow_points(start_balance: float, events: list[dict], today: date, end: date) -> list[schemas.CashflowPoint]:
     points: list[schemas.CashflowPoint] = []
     balance = start_balance
     idx = 0
@@ -468,10 +464,12 @@ def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> sch
             idx += 1
         points.append(schemas.CashflowPoint(date=d.isoformat(), balance=round(balance, 2)))
         d += timedelta(days=1)
+    return points
 
+
+def _cashflow_summary(start_balance: float, horizon_days: int, points: list[schemas.CashflowPoint], events: list[dict]) -> schemas.CashflowForecastOut:
     lowest = min(points, key=lambda p: p.balance) if points else None
     first_negative = next((p for p in points if p.balance < 0), None)
-
     return schemas.CashflowForecastOut(
         start_balance=start_balance,
         horizon_days=horizon_days,
@@ -485,6 +483,64 @@ def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> sch
         goes_negative=first_negative is not None,
         first_negative_date=first_negative.date if first_negative else None,
     )
+
+
+def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> schemas.CashflowForecastOut:
+    """Projiziert den Gesamtkontostand nach vorne, indem die erkannten wiederkehrenden
+    Zahlungen (Abos, Miete, Gehalt, ...) und die laufenden Kreditraten im gewählten
+    Zeitraum weitergeschrieben werden. Bewusst begrenzt: nur Muster, die
+    crud.detect_recurring_transactions bereits als wiederkehrend erkannt hat, fließen
+    ein - einmalige/unregelmäßige Ausgaben (z.B. spontane Einkäufe) werden NICHT
+    vorhergesagt, die Kurve bleibt zwischen zwei Terminen flach. Das ist eine bewusste
+    Einschränkung, keine Wettervorhersage für Spontanausgaben - im Frontend
+    entsprechend kommuniziert."""
+    accounts = get_accounts(db, space_id)
+    start_balance = round(sum(account_balance(db, a) for a in accounts), 2)
+    today = date.today()
+    end = today + timedelta(days=horizon_days)
+    events = _cashflow_events(db, space_id, end)
+    points = _cashflow_points(start_balance, events, today, end)
+    return _cashflow_summary(start_balance, horizon_days, points, events)
+
+
+def cashflow_scenario(
+    db: Session, space_id: int, horizon_days: int = 90,
+    cancel_description_key: str | None = None,
+    extra_monthly_saving: float = 0.0, extra_monthly_expense: float = 0.0,
+) -> schemas.CashflowScenarioOut:
+    """Vergleicht die normale Cashflow-Prognose (cashflow_forecast) mit einer
+    einfachen "Was-wäre-wenn"-Variante: ein erkanntes Abo herausrechnen
+    und/oder eine zusätzliche monatliche Sparrate bzw. Ausgabe einrechnen -
+    bewusst nur diese drei simplen Stellschrauben statt eines vollständigen
+    Simulations-Frameworks. Die zusätzliche Sparrate/Ausgabe wird als ein
+    einzelnes monatliches Ereignis ab in 30 Tagen angenommen (kein festes
+    Kalenderdatum wie beim Gehalt), das reicht für eine grobe Orientierung."""
+    accounts = get_accounts(db, space_id)
+    start_balance = round(sum(account_balance(db, a) for a in accounts), 2)
+    today = date.today()
+    end = today + timedelta(days=horizon_days)
+
+    baseline_events = _cashflow_events(db, space_id, end)
+    baseline_points = _cashflow_points(start_balance, baseline_events, today, end)
+    baseline = _cashflow_summary(start_balance, horizon_days, baseline_points, baseline_events)
+
+    scenario_events = [
+        e for e in baseline_events
+        if not (cancel_description_key and e.get("description_key") == cancel_description_key)
+    ]
+    net_monthly = extra_monthly_saving - extra_monthly_expense
+    if net_monthly:
+        occ = today + timedelta(days=30)
+        while occ <= end:
+            scenario_events.append({
+                "date": occ, "amount": net_monthly, "description": "Szenario-Anpassung", "description_key": None,
+            })
+            occ += timedelta(days=30)
+        scenario_events.sort(key=lambda e: e["date"])
+    scenario_points = _cashflow_points(start_balance, scenario_events, today, end)
+    scenario = _cashflow_summary(start_balance, horizon_days, scenario_points, scenario_events)
+
+    return schemas.CashflowScenarioOut(baseline=baseline, scenario=scenario)
 
 
 def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:

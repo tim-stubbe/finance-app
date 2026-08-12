@@ -645,6 +645,17 @@ def get_cashflow_forecast(days: int = 90, db: Session = Depends(get_db), space_i
     return crud.cashflow_forecast(db, space_id, days)
 
 
+@api_router.post("/forecast/cashflow/scenario", response_model=schemas.CashflowScenarioOut)
+def get_cashflow_scenario(data: schemas.CashflowScenarioRequest, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    days = max(7, min(data.horizon_days, 365))
+    return crud.cashflow_scenario(
+        db, space_id, days,
+        cancel_description_key=data.cancel_description_key,
+        extra_monthly_saving=data.extra_monthly_saving,
+        extra_monthly_expense=data.extra_monthly_expense,
+    )
+
+
 @api_router.post("/transactions", response_model=schemas.TransactionOut)
 def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     if not crud.get_account(db, transaction.account_id, space_id):
