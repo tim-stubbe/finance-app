@@ -18,11 +18,15 @@ RECEIPT_PARSE_PROMPT = (
 )
 
 CREDITCARD_BILL_PROMPT = (
-    "Du bekommst den Text einer Kreditkarten-Abrechnung (mehrere Buchungen, am "
-    "Ende ein Gesamtbetrag). Nenne ausschliesslich das Faelligkeitsdatum (wann "
-    "der Betrag abgebucht wird bzw. bis wann gezahlt werden muss - NICHT das "
-    "Rechnungsdatum) und den zu zahlenden Gesamtbetrag. Antworte NUR mit einem "
-    "JSON-Block:\n```json\n{\"faelligkeitsdatum\": \"JJJJ-MM-TT\", \"betrag\": 12.34}\n```\n"
+    "Du bekommst den Text einer Kreditkarten-Abrechnung (mehrere Buchungen, am Ende "
+    "meist zwei Beträge: der volle 'Neue Saldo'/Gesamtsaldo, und ein kleinerer "
+    "'Mindestbetrag' mit eigenem Fälligkeitsdatum, z.B. 'Mindestbetrag fällig am "
+    "20.08.2026: 81,56'). Nenne ausschliesslich GENAU DIESEN Mindestbetrag (nicht "
+    "den Gesamtsaldo!) und das dazugehörige Datum ('Fällig am' / 'fällig am' beim "
+    "Mindestbetrag, NICHT das Rechnungs- oder Abrechnungsdatum). Gibt es keinen "
+    "separaten Mindestbetrag, sondern nur einen einzigen fälligen Betrag, nimm "
+    "diesen. Antworte NUR mit einem JSON-Block:\n"
+    "```json\n{\"faelligkeitsdatum\": \"JJJJ-MM-TT\", \"betrag\": 12.34}\n```\n"
     "Wenn du eines der beiden nicht sicher erkennst, schreibe null. Rate nicht."
 )
 
