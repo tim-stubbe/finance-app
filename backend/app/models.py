@@ -201,6 +201,9 @@ class Settings(Base):
     home_lat = Column(Float, nullable=True)
     home_lon = Column(Float, nullable=True)
     openroute_api_key_encrypted = Column(String, nullable=True)
+    # Zeitpunkt des letzten Status-Updates - Grundlage fuer "seit dem letzten
+    # Update automatisch erledigt" im Digest (siehe crud.build_digest).
+    last_digest_sent_at = Column(DateTime, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -415,6 +418,11 @@ class Transaction(Base):
 
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    # Gesetzt, sobald category_id auf einen Wert wechselt (egal ob durch die KI,
+    # Sammel-Zuweisung oder manuell) - Grundlage fuer "was wurde seit dem letzten
+    # Digest erledigt" (siehe crud.build_digest). Rein additiv, kein Rueckschluss
+    # auf die aktuelle Kategorie moeglich, wenn sie sich seither nochmal aendert.
+    categorized_at = Column(DateTime, nullable=True)
     trip_id = Column(Integer, ForeignKey("trips.id"), nullable=True)
 
     receipt_filename = Column(String, nullable=True)

@@ -1075,6 +1075,8 @@ def update_transaction(db: Session, transaction_id: int, space_id: int, data: sc
             new_notes = changes.get("notes", db_transaction.notes)
             new_hash_input = f"{new_account_id}|{new_date}|{new_amount}|{new_description}|{new_notes}"
             db_transaction.import_hash = hashlib.sha256(new_hash_input.encode()).hexdigest()
+    if changes.get("category_id") is not None and changes["category_id"] != db_transaction.category_id:
+        db_transaction.categorized_at = datetime.utcnow()
     for key, value in changes.items():
         setattr(db_transaction, key, value)
     db.commit()
@@ -1103,6 +1105,8 @@ def bulk_set_category(db: Session, space_id: int, transaction_ids: list[int], ca
     )
     for tx in rows:
         tx.category_id = category_id
+        if category_id is not None:
+            tx.categorized_at = datetime.utcnow()
     db.commit()
     return len(rows)
 
@@ -1810,6 +1814,7 @@ def net_worth(db: Session, space_id: int) -> schemas.NetWorthOut:
 def build_digest(
     db: Session, space_id: int,
     home_coords: tuple[float, float] | None = None, ors_api_key: str | None = None,
+    since: datetime | None = None,
 ) -> str:
     """Baut die Telegram-Statusmeldung fuer den wiederkehrenden Digest (siehe
     main._scheduled_digest) - bewusst reine Auswertung, veraendert nirgends
@@ -1829,6 +1834,16 @@ def build_digest(
     if negative:
         namen = ", ".join(f"„{a.name}“" for a in negative)
         lines.append(f"\n⚠️ Im Minus: {namen}")
+
+    if since:
+        neu_kategorisiert = (
+            db.query(models.Transaction)
+            .join(models.Account)
+            .filter(models.Account.space_id == space_id, models.Transaction.categorized_at > since)
+            .count()
+        )
+        if neu_kategorisiert:
+            lines.append(f"\n✅ {neu_kategorisiert} Buchung(en) seit dem letzten Update automatisch kategorisiert.")
 
     forecast = cashflow_forecast(db, space_id, horizon_days=7)
     upcoming = forecast.upcoming_events[:5]

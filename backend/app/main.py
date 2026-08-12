@@ -80,6 +80,12 @@ ensure_columns("debt_payments", {
 ensure_columns("transactions", {
     "is_transfer": "BOOLEAN DEFAULT 0",
 })
+ensure_columns("transactions", {
+    "categorized_at": "DATETIME",
+})
+ensure_columns("settings", {
+    "last_digest_sent_at": "DATETIME",
+})
 ensure_columns("settings", {
     "auto_categorize_enabled": "BOOLEAN DEFAULT 1",
 })
@@ -4464,12 +4470,15 @@ def _scheduled_digest():
             bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
             if settings.openroute_api_key_encrypted else None
         )
+        since = settings.last_digest_sent_at
         for space in crud.get_spaces(db):
             try:
-                text = crud.build_digest(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key)
+                text = crud.build_digest(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key, since=since)
                 notifications.notify(settings, text)
             except Exception:
                 db.rollback()
+        settings.last_digest_sent_at = datetime.utcnow()
+        db.commit()
     finally:
         db.close()
 

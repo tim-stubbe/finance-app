@@ -7,6 +7,7 @@ unkategorisiert liegen, statt geraten zu werden (Nutzerentscheidung)."""
 
 import json
 import re
+from datetime import datetime
 from typing import NamedTuple
 
 from sqlalchemy.orm import Session
@@ -111,6 +112,7 @@ def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> Ca
                 skipped += 1
                 continue
             tx.category_id = cat.id
+            tx.categorized_at = datetime.utcnow()
             categorized += 1
         # Buchungen, zu denen die KI gar keine Zeile geliefert hat, zählen ebenfalls
         # als übersprungen statt stillschweigend zu verschwinden.
