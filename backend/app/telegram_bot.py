@@ -2,9 +2,12 @@
 über denselben Ollama-Assistenten wie der schwebende Web-Chat (inkl. Websuche
 und Steuer-Einschätzungen). Reiner Lesezugriff/Auskunft über die KI-Chat-Runde -
 bewusste Nutzerentscheidung, um das Risiko bei einem geleakten Bot-Token gering
-zu halten. EINZIGE Ausnahme: das explizite Kommando /saldo (siehe
-_BALANCE_CMD_RE) setzt den Kontostand direkt, an der KI vorbei (kein Raten bei
-einer Geldsumme) - jede Änderung landet nachvollziehbar in AccountBalanceLog.
+zu halten. Ausnahmen sind ausschließlich fest kodierte, deterministische
+Kommandos (Regex, keine KI-Interpretation): /saldo (Kontostand setzen,
+_BALANCE_CMD_RE), /todo (To-Do anlegen, _TODO_CMD_RE) und /termin
+(Kalender-Termin anlegen, _TERMIN_CMD_RE) - bei Geld/Terminen/Aufgaben soll
+nichts geraten werden. Jede Saldo-Änderung landet nachvollziehbar in
+AccountBalanceLog.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
 weil die App nur über Tailscale erreichbar ist, kein öffentlicher HTTPS-Endpunkt
@@ -17,10 +20,11 @@ errät, an Finanzdaten oder Ollama-Antworten herankommt."""
 
 import re
 import time
+from datetime import date, datetime
 
 import requests
 
-from . import auth, bank_sync, crud, models, ollama_client, websearch
+from . import auth, bank_sync, crud, models, ollama_client, radicale_sync, websearch
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
@@ -33,15 +37,27 @@ _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
 # Bewusst ein explizites Kommando statt Freitext-Interpretation durch die KI -
 # bei einer Geldsumme soll nichts geraten werden. Format: /saldo <Kontoname> <Betrag>
 _BALANCE_CMD_RE = re.compile(r"^/saldo\s+(.+?)\s+(-?\d+(?:[.,]\d{1,2})?)\s*€?\s*$", re.IGNORECASE)
+# Format: /todo <Text> [TT.MM.[JJJJ]] - optionales Fälligkeitsdatum am Ende.
+_TODO_CMD_RE = re.compile(r"^/todo\s+(.+?)(?:\s+(\d{1,2})\.(\d{1,2})\.(\d{4})?)?\s*$", re.IGNORECASE)
+# Format: /termin <Titel>; TT.MM.[JJJJ] [HH:MM][; Ort] - ohne Uhrzeit gilt der
+# Termin als ganztägig, ohne Jahr wird das laufende Jahr angenommen.
+_TERMIN_CMD_RE = re.compile(
+    r"^/termin\s+(.+?)\s*;\s*(\d{1,2})\.(\d{1,2})\.(\d{4})?"
+    r"(?:\s+(\d{1,2}):(\d{2}))?"
+    r"(?:\s*;\s*(.+))?\s*$",
+    re.IGNORECASE,
+)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
 
 Du kannst hier nichts in Buchungen schreiben oder Konten anlegen/löschen - dafür sag dem Nutzer freundlich, dass \
-er das in der App (schwebender KI-Chat oder direkt) erledigen soll. EINZIGE Ausnahme: den Saldo eines Kontos ODER \
-einer Schuld (z.B. eine Kreditkarte als Kreditlinie) setzen kann der Nutzer direkt hier mit dem Kommando \
-"/saldo <Name> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - weise bei einer entsprechenden Bitte auf genau \
-dieses Kommando hin, statt es selbst als Fließtext zu versuchen.
+er das in der App (schwebender KI-Chat oder direkt) erledigen soll. Es gibt drei feste Ausnahmen, jeweils über ein \
+exaktes Kommando (nicht selbst als Fließtext nachbauen, sondern dem Nutzer das Kommando nennen):
+- Saldo setzen: "/saldo <Name> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - für Konten UND Schulden/Kreditlinien.
+- To-Do anlegen: "/todo <Text> [TT.MM.[JJJJ]]" (z.B. "/todo Wäsche waschen" oder "/todo Steuererklärung 15.09.").
+- Termin anlegen: "/termin <Titel>; TT.MM.[JJJJ] [HH:MM][; Ort]" (z.B. "/termin Zahnarzt; 20.08. 14:30; Praxis Müller" \
+oder ganztägig ohne Uhrzeit: "/termin Urlaub Start; 01.09.").
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben) nutze NUR die unten mitgelieferten Fakten und \
 erfinde keine Zahlen.
@@ -112,8 +128,67 @@ def _handle_balance_command(db, token: str, chat_id: str, text: str) -> bool:
     return True
 
 
+def _first_calendar_url(settings) -> str | None:
+    if not settings.radicale_calendar_url:
+        return None
+    urls = [u.strip() for u in settings.radicale_calendar_url.split(",") if u.strip()]
+    return urls[0] if urls else None
+
+
+def _handle_todo_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _TODO_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    title, day, month, year = match.groups()
+    due_date = None
+    if day:
+        try:
+            due_date = date(int(year) if year else date.today().year, int(month), int(day))
+        except ValueError:
+            _send(token, chat_id, f"„{day}.{month}.{year or ''}“ ist kein gültiges Datum.")
+            return True
+    todo = crud.create_todo(db, title.strip(), due_date)
+    if settings.radicale_url:
+        try:
+            radicale_sync.sync(db, settings.radicale_url, settings.radicale_username,
+                                bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted))
+        except Exception:
+            pass
+    _send(token, chat_id, f"✓ To-Do „{todo.title}“ angelegt" + (f", fällig am {due_date.strftime('%d.%m.%Y')}." if due_date else "."))
+    return True
+
+
+def _handle_termin_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _TERMIN_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    title, day, month, year, hour, minute, location = match.groups()
+    try:
+        event_date = date(int(year) if year else date.today().year, int(month), int(day))
+    except ValueError:
+        _send(token, chat_id, f"„{day}.{month}.{year or ''}“ ist kein gültiges Datum.")
+        return True
+    all_day = hour is None
+    start = datetime(event_date.year, event_date.month, event_date.day, int(hour) if hour else 0, int(minute) if minute else 0)
+    calendar_url = _first_calendar_url(settings)
+    event = crud.create_calendar_event(db, title.strip(), start, None, (location or "").strip() or None, all_day, calendar_url)
+    if calendar_url:
+        try:
+            radicale_sync.sync_calendar(db, calendar_url, settings.radicale_username,
+                                         bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted))
+        except Exception:
+            pass
+    when = "ganztägig" if all_day else start.strftime("%H:%M")
+    _send(token, chat_id, f"✓ Termin „{event.title}“ am {event_date.strftime('%d.%m.%Y')} ({when}) angelegt.")
+    return True
+
+
 def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_balance_command(db, token, chat_id, text):
+        return
+    if _handle_todo_command(db, settings, token, chat_id, text):
+        return
+    if _handle_termin_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model
