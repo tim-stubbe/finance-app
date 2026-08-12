@@ -1702,3 +1702,15 @@ class BusinessIssueOut(BaseModel):
     resolved: bool
     created_at: datetime
     resolved_at: Optional[datetime] = None
+
+
+# ---------- Eingehender Webhook (n8n) ----------
+class WebhookSettingsOut(BaseModel):
+    secret: Optional[str] = None
+    configured: bool = False
+
+
+class WebhookIssueCreate(BaseModel):
+    project: str
+    title: str
+    notes: Optional[str] = None

@@ -2067,6 +2067,27 @@
         <p id="immich-status" class="page-sub"></p>
       </div>
 
+      <div class="panel" data-integration-key="webhook">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><path d="M12 9v4M12 16h.01"/></svg> Eingehender Webhook (z.B. n8n)</h3>
+        <p class="page-sub">
+          Für externe Automatisierung (z.B. n8n wertet E-Mails aus und meldet Ergebnisse hierher) – Kies wertet
+          selbst nichts aus, sondern nimmt nur fertige Meldungen entgegen und hängt sie als offenen Punkt an ein
+          bestehendes <strong>Projekt</strong> (Tab „Projekte“). Meldet sich sofort per Telegram.
+        </p>
+        <p class="page-sub">
+          POST an <code>/api/webhook/business-issue</code>, Header <code>X-Webhook-Secret: &lt;Secret&gt;</code>,
+          JSON-Body <code>{"project": "Projektname", "title": "…", "notes": "optional"}</code>.
+        </p>
+        <div class="filter-row">
+          <input type="text" id="webhook-secret" readonly placeholder="Noch kein Secret erzeugt">
+          <button type="button" id="webhook-copy" class="btn-ghost">Kopieren</button>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="webhook-regenerate" class="btn-primary">Neues Secret erzeugen</button>
+          <button type="button" id="webhook-remove" class="btn-ghost hidden">Deaktivieren</button>
+        </div>
+      </div>
+
       <div class="panel" data-integration-key="radicale">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Radicale – To-Dos &amp; Termine vom Handy</h3>
         <p class="page-sub">

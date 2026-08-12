@@ -6,6 +6,7 @@ import json
 import os
 import random
 import re
+import secrets
 import shutil
 import uuid
 import zipfile
@@ -15,7 +16,7 @@ from urllib.parse import urlparse
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import APIRouter, FastAPI, Depends, Form, HTTPException, UploadFile, File
+from fastapi import APIRouter, FastAPI, Depends, Form, Header, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, Response
 from starlette.middleware.sessions import SessionMiddleware
@@ -113,6 +114,9 @@ ensure_columns("settings", {
     "telegram_chat_id": "VARCHAR",
     "last_cashflow_alert_date": "DATE",
     "last_budget_alert_month": "VARCHAR",
+})
+ensure_columns("settings", {
+    "n8n_webhook_secret_encrypted": "VARCHAR",
 })
 ensure_columns("settings", {
     "telegram_last_update_id": "INTEGER",
@@ -2527,6 +2531,62 @@ def update_immich_settings(data: schemas.ImmichSettingsUpdate, db: Session = Dep
         url=s.immich_url, api_key_set=bool(s.immich_api_key_encrypted),
         skip_confirm=s.immich_skip_confirm,
     )
+
+
+# ---------------- Eingehender Webhook (z.B. n8n meldet E-Mail-Ereignisse) ----------------
+@api_router.get("/settings/webhook", response_model=schemas.WebhookSettingsOut)
+def get_webhook_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not s.n8n_webhook_secret_encrypted:
+        return schemas.WebhookSettingsOut(secret=None, configured=False)
+    secret = bank_sync.decrypt_secret(s.secret_key, s.n8n_webhook_secret_encrypted)
+    return schemas.WebhookSettingsOut(secret=secret, configured=True)
+
+
+@api_router.post("/settings/webhook/regenerate", response_model=schemas.WebhookSettingsOut)
+def regenerate_webhook_secret(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    new_secret = secrets.token_urlsafe(32)
+    s.n8n_webhook_secret_encrypted = bank_sync.encrypt_secret(s.secret_key, new_secret)
+    db.commit()
+    return schemas.WebhookSettingsOut(secret=new_secret, configured=True)
+
+
+@api_router.delete("/settings/webhook")
+def remove_webhook_secret(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.n8n_webhook_secret_encrypted = None
+    db.commit()
+    return {"ok": True}
+
+
+@api_router.post("/webhook/business-issue", response_model=schemas.BusinessIssueOut)
+def webhook_create_business_issue(
+    data: schemas.WebhookIssueCreate, db: Session = Depends(get_db),
+    x_webhook_secret: Optional[str] = Header(None),
+):
+    """Nimmt fertige Ereignisse von außen entgegen (z.B. n8n, das E-Mails
+    ausgewertet hat) und legt sie als offenen Punkt bei einem Business-Projekt
+    an - Kies wertet die E-Mails NICHT selbst aus (Nutzerentscheidung, das
+    bleibt bei n8n), sondern ist hier nur Empfänger des fertigen Ergebnisses.
+    Kein space_id/Session-Cookie wie bei den übrigen Endpunkten (der Aufrufer
+    ist kein eingeloggter Browser), stattdessen ein geteiltes Secret im
+    Header - secrets.compare_digest statt "==", um eine Timing-Angriffsfläche
+    gar nicht erst zu eröffnen, auch wenn das Netz (Tailscale/Docker intern)
+    ohnehin schon nicht öffentlich erreichbar ist."""
+    s = auth.get_or_create_settings(db)
+    if not s.n8n_webhook_secret_encrypted:
+        raise HTTPException(403, "Webhook ist noch nicht eingerichtet (Einstellungen → Weitere Verbindungen).")
+    expected = bank_sync.decrypt_secret(s.secret_key, s.n8n_webhook_secret_encrypted)
+    if not x_webhook_secret or not secrets.compare_digest(x_webhook_secret, expected):
+        raise HTTPException(403, "Ungültiges Secret.")
+
+    project, error = crud.find_business_project_by_name(db, data.project)
+    if error:
+        raise HTTPException(404, error)
+    issue = crud.create_business_issue(db, project.id, data.title, data.notes)
+    notifications.notify(s, f"📧 Neue Meldung bei „{project.name}“: {data.title}")
+    return issue
 
 
 @api_router.delete("/settings/immich", response_model=schemas.ImmichSettingsOut)

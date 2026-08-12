@@ -194,6 +194,13 @@ class Settings(Base):
     # Zuletzt verarbeitete Telegram-Update-ID (Long-Polling-Offset) - persistiert,
     # damit ein Neustart nicht die komplette Update-Warteschlange erneut abarbeitet.
     telegram_last_update_id = Column(Integer, nullable=True)
+    # --- Eingehender Webhook (z.B. n8n meldet E-Mail-Ereignisse als offene
+    # Punkte bei einem Business-Projekt) - n8n bleibt fuer die eigentliche
+    # E-Mail-Verarbeitung zustaendig (Nutzerentscheidung), Kies nimmt nur das
+    # fertige Ergebnis entgegen. Der Secret wird dem Nutzer im Klartext
+    # angezeigt (zum Eintragen in n8n), deshalb verschluesselt statt gehasht
+    # gespeichert - anders als ein Passwort muss er wieder lesbar sein.
+    n8n_webhook_secret_encrypted = Column(String, nullable=True)
     # --- Echte Anrufe (Twilio) für wirklich zeitkritische Fälle ---
     # Default False (anders als notifications_enabled): eine kostenpflichtige,
     # das Telefon klingelnde Aktion sollte nie ungefragt aktiv sein.

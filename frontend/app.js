@@ -4046,6 +4046,39 @@ document.getElementById("immich-remove").addEventListener("click", async () => {
   refreshIntegrationBadge();
 });
 
+// ================= EINGEHENDER WEBHOOK (n8n) =================
+async function loadWebhookSettings() {
+  const s = await api("/settings/webhook");
+  document.getElementById("webhook-secret").value = s.secret || "";
+  document.getElementById("webhook-secret").placeholder = s.configured ? "" : "Noch kein Secret erzeugt";
+  document.getElementById("webhook-remove").classList.toggle("hidden", !s.configured);
+}
+
+document.getElementById("webhook-regenerate").addEventListener("click", async () => {
+  if (
+    document.getElementById("webhook-secret").value &&
+    !confirm("Neues Secret erzeugen? Das alte funktioniert danach nicht mehr, bestehende n8n-Workflows müssen angepasst werden.")
+  ) return;
+  const s = await api("/settings/webhook/regenerate", { method: "POST" });
+  document.getElementById("webhook-secret").value = s.secret || "";
+  document.getElementById("webhook-remove").classList.remove("hidden");
+  toast("Neues Secret erzeugt.");
+});
+
+document.getElementById("webhook-copy").addEventListener("click", () => {
+  const input = document.getElementById("webhook-secret");
+  if (!input.value) return;
+  navigator.clipboard.writeText(input.value);
+  toast("Secret kopiert.");
+});
+
+document.getElementById("webhook-remove").addEventListener("click", async () => {
+  if (!confirm("Webhook deaktivieren? Eingehende Meldungen werden danach abgelehnt.")) return;
+  await api("/settings/webhook", { method: "DELETE" });
+  await loadWebhookSettings();
+  toast("Webhook deaktiviert.");
+});
+
 // ================= VERMÖGENSVERGLEICH =================
 let benchmarkChart = null;
 
@@ -5491,6 +5524,7 @@ async function loadSettingsTab() {
   await loadAutoCategorizeSettings();
   await loadWebSearchSettings();
   await loadImmichSettings();
+  await loadWebhookSettings();
   await loadMailSettings();
   await loadCreditCardSettings();
   await loadNotificationSettings();
