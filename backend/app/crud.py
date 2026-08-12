@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from statistics import median
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
-from . import models, schemas, prices, debts, radicale_sync
+from . import models, schemas, prices, debts, radicale_sync, travel_time
 
 CACHE_TTL = timedelta(hours=24)
 
@@ -1807,12 +1807,16 @@ def net_worth(db: Session, space_id: int) -> schemas.NetWorthOut:
     )
 
 
-def build_digest(db: Session, space_id: int) -> str:
+def build_digest(
+    db: Session, space_id: int,
+    home_coords: tuple[float, float] | None = None, ors_api_key: str | None = None,
+) -> str:
     """Baut die Telegram-Statusmeldung fuer den wiederkehrenden Digest (siehe
     main._scheduled_digest) - bewusst reine Auswertung, veraendert nirgends
     einen "notified"/"reminded"-Zustand wie die evaluate_*-Funktionen, damit
     sich Digest und die separaten Sofort-Warnungen nicht gegenseitig
-    beeinflussen."""
+    beeinflussen. Das Entschlüsseln von ors_api_key passiert bewusst schon in
+    main.py (kein bank_sync-Import hier, sonst zirkulärer Import mit crud)."""
     nw = net_worth(db, space_id)
     lines = [f"📊 Kies-Update ({datetime.now().strftime('%H:%M')})", ""]
     lines.append(f"Nettovermögen: {nw.total:.2f} EUR")
@@ -1839,7 +1843,21 @@ def build_digest(db: Session, space_id: int) -> str:
         for ev in events[:5]:
             zeit = "ganztägig" if ev.all_day else ev.start.strftime("%d.%m. %H:%M")
             ort = f" @ {ev.location}" if ev.location else ""
-            lines.append(f"- {zeit}: {ev.title}{ort}")
+            fahrzeit = ""
+            # Nur fuer Termine der naechsten 24h berechnen (sonst taeglich
+            # wiederholte Anfragen fuer laengst noch nicht relevante Termine)
+            # und nur mit Ort+Koordinaten+eingerichteter Anbindung.
+            if (
+                home_coords and ors_api_key and not ev.all_day and ev.lat and ev.lon
+                and ev.start <= datetime.utcnow() + timedelta(hours=24)
+            ):
+                try:
+                    minuten = travel_time.travel_time_minutes(ors_api_key, home_coords, (ev.lat, ev.lon))
+                except Exception:
+                    minuten = None
+                if minuten is not None:
+                    fahrzeit = f" · 🚗 ~{minuten} Min ab Zuhause"
+            lines.append(f"- {zeit}: {ev.title}{ort}{fahrzeit}")
 
     offen = (
         db.query(models.Transaction)

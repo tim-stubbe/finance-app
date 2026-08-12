@@ -4741,6 +4741,35 @@ document.getElementById("radicale-test").addEventListener("click", async () => {
     : `✗ ${r.error}`;
 });
 
+// ---------- Fahrzeit-Einstellungen ----------
+async function loadTravelSettings() {
+  const s = await api("/settings/travel");
+  document.getElementById("travel-home-address").value = s.home_address || "";
+  document.getElementById("travel-api-key").placeholder = s.api_key_set
+    ? "gespeichert – leer lassen behält den bisherigen"
+    : "wird verschlüsselt gespeichert";
+  const status = document.getElementById("travel-status");
+  if (!s.home_address) {
+    status.textContent = "";
+  } else if (!s.home_geocoded) {
+    status.textContent = "⚠️ Adresse konnte nicht gefunden werden - bitte prüfen (Straße Hausnummer, PLZ Ort).";
+  } else {
+    status.textContent = "✓ Adresse gefunden.";
+  }
+}
+
+document.getElementById("travel-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const body = {
+    home_address: document.getElementById("travel-home-address").value.trim(),
+    api_key: document.getElementById("travel-api-key").value.trim() || null,
+  };
+  await api("/settings/travel", { method: "PUT", body: JSON.stringify(body) });
+  document.getElementById("travel-api-key").value = "";
+  await loadTravelSettings();
+  toast("Fahrzeit-Einstellungen gespeichert.");
+});
+
 // ---------- To-Dos ----------
 let todosCache = [];
 
@@ -4926,6 +4955,7 @@ async function loadSettingsTab() {
   await loadEbaySettings();
   await loadEbayConnections();
   await loadRadicaleSettings();
+  await loadTravelSettings();
 }
 
 // ================= DASHBOARD =================

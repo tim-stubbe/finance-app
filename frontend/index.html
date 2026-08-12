@@ -1913,6 +1913,23 @@
         </form>
         <p id="radicale-status" class="page-sub"></p>
       </div>
+
+      <div class="panel" data-integration-key="travel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3l9 9-9 9"/></svg> Fahrzeit zu Terminen</h3>
+        <p class="page-sub">
+          Zeigt im Status-Update die geschätzte Autofahrzeit zu Terminen der nächsten 24 Stunden mit
+          hinterlegtem Ort. Braucht eine Startadresse und einen kostenlosen
+          <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>-API-Key.
+        </p>
+        <form id="travel-settings-form" class="form-grid">
+          <label class="wide">Startadresse (z.B. Zuhause) <input type="text" id="travel-home-address" placeholder="Straße Hausnummer, PLZ Ort"></label>
+          <label class="wide">OpenRouteService-API-Key <input type="password" id="travel-api-key" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <p id="travel-status" class="page-sub"></p>
+      </div>
       </div>
 
       <div id="settings-view-daten" class="hidden">

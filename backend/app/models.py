@@ -193,6 +193,14 @@ class Settings(Base):
     # in zwei verschiedenen Listen fuehrt. Nur lesend synchronisiert (siehe
     # CalendarEvent) - Termine werden im echten Kalender angelegt, nicht hier.
     radicale_calendar_url = Column(String, nullable=True)
+    # --- Fahrzeit zu Terminen (siehe travel_time.py) ---
+    # lat/lon werden beim Speichern der Adresse einmalig geokodiert und
+    # zwischengespeichert, statt bei jedem Digest-Lauf erneut Nominatim zu
+    # fragen (Adresse aendert sich praktisch nie, Koordinaten schon).
+    home_address = Column(String, nullable=True)
+    home_lat = Column(Float, nullable=True)
+    home_lon = Column(Float, nullable=True)
+    openroute_api_key_encrypted = Column(String, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -796,6 +804,12 @@ class CalendarEvent(Base):
     start = Column(DateTime, nullable=False)
     end = Column(DateTime, nullable=True)
     location = Column(String, nullable=True)
+    # Einmalig geokodiert (siehe main._geocode_missing_event_locations), damit
+    # die Fahrzeit-Berechnung im Digest nicht bei jedem Lauf neu bei Nominatim
+    # anfragen muss - NULL, solange die Adresse noch nicht (erfolgreich)
+    # geokodiert wurde oder kein Ort hinterlegt ist.
+    lat = Column(Float, nullable=True)
+    lon = Column(Float, nullable=True)
     all_day = Column(Boolean, nullable=False, default=False)
     href = Column(String, nullable=True)
     etag = Column(String, nullable=True)

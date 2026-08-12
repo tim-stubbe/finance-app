@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -137,6 +137,16 @@ ensure_columns("settings", {
     "radicale_username": "VARCHAR",
     "radicale_password_encrypted": "VARCHAR",
     "radicale_calendar_url": "VARCHAR",
+})
+ensure_columns("settings", {
+    "home_address": "VARCHAR",
+    "home_lat": "FLOAT",
+    "home_lon": "FLOAT",
+    "openroute_api_key_encrypted": "VARCHAR",
+})
+ensure_columns("calendar_events", {
+    "lat": "FLOAT",
+    "lon": "FLOAT",
 })
 ensure_columns("todos", {
     "completed_at": "DATETIME",
@@ -3675,6 +3685,35 @@ def update_radicale_settings(data: schemas.RadicaleSettingsUpdate, db: Session =
     )
 
 
+@api_router.get("/settings/travel", response_model=schemas.TravelSettingsOut)
+def get_travel_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.TravelSettingsOut(
+        home_address=s.home_address, home_geocoded=bool(s.home_lat and s.home_lon),
+        api_key_set=bool(s.openroute_api_key_encrypted),
+    )
+
+
+@api_router.put("/settings/travel", response_model=schemas.TravelSettingsOut)
+def update_travel_settings(data: schemas.TravelSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    address = (data.home_address or "").strip()
+    if address and address != s.home_address:
+        # Bei jeder tatsaechlichen Adressaenderung neu geokodieren - ein
+        # Fehlschlag hier soll das Speichern der uebrigen Felder nicht verhindern,
+        # nur eben ohne Koordinaten (Fahrzeit-Berechnung greift dann einfach nicht).
+        try:
+            coords = travel_time.geocode(address)
+        except Exception:
+            coords = None
+        s.home_lat, s.home_lon = coords if coords else (None, None)
+    s.home_address = address or None
+    if data.api_key:
+        s.openroute_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, data.api_key)
+    db.commit()
+    return get_travel_settings(db)
+
+
 @api_router.post("/radicale/test")
 def test_radicale(db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
@@ -4412,14 +4451,45 @@ def _scheduled_digest():
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
+        home_coords = (settings.home_lat, settings.home_lon) if settings.home_lat and settings.home_lon else None
+        ors_api_key = (
+            bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
+            if settings.openroute_api_key_encrypted else None
+        )
         for space in crud.get_spaces(db):
             try:
-                text = crud.build_digest(db, space.id)
+                text = crud.build_digest(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key)
                 notifications.notify(settings, text)
             except Exception:
                 db.rollback()
     finally:
         db.close()
+
+
+def _geocode_missing_event_locations(db: Session):
+    """Geokodiert Termin-Orte, die noch keine Koordinaten haben - einmalig pro
+    Termin, nicht bei jedem Digest-Lauf (siehe CalendarEvent.lat/lon). Nur
+    zukünftige Termine, damit nicht bei jedem Sync alte/vergangene Orte erneut
+    versucht werden. Nominatim-Nutzungsbedingungen: max. 1 Anfrage/Sekunde -
+    bei der hier üblichen Anzahl (wenige Termine) ohne Sleep unproblematisch."""
+    events = (
+        db.query(models.CalendarEvent)
+        .filter(
+            models.CalendarEvent.location.isnot(None),
+            models.CalendarEvent.lat.is_(None),
+            models.CalendarEvent.start >= datetime.utcnow(),
+        )
+        .all()
+    )
+    for ev in events:
+        try:
+            coords = travel_time.geocode(ev.location)
+        except Exception:
+            continue
+        if coords:
+            ev.lat, ev.lon = coords
+    if events:
+        db.commit()
 
 
 def _scheduled_radicale_sync():
@@ -4451,6 +4521,7 @@ def _scheduled_radicale_sync():
                 radicale_sync.sync_calendar(db, settings.radicale_calendar_url, settings.radicale_username, password)
             except Exception:
                 pass
+            _geocode_missing_event_locations(db)
     finally:
         db.close()
 

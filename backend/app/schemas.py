@@ -1448,6 +1448,17 @@ class CalendarEventOut(BaseModel):
     all_day: bool = False
 
 
+class TravelSettingsOut(BaseModel):
+    home_address: Optional[str] = None
+    home_geocoded: bool = False
+    api_key_set: bool = False
+
+
+class TravelSettingsUpdate(BaseModel):
+    home_address: Optional[str] = None
+    api_key: Optional[str] = None
+
+
 class TodoCreate(BaseModel):
     title: str
     due_date: Optional[date] = None
