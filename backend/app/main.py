@@ -475,6 +475,38 @@ def remove_budget(category_id: int, db: Session = Depends(get_db), space_id: int
     return {"ok": True}
 
 
+# ---------------- Eigene Regeln (Sofort-Alarme) ----------------
+@api_router.get("/alert-rules", response_model=List[schemas.AlertRuleOut])
+def list_alert_rules(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.get_alert_rules(db, space_id)
+
+
+@api_router.post("/alert-rules", response_model=schemas.AlertRuleOut)
+def create_alert_rule(data: schemas.AlertRuleCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    if data.rule_type in (schemas.AlertRuleType.category_spend_above, schemas.AlertRuleType.category_deviation) and not data.category_id:
+        raise HTTPException(400, "Diese Regel braucht eine Kategorie")
+    if data.rule_type == schemas.AlertRuleType.account_balance_below and not data.account_id:
+        raise HTTPException(400, "Diese Regel braucht ein Konto")
+    return crud.create_alert_rule(db, space_id, data)
+
+
+@api_router.patch("/alert-rules/{rule_id}", response_model=schemas.AlertRuleOut)
+def update_alert_rule(rule_id: int, data: schemas.AlertRuleUpdate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    rule = db.query(models.AlertRule).filter(models.AlertRule.id == rule_id, models.AlertRule.space_id == space_id).first()
+    if not rule:
+        raise HTTPException(404, "Regel nicht gefunden")
+    return crud.update_alert_rule(db, rule, data)
+
+
+@api_router.delete("/alert-rules/{rule_id}")
+def remove_alert_rule(rule_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    rule = db.query(models.AlertRule).filter(models.AlertRule.id == rule_id, models.AlertRule.space_id == space_id).first()
+    if not rule:
+        raise HTTPException(404, "Regel nicht gefunden")
+    crud.delete_alert_rule(db, rule)
+    return {"ok": True}
+
+
 # ---------------- Transactions ----------------
 @api_router.get("/transactions", response_model=List[schemas.TransactionOut])
 def list_transactions(
@@ -4610,6 +4642,38 @@ def _scheduled_anomaly_check():
         db.close()
 
 
+def _scheduled_alert_rules():
+    """Alle 30 Minuten: nutzerdefinierte Regeln (Einstellungen → Benach-
+    richtigungen → Eigene Regeln) prüfen und bei Auslösung sofort per
+    Telegram melden. last_triggered_date statt der dauerhaften NotifiedAnomaly-
+    Logik, damit z.B. ein weiter zu niedriger Kontostand nicht nach einer
+    einzigen Meldung verstummt - stattdessen hoechstens einmal pro Tag."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        today = date.today()
+        for space in crud.get_spaces(db):
+            rules = db.query(models.AlertRule).filter(
+                models.AlertRule.space_id == space.id, models.AlertRule.active.is_(True),
+            ).all()
+            for rule in rules:
+                if rule.last_triggered_date == today:
+                    continue
+                try:
+                    triggered, message = crud.evaluate_alert_rule(db, rule)
+                except Exception:
+                    db.rollback()
+                    continue
+                if triggered:
+                    notifications.notify(settings, message)
+                    rule.last_triggered_date = today
+                    db.commit()
+    finally:
+        db.close()
+
+
 def _scheduled_net_worth_snapshot():
     """Einmal taeglich kurz vor Mitternacht: Nettovermoegen je Bereich
     festhalten. Einzige Quelle fuer eine echte Verlaufskurve - siehe
@@ -4875,6 +4939,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_anomaly_check, CronTrigger(minute="*/30"),
     id="anomaly_check", misfire_grace_time=900,
+)
+scheduler.add_job(
+    _scheduled_alert_rules, CronTrigger(minute="*/30"),
+    id="alert_rules", misfire_grace_time=900,
 )
 scheduler.add_job(
     _scheduled_travel_reminder, CronTrigger(minute="*/5"),

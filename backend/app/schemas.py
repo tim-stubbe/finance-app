@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 from .models import (
     AccountType, CategoryType, AssetType, LotType,
     GoalType, GoalStatus, GoalMetricType, GoalComparison,
-    DebtKind, DebtStatus,
+    DebtKind, DebtStatus, AlertRuleType,
 )
 
 
@@ -169,6 +169,31 @@ class BudgetOut(BaseModel):
     category_id: int
     category_name: str
     monthly_limit: float
+
+
+class AlertRuleCreate(BaseModel):
+    rule_type: AlertRuleType
+    category_id: Optional[int] = None
+    account_id: Optional[int] = None
+    threshold: float
+    active: bool = True
+
+
+class AlertRuleUpdate(BaseModel):
+    threshold: Optional[float] = None
+    active: Optional[bool] = None
+
+
+class AlertRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    rule_type: AlertRuleType
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
+    threshold: float
+    active: bool
 
 
 class BudgetSuggestionOut(BaseModel):

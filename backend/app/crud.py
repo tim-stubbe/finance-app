@@ -755,6 +755,99 @@ def mark_anomaly_notified(db: Session, space_id: int, key: str) -> None:
     db.commit()
 
 
+# ---------- Eigene Regeln (Sofort-Alarme) ----------
+def get_alert_rules(db: Session, space_id: int) -> list[models.AlertRule]:
+    rules = db.query(models.AlertRule).filter(models.AlertRule.space_id == space_id).order_by(models.AlertRule.id).all()
+    for r in rules:
+        r.category_name = r.category.name if r.category else None
+        r.account_name = r.account.name if r.account else None
+    return rules
+
+
+def create_alert_rule(db: Session, space_id: int, data: schemas.AlertRuleCreate) -> models.AlertRule:
+    rule = models.AlertRule(
+        space_id=space_id, rule_type=data.rule_type, category_id=data.category_id,
+        account_id=data.account_id, threshold=data.threshold, active=data.active,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    rule.category_name = rule.category.name if rule.category else None
+    rule.account_name = rule.account.name if rule.account else None
+    return rule
+
+
+def update_alert_rule(db: Session, rule: models.AlertRule, data: schemas.AlertRuleUpdate) -> models.AlertRule:
+    if data.threshold is not None:
+        rule.threshold = data.threshold
+    if data.active is not None:
+        rule.active = data.active
+    db.commit()
+    db.refresh(rule)
+    rule.category_name = rule.category.name if rule.category else None
+    rule.account_name = rule.account.name if rule.account else None
+    return rule
+
+
+def delete_alert_rule(db: Session, rule: models.AlertRule) -> None:
+    db.delete(rule)
+    db.commit()
+
+
+def evaluate_alert_rule(db: Session, rule: models.AlertRule) -> tuple[bool, str]:
+    """Prüft eine einzelne Regel rein lesend (kein last_triggered_date-
+    Update) - main._scheduled_alert_rules entscheidet anhand dessen, ob heute
+    schon gemeldet wurde. Bewusst nur die drei Regeltypen aus AlertRuleType,
+    keine freie Bedingungs-Engine."""
+    if rule.rule_type == models.AlertRuleType.category_spend_above:
+        if not rule.category_id:
+            return False, ""
+        today = date.today()
+        total = (
+            db.query(func.sum(models.Transaction.amount))
+            .join(models.Account)
+            .filter(
+                models.Account.space_id == rule.space_id,
+                models.Transaction.category_id == rule.category_id,
+                models.Transaction.is_transfer.is_(False),
+                models.Transaction.date >= today.replace(day=1),
+            )
+            .scalar()
+        ) or 0
+        spent = abs(total) if total < 0 else 0.0
+        if spent > rule.threshold:
+            cat = db.query(models.Category).filter(models.Category.id == rule.category_id).first()
+            cat_name = cat.name if cat else "?"
+            return True, (f"🔔 Regel ausgelöst: Ausgaben in „{cat_name}“ diesen Monat {spent:.2f} € "
+                           f"(Schwelle {rule.threshold:.2f} €).")
+        return False, ""
+
+    if rule.rule_type == models.AlertRuleType.account_balance_below:
+        if not rule.account_id:
+            return False, ""
+        account = db.query(models.Account).filter(models.Account.id == rule.account_id).first()
+        if not account:
+            return False, ""
+        balance = account_balance(db, account)
+        if balance < rule.threshold:
+            return True, (f"🔔 Regel ausgelöst: Kontostand „{account.name}“ liegt bei {balance:.2f} € "
+                           f"(Schwelle {rule.threshold:.2f} €).")
+        return False, ""
+
+    if rule.rule_type == models.AlertRuleType.category_deviation:
+        if not rule.category_id:
+            return False, ""
+        anomalies = detect_spending_anomalies(db, rule.space_id, threshold_pct=rule.threshold)
+        match = next((a for a in anomalies if a["category_id"] == rule.category_id), None)
+        if match:
+            return True, (f"🔔 Regel ausgelöst: „{match['category_name']}“ liegt diesen Monat hochgerechnet bei "
+                           f"{match['projected_spent']:.2f} € (sonst ø {match['avg_prior_months']:.2f} €, "
+                           f"+{match['deviation_pct']:.0f}%, Schwelle {rule.threshold:.0f}%).")
+        return False, ""
+
+    return False, ""
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 def _contract_reminder_out(r: models.ContractReminder, account_name: str | None) -> schemas.ContractReminderOut:
     reminder_date = r.renewal_date - timedelta(days=r.notice_period_days)
