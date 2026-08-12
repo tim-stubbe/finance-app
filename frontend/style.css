@@ -2218,8 +2218,26 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   }
   .brand { width: auto; padding: 0 8px 0 4px; }
   .brand-name { display: none; }
-  .nav { flex-direction: row; flex: 1; overflow-x: auto; }
-  .nav-btn { flex-direction: column; gap: 4px; font-size: 11px; padding: 8px 10px; white-space: nowrap; }
+  .nav {
+    flex-direction: row; flex: 1; overflow-x: auto;
+    /* Ohne Hinweis wirkt die abgeschnittene Kante wie ein hartes Ende statt
+       wie "hier geht's mit Wischen weiter" - gleiches Muster wie bei
+       .table-wrap unten. */
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 22px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 22px), transparent);
+  }
+  /* width:100% ist fuer die senkrechte Desktop-Spalte gedacht - in der
+     waagrechten mobilen Leiste (.nav wird hier zu flex-direction:row)
+     wuerde jeder Button "100% der Zeile" beanspruchen und alle 15 Buttons
+     wuerden sich gegenseitig zusammenquetschen (live beobachtet: nur Hub/
+     Dashboard/ein abgeschnittenes "Buch" blieben lesbar, der Rest verschwand
+     spurlos statt scrollbar zu bleiben). flex-shrink:0 haelt zusaetzlich die
+     eigentliche Breite, statt trotzdem wieder zusammengedrueckt zu werden. */
+  .nav-btn { flex-direction: column; gap: 4px; font-size: 11px; padding: 8px 10px; white-space: nowrap; width: auto; flex-shrink: 0; }
+  /* Einstellungen/Profil sind unten angepinnt (siehe main.js .nav-bottom) und
+     nehmen dadurch immer volle Breite weg, egal wie schmal der Bildschirm -
+     ohne Text bleibt mehr Platz fuer die eigentliche, scrollbare Tab-Leiste. */
+  .nav-bottom .nav-btn span:not(.nav-warn-badge) { display: none; }
   /* Abschnitts-Labels ergeben in der waagrechten Icon-Leiste keinen Sinn -
      ausblenden statt als schmale, gequetschte Spalte mitzuscrollen. Der
      abgepinnte Bereich (Einstellungen/Profil) wird hier Teil derselben
