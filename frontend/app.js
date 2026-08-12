@@ -4873,6 +4873,19 @@ function fmtDateTime(iso) {
 async function loadCalendarTab() {
   calendarCollectionsCache = await api("/calendar/collections").catch(() => []);
   await loadCalendarEvents();
+  await loadCalendarConflicts();
+}
+
+async function loadCalendarConflicts() {
+  const warn = document.getElementById("calendar-conflict-warning");
+  const conflicts = await api("/calendar/conflicts?days=30").catch(() => []);
+  if (!conflicts.length) {
+    warn.classList.add("hidden");
+    return;
+  }
+  warn.innerHTML = `⚠️ ${conflicts.length} Terminüberschneidung${conflicts.length > 1 ? "en" : ""}: ` +
+    conflicts.map(c => `„${esc(c.event_a_title)}“ ↔ „${esc(c.event_b_title)}“ (${fmtDateTime(c.event_a_start)})`).join(" · ");
+  warn.classList.remove("hidden");
 }
 
 async function loadCalendarEvents() {
