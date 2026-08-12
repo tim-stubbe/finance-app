@@ -1871,7 +1871,19 @@ def build_digest(
     main.py (kein bank_sync-Import hier, sonst zirkulärer Import mit crud)."""
     nw = net_worth(db, space_id)
     lines = [f"📊 Kies-Update ({datetime.now().strftime('%H:%M')})", ""]
-    lines.append(f"Nettovermögen: {nw.total:.2f} EUR")
+    verlauf = ""
+    gestern = (
+        db.query(models.NetWorthSnapshot)
+        .filter(models.NetWorthSnapshot.space_id == space_id, models.NetWorthSnapshot.date < date.today())
+        .order_by(models.NetWorthSnapshot.date.desc())
+        .first()
+    )
+    if gestern:
+        delta = round(nw.total - gestern.total, 2)
+        if delta:
+            pfeil = "📈" if delta > 0 else "📉"
+            verlauf = f" ({pfeil} {delta:+.2f} EUR seit {gestern.date.strftime('%d.%m.')})"
+    lines.append(f"Nettovermögen: {nw.total:.2f} EUR{verlauf}")
     lines.append(
         f"Konten: {nw.accounts_total:.2f} EUR · Investments: {nw.investments_total:.2f} EUR · "
         f"Schulden: {nw.debts_total:.2f} EUR"
