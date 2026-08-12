@@ -2070,6 +2070,31 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6V2z"/><path d="M14 2v5h5"/><path d="M9 13h6M9 17h6"/></svg> Steuer-Export</h3>
+        <p class="page-sub">
+          Gefilterter Export für Steuerberater/ELSTER-Vorbereitung – Beleg-Dateiname steht in jeder Zeile mit,
+          die Dateien selbst liegen unter Buchungen → Beleg-Suche bzw. direkt bei der jeweiligen Buchung.
+        </p>
+        <form id="tax-export-form" class="form-grid">
+          <label>Von <input type="date" id="tax-export-from"></label>
+          <label>Bis <input type="date" id="tax-export-to"></label>
+          <label>Konto <select id="tax-export-account"><option value="">Alle</option></select></label>
+          <label>Kategorie <select id="tax-export-category"><option value="">Alle</option></select></label>
+          <label>Geschäftlich/Privat
+            <select id="tax-export-business">
+              <option value="">Alle</option>
+              <option value="true">Nur geschäftlich</option>
+              <option value="false">Nur privat</option>
+            </select>
+          </label>
+          <div class="form-actions wide">
+            <button type="button" id="tax-export-csv-btn" class="btn-primary">Als CSV</button>
+            <button type="button" id="tax-export-pdf-btn" class="btn-ghost">Als PDF</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12a8 3 0 0 0 16 0V6"/><path d="M4 12a8 3 0 0 0 16 0"/></svg> Automatische Backups</h3>
         <p class="page-sub">Legt täglich zur gewählten Uhrzeit automatisch ein Backup auf der Festplatte ab (im Docker-Volume, unter <code>data/backups</code>). Ältere Backups werden nach der eingestellten Anzahl automatisch gelöscht.</p>
         <form id="backup-schedule-form" class="form-grid">

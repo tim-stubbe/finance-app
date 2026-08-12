@@ -330,6 +330,29 @@ def get_transactions(
     return query.order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).all()
 
 
+def get_transactions_for_export(
+    db: Session, space_id: int,
+    date_from: date | None = None, date_to: date | None = None,
+    account_id: int | None = None, category_id: int | None = None,
+    is_business: bool | None = None,
+) -> list[models.Transaction]:
+    """Eigene, einfachere Filterung für den Steuer-Export (main.tax_export) -
+    bewusst nicht in get_transactions gemischt, damit dessen bestehende
+    Filter (Jahr/Monat/Suche/Umbuchungen) unangetastet bleiben."""
+    query = db.query(models.Transaction).join(models.Account).filter(models.Account.space_id == space_id)
+    if date_from:
+        query = query.filter(models.Transaction.date >= date_from)
+    if date_to:
+        query = query.filter(models.Transaction.date <= date_to)
+    if account_id:
+        query = query.filter(models.Transaction.account_id == account_id)
+    if category_id:
+        query = query.filter(models.Transaction.category_id == category_id)
+    if is_business is not None:
+        query = query.filter(models.Account.is_business.is_(is_business))
+    return query.order_by(models.Transaction.date, models.Transaction.id).all()
+
+
 _RECURRING_FREQUENCIES = [
     ("woechentlich", 7, 2),
     ("zweiwoechentlich", 14, 3),

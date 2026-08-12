@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time, weather
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time, weather, tax_export
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -4064,6 +4064,53 @@ def export_transactions_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _tax_export_subtitle(date_from: Optional[date], date_to: Optional[date], is_business: Optional[bool]) -> str:
+    parts = []
+    if date_from or date_to:
+        von = date_from.strftime("%d.%m.%Y") if date_from else "…"
+        bis = date_to.strftime("%d.%m.%Y") if date_to else "…"
+        parts.append(f"{von} – {bis}")
+    if is_business is not None:
+        parts.append("Geschäftlich" if is_business else "Privat")
+    return " · ".join(parts)
+
+
+@api_router.get("/export/tax.csv")
+def export_tax_csv(
+    date_from: Optional[date] = None, date_to: Optional[date] = None,
+    account_id: Optional[int] = None, category_id: Optional[int] = None,
+    is_business: Optional[bool] = None,
+    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
+):
+    transactions = crud.get_transactions_for_export(db, space_id, date_from, date_to, account_id, category_id, is_business)
+    csv_text = tax_export.build_csv(transactions)
+    filename = f"steuer-export_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api_router.get("/export/tax.pdf")
+def export_tax_pdf(
+    date_from: Optional[date] = None, date_to: Optional[date] = None,
+    account_id: Optional[int] = None, category_id: Optional[int] = None,
+    is_business: Optional[bool] = None,
+    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
+):
+    transactions = crud.get_transactions_for_export(db, space_id, date_from, date_to, account_id, category_id, is_business)
+    pdf_bytes = tax_export.build_pdf(
+        transactions, title="Kies – Buchungsexport",
+        subtitle=_tax_export_subtitle(date_from, date_to, is_business),
+    )
+    filename = f"steuer-export_{date.today().isoformat()}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
