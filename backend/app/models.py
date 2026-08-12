@@ -480,6 +480,13 @@ class Transaction(Base):
     trip_id = Column(Integer, ForeignKey("trips.id"), nullable=True)
 
     receipt_filename = Column(String, nullable=True)
+    # Volltext des Belegs für die Beleg-Suche (main._scheduled_receipt_indexing) -
+    # bei einem durchsuchbaren PDF direkt der PDF-Text (kein KI-Aufruf nötig),
+    # bei einem Foto/gescannten PDF eine Vision-Modell-Abschrift. receipt_indexed_at
+    # wird IMMER gesetzt (auch bei leerem Ergebnis), sonst würde ein dauerhaft
+    # nicht lesbarer Beleg bei jedem Lauf erneut versucht werden.
+    receipt_text = Column(Text, nullable=True)
+    receipt_indexed_at = Column(DateTime, nullable=True)
     import_hash = Column(String, nullable=True, index=True)
     # True = Umbuchung zwischen zwei eigenen Konten (automatisch per Muster erkannt,
     # siehe crud.detect_and_mark_transfers). Zählt nicht als Einnahme/Ausgabe.

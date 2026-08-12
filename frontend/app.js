@@ -1784,6 +1784,40 @@ window.deleteTrip = async id => {
 // ================= TRANSACTIONS =================
 let returnDeadlinesCache = [];
 
+async function runReceiptSearch() {
+  const q = document.getElementById("receipt-search-input").value.trim();
+  const results = document.getElementById("receipt-search-results");
+  if (q.length < 2) {
+    results.innerHTML = `<p class="page-sub">Mindestens 2 Zeichen eingeben.</p>`;
+    return;
+  }
+  if (!accountsCache.length) await loadAccounts();
+  if (!categoriesCache.length) await loadCategories();
+  results.innerHTML = `<p class="page-sub">Suche …</p>`;
+  const hits = await api(`/receipts/search/query?q=${encodeURIComponent(q)}`);
+  if (!hits.length) {
+    results.innerHTML = `<div class="empty-state"><span class="empty-icon">${svgIcon("receipt")}</span><span>Keine Belege gefunden.</span></div>`;
+    return;
+  }
+  results.innerHTML = hits.map(t => {
+    const acc = accountsCache.find(a => a.id === t.account_id);
+    const cat = categoriesCache.find(c => c.id === t.category_id);
+    return `
+      <div class="todo-row">
+        <span class="todo-title">
+          ${esc(t.description || "Ohne Beschreibung")}
+          <span class="page-sub" style="display:inline">– ${fmtDate(t.date)} · ${acc ? esc(acc.name) : "?"}${cat ? " · " + esc(cat.name) : ""}</span>
+        </span>
+        <span class="${t.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(t.amount)}</span>
+        <a href="/api/receipts/${esc(t.receipt_filename)}" target="_blank" rel="noopener" class="link-btn">Beleg öffnen</a>
+      </div>`;
+  }).join("");
+}
+document.getElementById("receipt-search-btn").addEventListener("click", runReceiptSearch);
+document.getElementById("receipt-search-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); runReceiptSearch(); }
+});
+
 async function loadTransactions() {
   loadGlobalTopbar();
   document.getElementById("tx-list").innerHTML = skelTableRows(7, 8);

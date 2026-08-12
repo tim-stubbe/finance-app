@@ -1152,6 +1152,29 @@ def evaluate_creditcard_bills(db: Session, space_id: int) -> list[dict]:
     return due
 
 
+def search_receipts(db: Session, space_id: int, query: str, limit: int = 50) -> list[models.Transaction]:
+    """Volltextsuche über Beleg-Text (receipt_text, siehe main.
+    _scheduled_receipt_indexing) UND Beschreibung/Notiz - reines SQL LIKE
+    statt eines Suchindex (SQLite FTS5 wäre ein weiterer Baustein, bei der
+    hier üblichen Beleg-Anzahl eines Einzelnutzers unnötig). Nur Buchungen
+    MIT Beleg, sonst wäre es nur die normale Buchungssuche noch einmal."""
+    q = f"%{query.strip()}%"
+    return (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.receipt_filename.isnot(None),
+            (models.Transaction.receipt_text.ilike(q))
+            | (models.Transaction.description.ilike(q))
+            | (models.Transaction.notes.ilike(q)),
+        )
+        .order_by(models.Transaction.date.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def find_duplicate_transactions(db: Session, space_id: int) -> list[dict]:
     """Findet Buchungen, die in Konto, Datum, Betrag, Beschreibung UND Notiz
     exakt übereinstimmen - bewusst kein Fuzzy-Match, um keine echten, nur

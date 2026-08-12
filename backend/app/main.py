@@ -84,6 +84,10 @@ ensure_columns("transactions", {
 ensure_columns("transactions", {
     "categorized_at": "DATETIME",
 })
+ensure_columns("transactions", {
+    "receipt_text": "TEXT",
+    "receipt_indexed_at": "DATETIME",
+})
 ensure_columns("settings", {
     "last_digest_sent_at": "DATETIME",
     "transfers_marked_since_digest": "INTEGER DEFAULT 0",
@@ -739,6 +743,13 @@ def get_receipt(filename: str):
     if not os.path.exists(path):
         raise HTTPException(404, "Beleg nicht gefunden")
     return FileResponse(path)
+
+
+@api_router.get("/receipts/search/query", response_model=List[schemas.TransactionOut])
+def search_receipts(q: str, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    if len(q.strip()) < 2:
+        return []
+    return crud.search_receipts(db, space_id, q)
 
 
 @api_router.delete("/transactions/{transaction_id}/receipt")
@@ -4867,6 +4878,48 @@ def _scheduled_radicale_sync():
         db.close()
 
 
+RECEIPT_INDEX_BATCH_SIZE = 5
+
+
+def _scheduled_receipt_indexing():
+    """Alle 10 Minuten ein kleines Häppchen noch nicht indexierter Belege für
+    die Beleg-Suche einlesen (document_extract.extract_receipt_text) - in
+    kleinen Batches statt auf einen Schlag, weil ein Foto/gescanntes PDF ohne
+    eingebetteten Text über das (auf Produktion langsame, CPU-gebundene)
+    Vision-Modell laufen muss. Durchsuchbare PDFs sind dagegen sofort fertig
+    (reiner PyMuPDF-Text, kein KI-Aufruf). receipt_indexed_at wird immer
+    gesetzt, auch bei leerem Ergebnis, sonst würde ein dauerhaft nicht
+    lesbarer Beleg bei jedem Lauf erneut versucht."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        pending = (
+            db.query(models.Transaction)
+            .filter(
+                models.Transaction.receipt_filename.isnot(None),
+                models.Transaction.receipt_indexed_at.is_(None),
+            )
+            .limit(RECEIPT_INDEX_BATCH_SIZE)
+            .all()
+        )
+        for tx in pending:
+            path = os.path.join(UPLOAD_DIR, tx.receipt_filename)
+            try:
+                with open(path, "rb") as f:
+                    content = f.read()
+                text = document_extract.extract_receipt_text(
+                    settings.ollama_url, settings.ollama_model, settings.beleg_chat_model,
+                    content, tx.receipt_filename,
+                )
+            except Exception:
+                text = None
+            tx.receipt_text = text
+            tx.receipt_indexed_at = datetime.utcnow()
+            db.commit()
+    finally:
+        db.close()
+
+
 def _scheduled_immich_quality_scan():
     """Scannt alle paar Minuten eine weitere Seite der Immich-Bibliothek auf
     unscharfe/leere Fotos. Läuft absichtlich in kleinen Häppchen statt in
@@ -4962,6 +5015,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_travel_reminder, CronTrigger(minute="*/5"),
     id="travel_reminder", misfire_grace_time=300,
+)
+scheduler.add_job(
+    _scheduled_receipt_indexing, CronTrigger(minute="*/10"),
+    id="receipt_indexing", misfire_grace_time=600,
 )
 scheduler.add_job(
     _scheduled_net_worth_snapshot, CronTrigger(hour=23, minute=55),

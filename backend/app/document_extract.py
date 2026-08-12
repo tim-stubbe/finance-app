@@ -17,6 +17,12 @@ RECEIPT_PARSE_PROMPT = (
     "Wenn du eines der beiden nicht sicher erkennst, schreibe null. Rate nicht."
 )
 
+RECEIPT_TEXT_PROMPT = (
+    "Gib den gesamten lesbaren Text auf diesem Beleg/dieser Rechnung möglichst wortwörtlich wieder "
+    "(Absender, Positionen, Beträge, Datum). Keine eigene Zusammenfassung oder Interpretation, nur der "
+    "Text, so wie er auf dem Beleg steht."
+)
+
 CREDITCARD_BILL_PROMPT = (
     "Du bekommst den Text einer Kreditkarten-Abrechnung (mehrere Buchungen, am Ende "
     "meist zwei Beträge: der volle 'Neue Saldo'/Gesamtsaldo, und ein kleinerer "
@@ -119,6 +125,43 @@ def parse_receipt_fields(
         except ValueError:
             datum = None
     return datum, betrag, None
+
+
+def extract_receipt_text(
+    ollama_url: str | None, ollama_model: str | None, beleg_chat_model: str | None,
+    content: bytes, filename: str, timeout: int = 180, max_chars: int = MAX_TEXT_CHARS,
+) -> str | None:
+    """Liest den Volltext eines Belegs für die Beleg-Suche (main.
+    _scheduled_receipt_indexing). Bei einem durchsuchbaren PDF kommt der Text
+    direkt aus PyMuPDF (kein KI-Aufruf nötig, schnell und kostenlos) - nur bei
+    einem Foto oder gescannten PDF ohne eingebetteten Text übernimmt ein
+    Vision-Modell die Abschrift, mit derselben Ein-Bild-Begrenzung wie
+    parse_receipt_fields (mehrseitige Scans wären für eine reine Textsuche
+    unverhältnismäßig teuer). None bei jedem Fehlschlag - der Aufrufer
+    speichert dann trotzdem "versucht", damit es nicht endlos erneut probiert."""
+    try:
+        if filename.lower().endswith(".pdf"):
+            text, images = extract_pdf(content, max_chars=max_chars)
+        else:
+            text, images = None, [base64.b64encode(content).decode()]
+    except Exception:
+        return None
+
+    if text:
+        return text
+
+    if not images or not ollama_url:
+        return None
+    modell = beleg_chat_model or ollama_model
+    if not modell:
+        return None
+
+    nachricht = {"role": "user", "content": RECEIPT_TEXT_PROMPT, "images": images[:1]}
+    try:
+        antwort = ollama_client.chat(ollama_url, modell, [nachricht], timeout=timeout)
+    except Exception:
+        return None
+    return antwort.strip()[:max_chars] or None
 
 
 def parse_creditcard_bill_fields(
