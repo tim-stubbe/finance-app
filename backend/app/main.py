@@ -3697,19 +3697,27 @@ def get_travel_settings(db: Session = Depends(get_db)):
 @api_router.put("/settings/travel", response_model=schemas.TravelSettingsOut)
 def update_travel_settings(data: schemas.TravelSettingsUpdate, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
-    address = (data.home_address or "").strip()
-    if address and address != s.home_address:
-        # Bei jeder tatsaechlichen Adressaenderung neu geokodieren - ein
-        # Fehlschlag hier soll das Speichern der uebrigen Felder nicht verhindern,
-        # nur eben ohne Koordinaten (Fahrzeit-Berechnung greift dann einfach nicht).
-        try:
-            coords = travel_time.geocode(address)
-        except Exception:
-            coords = None
-        s.home_lat, s.home_lon = coords if coords else (None, None)
-    s.home_address = address or None
-    if data.api_key:
-        s.openroute_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, data.api_key)
+    changes = data.model_dump(exclude_unset=True)
+    # exclude_unset statt "leer heisst loeschen": beim Speichern nur des
+    # API-Keys (Adresse nicht mitgeschickt) darf die schon gespeicherte
+    # Adresse nicht verschwinden - live als echter Bug aufgetreten.
+    if "home_address" in changes:
+        address = (changes["home_address"] or "").strip()
+        if address and address != s.home_address:
+            # Bei jeder tatsaechlichen Adressaenderung neu geokodieren - ein
+            # Fehlschlag hier soll das Speichern der uebrigen Felder nicht
+            # verhindern, nur eben ohne Koordinaten (Fahrzeit-Berechnung greift
+            # dann einfach nicht).
+            try:
+                coords = travel_time.geocode(address)
+            except Exception:
+                coords = None
+            s.home_lat, s.home_lon = coords if coords else (None, None)
+        elif not address:
+            s.home_lat, s.home_lon = None, None
+        s.home_address = address or None
+    if changes.get("api_key"):
+        s.openroute_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, changes["api_key"])
     db.commit()
     return get_travel_settings(db)
 
