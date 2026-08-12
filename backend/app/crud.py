@@ -881,7 +881,28 @@ def update_transaction(db: Session, transaction_id: int, space_id: int, data: sc
     db_transaction = get_transaction(db, transaction_id, space_id)
     if not db_transaction:
         return None
-    for key, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    # Wird eine importierte Buchung auf ein anderes Konto verschoben (oder Datum/
+    # Betrag/Text geaendert), muss ihr Sync-Fingerabdruck mitwandern - sonst haelt
+    # der naechste Bank-Sync sie faelschlich fuer neu und importiert sie ein
+    # zweites Mal. Live beobachtet: Konto nach dem Einrichten manuell korrigiert,
+    # der Fingerabdruck blieb am alten Konto haengen, 223 Dubletten entstanden.
+    # Nur bei per Inhalt gehashten Buchungen (Enable Banking/FinTS) - bei per
+    # externer ID gehashten (PayPal) wuerde ein Neuberechnen den eigentlich noch
+    # gueltigen Fingerabdruck kaputt machen, das laesst sich von aussen nicht
+    # unterscheiden, also lieber unangetastet lassen.
+    relevant = {"account_id", "date", "amount", "description", "notes"}
+    if db_transaction.import_hash and relevant & changes.keys():
+        old_hash_input = f"{db_transaction.account_id}|{db_transaction.date}|{db_transaction.amount}|{db_transaction.description}|{db_transaction.notes}"
+        if db_transaction.import_hash == hashlib.sha256(old_hash_input.encode()).hexdigest():
+            new_account_id = changes.get("account_id", db_transaction.account_id)
+            new_date = changes.get("date", db_transaction.date)
+            new_amount = changes.get("amount", db_transaction.amount)
+            new_description = changes.get("description", db_transaction.description)
+            new_notes = changes.get("notes", db_transaction.notes)
+            new_hash_input = f"{new_account_id}|{new_date}|{new_amount}|{new_description}|{new_notes}"
+            db_transaction.import_hash = hashlib.sha256(new_hash_input.encode()).hexdigest()
+    for key, value in changes.items():
         setattr(db_transaction, key, value)
     db.commit()
     db.refresh(db_transaction)

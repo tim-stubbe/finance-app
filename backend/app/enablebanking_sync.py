@@ -144,12 +144,18 @@ def import_transactions(db: Session, account_id: int, transactions: list[dict]) 
 
 
 def fetch_account_balance(app_id: str, private_key_pem: str, eb_account_id: str, currency: str = "EUR") -> float | None:
+    """`name` ist bei den meisten Banken ein Freitext-Label wie "Interim available
+    balance", NICHT der Waehrungscode - nur bei PayPal steht dort zufaellig "EUR".
+    Deshalb muss `balance_amount.currency` verglichen werden, nicht `name` (live
+    beobachtet: fuer alle Nicht-PayPal-Konten kam deshalb immer None zurueck, der
+    Saldo-Abgleich in sync() lief seit Einfuehrung fuer keins dieser Konten je)."""
     url_path = f"/accounts/{eb_account_id}/balances"
     resp = requests.get(f"{BASE_URL}{url_path}", headers=_headers(app_id, private_key_pem), timeout=15)
     resp.raise_for_status()
     for b in resp.json().get("balances", []):
-        if b.get("name") == currency:
-            return float(b["balance_amount"]["amount"])
+        amt = b.get("balance_amount") or {}
+        if amt.get("currency") == currency:
+            return float(amt["amount"])
     return None
 
 
