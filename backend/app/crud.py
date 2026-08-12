@@ -860,6 +860,51 @@ def evaluate_return_deadlines(db: Session, space_id: int) -> list[dict]:
     return due
 
 
+CREDITCARD_BILL_REMIND_DAYS = 3
+
+
+def next_creditcard_bill(db: Session, space_id: int):
+    """Naechste bevorstehende/aktuelle Kreditkarten-Faelligkeit fuers Hub -
+    reine Anzeige, kein Reminder-Statuswechsel wie bei evaluate_*."""
+    return (
+        db.query(models.CreditCardBill)
+        .join(models.Account, models.CreditCardBill.account_id == models.Account.id)
+        .filter(models.Account.space_id == space_id, models.CreditCardBill.due_date.is_not(None))
+        .order_by(models.CreditCardBill.due_date.desc())
+        .first()
+    )
+
+
+def evaluate_creditcard_bills(db: Session, space_id: int) -> list[dict]:
+    """Läuft täglich (siehe main._check_daily_alerts): meldet jede erkannte
+    Kreditkarten-Rechnung CREDITCARD_BILL_REMIND_DAYS Tage vor Fälligkeit genau
+    einmal - analog zu evaluate_return_deadlines."""
+    today = date.today()
+    due: list[dict] = []
+    rows = (
+        db.query(models.CreditCardBill)
+        .join(models.Account, models.CreditCardBill.account_id == models.Account.id)
+        .filter(
+            models.Account.space_id == space_id,
+            models.CreditCardBill.notified.is_(False),
+            models.CreditCardBill.due_date.is_not(None),
+        )
+        .all()
+    )
+    for bill in rows:
+        if today >= bill.due_date - timedelta(days=CREDITCARD_BILL_REMIND_DAYS):
+            bill.notified = True
+            due.append({
+                "account_name": bill.account.name if bill.account else "Kreditkarte",
+                "due_date": bill.due_date,
+                "amount": bill.amount,
+                "days_left": (bill.due_date - today).days,
+            })
+    if due:
+        db.commit()
+    return due
+
+
 def get_transaction(db: Session, transaction_id: int, space_id: int):
     return (
         db.query(models.Transaction)
@@ -2228,6 +2273,11 @@ def dashboard_summary(db: Session, space_id: int, year: int, month: int | None =
     )
 
 
+# Eigener Name, wie er bei internen Umbuchungen als Empfaenger/Sender auftaucht
+# (Kies ist Single-User) - siehe Ausschluss in top_expense_recipients.
+OWN_NAME_PATTERN = "tim stubbe"
+
+
 def top_expense_recipients(db: Session, space_id: int, year: int, month: int | None = None, limit: int = 10) -> list[dict]:
     """Wo das Geld tatsaechlich hingeht, konkret statt nur nach Kategorie -
     "Rewe: 450 EUR" ist oft aussagekraeftiger als "Lebensmittel: 1200 EUR" ueber
@@ -2250,6 +2300,13 @@ def top_expense_recipients(db: Session, space_id: int, year: int, month: int | N
     groups: dict[str, dict] = {}
     for t in query.all():
         key = _normalize_description(t.description) or "(ohne Beschreibung)"
+        # Interne Umbuchungen zwischen eigenen Konten tauchen als eigener Name
+        # auf (z.B. "Tim Stubbe" als Empfaenger), auch wenn is_transfer aus
+        # anderen Gruenden nicht gesetzt ist (z.B. schon kategorisiert, bevor
+        # die Umbuchungs-Erkennung lief) - fuer "wo geht mein Geld hin" ist das
+        # kein echter Ausgabe-Empfaenger und stoert nur.
+        if OWN_NAME_PATTERN and OWN_NAME_PATTERN in key:
+            continue
         g = groups.setdefault(key, {"label": t.description or "Ohne Beschreibung", "total": 0.0, "count": 0})
         g["total"] += t.amount
         g["count"] += 1

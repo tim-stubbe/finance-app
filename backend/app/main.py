@@ -147,6 +147,8 @@ ensure_columns("settings", {
     "imap_password_encrypted": "VARCHAR",
     "imap_folder": "VARCHAR DEFAULT 'INBOX'",
     "mail_last_sync_at": "DATETIME",
+    "creditcard_mail_sender": "VARCHAR",
+    "creditcard_account_id": "INTEGER",
 })
 ensure_columns("trips", {
     "budget": "FLOAT",
@@ -2080,7 +2082,20 @@ def _run_mail_sync(db: Session, space_id: int) -> dict:
         with open(os.path.join(UPLOAD_DIR, speichername), "wb") as f:
             f.write(a["content"])
 
-        datum, betrag, fehler = _parse_receipt(s, a["content"], a["filename"])
+        # Kreditkarten-Rechnungsmails werden NICHT wie ein normaler Beleg
+        # gelesen (Belegdatum+Einzelbetrag ergeben bei einer Abrechnung mit
+        # vielen Buchungen keinen Sinn) - stattdessen Faelligkeitsdatum +
+        # Gesamtbetrag, siehe CreditCardBill.
+        ist_kreditkarten_mail = bool(
+            s.creditcard_mail_sender and s.creditcard_account_id
+            and s.creditcard_mail_sender.lower() in (a.get("sender") or "").lower()
+        )
+        if ist_kreditkarten_mail:
+            datum, betrag, fehler = document_extract.parse_creditcard_bill_fields(
+                s.ollama_url, s.ollama_model, s.beleg_chat_model, a["content"], a["filename"],
+            )
+        else:
+            datum, betrag, fehler = _parse_receipt(s, a["content"], a["filename"])
         eintrag = models.MailAttachment(
             message_id=a["message_id"], filename=a["filename"],
             stored_filename=speichername, content_type=a.get("content_type"),
@@ -2091,6 +2106,15 @@ def _run_mail_sync(db: Session, space_id: int) -> dict:
         db.add(eintrag)
         db.flush()
         neu += 1
+
+        if ist_kreditkarten_mail and (datum or betrag):
+            db.add(models.CreditCardBill(
+                account_id=s.creditcard_account_id, message_id=a["message_id"],
+                subject=a.get("subject"), due_date=datum, amount=betrag,
+                mail_attachment_id=eintrag.id,
+            ))
+            eintrag.status = "ignored"  # kein Beleg zum Zuordnen, taucht sonst leer im Beleg-Eingang auf
+            continue
 
         # Nur bei GENAU EINEM passenden Kandidaten automatisch zuordnen. Bei
         # mehreren wäre es geraten - dann entscheidet der Nutzer in der Liste.
@@ -2140,6 +2164,32 @@ def remove_mail_settings(db: Session = Depends(get_db)):
     s.imap_host = s.imap_user = s.imap_password_encrypted = None
     db.commit()
     return get_mail_settings(db)
+
+
+@api_router.get("/settings/creditcard", response_model=schemas.CreditCardSettingsOut)
+def get_creditcard_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.CreditCardSettingsOut(mail_sender=s.creditcard_mail_sender, account_id=s.creditcard_account_id)
+
+
+@api_router.put("/settings/creditcard", response_model=schemas.CreditCardSettingsOut)
+def update_creditcard_settings(data: schemas.CreditCardSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.creditcard_mail_sender = (data.mail_sender or "").strip() or None
+    s.creditcard_account_id = data.account_id
+    db.commit()
+    return get_creditcard_settings(db)
+
+
+@api_router.get("/creditcard-bills/next", response_model=Optional[schemas.CreditCardBillOut])
+def get_next_creditcard_bill(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    bill = crud.next_creditcard_bill(db, space_id)
+    if not bill:
+        return None
+    return schemas.CreditCardBillOut(
+        account_name=bill.account.name if bill.account else "Kreditkarte",
+        due_date=bill.due_date, amount=bill.amount,
+    )
 
 
 @api_router.post("/mail/test", response_model=schemas.MailTestResult)
@@ -4172,6 +4222,17 @@ def _check_daily_alerts():
                         settings,
                         f"🔄 Rückgabefrist ({space.name}): „{r['label']}“ läuft am "
                         f"{r['deadline_date'].strftime('%d.%m.%Y')} ab (noch {r['days_left']} Tag(e)).",
+                    )
+            except Exception:
+                db.rollback()
+
+            try:
+                for bill in crud.evaluate_creditcard_bills(db, space.id):
+                    betrag_text = f"{bill['amount']:.2f} €" if bill["amount"] is not None else "unbekannter Betrag"
+                    notifications.notify(
+                        settings,
+                        f"💳 Kreditkarten-Rechnung ({bill['account_name']}): {betrag_text} fällig am "
+                        f"{bill['due_date'].strftime('%d.%m.%Y')} (noch {bill['days_left']} Tag(e)).",
                     )
             except Exception:
                 db.rollback()

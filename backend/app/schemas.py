@@ -1478,6 +1478,22 @@ class MailSyncResult(BaseModel):
     auto_attached: int
 
 
+class CreditCardSettingsOut(BaseModel):
+    mail_sender: Optional[str] = None
+    account_id: Optional[int] = None
+
+
+class CreditCardSettingsUpdate(BaseModel):
+    mail_sender: Optional[str] = None
+    account_id: Optional[int] = None
+
+
+class CreditCardBillOut(BaseModel):
+    account_name: str
+    due_date: Optional[date] = None
+    amount: Optional[float] = None
+
+
 class MailAttachmentOut(BaseModel):
     id: int
     filename: str

@@ -1735,6 +1735,23 @@
           </div>
         </form>
         <p id="mail-status" class="page-sub"></p>
+
+        <h4 class="panel-subtitle">Kreditkarten-Rechnung erkennen</h4>
+        <p class="page-sub">
+          Für Karten, die sich nicht direkt anbinden lassen (z.B. Advanzia/White-Label-Karten):
+          erkennt die monatliche Abrechnungsmail am Absender und liest Fälligkeitsdatum + Gesamtbetrag
+          aus, statt sie wie einen normalen Beleg zu behandeln.
+        </p>
+        <form id="creditcard-settings-form" class="form-grid">
+          <label>Absender-Kennung <input type="text" id="creditcard-mail-sender" placeholder="z.B. advanzia.com"></label>
+          <label>Zugehöriges Konto
+            <select id="creditcard-account-select"><option value="">– auswählen –</option></select>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <p id="creditcard-status" class="page-sub"></p>
       </div>
       </div>
 

@@ -174,6 +174,11 @@ class Settings(Base):
     imap_password_encrypted = Column(String, nullable=True)
     imap_folder = Column(String, nullable=False, default="INBOX")
     mail_last_sync_at = Column(DateTime, nullable=True)
+    # --- Kreditkarten-Rechnung per E-Mail (fuer Karten ohne Enable-Banking-Sync) ---
+    # Absender-Teilstring (z.B. "advanzia.com") - ohne diesen Abgleich wuerde
+    # jede Rechnungsmail im Postfach faelschlich als Kreditkarten-Abrechnung gelten.
+    creditcard_mail_sender = Column(String, nullable=True)
+    creditcard_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
 
 
 class BasiszinsRate(Base):
@@ -641,6 +646,32 @@ class MailAttachment(Base):
     parse_error = Column(String, nullable=True)
 
     transaction = relationship("Transaction")
+
+
+class CreditCardBill(Base):
+    """Erkannte Fälligkeit + Betrag aus einer Kreditkarten-Rechnungsmail.
+
+    Für Karten, die sich nicht per Enable Banking synchronisieren lassen
+    (z.B. Advanzia/White-Label-Karten wie "Kreditkarte Gold" bei C24) - die
+    einzige verfügbare Quelle für den Kontostand ist dann die monatliche
+    Abrechnungsmail. Wird beim E-Mail-Abholen (siehe main._run_mail_sync)
+    zusätzlich zur normalen Beleg-Auswertung erzeugt, wenn der Absender auf
+    Settings.creditcard_mail_sender passt."""
+
+    __tablename__ = "creditcard_bills"
+    __table_args__ = (UniqueConstraint("message_id", name="uq_creditcard_bill_message"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    message_id = Column(String, nullable=False, index=True)
+    subject = Column(String, nullable=True)
+    due_date = Column(Date, nullable=True)
+    amount = Column(Float, nullable=True)
+    mail_attachment_id = Column(Integer, ForeignKey("mail_attachments.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    notified = Column(Boolean, nullable=False, default=False)
+
+    account = relationship("Account")
 
 
 class ImmichQualityFlag(Base):

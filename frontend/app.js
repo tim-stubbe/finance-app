@@ -3460,6 +3460,27 @@ document.getElementById("mail-remove").addEventListener("click", async () => {
   refreshIntegrationBadge();
 });
 
+async function loadCreditCardSettings() {
+  if (!accountsCache.length) accountsCache = await api("/accounts");
+  const select = document.getElementById("creditcard-account-select");
+  select.innerHTML = '<option value="">– auswählen –</option>' +
+    accountsCache.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join("");
+  const s = await api("/settings/creditcard");
+  document.getElementById("creditcard-mail-sender").value = s.mail_sender || "";
+  select.value = s.account_id || "";
+}
+
+document.getElementById("creditcard-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const body = {
+    mail_sender: document.getElementById("creditcard-mail-sender").value.trim(),
+    account_id: document.getElementById("creditcard-account-select").value
+      ? parseInt(document.getElementById("creditcard-account-select").value, 10) : null,
+  };
+  await api("/settings/creditcard", { method: "PUT", body: JSON.stringify(body) });
+  toast("Kreditkarten-Einstellungen gespeichert.");
+});
+
 // ---------- Beleg-Eingang ----------
 async function loadMailInbox() {
   const panel = document.getElementById("mail-inbox-panel");
@@ -4726,6 +4747,7 @@ async function loadSettingsTab() {
   await loadWebSearchSettings();
   await loadImmichSettings();
   await loadMailSettings();
+  await loadCreditCardSettings();
   await loadNotificationSettings();
   await loadCallSettings();
   await loadBackupSettings();
@@ -4870,7 +4892,19 @@ async function loadHubTab() {
   const upcomingPanel = document.getElementById("hub-upcoming-panel");
   try {
     const forecast = await api("/forecast/cashflow?days=30");
-    const events = forecast.upcoming_events.slice(0, 5);
+    let events = [...forecast.upcoming_events];
+    try {
+      const bill = await api("/creditcard-bills/next");
+      if (bill && bill.due_date && bill.amount != null) {
+        events.push({
+          description: `💳 ${bill.account_name}`,
+          date: bill.due_date,
+          amount: -Math.abs(bill.amount),
+        });
+      }
+    } catch { /* keine Kreditkarten-Rechnung eingerichtet/erkannt - kein Problem */ }
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    events = events.slice(0, 5);
     if (events.length) {
       upcomingPanel.classList.remove("hidden");
       document.getElementById("hub-upcoming-body").innerHTML = events.map(e => `

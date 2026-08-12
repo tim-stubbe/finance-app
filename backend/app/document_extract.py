@@ -17,6 +17,15 @@ RECEIPT_PARSE_PROMPT = (
     "Wenn du eines der beiden nicht sicher erkennst, schreibe null. Rate nicht."
 )
 
+CREDITCARD_BILL_PROMPT = (
+    "Du bekommst den Text einer Kreditkarten-Abrechnung (mehrere Buchungen, am "
+    "Ende ein Gesamtbetrag). Nenne ausschliesslich das Faelligkeitsdatum (wann "
+    "der Betrag abgebucht wird bzw. bis wann gezahlt werden muss - NICHT das "
+    "Rechnungsdatum) und den zu zahlenden Gesamtbetrag. Antworte NUR mit einem "
+    "JSON-Block:\n```json\n{\"faelligkeitsdatum\": \"JJJJ-MM-TT\", \"betrag\": 12.34}\n```\n"
+    "Wenn du eines der beiden nicht sicher erkennst, schreibe null. Rate nicht."
+)
+
 
 def extract_pdf(data: bytes, max_chars: int = MAX_TEXT_CHARS) -> tuple[str | None, list[str]]:
     """Liest ein PDF aus. Enthält es durchsuchbaren Text (z.B. ein digital
@@ -106,3 +115,62 @@ def parse_receipt_fields(
         except ValueError:
             datum = None
     return datum, betrag, None
+
+
+def parse_creditcard_bill_fields(
+    ollama_url: str, ollama_model: str, beleg_chat_model: str | None,
+    content: bytes, filename: str, timeout: int = 180,
+) -> tuple[date | None, float | None, str | None]:
+    """Wie parse_receipt_fields, aber fuer Kreditkarten-Abrechnungen: liefert das
+    Faelligkeitsdatum statt des Rechnungsdatums (siehe CREDITCARD_BILL_PROMPT -
+    beides steht auf so einer Abrechnung, ist aber nicht dasselbe Datum)."""
+    if not ollama_url or not ollama_model:
+        return None, None, "Kein Ollama-Server eingerichtet"
+
+    text, images = None, []
+    try:
+        if filename.lower().endswith(".pdf"):
+            text, images = extract_pdf(content)
+        else:
+            images = [base64.b64encode(content).decode()]
+    except Exception as e:
+        return None, None, f"Datei nicht lesbar: {e}"
+
+    nachricht = {"role": "user", "content": CREDITCARD_BILL_PROMPT}
+    if text:
+        nachricht["content"] += f"\n\nText der Abrechnung:\n{text[:6000]}"
+        modell = ollama_model
+    elif images:
+        nachricht["images"] = images[:1]
+        modell = beleg_chat_model or ollama_model
+    else:
+        return None, None, "Weder Text noch Bild aus der Datei gewinnbar"
+
+    try:
+        antwort = ollama_client.chat(ollama_url, modell, [nachricht], timeout=timeout)
+    except Exception as e:
+        return None, None, f"KI nicht erreichbar: {e}"
+
+    treffer = re.search(r"```json\s*(\{.*?\})\s*```", antwort, re.DOTALL)
+    if not treffer:
+        treffer = re.search(r"(\{[^{}]*\"faelligkeitsdatum\"[^{}]*\})", antwort, re.DOTALL)
+    if not treffer:
+        return None, None, "Kein verwertbares Ergebnis von der KI"
+
+    try:
+        daten = json.loads(treffer.group(1))
+    except Exception:
+        return None, None, "Antwort der KI war kein gültiges JSON"
+
+    betrag = daten.get("betrag")
+    try:
+        betrag = float(betrag) if betrag is not None else None
+    except (TypeError, ValueError):
+        betrag = None
+    faelligkeit = None
+    if daten.get("faelligkeitsdatum"):
+        try:
+            faelligkeit = date.fromisoformat(str(daten["faelligkeitsdatum"])[:10])
+        except ValueError:
+            faelligkeit = None
+    return faelligkeit, betrag, None
