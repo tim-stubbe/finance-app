@@ -59,8 +59,8 @@ exaktes Kommando (nicht selbst als Fließtext nachbauen, sondern dem Nutzer das 
 - Termin anlegen: "/termin <Titel>; TT.MM.[JJJJ] [HH:MM][; Ort]" (z.B. "/termin Zahnarzt; 20.08. 14:30; Praxis Müller" \
 oder ganztägig ohne Uhrzeit: "/termin Urlaub Start; 01.09.").
 
-Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben) nutze NUR die unten mitgelieferten Fakten und \
-erfinde keine Zahlen.
+Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben, anstehende Termine, offene To-Dos) nutze NUR die \
+unten mitgelieferten Fakten und erfinde keine Zahlen/Termine.
 
 Du darfst im Internet suchen, wenn du für eine Frage aktuelle, recherchierbare Informationen brauchst (z.B. \
 aktuelle Steuersätze/Freibeträge, Rechtslage, Zinssätze, aktuelle Nachrichten). Brauchst du das, antworte NUR \
@@ -92,6 +92,20 @@ def _context_facts(db, space_id: int) -> str:
     if nw.debts_total:
         lines.append(f"- Offene Schulden gesamt: {nw.debts_total:.2f} EUR")
     lines.append(f"- Nettovermögen: {nw.total:.2f} EUR")
+
+    events = crud.get_upcoming_calendar_events(db, days=7, limit=10)
+    if events:
+        lines.append("\nAnstehende Termine (nächste 7 Tage):")
+        for ev in events:
+            when = "ganztägig" if ev.all_day else ev.start.strftime("%H:%M")
+            lines.append(f"- {ev.start.strftime('%d.%m.')} {when}: „{ev.title}“" + (f" ({ev.location})" if ev.location else ""))
+
+    todos = crud.get_todos(db, include_done=False)[:10]
+    if todos:
+        lines.append("\nOffene To-Dos:")
+        for t in todos:
+            lines.append(f"- {t.title}" + (f" (fällig {t.due_date.strftime('%d.%m.%Y')})" if t.due_date else ""))
+
     return "\n".join(lines)
 
 
