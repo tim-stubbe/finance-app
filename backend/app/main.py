@@ -166,6 +166,9 @@ ensure_columns("settings", {
     "imap_folder": "VARCHAR DEFAULT 'INBOX'",
     "mail_last_sync_at": "DATETIME",
 })
+ensure_columns("trips", {
+    "budget": "FLOAT",
+})
 
 _bootstrap_db = SessionLocal()
 _settings = auth.get_or_create_settings(_bootstrap_db)

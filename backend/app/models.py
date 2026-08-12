@@ -229,6 +229,9 @@ class Trip(Base):
     name = Column(String, nullable=False)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
+    # Optional - ohne Budget zeigt die App weiterhin nur die Ist-Ausgaben wie
+    # bisher, kein erzwungenes Feld.
+    budget = Column(Float, nullable=True)
 
     space = relationship("Space", back_populates="trips")
     transactions = relationship("Transaction", back_populates="trip")

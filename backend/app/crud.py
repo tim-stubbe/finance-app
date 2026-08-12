@@ -930,6 +930,7 @@ def trip_summary(db: Session, trip: models.Trip):
         name=trip.name,
         start_date=trip.start_date,
         end_date=trip.end_date,
+        budget=trip.budget,
         total_spent=round(abs(min(0.0, total or 0.0)), 2),
         transaction_count=count or 0,
     )

@@ -74,12 +74,14 @@ class TripCreate(BaseModel):
     name: str
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    budget: Optional[float] = None
 
 
 class TripUpdate(BaseModel):
     name: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    budget: Optional[float] = None
 
 
 class TripOut(BaseModel):
@@ -87,6 +89,7 @@ class TripOut(BaseModel):
     name: str
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    budget: Optional[float] = None
     total_spent: float = 0.0
     transaction_count: int = 0
 
