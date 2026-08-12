@@ -1682,6 +1682,7 @@ class BusinessProjectOut(BaseModel):
     description: Optional[str] = None
     check_interval_days: Optional[int] = None
     last_checked_at: Optional[datetime] = None
+    created_at: datetime
     active: bool
     open_issue_count: int = 0
 
@@ -1743,6 +1744,7 @@ class LifeAreaOut(BaseModel):
     progress_percent: Optional[int] = None
     check_interval_days: Optional[int] = None
     last_checked_at: Optional[datetime] = None
+    created_at: datetime
     active: bool
 
 
@@ -1794,6 +1796,7 @@ class WishlistItemOut(BaseModel):
     notes: Optional[str] = None
     check_interval_days: Optional[int] = None
     last_checked_at: Optional[datetime] = None
+    created_at: datetime
     auto_check_enabled: bool = False
     purchased: bool = False
     active: bool

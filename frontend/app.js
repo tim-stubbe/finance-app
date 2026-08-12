@@ -1815,8 +1815,9 @@ async function loadProjectsTab() {
 
 function projectIsOverdue(p) {
   if (!p.check_interval_days) return false;
-  const reference = p.last_checked_at ? new Date(p.last_checked_at) : null;
-  if (!reference) return true;
+  // Fallback auf created_at spiegelt main._scheduled_business_check_reminder -
+  // ohne das galt ein gerade erst angelegtes Projekt sofort als überfällig.
+  const reference = new Date(p.last_checked_at || p.created_at);
   const days = (Date.now() - reference.getTime()) / (1000 * 60 * 60 * 24);
   return days >= p.check_interval_days;
 }
@@ -1973,8 +1974,8 @@ async function loadLifeTab() {
 
 function lifeAreaIsOverdue(a) {
   if (!a.check_interval_days) return false;
-  const reference = a.last_checked_at ? new Date(a.last_checked_at) : null;
-  if (!reference) return true;
+  // Fallback auf created_at spiegelt main._scheduled_life_check_reminder.
+  const reference = new Date(a.last_checked_at || a.created_at);
   const days = (Date.now() - reference.getTime()) / (1000 * 60 * 60 * 24);
   return days >= a.check_interval_days;
 }
@@ -2096,8 +2097,8 @@ let wishlistCache = [];
 
 function wishlistItemIsOverdue(w) {
   if (!w.check_interval_days) return false;
-  const reference = w.last_checked_at ? new Date(w.last_checked_at) : null;
-  if (!reference) return true;
+  // Fallback auf created_at spiegelt main._scheduled_wishlist_reminder.
+  const reference = new Date(w.last_checked_at || w.created_at);
   const days = (Date.now() - reference.getTime()) / (1000 * 60 * 60 * 24);
   return days >= w.check_interval_days;
 }

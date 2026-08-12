@@ -3302,9 +3302,13 @@ def get_life_area(db: Session, area_id: int) -> models.LifeArea | None:
 
 
 def create_life_area(db: Session, data: schemas.LifeAreaCreate) -> models.LifeArea:
+    # Dieselbe Begrenzung wie update_life_area/create_life_checkin - ohne das
+    # könnte ein direkter POST-Aufruf (z.B. Tippfehler) den Fortschritt
+    # außerhalb 0-100 anlegen und die Balken-Darstellung verzerren.
+    progress = max(0, min(100, data.progress_percent)) if data.progress_percent is not None else None
     area = models.LifeArea(
         name=data.name, description=data.description, target_date=data.target_date,
-        progress_percent=data.progress_percent, check_interval_days=data.check_interval_days,
+        progress_percent=progress, check_interval_days=data.check_interval_days,
     )
     db.add(area)
     db.commit()

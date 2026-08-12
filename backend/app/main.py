@@ -4941,20 +4941,26 @@ def _scheduled_business_check_reminder():
             reference = p.last_checked_at or p.created_at
             if not reference or (now - reference).days < p.check_interval_days:
                 continue
-            open_count = (
-                db.query(models.BusinessIssue)
-                .filter(models.BusinessIssue.project_id == p.id, models.BusinessIssue.resolved.is_(False))
-                .count()
-            )
-            days_ago = (now - reference).days
-            offene = f" · {open_count} offene(r) Punkt(e)" if open_count else ""
-            notifications.notify(
-                settings,
-                f"📋 Prüfung fällig: „{p.name}“ seit {days_ago} Tagen nicht bestätigt{offene}. "
-                f"Per /projekt_geprueft {p.name} bestätigen, wenn alles ok ist.",
-            )
-            p.last_reminded_date = today
-            db.commit()
+            try:
+                open_count = (
+                    db.query(models.BusinessIssue)
+                    .filter(models.BusinessIssue.project_id == p.id, models.BusinessIssue.resolved.is_(False))
+                    .count()
+                )
+                days_ago = (now - reference).days
+                offene = f" · {open_count} offene(r) Punkt(e)" if open_count else ""
+                notifications.notify(
+                    settings,
+                    f"📋 Prüfung fällig: „{p.name}“ seit {days_ago} Tagen nicht bestätigt{offene}. "
+                    f"Per /projekt_geprueft {p.name} bestätigen, wenn alles ok ist.",
+                )
+                p.last_reminded_date = today
+                db.commit()
+            except Exception:
+                # Ein Fehler bei einem Projekt (z.B. DB-Hänger) darf die
+                # übrigen Projekte in diesem Lauf nicht mit abbrechen.
+                db.rollback()
+                continue
     finally:
         db.close()
 
@@ -4982,15 +4988,19 @@ def _scheduled_life_check_reminder():
             reference = a.last_checked_at or a.created_at
             if not reference or (now - reference).days < a.check_interval_days:
                 continue
-            days_ago = (now - reference).days
-            fortschritt = f" · Fortschritt {a.progress_percent}%" if a.progress_percent is not None else ""
-            notifications.notify(
-                settings,
-                f"🎯 Check-in fällig: „{a.name}“ seit {days_ago} Tagen nichts eingetragen{fortschritt}. "
-                f"Per /leben {a.name}; <Notiz> eintragen, sonst kommst du vom Kurs ab.",
-            )
-            a.last_reminded_date = today
-            db.commit()
+            try:
+                days_ago = (now - reference).days
+                fortschritt = f" · Fortschritt {a.progress_percent}%" if a.progress_percent is not None else ""
+                notifications.notify(
+                    settings,
+                    f"🎯 Check-in fällig: „{a.name}“ seit {days_ago} Tagen nichts eingetragen{fortschritt}. "
+                    f"Per /leben {a.name}; <Notiz> eintragen, sonst kommst du vom Kurs ab.",
+                )
+                a.last_reminded_date = today
+                db.commit()
+            except Exception:
+                db.rollback()
+                continue
     finally:
         db.close()
 
@@ -5017,13 +5027,17 @@ def _scheduled_wishlist_reminder():
             reference = i.last_checked_at or i.created_at
             if not reference or (now - reference).days < i.check_interval_days:
                 continue
-            preis = f" (Zielpreis {i.target_price:.2f} EUR)" if i.target_price else ""
-            notifications.notify(
-                settings,
-                f"🛒 Schau mal nach: „{i.name}“{preis} - seit {(now - reference).days} Tagen nicht geprüft.",
-            )
-            i.last_reminded_date = today
-            db.commit()
+            try:
+                preis = f" (Zielpreis {i.target_price:.2f} EUR)" if i.target_price else ""
+                notifications.notify(
+                    settings,
+                    f"🛒 Schau mal nach: „{i.name}“{preis} - seit {(now - reference).days} Tagen nicht geprüft.",
+                )
+                i.last_reminded_date = today
+                db.commit()
+            except Exception:
+                db.rollback()
+                continue
     finally:
         db.close()
 
@@ -5058,6 +5072,12 @@ def _scheduled_wishlist_auto_check():
                 models.WishlistItem.auto_check_enabled.is_(True),
                 (models.WishlistItem.last_auto_check_at.is_(None)) | (models.WishlistItem.last_auto_check_at < cutoff),
             )
+            # Ohne Sortierung liefert ein LIMIT bei mehr als BATCH_SIZE aktiven
+            # Einträgen jeden Tag dieselben (niedrigste ID) zuerst - waeren es
+            # mehr als 3, kaemen spaeter angelegte nie an die Reihe. Laengst
+            # nicht geprueft (bzw. noch nie, NULL sortiert in SQLite zuerst)
+            # zuerst rotiert fair durch.
+            .order_by(models.WishlistItem.last_auto_check_at.asc())
             .limit(WISHLIST_AUTO_CHECK_BATCH_SIZE)
             .all()
         )
