@@ -851,6 +851,10 @@ class CalendarEvent(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_synced_at = Column(DateTime, nullable=True)
     pending_delete = Column(Boolean, nullable=False, default=False)
+    # Einmalig True, sobald main._scheduled_travel_reminder rechtzeitig vor
+    # diesem Termin per Telegram zum Losfahren aufgefordert hat - verhindert
+    # eine Dauerschleife von Erinnerungen fuer denselben Termin.
+    travel_reminder_sent = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

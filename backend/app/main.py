@@ -159,6 +159,7 @@ ensure_columns("calendar_events", {
     "updated_at": "DATETIME",
     "last_synced_at": "DATETIME",
     "pending_delete": "BOOLEAN DEFAULT 0",
+    "travel_reminder_sent": "BOOLEAN DEFAULT 0",
 })
 ensure_columns("todos", {
     "completed_at": "DATETIME",
@@ -4642,6 +4643,57 @@ def _geocode_missing_event_locations(db: Session):
         db.commit()
 
 
+TRAVEL_PREP_BUFFER_MINUTES = 10  # Zeit zum Fertigmachen/Anziehen vor der reinen Fahrzeit
+
+
+def _scheduled_travel_reminder():
+    """Alle 5 Minuten: rechtzeitig vor einem Termin mit Ort per Telegram zum
+    Losfahren auffordern, statt die Fahrzeit nur passiv im Digest zu zeigen -
+    genau der proaktive "Jarvis"-Charakter, den sich der Nutzer gewünscht hat.
+    travel_reminder_sent verhindert eine Wiederholung fuer denselben Termin."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        if not (settings.home_lat and settings.home_lon and settings.openroute_api_key_encrypted):
+            return
+        home_coords = (settings.home_lat, settings.home_lon)
+        api_key = bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
+
+        now = datetime.utcnow()
+        events = (
+            db.query(models.CalendarEvent)
+            .filter(
+                models.CalendarEvent.all_day.is_(False),
+                models.CalendarEvent.lat.isnot(None),
+                models.CalendarEvent.lon.isnot(None),
+                models.CalendarEvent.travel_reminder_sent.is_(False),
+                models.CalendarEvent.start > now,
+                models.CalendarEvent.start <= now + timedelta(hours=3),
+            )
+            .all()
+        )
+        for ev in events:
+            try:
+                minutes = travel_time.travel_time_minutes(api_key, home_coords, (ev.lat, ev.lon))
+            except Exception:
+                continue
+            if minutes is None:
+                continue
+            leave_by = ev.start - timedelta(minutes=minutes + TRAVEL_PREP_BUFFER_MINUTES)
+            if now >= leave_by:
+                notifications.notify(
+                    settings,
+                    f"🚗 Los geht's: Fahrzeit ca. {minutes} Min zu „{ev.title}“ um "
+                    f"{ev.start.strftime('%H:%M')}. Jetzt losfahren, um pünktlich zu sein.",
+                )
+                ev.travel_reminder_sent = True
+                db.commit()
+    finally:
+        db.close()
+
+
 def _scheduled_radicale_sync():
     """Alle paar Minuten mit dem Radicale-Server abgleichen - läuft öfter als
     die anderen Sync-Jobs, weil To-Dos, die man gerade am Handy einträgt, sich
@@ -4767,6 +4819,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_anomaly_check, CronTrigger(minute="*/30"),
     id="anomaly_check", misfire_grace_time=900,
+)
+scheduler.add_job(
+    _scheduled_travel_reminder, CronTrigger(minute="*/5"),
+    id="travel_reminder", misfire_grace_time=300,
 )
 scheduler.add_job(
     _scheduled_net_worth_snapshot, CronTrigger(hour=23, minute=55),
