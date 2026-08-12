@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import random
 import re
 import shutil
 import uuid
@@ -2799,7 +2800,7 @@ PHOTOS_PAGE_SIZE = 60
 
 
 @api_router.get("/immich/photos", response_model=schemas.ImmichPhotosOut)
-def immich_photos(offset: int = 0, limit: int = PHOTOS_PAGE_SIZE, db: Session = Depends(get_db)):
+def immich_photos(offset: int = 0, limit: int = PHOTOS_PAGE_SIZE, shuffle: bool = False, db: Session = Depends(get_db)):
     """Blaettert ohne jeden Filter durch die gesamte Bibliothek - fuer den
     Swipe-Modus 'Alle Fotos', der bewusst nicht wie Screenshots/Unschaerfe auf
     einen engeren Kandidaten-Ausschnitt beschraenkt ist, sondern wirklich jedes
@@ -2807,15 +2808,30 @@ def immich_photos(offset: int = 0, limit: int = PHOTOS_PAGE_SIZE, db: Session = 
     url, key = _immich_credentials(db)
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
-    # Immichs eigene Seitenzaehlung ist 1-basiert und pro Seite fest an `limit`
-    # gebunden - offset muss daher ein Vielfaches von limit sein. Das ist die
-    # einzige Art, wie das Frontend diesen Endpunkt tatsaechlich aufruft
-    # (0, 60, 120, ... - siehe SWIPE_CONFIG).
-    page_num = offset // limit + 1
+    if shuffle:
+        # Immich kennt keine "random"-Sortierung (nur asc/desc) - stattdessen
+        # bei jedem Aufruf eine zufaellige Seite aus der ganzen Bibliothek
+        # ziehen und ihren Inhalt zusaetzlich mischen. Das offset-Argument wird
+        # hier bewusst ignoriert (jeder Aufruf ist unabhaengig "zufaellig"),
+        # has_more bleibt True - es gibt kein Ende, nur den naechsten Zufallsgriff.
+        try:
+            total = max(1, immich.server_statistics(url, key).get("photos", 0))
+        except Exception:
+            total = 1
+        page_num = random.randint(1, max(1, (total + limit - 1) // limit))
+    else:
+        # Immichs eigene Seitenzaehlung ist 1-basiert und pro Seite fest an `limit`
+        # gebunden - offset muss daher ein Vielfaches von limit sein. Das ist die
+        # einzige Art, wie das Frontend diesen Endpunkt tatsaechlich aufruft
+        # (0, 60, 120, ... - siehe SWIPE_CONFIG).
+        page_num = offset // limit + 1
     try:
         raw, has_more = immich.list_assets_page(url, key, page_num, size=limit)
     except Exception as e:
         raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
+    if shuffle:
+        random.shuffle(raw)
+        has_more = True
     try:
         trash = immich.trash_config(url, key)
     except Exception:

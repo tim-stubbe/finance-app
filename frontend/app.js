@@ -2898,7 +2898,7 @@ let allPhotosState = { offset: 0, hasMore: true, assets: [], trashEnabled: true 
 async function loadAllPhotos(offset = 0) {
   let d;
   try {
-    d = await api(`/immich/photos?offset=${offset}&limit=60`);
+    d = await api(`/immich/photos?offset=${offset}&limit=60&shuffle=true`);
   } catch (e) {
     toast("Fehler: " + e.message);
     allPhotosState = { ...allPhotosState, hasMore: false };
