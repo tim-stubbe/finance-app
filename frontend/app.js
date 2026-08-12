@@ -5974,6 +5974,18 @@ async function loadVersionWatermark() {
   }
 }
 
+// Cursor-folgender Glanz auf Cards/Panels (siehe .card::before in style.css) -
+// ein einzelner delegierter Listener statt einem pro Karte, da Karten/Panels
+// staendig neu gerendert werden (jedes innerHTML= wuerde direkte Listener
+// wieder verlieren).
+document.addEventListener("mousemove", e => {
+  const el = e.target.closest(".card, .panel, .integration-card");
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  el.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+  el.style.setProperty("--my", `${e.clientY - rect.top}px`);
+});
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => {});
