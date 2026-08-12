@@ -985,3 +985,48 @@ class NetWorthSnapshot(Base):
     __table_args__ = (
         UniqueConstraint("space_id", "date", name="uq_net_worth_snapshot_space_date"),
     )
+
+
+class BusinessProject(Base):
+    """Ein Nebenprojekt/Geschäft außerhalb der eigentlichen Finanzverwaltung
+    (z.B. ein Roblox-Spiel, ein Shop, Kundenservice für ein bestimmtes
+    Produkt) - Kies hat dafür keinen direkten Datenzugriff (keine Roblox-API,
+    kein Kundensystem angebunden), kann also nicht selbst prüfen, ob dort
+    etwas schiefläuft. Was es stattdessen leistet: offene Punkte (siehe
+    BusinessIssue) an einem Ort sammeln, statt dass sie zwischen Kopf/Notizen/
+    Chats verloren gehen, und per check_interval_days aktiv nachfragen, wenn
+    länger nichts eingetragen/bestätigt wurde - eine Art Sekretariat, keine
+    automatische Fehlererkennung. Kein space_id, das ist bereichsübergreifend
+    persönlich wie Todo/CalendarEvent."""
+
+    __tablename__ = "business_projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    # None = keine automatische Erinnerung, nur die offenen Punkte selbst zaehlen.
+    check_interval_days = Column(Integer, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    last_reminded_date = Column(Date, nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BusinessIssue(Base):
+    """Ein offener Punkt/Vorfall zu einem BusinessProject - "beim Roblox-Spiel
+    X funktioniert die Zahlung nicht" statt einer verlorenen Chat-Nachricht.
+    Wird typischerweise per Telegram-Freitext angelegt (siehe telegram_bot.
+    _execute_action, Aktionstyp create_business_issue) und dort auch wieder
+    abgehakt."""
+
+    __tablename__ = "business_issues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("business_projects.id"), nullable=False)
+    title = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+    resolved = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    project = relationship("BusinessProject")

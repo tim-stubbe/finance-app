@@ -5,15 +5,20 @@ Saldo bleibt bewusst ausschließlich über das feste Kommando /saldo (Regex,
 _BALANCE_CMD_RE, keine KI-Interpretation) änderbar, bei Geld soll nichts
 geraten werden. Jede Saldo-Änderung landet nachvollziehbar in AccountBalanceLog.
 
-Termine und To-Dos dürfen dagegen auch in normaler Sprache angelegt/abgehakt/
+Termine, To-Dos und offene Punkte zu Business-Projekten (Nebenprojekte
+außerhalb der Finanzverwaltung, siehe models.BusinessProject - Kies hat
+keinen Datenzugriff auf z.B. Roblox/Kundensysteme, sammelt aber die vom
+Nutzer gemeldeten offenen Punkte an einem Ort und erinnert per
+main._scheduled_business_check_reminder, wenn ein Projekt lange nicht
+bestätigt wurde) dürfen dagegen auch in normaler Sprache angelegt/abgehakt/
 abgesagt werden (Nutzerentscheidung, das Risiko einer Fehlinterpretation hier
 in Kauf zu nehmen) - die KI antwortet dafür mit einem ```action```-Block
 (_ACTION_BLOCK_RE, siehe _execute_action), den der Bot statt der KI ausführt
 und danach IMMER eine Bestätigung mit dem tatsächlich verstandenen Ergebnis
-zurückschickt, damit ein Missverständnis sofort auffällt (und sich per
-/erledigt bzw. /termin_absagen korrigieren lässt). Die festen Kommandos
-(/todo, /erledigt, /termin, /termin_absagen) bleiben parallel nutzbar, wenn
-Präzision wichtiger ist als Bequemlichkeit. /status schickt außerdem den
+zurückschickt, damit ein Missverständnis sofort auffällt (und sich korrigieren
+lässt). Die festen Kommandos (/todo, /erledigt, /termin, /termin_absagen,
+/projekt, /projekt_erledigt, /projekt_geprueft) bleiben parallel nutzbar,
+wenn Präzision wichtiger ist als Bequemlichkeit. /status schickt außerdem den
 sonst nur alle 3 Stunden automatisch verschickten Digest sofort auf Zuruf.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
@@ -63,6 +68,14 @@ _TERMIN_CMD_RE = re.compile(
 # Format: /status - schickt den Digest sofort statt auf den naechsten
 # 3-Stunden-Termin (siehe main.DIGEST_HOURS) zu warten.
 _STATUS_CMD_RE = re.compile(r"^/status\s*$", re.IGNORECASE)
+# Format: /projekt <Name>; <Titel> - legt einen offenen Punkt bei einem
+# Business-Projekt an (siehe models.BusinessProject).
+_PROJECT_ISSUE_CMD_RE = re.compile(r"^/projekt\s+(.+?)\s*;\s*(.+)$", re.IGNORECASE)
+# Format: /projekt_erledigt <Name>; <Stichwort> - hakt einen offenen Punkt ab.
+_PROJECT_RESOLVE_CMD_RE = re.compile(r"^/projekt_erledigt\s+(.+?)\s*;\s*(.+)$", re.IGNORECASE)
+# Format: /projekt_geprueft <Name> - setzt den "zuletzt geprüft"-Zeitpunkt
+# zurück, ohne einen neuen offenen Punkt anzulegen.
+_PROJECT_CHECKED_CMD_RE = re.compile(r"^/projekt_geprueft\s+(.+)$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -87,6 +100,20 @@ Aktions-Block (kein Fließtext davor/danach), einer der folgenden Formen:
 ```action
 {"type": "cancel_termin", "title": "<Stichwort aus dem Titel>"}
 ```
+Genauso darfst du offene Punkte zu einem Business-Projekt (Nebenprojekte außerhalb der Finanzverwaltung, z.B. \
+"Roblox-Spiel X", siehe unten mitgelieferte Liste) anlegen/abhaken, und ein Projekt als "gerade geprüft" bestätigen:
+```action
+{"type": "create_business_issue", "project": "<Projektname oder Stichwort davon>", "title": "<worum es geht>"}
+```
+```action
+{"type": "resolve_business_issue", "project": "<Projektname oder Stichwort davon>", "title": "<Stichwort aus dem offenen Punkt>"}
+```
+```action
+{"type": "mark_project_checked", "project": "<Projektname oder Stichwort davon>"}
+```
+Nutze diese NUR für eines der unten mitgelieferten, bereits angelegten Projekte - erfinde kein neues Projekt, das \
+muss der Nutzer erst in der App anlegen. Ist unklar, welches Projekt gemeint ist, frag lieber nach.
+
 Rechne relative Datumsangaben anhand des unten mitgelieferten heutigen Datums IMMER selbst in JJJJ-MM-TT um, auch \
 bei einem To-Do - lass due_date/date NIE auf null, wenn der Nutzer irgendeine Zeitangabe genannt hat. "morgen" = \
 heute + 1 Tag, "übermorgen" = heute + 2 Tage, "in 3 Tagen" = heute + 3 Tage - zähl das genau nach, verwechsle \
@@ -146,6 +173,17 @@ def _context_facts(db, space_id: int) -> str:
         lines.append("\nOffene To-Dos:")
         for t in todos:
             lines.append(f"- {t.title}" + (f" (fällig {t.due_date.strftime('%d.%m.%Y')})" if t.due_date else ""))
+
+    projects = crud.get_business_projects(db)
+    if projects:
+        lines.append("\nBusiness-Projekte (Nebenprojekte, für create_business_issue/resolve_business_issue/mark_project_checked NUR diese Namen verwenden):")
+        for p in projects:
+            lines.append(f"- „{p.name}“" + (f" ({p.open_issue_count} offene(r) Punkt(e))" if p.open_issue_count else ""))
+        open_issues = crud.get_business_issues(db)[:10]
+        if open_issues:
+            lines.append("\nOffene Punkte in Business-Projekten:")
+            for i in open_issues:
+                lines.append(f"- [{i.project_name}] {i.title}")
 
     return "\n".join(lines)
 
@@ -300,6 +338,64 @@ def _handle_status_command(db, settings, token: str, chat_id: str, text: str) ->
     return True
 
 
+def _create_project_issue(db, project_name: str, title: str) -> str:
+    project, error = crud.find_business_project_by_name(db, project_name)
+    if error:
+        return error
+    title = title.strip()
+    if not title:
+        return "Kein Titel für den offenen Punkt erkannt."
+    project.last_checked_at = datetime.utcnow()
+    db.commit()
+    crud.create_business_issue(db, project.id, title)
+    return f"✓ Offener Punkt bei „{project.name}“ angelegt: „{title}“."
+
+
+def _resolve_project_issue(db, project_name: str, title_query: str) -> str:
+    project, error = crud.find_business_project_by_name(db, project_name)
+    if error:
+        return error
+    issue, error = crud.find_open_business_issue(db, project.id, title_query)
+    if error:
+        return error
+    crud.resolve_business_issue(db, issue)
+    return f"✓ „{issue.title}“ bei „{project.name}“ als erledigt markiert."
+
+
+def _mark_project_checked(db, project_name: str) -> str:
+    project, error = crud.find_business_project_by_name(db, project_name)
+    if error:
+        return error
+    crud.mark_business_project_checked(db, project)
+    return f"✓ „{project.name}“ als geprüft bestätigt."
+
+
+def _handle_project_issue_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _PROJECT_ISSUE_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    project_name, title = match.groups()
+    _send(token, chat_id, _create_project_issue(db, project_name, title))
+    return True
+
+
+def _handle_project_resolve_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _PROJECT_RESOLVE_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    project_name, title_query = match.groups()
+    _send(token, chat_id, _resolve_project_issue(db, project_name, title_query))
+    return True
+
+
+def _handle_project_checked_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    match = _PROJECT_CHECKED_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    _send(token, chat_id, _mark_project_checked(db, match.group(1)))
+    return True
+
+
 def _execute_action(db, settings, action: dict) -> str:
     """Führt einen von der KI erkannten Aktions-Block aus und gibt die
     Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
@@ -388,6 +484,26 @@ def _execute_action(db, settings, action: dict) -> str:
                 pass
         return f"✓ Termin „{event.title}“ am {event.start.strftime('%d.%m.%Y')} abgesagt."
 
+    if action_type == "create_business_issue":
+        project = (action.get("project") or "").strip()
+        title = (action.get("title") or "").strip()
+        if not project or not title:
+            return "Konnte Projekt oder Titel nicht eindeutig erkennen - bitte genauer beschreiben."
+        return _create_project_issue(db, project, title)
+
+    if action_type == "resolve_business_issue":
+        project = (action.get("project") or "").strip()
+        title = (action.get("title") or "").strip()
+        if not project or not title:
+            return "Konnte nicht erkennen, welcher Punkt bei welchem Projekt gemeint ist - bitte genauer beschreiben."
+        return _resolve_project_issue(db, project, title)
+
+    if action_type == "mark_project_checked":
+        project = (action.get("project") or "").strip()
+        if not project:
+            return "Konnte nicht erkennen, welches Projekt gemeint ist."
+        return _mark_project_checked(db, project)
+
     return "Konnte die Anfrage nicht eindeutig einer Aktion zuordnen."
 
 
@@ -403,6 +519,12 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_termin_command(db, settings, token, chat_id, text):
         return
     if _handle_status_command(db, settings, token, chat_id, text):
+        return
+    if _handle_project_resolve_command(db, settings, token, chat_id, text):
+        return
+    if _handle_project_checked_command(db, settings, token, chat_id, text):
+        return
+    if _handle_project_issue_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model

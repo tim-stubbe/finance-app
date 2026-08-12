@@ -1659,3 +1659,46 @@ class MailCreateTransactionRequest(BaseModel):
     date: date
     amount: float
     description: Optional[str] = None
+
+
+# ---------- Business-Projekte (Nebenprojekte, außerhalb der Finanzverwaltung) ----------
+class BusinessProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    check_interval_days: Optional[int] = None
+
+
+class BusinessProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    check_interval_days: Optional[int] = None
+    active: Optional[bool] = None
+
+
+class BusinessProjectOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    description: Optional[str] = None
+    check_interval_days: Optional[int] = None
+    last_checked_at: Optional[datetime] = None
+    active: bool
+    open_issue_count: int = 0
+
+
+class BusinessIssueCreate(BaseModel):
+    project_id: int
+    title: str
+    notes: Optional[str] = None
+
+
+class BusinessIssueOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    project_name: Optional[str] = None
+    title: str
+    notes: Optional[str] = None
+    resolved: bool
+    created_at: datetime
+    resolved_at: Optional[datetime] = None

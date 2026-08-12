@@ -483,6 +483,56 @@ def remove_budget(category_id: int, db: Session = Depends(get_db), space_id: int
     return {"ok": True}
 
 
+# ---------------- Business-Projekte (Nebenprojekte) ----------------
+@api_router.get("/business-projects", response_model=List[schemas.BusinessProjectOut])
+def list_business_projects(include_inactive: bool = False, db: Session = Depends(get_db)):
+    return crud.get_business_projects(db, include_inactive)
+
+
+@api_router.post("/business-projects", response_model=schemas.BusinessProjectOut)
+def create_business_project(data: schemas.BusinessProjectCreate, db: Session = Depends(get_db)):
+    return crud.create_business_project(db, data)
+
+
+@api_router.patch("/business-projects/{project_id}", response_model=schemas.BusinessProjectOut)
+def update_business_project(project_id: int, data: schemas.BusinessProjectUpdate, db: Session = Depends(get_db)):
+    project = crud.get_business_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "Projekt nicht gefunden")
+    return crud.update_business_project(db, project, data)
+
+
+@api_router.post("/business-projects/{project_id}/checked", response_model=schemas.BusinessProjectOut)
+def mark_business_project_checked(project_id: int, db: Session = Depends(get_db)):
+    project = crud.get_business_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "Projekt nicht gefunden")
+    return crud.mark_business_project_checked(db, project)
+
+
+@api_router.get("/business-issues", response_model=List[schemas.BusinessIssueOut])
+def list_business_issues(project_id: Optional[int] = None, include_resolved: bool = False, db: Session = Depends(get_db)):
+    return crud.get_business_issues(db, project_id, include_resolved)
+
+
+@api_router.post("/business-issues", response_model=schemas.BusinessIssueOut)
+def create_business_issue(data: schemas.BusinessIssueCreate, db: Session = Depends(get_db)):
+    project = crud.get_business_project(db, data.project_id)
+    if not project:
+        raise HTTPException(404, "Projekt nicht gefunden")
+    project.last_checked_at = datetime.utcnow()
+    db.commit()
+    return crud.create_business_issue(db, data.project_id, data.title, data.notes)
+
+
+@api_router.post("/business-issues/{issue_id}/resolve", response_model=schemas.BusinessIssueOut)
+def resolve_business_issue(issue_id: int, db: Session = Depends(get_db)):
+    issue = db.query(models.BusinessIssue).filter(models.BusinessIssue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return crud.resolve_business_issue(db, issue)
+
+
 # ---------------- Eigene Regeln (Sofort-Alarme) ----------------
 @api_router.get("/alert-rules", response_model=List[schemas.AlertRuleOut])
 def list_alert_rules(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
@@ -4747,6 +4797,49 @@ def _scheduled_alert_rules():
         db.close()
 
 
+def _scheduled_business_check_reminder():
+    """Einmal täglich: Business-Projekte mit hinterlegtem Prüf-Intervall
+    (check_interval_days) erinnern, wenn seit last_checked_at (bzw.
+    created_at, falls noch nie geprüft) zu lange nichts passiert ist -
+    das Sekretariats-Prinzip aus models.BusinessProject: Kies kann nicht
+    selbst prüfen, ob z.B. ein Roblox-Spiel noch läuft, aber dafür sorgen,
+    dass der Nutzer regelmäßig aktiv hinschaut. last_reminded_date begrenzt
+    auf höchstens eine Erinnerung pro Tag und Projekt."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        today = date.today()
+        now = datetime.utcnow()
+        projects = db.query(models.BusinessProject).filter(
+            models.BusinessProject.active.is_(True),
+            models.BusinessProject.check_interval_days.isnot(None),
+        ).all()
+        for p in projects:
+            if p.last_reminded_date == today:
+                continue
+            reference = p.last_checked_at or p.created_at
+            if not reference or (now - reference).days < p.check_interval_days:
+                continue
+            open_count = (
+                db.query(models.BusinessIssue)
+                .filter(models.BusinessIssue.project_id == p.id, models.BusinessIssue.resolved.is_(False))
+                .count()
+            )
+            days_ago = (now - reference).days
+            offene = f" · {open_count} offene(r) Punkt(e)" if open_count else ""
+            notifications.notify(
+                settings,
+                f"📋 Prüfung fällig: „{p.name}“ seit {days_ago} Tagen nicht bestätigt{offene}. "
+                f"Per /projekt_geprueft {p.name} bestätigen, wenn alles ok ist.",
+            )
+            p.last_reminded_date = today
+            db.commit()
+    finally:
+        db.close()
+
+
 def _scheduled_net_worth_snapshot():
     """Einmal taeglich kurz vor Mitternacht: Nettovermoegen je Bereich
     festhalten. Einzige Quelle fuer eine echte Verlaufskurve - siehe
@@ -5058,6 +5151,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_alert_rules, CronTrigger(minute="*/30"),
     id="alert_rules", misfire_grace_time=900,
+)
+scheduler.add_job(
+    _scheduled_business_check_reminder, CronTrigger(hour=8, minute=15),
+    id="business_check_reminder", misfire_grace_time=3600,
 )
 scheduler.add_job(
     _scheduled_travel_reminder, CronTrigger(minute="*/5"),

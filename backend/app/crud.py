@@ -3155,3 +3155,135 @@ def year_review(db: Session, space_id: int, year: int) -> dict:
         "net_worth_now": net_worth(db, space_id).total,
         "monthly_points": monthly_points,
     }
+
+
+# ---------- Business-Projekte (Nebenprojekte) ----------
+def get_business_projects(db: Session, include_inactive: bool = False) -> list[models.BusinessProject]:
+    query = db.query(models.BusinessProject)
+    if not include_inactive:
+        query = query.filter(models.BusinessProject.active.is_(True))
+    projects = query.order_by(models.BusinessProject.name).all()
+    counts = dict(
+        db.query(models.BusinessIssue.project_id, func.count(models.BusinessIssue.id))
+        .filter(models.BusinessIssue.resolved.is_(False))
+        .group_by(models.BusinessIssue.project_id)
+        .all()
+    )
+    for p in projects:
+        p.open_issue_count = counts.get(p.id, 0)
+    return projects
+
+
+def get_business_project(db: Session, project_id: int) -> models.BusinessProject | None:
+    return db.query(models.BusinessProject).filter(models.BusinessProject.id == project_id).first()
+
+
+def create_business_project(db: Session, data: schemas.BusinessProjectCreate) -> models.BusinessProject:
+    project = models.BusinessProject(
+        name=data.name, description=data.description, check_interval_days=data.check_interval_days,
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    project.open_issue_count = 0
+    return project
+
+
+def update_business_project(db: Session, project: models.BusinessProject, data: schemas.BusinessProjectUpdate) -> models.BusinessProject:
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(project, key, value)
+    db.commit()
+    db.refresh(project)
+    project.open_issue_count = (
+        db.query(models.BusinessIssue)
+        .filter(models.BusinessIssue.project_id == project.id, models.BusinessIssue.resolved.is_(False))
+        .count()
+    )
+    return project
+
+
+def mark_business_project_checked(db: Session, project: models.BusinessProject) -> models.BusinessProject:
+    project.last_checked_at = datetime.utcnow()
+    db.commit()
+    db.refresh(project)
+    project.open_issue_count = (
+        db.query(models.BusinessIssue)
+        .filter(models.BusinessIssue.project_id == project.id, models.BusinessIssue.resolved.is_(False))
+        .count()
+    )
+    return project
+
+
+def _business_issue_out(issue: models.BusinessIssue) -> schemas.BusinessIssueOut:
+    return schemas.BusinessIssueOut(
+        id=issue.id, project_id=issue.project_id,
+        project_name=issue.project.name if issue.project else None,
+        title=issue.title, notes=issue.notes, resolved=issue.resolved,
+        created_at=issue.created_at, resolved_at=issue.resolved_at,
+    )
+
+
+def get_business_issues(db: Session, project_id: int | None = None, include_resolved: bool = False) -> list[schemas.BusinessIssueOut]:
+    query = db.query(models.BusinessIssue)
+    if project_id:
+        query = query.filter(models.BusinessIssue.project_id == project_id)
+    if not include_resolved:
+        query = query.filter(models.BusinessIssue.resolved.is_(False))
+    rows = query.order_by(models.BusinessIssue.created_at.desc()).all()
+    return [_business_issue_out(r) for r in rows]
+
+
+def create_business_issue(db: Session, project_id: int, title: str, notes: str | None = None) -> schemas.BusinessIssueOut:
+    issue = models.BusinessIssue(project_id=project_id, title=title, notes=notes)
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    return _business_issue_out(issue)
+
+
+def resolve_business_issue(db: Session, issue: models.BusinessIssue) -> schemas.BusinessIssueOut:
+    issue.resolved = True
+    issue.resolved_at = datetime.utcnow()
+    db.commit()
+    db.refresh(issue)
+    return _business_issue_out(issue)
+
+
+def find_business_project_by_name(db: Session, name_query: str) -> tuple[models.BusinessProject | None, str | None]:
+    """Sucht ein aktives Projekt per (Teil-)Name - fürs Telegram-Freitext-
+    Anlegen eines offenen Punkts, analog zu complete_todo_by_name. Gibt
+    (projekt, error) zurück: error ist None bei Erfolg, sonst ein Text zum
+    direkten Zurücksenden (kein Treffer / mehrdeutig)."""
+    q = name_query.strip().lower()
+    if not q:
+        return None, "Kein Projektname angegeben."
+    projects = db.query(models.BusinessProject).filter(models.BusinessProject.active.is_(True)).all()
+    matches = [p for p in projects if q in p.name.lower()]
+    if not matches:
+        namen = ", ".join(p.name for p in projects) or "noch keine Projekte angelegt"
+        return None, f"Kein Projekt mit „{name_query}“ gefunden. Vorhanden: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(p.name for p in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    return matches[0], None
+
+
+def find_open_business_issue(db: Session, project_id: int, title_query: str) -> tuple[models.BusinessIssue | None, str | None]:
+    """Wie find_business_project_by_name, aber für einen offenen Punkt
+    innerhalb eines Projekts (zum Abhaken per Telegram)."""
+    q = title_query.strip().lower()
+    if not q:
+        return None, "Kein Stichwort angegeben."
+    open_issues = (
+        db.query(models.BusinessIssue)
+        .filter(models.BusinessIssue.project_id == project_id, models.BusinessIssue.resolved.is_(False))
+        .all()
+    )
+    matches = [i for i in open_issues if q in i.title.lower()]
+    if not matches:
+        namen = ", ".join(i.title for i in open_issues) or "keine offenen Punkte"
+        return None, f"Nichts mit „{title_query}“ gefunden. Offen: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(i.title for i in matches)
+        return None, f"„{title_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    return matches[0], None
