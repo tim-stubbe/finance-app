@@ -3581,20 +3581,24 @@ document.getElementById("mail-remove").addEventListener("click", async () => {
 
 async function loadCreditCardSettings() {
   if (!accountsCache.length) accountsCache = await api("/accounts");
+  if (!debtsCache.length) debtsCache = await api("/debts");
   const select = document.getElementById("creditcard-account-select");
   select.innerHTML = '<option value="">– auswählen –</option>' +
-    accountsCache.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join("");
+    accountsCache.map(a => `<option value="acc:${a.id}">${esc(a.name)} (Konto)</option>`).join("") +
+    debtsCache.map(d => `<option value="debt:${d.id}">${esc(d.name)} (Schuld)</option>`).join("");
   const s = await api("/settings/creditcard");
   document.getElementById("creditcard-mail-sender").value = s.mail_sender || "";
-  select.value = s.account_id || "";
+  select.value = s.account_id ? `acc:${s.account_id}` : s.debt_id ? `debt:${s.debt_id}` : "";
 }
 
 document.getElementById("creditcard-settings-form").addEventListener("submit", async e => {
   e.preventDefault();
+  const sel = document.getElementById("creditcard-account-select").value;
+  const [kind, id] = sel ? sel.split(":") : [null, null];
   const body = {
     mail_sender: document.getElementById("creditcard-mail-sender").value.trim(),
-    account_id: document.getElementById("creditcard-account-select").value
-      ? parseInt(document.getElementById("creditcard-account-select").value, 10) : null,
+    account_id: kind === "acc" ? parseInt(id, 10) : null,
+    debt_id: kind === "debt" ? parseInt(id, 10) : null,
   };
   await api("/settings/creditcard", { method: "PUT", body: JSON.stringify(body) });
   toast("Kreditkarten-Einstellungen gespeichert.");

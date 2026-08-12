@@ -166,39 +166,59 @@ def update_account(db: Session, account_id: int, space_id: int, data: schemas.Ac
     return db_account
 
 
-def set_account_balance_by_name(db: Session, space_id: int, name_query: str, new_balance: float, source: str = "telegram"):
-    """Setzt den aktuellen Kontostand über einen (Teil-)Namen statt einer ID -
-    fürs Telegram-Kommando gedacht, wo der Nutzer den Kontonamen eintippt statt
-    ihn aus einer Liste auszuwählen. Gibt (account, error) zurück: error ist
-    None bei Erfolg, sonst ein Text zum direkten Zurücksenden (kein Treffer /
-    mehrdeutig - bewusst KEIN Rateversuch bei einer Geldsumme)."""
+def set_debt_balance(db: Session, debt: models.Debt, new_balance: float, source: str = "telegram") -> models.Debt:
+    """Setzt die Restschuld direkt statt sie aus dem Zahlungs-Ledger abzuleiten -
+    fuer eine Kreditkarte/Kreditlinie (kind=dispo) gibt es kein festes
+    Tilgungsschema, der Saldo schwankt durch laufende Ausgaben/Zahlungen, die
+    hier nicht einzeln erfasst werden. Analog zu update_account(initial_balance)
+    wird auch das im AccountBalanceLog vermerkt."""
+    old_balance = debt.current_balance
+    if new_balance != old_balance:
+        db.add(models.AccountBalanceLog(debt_id=debt.id, old_balance=old_balance, new_balance=new_balance, source=source))
+    debt.original_amount = round(new_balance, 2)
+    recompute_debt_from_payments(db, debt)
+    return debt
+
+
+def set_balance_by_name(db: Session, space_id: int, name_query: str, new_balance: float, source: str = "telegram"):
+    """Setzt den aktuellen Saldo (Konto ODER Schuld, z.B. eine Kreditkarte als
+    Dispo/Kreditlinie) über einen (Teil-)Namen statt einer ID - fürs Telegram-
+    Kommando gedacht. Gibt (objekt, error) zurück: error ist None bei Erfolg,
+    sonst ein Text zum direkten Zurücksenden (kein Treffer / mehrdeutig -
+    bewusst KEIN Rateversuch bei einer Geldsumme)."""
     accounts = get_accounts(db, space_id)
+    debts_list = get_debts(db, space_id)
     q = name_query.strip().lower()
-    matches = [a for a in accounts if q in a.name.lower()]
-    if not matches:
-        namen = ", ".join(a.name for a in accounts)
-        return None, f"Kein Konto mit „{name_query}“ gefunden. Vorhandene Konten: {namen}"
-    if len(matches) > 1:
-        namen = ", ".join(a.name for a in matches)
+    acc_matches = [a for a in accounts if q in a.name.lower()]
+    debt_matches = [d for d in debts_list if q in d.name.lower()]
+    if not acc_matches and not debt_matches:
+        namen = ", ".join([a.name for a in accounts] + [d.name for d in debts_list])
+        return None, f"Nichts mit „{name_query}“ gefunden. Vorhanden: {namen}"
+    if len(acc_matches) + len(debt_matches) > 1:
+        namen = ", ".join([a.name for a in acc_matches] + [d.name for d in debt_matches])
         return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
-    account = matches[0]
-    updated = update_account(db, account.id, space_id, schemas.AccountUpdate(
-        initial_balance=round(account.initial_balance - account_balance(db, account) + new_balance, 2),
-    ), source=source)
-    return updated, None
+    if acc_matches:
+        account = acc_matches[0]
+        updated = update_account(db, account.id, space_id, schemas.AccountUpdate(
+            initial_balance=round(account.initial_balance - account_balance(db, account) + new_balance, 2),
+        ), source=source)
+        return updated, None
+    debt = set_debt_balance(db, debt_matches[0], new_balance, source=source)
+    return debt, None
 
 
 def recent_balance_changes(db: Session, space_id: int, limit: int = 20) -> list[dict]:
     rows = (
         db.query(models.AccountBalanceLog)
-        .join(models.Account, models.AccountBalanceLog.account_id == models.Account.id)
-        .filter(models.Account.space_id == space_id)
+        .outerjoin(models.Account, models.AccountBalanceLog.account_id == models.Account.id)
+        .outerjoin(models.Debt, models.AccountBalanceLog.debt_id == models.Debt.id)
+        .filter((models.Account.space_id == space_id) | (models.Debt.space_id == space_id))
         .order_by(models.AccountBalanceLog.created_at.desc())
         .limit(limit)
         .all()
     )
     return [{
-        "account_name": r.account.name if r.account else "",
+        "account_name": (r.account.name if r.account else None) or (r.debt.name if r.debt else None) or "",
         "old_balance": r.old_balance, "new_balance": r.new_balance,
         "source": r.source, "created_at": r.created_at,
     } for r in rows]
@@ -920,11 +940,17 @@ CREDITCARD_BILL_REMIND_DAYS = 3
 
 def next_creditcard_bill(db: Session, space_id: int):
     """Naechste bevorstehende/aktuelle Kreditkarten-Faelligkeit fuers Hub -
-    reine Anzeige, kein Reminder-Statuswechsel wie bei evaluate_*."""
+    reine Anzeige, kein Reminder-Statuswechsel wie bei evaluate_*. Haengt
+    entweder an einem Konto oder einer Schuld (siehe CreditCardBill), daher
+    LEFT JOIN auf beide statt eines einzelnen INNER JOIN."""
     return (
         db.query(models.CreditCardBill)
-        .join(models.Account, models.CreditCardBill.account_id == models.Account.id)
-        .filter(models.Account.space_id == space_id, models.CreditCardBill.due_date.is_not(None))
+        .outerjoin(models.Account, models.CreditCardBill.account_id == models.Account.id)
+        .outerjoin(models.Debt, models.CreditCardBill.debt_id == models.Debt.id)
+        .filter(
+            models.CreditCardBill.due_date.is_not(None),
+            (models.Account.space_id == space_id) | (models.Debt.space_id == space_id),
+        )
         .order_by(models.CreditCardBill.due_date.desc())
         .first()
     )
@@ -938,9 +964,10 @@ def evaluate_creditcard_bills(db: Session, space_id: int) -> list[dict]:
     due: list[dict] = []
     rows = (
         db.query(models.CreditCardBill)
-        .join(models.Account, models.CreditCardBill.account_id == models.Account.id)
+        .outerjoin(models.Account, models.CreditCardBill.account_id == models.Account.id)
+        .outerjoin(models.Debt, models.CreditCardBill.debt_id == models.Debt.id)
         .filter(
-            models.Account.space_id == space_id,
+            (models.Account.space_id == space_id) | (models.Debt.space_id == space_id),
             models.CreditCardBill.notified.is_(False),
             models.CreditCardBill.due_date.is_not(None),
         )
@@ -949,8 +976,9 @@ def evaluate_creditcard_bills(db: Session, space_id: int) -> list[dict]:
     for bill in rows:
         if today >= bill.due_date - timedelta(days=CREDITCARD_BILL_REMIND_DAYS):
             bill.notified = True
+            label = (bill.account.name if bill.account else None) or (bill.debt.name if bill.debt else None) or "Kreditkarte"
             due.append({
-                "account_name": bill.account.name if bill.account else "Kreditkarte",
+                "account_name": label,
                 "due_date": bill.due_date,
                 "amount": bill.amount,
                 "days_left": (bill.due_date - today).days,

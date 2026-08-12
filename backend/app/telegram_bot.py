@@ -20,7 +20,7 @@ import time
 
 import requests
 
-from . import auth, bank_sync, crud, ollama_client, websearch
+from . import auth, bank_sync, crud, models, ollama_client, websearch
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
@@ -38,9 +38,10 @@ TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Fi
 Antworte immer kurz und freundlich auf Deutsch.
 
 Du kannst hier nichts in Buchungen schreiben oder Konten anlegen/löschen - dafür sag dem Nutzer freundlich, dass \
-er das in der App (schwebender KI-Chat oder direkt) erledigen soll. EINZIGE Ausnahme: einen Kontostand setzen \
-kann der Nutzer direkt hier mit dem Kommando "/saldo <Kontoname> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - \
-weise bei einer entsprechenden Bitte auf genau dieses Kommando hin, statt es selbst als Fließtext zu versuchen.
+er das in der App (schwebender KI-Chat oder direkt) erledigen soll. EINZIGE Ausnahme: den Saldo eines Kontos ODER \
+einer Schuld (z.B. eine Kreditkarte als Kreditlinie) setzen kann der Nutzer direkt hier mit dem Kommando \
+"/saldo <Name> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - weise bei einer entsprechenden Bitte auf genau \
+dieses Kommando hin, statt es selbst als Fließtext zu versuchen.
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben) nutze NUR die unten mitgelieferten Fakten und \
 erfinde keine Zahlen.
@@ -63,13 +64,17 @@ _history: list[dict] = []
 
 def _context_facts(db, space_id: int) -> str:
     accounts = crud.get_accounts(db, space_id)
+    debts_list = crud.get_debts(db, space_id)
     nw = crud.net_worth(db, space_id)
     lines = ["Aktueller Stand:"]
     for a in accounts:
         lines.append(f"- Konto „{a.name}“: {crud.account_balance(db, a):.2f} EUR")
+    for d in debts_list:
+        if d.status == models.DebtStatus.active:
+            lines.append(f"- Schuld „{d.name}“: {d.current_balance:.2f} EUR")
     lines.append(f"- Investments gesamt: {nw.investments_total:.2f} EUR")
     if nw.debts_total:
-        lines.append(f"- Offene Schulden: {nw.debts_total:.2f} EUR")
+        lines.append(f"- Offene Schulden gesamt: {nw.debts_total:.2f} EUR")
     lines.append(f"- Nettovermögen: {nw.total:.2f} EUR")
     return "\n".join(lines)
 
@@ -98,12 +103,12 @@ def _handle_balance_command(db, token: str, chat_id: str, text: str) -> bool:
         _send(token, chat_id, f"„{amount_raw}“ ist kein gültiger Betrag.")
         return True
     space = crud.get_spaces(db)[0]
-    account, error = crud.set_account_balance_by_name(db, space.id, name_query, new_balance, source="telegram")
+    obj, error = crud.set_balance_by_name(db, space.id, name_query, new_balance, source="telegram")
     db.commit()
     if error:
         _send(token, chat_id, error)
     else:
-        _send(token, chat_id, f"✓ „{account.name}“ auf {new_balance:.2f} € gesetzt.")
+        _send(token, chat_id, f"✓ „{obj.name}“ auf {new_balance:.2f} € gesetzt.")
     return True
 
 

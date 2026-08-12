@@ -149,9 +149,16 @@ ensure_columns("settings", {
     "mail_last_sync_at": "DATETIME",
     "creditcard_mail_sender": "VARCHAR",
     "creditcard_account_id": "INTEGER",
+    "creditcard_debt_id": "INTEGER",
 })
 ensure_columns("trips", {
     "budget": "FLOAT",
+})
+ensure_columns("creditcard_bills", {
+    "debt_id": "INTEGER",
+})
+ensure_columns("account_balance_log", {
+    "debt_id": "INTEGER",
 })
 
 _bootstrap_db = SessionLocal()
@@ -2121,8 +2128,9 @@ def _run_mail_sync(db: Session, space_id: int) -> dict:
         # gelesen (Belegdatum+Einzelbetrag ergeben bei einer Abrechnung mit
         # vielen Buchungen keinen Sinn) - stattdessen Faelligkeitsdatum +
         # Gesamtbetrag, siehe CreditCardBill.
+        creditcard_target = s.creditcard_account_id or s.creditcard_debt_id
         ist_kreditkarten_mail = bool(
-            s.creditcard_mail_sender and s.creditcard_account_id
+            s.creditcard_mail_sender and creditcard_target
             and s.creditcard_mail_sender.lower() in (a.get("sender") or "").lower()
         )
         if ist_kreditkarten_mail:
@@ -2144,8 +2152,8 @@ def _run_mail_sync(db: Session, space_id: int) -> dict:
 
         if ist_kreditkarten_mail and (datum or betrag):
             db.add(models.CreditCardBill(
-                account_id=s.creditcard_account_id, message_id=a["message_id"],
-                subject=a.get("subject"), due_date=datum, amount=betrag,
+                account_id=s.creditcard_account_id, debt_id=s.creditcard_debt_id,
+                message_id=a["message_id"], subject=a.get("subject"), due_date=datum, amount=betrag,
                 mail_attachment_id=eintrag.id,
             ))
             eintrag.status = "ignored"  # kein Beleg zum Zuordnen, taucht sonst leer im Beleg-Eingang auf
@@ -2204,7 +2212,9 @@ def remove_mail_settings(db: Session = Depends(get_db)):
 @api_router.get("/settings/creditcard", response_model=schemas.CreditCardSettingsOut)
 def get_creditcard_settings(db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
-    return schemas.CreditCardSettingsOut(mail_sender=s.creditcard_mail_sender, account_id=s.creditcard_account_id)
+    return schemas.CreditCardSettingsOut(
+        mail_sender=s.creditcard_mail_sender, account_id=s.creditcard_account_id, debt_id=s.creditcard_debt_id,
+    )
 
 
 @api_router.put("/settings/creditcard", response_model=schemas.CreditCardSettingsOut)
@@ -2212,6 +2222,7 @@ def update_creditcard_settings(data: schemas.CreditCardSettingsUpdate, db: Sessi
     s = auth.get_or_create_settings(db)
     s.creditcard_mail_sender = (data.mail_sender or "").strip() or None
     s.creditcard_account_id = data.account_id
+    s.creditcard_debt_id = data.debt_id
     db.commit()
     return get_creditcard_settings(db)
 
@@ -2221,10 +2232,8 @@ def get_next_creditcard_bill(db: Session = Depends(get_db), space_id: int = Depe
     bill = crud.next_creditcard_bill(db, space_id)
     if not bill:
         return None
-    return schemas.CreditCardBillOut(
-        account_name=bill.account.name if bill.account else "Kreditkarte",
-        due_date=bill.due_date, amount=bill.amount,
-    )
+    label = (bill.account.name if bill.account else None) or (bill.debt.name if bill.debt else None) or "Kreditkarte"
+    return schemas.CreditCardBillOut(account_name=label, due_date=bill.due_date, amount=bill.amount)
 
 
 @api_router.post("/mail/test", response_model=schemas.MailTestResult)

@@ -1502,11 +1502,13 @@ class MailSyncResult(BaseModel):
 class CreditCardSettingsOut(BaseModel):
     mail_sender: Optional[str] = None
     account_id: Optional[int] = None
+    debt_id: Optional[int] = None
 
 
 class CreditCardSettingsUpdate(BaseModel):
     mail_sender: Optional[str] = None
     account_id: Optional[int] = None
+    debt_id: Optional[int] = None
 
 
 class CreditCardBillOut(BaseModel):

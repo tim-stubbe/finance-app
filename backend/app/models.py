@@ -85,13 +85,17 @@ class AccountBalanceLog(Base):
     __tablename__ = "account_balance_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    # Genau eines von beiden ist gesetzt - seit /saldo auch Schulden (z.B.
+    # Kreditkarten als Dispo/Kreditlinie) direkt setzen kann, nicht mehr nur Konten.
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    debt_id = Column(Integer, ForeignKey("debts.id"), nullable=True)
     old_balance = Column(Float, nullable=False)
     new_balance = Column(Float, nullable=False)
     source = Column(String, nullable=False)  # "app" oder "telegram"
     created_at = Column(DateTime, default=datetime.utcnow)
 
     account = relationship("Account")
+    debt = relationship("Debt")
 
 
 class Category(Base):
@@ -196,7 +200,9 @@ class Settings(Base):
     # Absender-Teilstring (z.B. "advanzia.com") - ohne diesen Abgleich wuerde
     # jede Rechnungsmail im Postfach faelschlich als Kreditkarten-Abrechnung gelten.
     creditcard_mail_sender = Column(String, nullable=True)
+    # Genau eines von beiden ist gesetzt - siehe CreditCardBill.
     creditcard_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    creditcard_debt_id = Column(Integer, ForeignKey("debts.id"), nullable=True)
 
 
 class BasiszinsRate(Base):
@@ -680,7 +686,12 @@ class CreditCardBill(Base):
     __table_args__ = (UniqueConstraint("message_id", name="uq_creditcard_bill_message"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    # Genau eines von beiden ist gesetzt - die meisten Karten dieser Art sind
+    # eine eigene Schuld (Dispo/Kreditlinie), keine echte Kontoverbindung mit
+    # Saldo-Sync (siehe Debt-Docstring), account_id bleibt fuer den Fall stehen,
+    # dass die Karte doch als Konto gefuehrt wird.
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    debt_id = Column(Integer, ForeignKey("debts.id"), nullable=True)
     message_id = Column(String, nullable=False, index=True)
     subject = Column(String, nullable=True)
     due_date = Column(Date, nullable=True)
@@ -690,6 +701,7 @@ class CreditCardBill(Base):
     notified = Column(Boolean, nullable=False, default=False)
 
     account = relationship("Account")
+    debt = relationship("Debt")
 
 
 class ImmichQualityFlag(Base):
