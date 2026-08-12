@@ -134,6 +134,11 @@ class TransactionOut(TransactionBase):
     is_transfer: bool = False
     created_at: datetime
 
+class BulkCategorizeRequest(BaseModel):
+    transaction_ids: List[int]
+    category_id: Optional[int] = None
+
+
 class DuplicateTransactionGroup(BaseModel):
     account_id: int
     account_name: str

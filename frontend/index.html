@@ -410,9 +410,16 @@
           <button id="tx-filter-btn" class="btn-ghost">Filtern</button>
           <button type="button" id="tx-new-btn" class="btn-primary"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Neue Buchung</button>
         </div>
+        <div class="filter-row hidden" id="tx-bulk-bar">
+          <span class="page-sub"><strong id="tx-bulk-count">0</strong> ausgewählt</span>
+          <select id="tx-bulk-category"><option value="">– Kategorie wählen –</option></select>
+          <button type="button" id="tx-bulk-apply" class="btn-primary">Zuweisen</button>
+          <button type="button" id="tx-bulk-clear" class="btn-ghost">Auswahl aufheben</button>
+        </div>
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr id="tx-list-head">
+              <th><input type="checkbox" id="tx-select-all"></th>
               <th data-sort-key="date" class="sort-desc">Datum</th>
               <th data-sort-key="description">Beschreibung</th>
               <th data-sort-key="_account_name">Konto</th>

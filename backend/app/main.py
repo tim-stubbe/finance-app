@@ -599,6 +599,14 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db), space
     return {"ok": True}
 
 
+@api_router.post("/transactions/bulk-categorize")
+def bulk_categorize_transactions(data: schemas.BulkCategorizeRequest, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    if not data.transaction_ids:
+        raise HTTPException(400, "Keine Buchungen ausgewählt.")
+    count = crud.bulk_set_category(db, space_id, data.transaction_ids, data.category_id)
+    return {"updated": count}
+
+
 # Erlaubte Beleg-Endungen. Der Original-Dateiname kommt ungeprüft vom Client -
 # ohne diese Schranke könnte eine präparierte Endung (z.B. mit enthaltenen
 # "/") beim Zusammensetzen des Pfads aus UPLOAD_DIR herausführen

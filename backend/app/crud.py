@@ -1062,6 +1062,23 @@ def delete_transaction(db: Session, transaction_id: int, space_id: int):
     return db_transaction
 
 
+def bulk_set_category(db: Session, space_id: int, transaction_ids: list[int], category_id: int | None) -> int:
+    """Weist mehreren Buchungen auf einmal dieselbe Kategorie zu (oder entfernt
+    sie mit category_id=None) - fuer das manuelle Aufraeumen des Kategorisierungs-
+    Rueckstands per Mehrfachauswahl, ohne auf die KI zu warten. Ueber space_id
+    join gefiltert, damit niemand IDs aus einem fremden Bereich raten kann."""
+    rows = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(models.Account.space_id == space_id, models.Transaction.id.in_(transaction_ids))
+        .all()
+    )
+    for tx in rows:
+        tx.category_id = category_id
+    db.commit()
+    return len(rows)
+
+
 # ---------- Trips ----------
 def get_trips(db: Session, space_id: int):
     return db.query(models.Trip).filter(models.Trip.space_id == space_id).order_by(models.Trip.start_date.desc()).all()

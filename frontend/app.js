@@ -388,11 +388,13 @@ function populateCategorySelects() {
   const txSel = document.getElementById("tx-category");
   const filterSel = document.getElementById("tx-filter-category");
   const parentSel = document.getElementById("cat-parent");
+  const bulkSel = document.getElementById("tx-bulk-category");
   txSel.innerHTML = '<option value="">–</option>';
   filterSel.innerHTML = '<option value="">Alle Kategorien</option>';
   parentSel.innerHTML = '<option value="">–</option>';
+  bulkSel.innerHTML = '<option value="">– Kategorie wählen –</option>';
   categoriesCache.forEach(c => {
-    [txSel, filterSel, parentSel].forEach(sel => {
+    [txSel, filterSel, parentSel, bulkSel].forEach(sel => {
       const opt = document.createElement("option");
       opt.value = c.id; opt.textContent = `${c.name} (${c.type})`;
       sel.appendChild(opt);
@@ -1819,12 +1821,26 @@ async function loadTransactions() {
 
 let txSortKey = "date";
 let txSortDir = -1;
+let txSelection = new Set();
+
+function updateTxBulkBar() {
+  const bar = document.getElementById("tx-bulk-bar");
+  bar.classList.toggle("hidden", txSelection.size === 0);
+  document.getElementById("tx-bulk-count").textContent = txSelection.size;
+  document.getElementById("tx-select-all").checked =
+    txListCache.length > 0 && txListCache.every(t => txSelection.has(t.id));
+}
 
 function renderTransactionsTable() {
   const tbody = document.getElementById("tx-list");
   tbody.innerHTML = "";
+  // Aus der Auswahl entfernen, was durch einen neuen Filter/Reload nicht mehr
+  // in der Liste steckt - sonst bliebe der Zähler auf unsichtbaren Buchungen sitzen.
+  const visibleIds = new Set(txListCache.map(t => t.id));
+  txSelection.forEach(id => { if (!visibleIds.has(id)) txSelection.delete(id); });
   if (txListCache.length === 0) {
-    tbody.innerHTML = emptyRow(7, "receipt", "Keine Buchungen gefunden.");
+    tbody.innerHTML = emptyRow(8, "receipt", "Keine Buchungen gefunden.");
+    updateTxBulkBar();
     return;
   }
   const rows = [...txListCache];
@@ -1849,6 +1865,7 @@ function renderTransactionsTable() {
       : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td><input type="checkbox" class="tx-row-select" data-tx-select="${t.id}" ${txSelection.has(t.id) ? "checked" : ""}></td>
       <td>${t.date}</td>
       <td>${t.description || ""}${rdBadge}</td>
       <td>${t._account_name}</td>
@@ -1869,7 +1886,39 @@ function renderTransactionsTable() {
       openContractReminderModal(parseInt(btn.dataset.crAccount), normalizeDescriptionKey(desc), desc, null);
     });
   });
+  tbody.querySelectorAll("[data-tx-select]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const id = parseInt(cb.dataset.txSelect, 10);
+      cb.checked ? txSelection.add(id) : txSelection.delete(id);
+      updateTxBulkBar();
+    });
+  });
+  updateTxBulkBar();
 }
+
+document.getElementById("tx-select-all").addEventListener("change", e => {
+  if (e.target.checked) txListCache.forEach(t => txSelection.add(t.id));
+  else txListCache.forEach(t => txSelection.delete(t.id));
+  renderTransactionsTable();
+});
+
+document.getElementById("tx-bulk-clear").addEventListener("click", () => {
+  txSelection.clear();
+  renderTransactionsTable();
+});
+
+document.getElementById("tx-bulk-apply").addEventListener("click", async () => {
+  const catId = document.getElementById("tx-bulk-category").value;
+  if (!catId) { toast("Bitte zuerst eine Kategorie auswählen."); return; }
+  const ids = [...txSelection];
+  await api("/transactions/bulk-categorize", {
+    method: "POST",
+    body: JSON.stringify({ transaction_ids: ids, category_id: parseInt(catId, 10) }),
+  });
+  toast(`${ids.length} Buchung(en) kategorisiert.`);
+  txSelection.clear();
+  await loadTransactions();
+});
 
 document.querySelectorAll("#tx-list-head [data-sort-key]").forEach(th => {
   th.addEventListener("click", () => {
