@@ -126,6 +126,14 @@ class TransactionOut(TransactionBase):
     is_transfer: bool = False
     created_at: datetime
 
+class DuplicateTransactionGroup(BaseModel):
+    account_id: int
+    account_name: str
+    date: date
+    amount: float
+    description: Optional[str] = None
+    transaction_ids: List[int]
+
 
 # ---------- Profil ----------
 class ProfileOut(BaseModel):

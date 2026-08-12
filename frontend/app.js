@@ -207,7 +207,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "hub") loadHubTab();
     if (btn.dataset.tab === "dashboard") loadDashboard();
     if (btn.dataset.tab === "business") loadBusinessTab();
-    if (btn.dataset.tab === "transactions") { loadTransactions(); loadMailInbox(); }
+    if (btn.dataset.tab === "transactions") { loadTransactions(); loadMailInbox(); loadDuplicateTransactions(); }
     if (btn.dataset.tab === "accounts") loadAccounts();
     if (btn.dataset.tab === "recurring") loadRecurringTab();
     if (btn.dataset.tab === "categories") loadCategories();
@@ -3527,6 +3527,46 @@ document.getElementById("creditcard-settings-form").addEventListener("submit", a
 });
 
 // ---------- Beleg-Eingang ----------
+async function loadDuplicateTransactions() {
+  const panel = document.getElementById("dup-tx-panel");
+  let groups = [];
+  try {
+    groups = await api("/transactions/duplicates");
+  } catch (e) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.toggle("hidden", groups.length === 0);
+  document.getElementById("dup-tx-count").textContent = groups.length;
+  if (!groups.length) return;
+
+  document.getElementById("dup-tx-list").innerHTML = groups.map((g, i) => `
+    <div class="mail-item">
+      <div>
+        <strong>${g.transaction_ids.length}× ${esc(g.description || "(ohne Beschreibung)")}</strong><br>
+        <span class="page-sub">${esc(g.account_name)} · ${fmtDate(g.date)} · ${eur(g.amount)}</span>
+      </div>
+      <button type="button" class="btn-ghost" data-dup-resolve="${i}">
+        ${g.transaction_ids.length - 1} überzählige löschen (behält eine)
+      </button>
+    </div>`).join("");
+
+  document.querySelectorAll("[data-dup-resolve]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const g = groups[parseInt(btn.dataset.dupResolve, 10)];
+      const toDelete = g.transaction_ids.slice(1);
+      if (!confirm(`${toDelete.length} doppelte Buchung(en) löschen? Die erste bleibt erhalten.`)) return;
+      btn.disabled = true;
+      for (const id of toDelete) {
+        try { await api(`/transactions/${id}`, { method: "DELETE" }); } catch { /* einzelne fehlgeschlagene Loeschung nicht die ganze Aktion abbrechen lassen */ }
+      }
+      toast(`${toDelete.length} doppelte Buchung(en) gelöscht.`);
+      await loadDuplicateTransactions();
+      await loadTransactions();
+    });
+  });
+}
+
 async function loadMailInbox() {
   const panel = document.getElementById("mail-inbox-panel");
   const list = document.getElementById("mail-inbox-list");

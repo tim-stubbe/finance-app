@@ -389,6 +389,16 @@
         <div id="mail-inbox-list"></div>
       </div>
 
+      <div class="panel hidden" id="dup-tx-panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 16h.01"/><path d="M12 3l9 16H3z"/></svg> Mögliche doppelte Buchungen <span class="nav-warn-badge" id="dup-tx-count">0</span></h3>
+        <p class="page-sub">
+          Buchungen, die in Konto, Datum, Betrag und Beschreibung exakt übereinstimmen - kann z.B.
+          passieren, wenn eine importierte Buchung nachträglich einem anderen Konto zugeordnet wurde.
+          Prüfe die Gruppe, bevor du löschst.
+        </p>
+        <div id="dup-tx-list"></div>
+      </div>
+
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h11M9 12h11M9 20h11"/><circle cx="4.5" cy="4" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="20" r="1.3" fill="currentColor" stroke="none"/></svg> Übersicht</h3>
         <div class="filter-row">

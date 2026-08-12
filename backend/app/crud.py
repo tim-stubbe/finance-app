@@ -905,6 +905,51 @@ def evaluate_creditcard_bills(db: Session, space_id: int) -> list[dict]:
     return due
 
 
+def find_duplicate_transactions(db: Session, space_id: int) -> list[dict]:
+    """Findet Buchungen, die in Konto, Datum, Betrag, Beschreibung UND Notiz
+    exakt übereinstimmen - bewusst kein Fuzzy-Match, um keine echten, nur
+    zufällig ähnlichen Buchungen (z.B. zwei Kartenzahlungen mit demselben
+    runden Betrag am selben Tag) faelschlich als Duplikat zu melden.
+
+    Entstehen kann so etwas z.B. wenn eine importierte Buchung nachträglich
+    einem anderen Konto zugeordnet wird und der Sync-Fingerabdruck dadurch
+    nicht mehr zur nächsten Synchronisierung passt (siehe update_transaction) -
+    dieser Check ist das dauerhafte Sicherheitsnetz dafür, nicht nur eine
+    einmalige Aufräumaktion."""
+    key_cols = (
+        models.Transaction.account_id, models.Transaction.date, models.Transaction.amount,
+        models.Transaction.description, models.Transaction.notes,
+    )
+    dup_keys = (
+        db.query(*key_cols)
+        .join(models.Account)
+        .filter(models.Account.space_id == space_id)
+        .group_by(*key_cols)
+        .having(func.count(models.Transaction.id) > 1)
+        .all()
+    )
+    groups = []
+    for account_id, tx_date, amount, description, notes in dup_keys:
+        rows = (
+            db.query(models.Transaction)
+            .filter(
+                models.Transaction.account_id == account_id, models.Transaction.date == tx_date,
+                models.Transaction.amount == amount, models.Transaction.description == description,
+                models.Transaction.notes == notes,
+            )
+            .order_by(models.Transaction.id)
+            .all()
+        )
+        account = db.get(models.Account, account_id)
+        groups.append({
+            "account_id": account_id, "account_name": account.name if account else "",
+            "date": tx_date, "amount": amount, "description": description,
+            "transaction_ids": [r.id for r in rows],
+        })
+    groups.sort(key=lambda g: g["date"], reverse=True)
+    return groups
+
+
 def get_transaction(db: Session, transaction_id: int, space_id: int):
     return (
         db.query(models.Transaction)

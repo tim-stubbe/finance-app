@@ -469,6 +469,11 @@ def get_overlapping_contracts(db: Session = Depends(get_db), space_id: int = Dep
     return crud.detect_overlapping_contracts(db, space_id)
 
 
+@api_router.get("/transactions/duplicates", response_model=List[schemas.DuplicateTransactionGroup])
+def get_duplicate_transactions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.find_duplicate_transactions(db, space_id)
+
+
 @api_router.get("/contract-reminders", response_model=List[schemas.ContractReminderOut])
 def list_contract_reminders(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.get_contract_reminders(db, space_id)
