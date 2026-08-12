@@ -13,7 +13,8 @@ und danach IMMER eine Bestätigung mit dem tatsächlich verstandenen Ergebnis
 zurückschickt, damit ein Missverständnis sofort auffällt (und sich per
 /erledigt bzw. /termin_absagen korrigieren lässt). Die festen Kommandos
 (/todo, /erledigt, /termin, /termin_absagen) bleiben parallel nutzbar, wenn
-Präzision wichtiger ist als Bequemlichkeit.
+Präzision wichtiger ist als Bequemlichkeit. /status schickt außerdem den
+sonst nur alle 3 Stunden automatisch verschickten Digest sofort auf Zuruf.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
 weil die App nur über Tailscale erreichbar ist, kein öffentlicher HTTPS-Endpunkt
@@ -59,6 +60,9 @@ _TERMIN_CMD_RE = re.compile(
     r"(?:\s*;\s*(.+))?\s*$",
     re.IGNORECASE,
 )
+# Format: /status - schickt den Digest sofort statt auf den naechsten
+# 3-Stunden-Termin (siehe main.DIGEST_HOURS) zu warten.
+_STATUS_CMD_RE = re.compile(r"^/status\s*$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -78,22 +82,26 @@ Aktions-Block (kein Fließtext davor/danach), einer der folgenden Formen:
 {"type": "complete_todo", "title": "<Stichwort aus dem Titel>"}
 ```
 ```action
-{"type": "create_termin", "title": "<Text>", "date": "JJJJ-MM-TT", "time": "HH:MM oder null bei ganztägig", "location": "<Ort oder null>"}
+{"type": "create_termin", "title": "<Text OHNE den Ort>", "date": "JJJJ-MM-TT", "time": "HH:MM oder null bei ganztägig", "location": "<Ort oder null>"}
 ```
 ```action
 {"type": "cancel_termin", "title": "<Stichwort aus dem Titel>"}
 ```
-Rechne relative Datumsangaben ("morgen", "übermorgen", "nächsten Montag") anhand des unten mitgelieferten heutigen \
-Datums IMMER selbst in JJJJ-MM-TT um, auch bei einem To-Do - lass due_date/date NIE auf null, wenn der Nutzer \
-irgendeine Zeitangabe genannt hat. Beispiel: wenn "Heutiges Datum: 2026-08-12" und der Nutzer "erinnere mich \
-morgen an X" schreibt, ist 2026-08-12 + 1 Tag = 2026-08-13, also {"type": "create_todo", "title": "X", \
-"due_date": "2026-08-13"}. Nur wenn WIRKLICH keinerlei Zeitangabe im Text vorkommt, darf due_date null sein bzw. \
-musst du bei einem Termin (date ist dort Pflicht) stattdessen nachfragen statt zu raten. Der Bot führt den \
-Aktions-Block aus und schickt dem Nutzer danach selbst eine Bestätigung - du musst dem Aktions-Block nichts \
-hinzufügen.
+Rechne relative Datumsangaben anhand des unten mitgelieferten heutigen Datums IMMER selbst in JJJJ-MM-TT um, auch \
+bei einem To-Do - lass due_date/date NIE auf null, wenn der Nutzer irgendeine Zeitangabe genannt hat. "morgen" = \
+heute + 1 Tag, "übermorgen" = heute + 2 Tage, "in 3 Tagen" = heute + 3 Tage - zähl das genau nach, verwechsle \
+"morgen" und "übermorgen" nicht. Beispiel bei "Heutiges Datum: 2026-08-12": "morgen" → "2026-08-13", "übermorgen" \
+→ "2026-08-14". Nur wenn WIRKLICH keinerlei Zeitangabe im Text vorkommt, darf due_date null sein bzw. musst du bei \
+einem Termin (date ist dort Pflicht) stattdessen nachfragen statt zu raten.
+
+Nennt der Nutzer bei einem Termin einen Ort (z.B. "beim Zahnarzt in der Praxis Müller", "im Büro"), gehört der \
+IMMER ins separate Feld "location", NIEMALS in "title" hineingemischt - "title" bleibt kurz (z.B. "Zahnarzt"), \
+"location" bekommt den Ort (z.B. "Praxis Müller"). Der Bot führt den Aktions-Block aus und schickt dem Nutzer \
+danach selbst eine Bestätigung - du musst dem Aktions-Block nichts hinzufügen.
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben, anstehende Termine, offene To-Dos) nutze NUR die \
-unten mitgelieferten Fakten und erfinde keine Zahlen/Termine.
+unten mitgelieferten Fakten und erfinde keine Zahlen/Termine. Für einen vollständigen, tagesaktuellen Statusbericht \
+(sonst nur alle 3 Stunden automatisch) verweise auf das Kommando "/status".
 
 Du darfst im Internet suchen, wenn du für eine Frage aktuelle, recherchierbare Informationen brauchst (z.B. \
 aktuelle Steuersätze/Freibeträge, Rechtslage, Zinssätze, aktuelle Nachrichten). Brauchst du das, antworte NUR \
@@ -270,6 +278,28 @@ def _handle_cancel_termin_command(db, settings, token: str, chat_id: str, text: 
     return True
 
 
+def _handle_status_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """Schickt den Digest sofort auf Zuruf, statt auf den nächsten der festen
+    3-Stunden-Termine zu warten (main._scheduled_digest) - baut ihn mit den
+    aktuell gültigen since/transfers_marked-Werten, rührt aber last_digest_
+    sent_at/transfers_marked_since_digest NICHT an, damit der nächste
+    planmäßige Digest weiterhin denselben Zeitraum abdeckt wie ohne /status."""
+    if not _STATUS_CMD_RE.match(text.strip()):
+        return False
+    home_coords = (settings.home_lat, settings.home_lon) if settings.home_lat and settings.home_lon else None
+    ors_api_key = (
+        bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
+        if settings.openroute_api_key_encrypted else None
+    )
+    space = crud.get_spaces(db)[0]
+    text_out = crud.build_digest(
+        db, space.id, home_coords=home_coords, ors_api_key=ors_api_key,
+        since=settings.last_digest_sent_at, transfers_marked=settings.transfers_marked_since_digest or 0,
+    )
+    _send(token, chat_id, text_out)
+    return True
+
+
 def _execute_action(db, settings, action: dict) -> str:
     """Führt einen von der KI erkannten Aktions-Block aus und gibt die
     Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
@@ -360,6 +390,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_cancel_termin_command(db, settings, token, chat_id, text):
         return
     if _handle_termin_command(db, settings, token, chat_id, text):
+        return
+    if _handle_status_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model
