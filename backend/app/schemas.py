@@ -559,6 +559,17 @@ class DashboardSummary(BaseModel):
     account_balances: List[AccountOut]
 
 
+class DashboardTrendPoint(BaseModel):
+    year: int
+    month: int
+    income: float
+    expense: float
+
+
+class DashboardTrendOut(BaseModel):
+    points: List[DashboardTrendPoint]
+
+
 # ---------- Wiederkehrende Zahlungen ----------
 class RecurringPaymentOut(BaseModel):
     description: Optional[str] = None

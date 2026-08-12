@@ -3726,6 +3726,17 @@ def dashboard(year: int = date.today().year, month: Optional[int] = None, db: Se
     return crud.dashboard_summary(db, space_id, year, month)
 
 
+@api_router.get("/dashboard/trend", response_model=schemas.DashboardTrendOut)
+def dashboard_trend(months: int = 6, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Kleine monatliche Einnahmen/Ausgaben-Reihe fuer die Sparklines auf dem
+    Hub - bewusst ein eigener, leichtgewichtiger Endpunkt statt N Aufrufe von
+    /dashboard je Monat vom Frontend aus."""
+    months = max(2, min(months, 24))
+    return schemas.DashboardTrendOut(points=[
+        schemas.DashboardTrendPoint(**p) for p in crud.monthly_flow_trend(db, space_id, months)
+    ])
+
+
 # ---------------- Geschäftlich (Filter auf is_business-Konten, kein eigener Bereich) ----------------
 @api_router.get("/business/summary", response_model=schemas.DashboardSummary)
 def business_summary(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):

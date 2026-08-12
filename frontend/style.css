@@ -828,6 +828,20 @@ button.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .card-neg .card-icon { background: var(--neg-wash); color: var(--neg); }
 .card-bal .card-icon { background: var(--accent-wash); color: var(--accent-strong); }
 
+.card-sparkline {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 56px;
+  height: 22px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.card-sparkline svg { display: block; width: 100%; height: 100%; }
+.card-pos .card-sparkline { color: var(--pos); }
+.card-neg .card-sparkline { color: var(--neg); }
+.card-bal .card-sparkline { color: var(--accent-strong); }
+
 .card h3 {
   margin: 0 0 4px;
   font-size: 12px;

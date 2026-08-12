@@ -100,6 +100,25 @@ const ICON_PATHS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"/>',
 };
 
+// Kleine Trendlinie ohne Chart.js-Overhead - reicht fuer 6 Datenpunkte in
+// einer 56x22px-Karte locker, spart eine schwere Abhaengigkeit fuer etwas
+// rein Dekoratives.
+function sparklineSvg(values) {
+  if (!values || values.length < 2) return "";
+  const w = 56, h = 22, pad = 2;
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const step = (w - pad * 2) / (values.length - 1);
+  const points = values.map((v, i) => {
+    const x = pad + i * step;
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
 function svgIcon(name, cls = "empty-icon-svg") {
   const inner = ICON_PATHS[name];
   if (!inner) return "";
@@ -4766,8 +4785,11 @@ function goToTab(tabName) {
 async function loadHubTab() {
   const cardsEl = document.getElementById("hub-finance-cards");
   try {
-    const [dash, nw] = await Promise.all([api("/dashboard"), api("/net-worth")]);
+    const [dash, nw, trend] = await Promise.all([api("/dashboard"), api("/net-worth"), api("/dashboard/trend?months=6")]);
     const hasDebts = nw.debts_total > 0;
+    const incomeSpark = sparklineSvg(trend.points.map(p => p.income));
+    const expenseSpark = sparklineSvg(trend.points.map(p => Math.abs(p.expense)));
+    const balanceSpark = sparklineSvg(trend.points.map(p => p.income + p.expense));
     cardsEl.innerHTML = `
       <button type="button" class="card hub-hero" data-hub-jump="investments">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -4776,14 +4798,17 @@ async function loadHubTab() {
       <button type="button" class="card card-pos hub-tile" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div><h3>Einnahmen (Jahr)</h3><p class="pos">${eur(dash.total_income)}</p></div>
+        <span class="card-sparkline" title="Verlauf der letzten 6 Monate">${incomeSpark}</span>
       </button>
       <button type="button" class="card card-neg hub-tile" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div><h3>Ausgaben (Jahr)</h3><p class="neg">${eur(dash.total_expense)}</p></div>
+        <span class="card-sparkline" title="Verlauf der letzten 6 Monate">${expenseSpark}</span>
       </button>
       <button type="button" class="card card-bal hub-tile ${hasDebts ? "" : "hub-tile-wide"}" data-hub-jump="dashboard">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8 12H16M12 8V16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
         <div><h3>Saldo (Jahr)</h3><p>${eur(dash.balance)}</p></div>
+        <span class="card-sparkline" title="Verlauf der letzten 6 Monate">${balanceSpark}</span>
       </button>`;
     if (hasDebts) {
       cardsEl.innerHTML += `

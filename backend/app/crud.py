@@ -2098,3 +2098,48 @@ def dashboard_summary(db: Session, space_id: int, year: int, month: int | None =
         # Geschäftlich-Filter bewusst leer statt einer irreführenden Mischung.
         budgets=[] if business_only else budget_progress(db, space_id, year, month),
     )
+
+
+def monthly_flow_trend(db: Session, space_id: int, months: int = 6) -> list[dict]:
+    """Einnahmen/Ausgaben je Monat der letzten `months` Monate (aktueller Monat
+    eingeschlossen) - fuer kleine Trend-Sparklines auf dem Hub, keine
+    tiefergehende Auswertung wie dashboard_summary."""
+    today = date.today()
+    start_year, start_month = today.year, today.month - (months - 1)
+    while start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    start = date(start_year, start_month, 1)
+
+    rows = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.date >= start,
+            models.Transaction.is_transfer.is_(False),
+        )
+        .all()
+    )
+
+    buckets: dict[tuple[int, int], dict[str, float]] = {}
+    y, m = start_year, start_month
+    for _ in range(months):
+        buckets[(y, m)] = {"income": 0.0, "expense": 0.0}
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+    for t in rows:
+        key = (t.date.year, t.date.month)
+        bucket = buckets.get(key)
+        if not bucket:
+            continue
+        if t.amount > 0:
+            bucket["income"] += t.amount
+        else:
+            bucket["expense"] += t.amount
+
+    return [
+        {"year": y, "month": m, "income": round(v["income"], 2), "expense": round(v["expense"], 2)}
+        for (y, m), v in sorted(buckets.items())
+    ]
