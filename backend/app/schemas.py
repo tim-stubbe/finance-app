@@ -1464,6 +1464,7 @@ class CalendarEventOut(BaseModel):
     location: Optional[str] = None
     all_day: bool = False
     calendar_url: Optional[str] = None
+    travel_minutes: Optional[int] = None
 
 
 class CalendarEventCreate(BaseModel):

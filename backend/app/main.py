@@ -3811,7 +3811,24 @@ def list_calendar_events(start: datetime, end: datetime, sync: bool = True, db: 
     # übersprungen werden (z.B. beim reinen Monat-weiterklicken).
     if sync:
         _sync_all_calendars(db)
-    return crud.get_calendar_events(db, start, end)
+    events = crud.get_calendar_events(db, start, end)
+
+    settings = auth.get_or_create_settings(db)
+    if settings.home_lat and settings.home_lon and settings.openroute_api_key_encrypted:
+        api_key = bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
+        home_coords = (settings.home_lat, settings.home_lon)
+        now = datetime.utcnow()
+        for ev in events:
+            # Nur fuer Termine der naechsten 24h (siehe crud.build_digest fuer
+            # dieselbe Begruendung: sonst taeglich wiederholte Anfragen fuer
+            # laengst noch nicht relevante Termine).
+            if ev.all_day or not (ev.lat and ev.lon) or not (now <= ev.start <= now + timedelta(hours=24)):
+                continue
+            try:
+                ev.travel_minutes = travel_time.travel_time_minutes(api_key, home_coords, (ev.lat, ev.lon))
+            except Exception:
+                pass
+    return events
 
 
 @api_router.post("/calendar-events", response_model=schemas.CalendarEventOut)

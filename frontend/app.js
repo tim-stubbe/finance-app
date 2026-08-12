@@ -4929,7 +4929,7 @@ function renderCalendarEvents() {
             ${esc(ev.title)}
             ${new Date(ev.start) < now ? '<span class="page-sub" style="display:inline">· vergangen</span>' : ""}
           </span>
-          <span class="todo-due">${ev.all_day ? "ganztägig" : new Date(ev.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${ev.location ? " · " + esc(ev.location) : ""}</span>
+          <span class="todo-due">${ev.all_day ? "ganztägig" : new Date(ev.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${ev.location ? " · " + esc(ev.location) : ""}${ev.travel_minutes != null ? ` · 🚗 ~${ev.travel_minutes} Min` : ""}</span>
         </div>
       `).join("")}
     </div>
