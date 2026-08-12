@@ -1935,6 +1935,24 @@ def build_digest(
                     fahrzeit = f" · 🚗 ~{minuten} Min ab Zuhause"
             lines.append(f"- {zeit}: {ev.title}{ort}{fahrzeit}")
 
+    # Lokaler Import statt am Modulanfang - goals.py importiert seinerseits
+    # crud, ein Import ganz oben wuerde einen Zirkelbezug erzeugen.
+    from . import goals as goals_module
+    open_goals = [g for g in get_goals(db, space_id) if g.status == models.GoalStatus.open and g.trigger]
+    nah_dran = []
+    for g in open_goals:
+        result = goals_module.evaluate_metric(db, g)
+        if result.value is None:
+            continue
+        percent = goals_module.progress_percent(result.value, result.threshold, result.comparison)
+        if percent >= 80:
+            nah_dran.append((g, percent))
+    if nah_dran:
+        nah_dran.sort(key=lambda x: -x[1])
+        lines.append("\n🎯 Fast geschafft:")
+        for g, percent in nah_dran[:3]:
+            lines.append(f"- „{g.title}“: {percent:.0f}%")
+
     offen = (
         db.query(models.Transaction)
         .join(models.Account)
