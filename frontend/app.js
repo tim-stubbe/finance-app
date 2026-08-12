@@ -1892,7 +1892,9 @@ function normalizeDescriptionKey(desc) {
   // sonst wuerde aus dieser Buchungsliste heraus eine zweite, nicht
   // zusammengehoerende Erinnerung fuer dieselbe Zahlung entstehen.
   if (!desc) return "";
-  let text = desc.trim().toLowerCase().replace(/\s+/g, " ");
+  let text = desc.trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  text = text.replace(/[.,()/-]/g, " ");
+  text = text.replace(/\s+/g, " ");
   text = text.replace(/\b\d{6,}\b/g, "");
   return text.trim();
 }

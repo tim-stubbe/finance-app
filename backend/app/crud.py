@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import re
+import unicodedata
 from datetime import date, datetime, timedelta
 from statistics import median
 from sqlalchemy import func, extract
@@ -319,9 +320,18 @@ _RECURRING_FREQUENCIES = [
 
 
 def _normalize_description(desc: str | None) -> str:
+    """Live beobachtet: derselbe PayPal-Empfaenger tauchte je nach Buchung als
+    "PayPal (Europe) S.à r.l. et Cie, SCA", "PayPal Europe S.a.r.l. et Cie S.C.A"
+    und "PayPal (Europe) S.a r.l. et Cie, S.C.A." auf - reines Whitespace-Trimmen
+    reichte nicht, um das als denselben Empfaenger zu erkennen (weder bei "Wo dein
+    Geld hingeht" noch bei der Abo-Erkennung). Deshalb zusaetzlich Akzente und
+    Satzzeichen vereinheitlichen, bevor verglichen wird."""
     if not desc:
         return ""
-    text = re.sub(r"\s+", " ", desc.strip().lower())
+    text = unicodedata.normalize("NFKD", desc.strip().lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[.,()/-]", " ", text)
+    text = re.sub(r"\s+", " ", text)
     text = re.sub(r"\b\d{6,}\b", "", text)
     return text.strip()
 
