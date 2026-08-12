@@ -2312,6 +2312,24 @@ def update_todo(db: Session, todo: models.Todo, title=None, done=None, due_date=
     return todo
 
 
+def complete_todo_by_name(db: Session, name_query: str):
+    """Hakt ein offenes To-Do über einen (Teil-)Namen ab - fürs Telegram-
+    Kommando /erledigt, analog zu set_balance_by_name. Gibt (todo, error)
+    zurück: error ist None bei Erfolg, sonst ein Text zum direkten
+    Zurücksenden (kein Treffer / mehrdeutig)."""
+    open_todos = get_todos(db, include_done=False)
+    q = name_query.strip().lower()
+    matches = [t for t in open_todos if q in t.title.lower()]
+    if not matches:
+        namen = ", ".join(t.title for t in open_todos) or "keine offenen To-Dos"
+        return None, f"Nichts mit „{name_query}“ gefunden. Offen: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(t.title for t in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    todo = update_todo(db, matches[0], done=True)
+    return todo, None
+
+
 def cleanup_old_done_todos(db: Session, days: int = 2) -> int:
     """Erledigte To-Dos verschwinden 2 Tage, nachdem sie abgehakt wurden, von
     selbst - abgehakt heißt hier "erledigt, kann weg", nicht "soll dauerhaft
