@@ -635,6 +635,13 @@ class SpendingAnomalyOut(BaseModel):
     deviation_pct: float
 
 
+class OverlappingContractGroupOut(BaseModel):
+    category_id: int
+    category_name: str
+    items: List[RecurringPaymentOut]
+    monthly_total: float
+
+
 # ---------- Kündigungsfrist-Erinnerungen ----------
 class ContractReminderCreate(BaseModel):
     account_id: int

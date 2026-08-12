@@ -445,6 +445,42 @@ def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
     return results
 
 
+def detect_overlapping_contracts(db: Session, space_id: int) -> list[dict]:
+    """Gruppiert die schon erkannten wiederkehrenden Zahlungen (siehe
+    detect_recurring_transactions) nach Kategorie und markiert Kategorien mit
+    mehreren UNTERSCHIEDLICHEN Abos als moegliche Ueberschneidung - typischer
+    Fall: zwei gleichzeitig laufende Mobilfunkvertraege oder zwei Versicherungen
+    derselben Art, die eigentlich nur eine sein sollten.
+
+    Bewusst kategoriebasiert statt KI-basiert (Markennamen erraten/vergleichen):
+    keine neue Ollama-Abhaengigkeit und kein Risiko, zwei unterschiedliche Dienste
+    faelschlich als "dasselbe" zu erkennen. Dafuer muss der Nutzer seine
+    Kategorien halbwegs sinnvoll vergeben - reiner Heuristik-Kompromiss, kein
+    Vertragsdatenabgleich."""
+    recurring = detect_recurring_transactions(db, space_id)
+    by_category: dict[int, list[dict]] = {}
+    for r in recurring:
+        if r["category_id"]:
+            by_category.setdefault(r["category_id"], []).append(r)
+
+    groups = []
+    for cat_id, items in by_category.items():
+        if len(items) < 2:
+            continue
+        monthly_total = sum(
+            abs(r["avg_amount"]) * 30.44 / RECURRING_INTERVAL_DAYS.get(r["frequency"], 30.44)
+            for r in items
+        )
+        groups.append({
+            "category_id": cat_id,
+            "category_name": items[0]["category_name"],
+            "items": items,
+            "monthly_total": round(monthly_total, 2),
+        })
+    groups.sort(key=lambda g: -g["monthly_total"])
+    return groups
+
+
 def detect_price_increases(db: Session, space_id: int) -> list[dict]:
     """Erkennt Abos, deren letzte Abbuchung teurer war als die vorherigen üblichen -
     reine Auswertung der ohnehin schon vorhandenen Buchungen, kein neuer Datenbestand

@@ -1958,9 +1958,27 @@ async function loadPriceIncreases() {
     </tr>`).join("");
 }
 
+async function loadOverlappingContracts() {
+  const groups = await api("/transactions/overlapping-contracts");
+  const panel = document.getElementById("overlapping-contracts-panel");
+  panel.classList.toggle("hidden", groups.length === 0);
+  document.getElementById("overlapping-contracts-list").innerHTML = groups.map(g => `
+    <div class="overlap-group">
+      <div class="overlap-group-head">
+        <strong>${esc(g.category_name)}</strong>
+        <span class="overlap-group-total">${eur(g.monthly_total)} / Monat zusammen</span>
+      </div>
+      ${g.items.map(it => `
+        <div class="overlap-item">
+          <span>${esc(it.description || "–")}</span>
+          <span class="overlap-item-meta">${esc(it.frequency)} · ${eur(Math.abs(it.avg_amount))} · ${esc(it.account_name || "–")}</span>
+        </div>`).join("")}
+    </div>`).join("");
+}
+
 async function loadRecurringTab() {
   await loadCashflowForecast();
-  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders(), loadPriceIncreases()]);
+  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders(), loadPriceIncreases(), loadOverlappingContracts()]);
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {

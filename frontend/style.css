@@ -1205,6 +1205,34 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* ---------- Budgets ---------- */
 .budget-list { display: flex; flex-direction: column; gap: 16px; }
 
+.overlap-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: var(--surface-2);
+}
+.overlap-group:last-child { margin-bottom: 0; }
+.overlap-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.overlap-group-head strong { font-size: 14px; }
+.overlap-group-total { font-size: 13px; font-weight: 700; color: var(--neg); white-space: nowrap; }
+.overlap-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+.overlap-item:first-of-type { border-top: none; }
+.overlap-item-meta { color: var(--muted); font-size: 12px; }
+
 .budget-row { display: flex; flex-direction: column; gap: 6px; }
 
 .budget-row-head {

@@ -455,6 +455,11 @@ def get_spending_anomalies(db: Session = Depends(get_db), space_id: int = Depend
     return crud.detect_spending_anomalies(db, space_id)
 
 
+@api_router.get("/transactions/overlapping-contracts", response_model=List[schemas.OverlappingContractGroupOut])
+def get_overlapping_contracts(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.detect_overlapping_contracts(db, space_id)
+
+
 @api_router.get("/contract-reminders", response_model=List[schemas.ContractReminderOut])
 def list_contract_reminders(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.get_contract_reminders(db, space_id)
