@@ -3314,6 +3314,11 @@ def create_life_area(db: Session, data: schemas.LifeAreaCreate) -> models.LifeAr
 
 def update_life_area(db: Session, area: models.LifeArea, data: schemas.LifeAreaUpdate) -> models.LifeArea:
     for key, value in data.model_dump(exclude_unset=True).items():
+        # Dieselbe Begrenzung wie create_life_checkin - ohne das könnte ein
+        # direktes PATCH (z.B. Tippfehler) den Fortschritt außerhalb 0-100
+        # setzen, was die Balken-Darstellung im Frontend verzerren würde.
+        if key == "progress_percent" and value is not None:
+            value = max(0, min(100, value))
         setattr(area, key, value)
     db.commit()
     db.refresh(area)
