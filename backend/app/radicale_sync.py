@@ -331,6 +331,13 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
         seen_hrefs.add(item["href"])
         local = local_by_href.get(item["href"])
         if local and local.etag == item["etag"]:
+            # calendar_url fehlt noch bei Einträgen aus der Zeit vor dem
+            # Zwei-Wege-Sync (nur gelesen, nie geschrieben) - ohne Nachtragen
+            # würde ein lokales Bearbeiten so eines alten Termins nie den
+            # Weg zurück zum Server finden (siehe to_push-Filter oben).
+            if not local.calendar_url:
+                local.calendar_url = url
+                db.commit()
             continue
         try:
             ics = fetch_ics(url, item["href"], username, password)
