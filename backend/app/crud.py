@@ -1807,6 +1807,49 @@ def net_worth(db: Session, space_id: int) -> schemas.NetWorthOut:
     )
 
 
+def build_digest(db: Session, space_id: int) -> str:
+    """Baut die Telegram-Statusmeldung fuer den wiederkehrenden Digest (siehe
+    main._scheduled_digest) - bewusst reine Auswertung, veraendert nirgends
+    einen "notified"/"reminded"-Zustand wie die evaluate_*-Funktionen, damit
+    sich Digest und die separaten Sofort-Warnungen nicht gegenseitig
+    beeinflussen."""
+    nw = net_worth(db, space_id)
+    lines = [f"📊 Kies-Update ({datetime.now().strftime('%H:%M')})", ""]
+    lines.append(f"Nettovermögen: {nw.total:.2f} EUR")
+    lines.append(
+        f"Konten: {nw.accounts_total:.2f} EUR · Investments: {nw.investments_total:.2f} EUR · "
+        f"Schulden: {nw.debts_total:.2f} EUR"
+    )
+
+    negative = [a for a in get_accounts(db, space_id) if account_balance(db, a) < 0]
+    if negative:
+        namen = ", ".join(f"„{a.name}“" for a in negative)
+        lines.append(f"\n⚠️ Im Minus: {namen}")
+
+    forecast = cashflow_forecast(db, space_id, horizon_days=7)
+    upcoming = forecast.upcoming_events[:5]
+    if upcoming:
+        lines.append("\n📅 Fällig in den nächsten 7 Tagen:")
+        for e in upcoming:
+            lines.append(f"- {e.date.strftime('%d.%m.')}: {e.description or '–'} ({e.amount:.2f} EUR)")
+
+    offen = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(models.Account.space_id == space_id, models.Transaction.category_id.is_(None),
+                models.Transaction.is_transfer.is_(False))
+        .count()
+    )
+    if offen:
+        lines.append(f"\n🗂 {offen} Buchung(en) noch unkategorisiert - läuft automatisch weiter im Hintergrund.")
+
+    dupes = find_duplicate_transactions(db, space_id)
+    if dupes:
+        lines.append(f"\n🔁 {len(dupes)} mögliche doppelte Buchung(en) gefunden - im Buchungen-Tab prüfbar.")
+
+    return "\n".join(lines)
+
+
 def record_net_worth_snapshot(db: Session, space_id: int) -> None:
     """Schreibt einen Nettovermoegen-Snapshot fuer heute, falls noch keiner
     existiert - idempotent, damit ein Neustart des Schedulers am selben Tag

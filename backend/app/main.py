@@ -4389,6 +4389,28 @@ def _scheduled_net_worth_snapshot():
         db.close()
 
 
+DIGEST_HOURS = [6, 9, 12, 15, 18, 21, 0]  # alle 3 Stunden, 06:30 bis 00:30
+
+
+def _scheduled_digest():
+    """Proaktives Status-Update per Telegram, mehrmals taeglich (siehe
+    DIGEST_HOURS) - Nutzerwunsch nach einem Assistenten, der sich von selbst
+    meldet statt nur auf Nachfrage zu antworten. Bewusst reine Auswertung
+    (crud.build_digest), keine eigene "notified"-Logik wie die Sofort-
+    Warnungen in _check_daily_alerts - beides laeuft unabhaengig nebeneinander."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        for space in crud.get_spaces(db):
+            try:
+                text = crud.build_digest(db, space.id)
+                notifications.notify(settings, text)
+            except Exception:
+                db.rollback()
+    finally:
+        db.close()
+
+
 def _scheduled_radicale_sync():
     """Alle paar Minuten mit dem Radicale-Server abgleichen - läuft öfter als
     die anderen Sync-Jobs, weil To-Dos, die man gerade am Handy einträgt, sich
@@ -4504,6 +4526,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_net_worth_snapshot, CronTrigger(hour=23, minute=55),
     id="net_worth_snapshot", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_digest, CronTrigger(hour=",".join(str(h) for h in DIGEST_HOURS), minute=30),
+    id="digest", misfire_grace_time=1800,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es
