@@ -85,6 +85,7 @@ ensure_columns("transactions", {
 })
 ensure_columns("settings", {
     "last_digest_sent_at": "DATETIME",
+    "transfers_marked_since_digest": "INTEGER DEFAULT 0",
 })
 ensure_columns("settings", {
     "auto_categorize_enabled": "BOOLEAN DEFAULT 1",
@@ -4403,6 +4404,9 @@ def _run_ai_maintenance_for_space(db: Session, space_id: int, settings: models.S
     KI zuordnen. Gemeinsam genutzt vom stündlichen Job und vom manuellen 'Jetzt
     ausführen'-Button, damit beide garantiert dasselbe tun."""
     transfers_marked = crud.detect_and_mark_transfers(db, space_id)
+    if transfers_marked:
+        settings.transfers_marked_since_digest = (settings.transfers_marked_since_digest or 0) + transfers_marked
+        db.commit()
     if not settings.auto_categorize_enabled:
         return schemas.AutoCategorizeRunResult(transfers_marked=transfers_marked, categorized=0, skipped=0)
     result = ai_auto.auto_categorize(db, space_id, settings)
@@ -4471,13 +4475,18 @@ def _scheduled_digest():
             if settings.openroute_api_key_encrypted else None
         )
         since = settings.last_digest_sent_at
+        transfers_marked = settings.transfers_marked_since_digest or 0
         for space in crud.get_spaces(db):
             try:
-                text = crud.build_digest(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key, since=since)
+                text = crud.build_digest(
+                    db, space.id, home_coords=home_coords, ors_api_key=ors_api_key,
+                    since=since, transfers_marked=transfers_marked,
+                )
                 notifications.notify(settings, text)
             except Exception:
                 db.rollback()
         settings.last_digest_sent_at = datetime.utcnow()
+        settings.transfers_marked_since_digest = 0
         db.commit()
     finally:
         db.close()

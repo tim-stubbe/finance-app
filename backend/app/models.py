@@ -204,6 +204,11 @@ class Settings(Base):
     # Zeitpunkt des letzten Status-Updates - Grundlage fuer "seit dem letzten
     # Update automatisch erledigt" im Digest (siehe crud.build_digest).
     last_digest_sent_at = Column(DateTime, nullable=True)
+    # Laufender Zaehler seit dem letzten Digest, im Digest ausgelesen und dort
+    # wieder auf 0 gesetzt - einfacher als ein Zeitstempel pro Buchung, weil
+    # eine Umbuchungs-Markierung (anders als eine Kategorie) nicht rueckwirkend
+    # nachvollziehbar sein muss.
+    transfers_marked_since_digest = Column(Integer, nullable=False, default=0)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)

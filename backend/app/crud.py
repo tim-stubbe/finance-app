@@ -1814,7 +1814,7 @@ def net_worth(db: Session, space_id: int) -> schemas.NetWorthOut:
 def build_digest(
     db: Session, space_id: int,
     home_coords: tuple[float, float] | None = None, ors_api_key: str | None = None,
-    since: datetime | None = None,
+    since: datetime | None = None, transfers_marked: int = 0,
 ) -> str:
     """Baut die Telegram-Statusmeldung fuer den wiederkehrenden Digest (siehe
     main._scheduled_digest) - bewusst reine Auswertung, veraendert nirgends
@@ -1844,6 +1844,8 @@ def build_digest(
         )
         if neu_kategorisiert:
             lines.append(f"\n✅ {neu_kategorisiert} Buchung(en) seit dem letzten Update automatisch kategorisiert.")
+        if transfers_marked:
+            lines.append(f"🔁 {transfers_marked} interne Umbuchung(en) erkannt und markiert.")
 
     forecast = cashflow_forecast(db, space_id, horizon_days=7)
     upcoming = forecast.upcoming_events[:5]
