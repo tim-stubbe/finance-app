@@ -317,12 +317,17 @@ RECURRING_INTERVAL_DAYS = {label: target for label, target, _tol in _RECURRING_F
 
 def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> schemas.CashflowForecastOut:
     """Projiziert den Gesamtkontostand nach vorne, indem die erkannten wiederkehrenden
-    Zahlungen (Abos, Miete, Gehalt, ...) im gewählten Zeitraum weitergeschrieben
-    werden. Bewusst begrenzt: nur Muster, die crud.detect_recurring_transactions
-    bereits als wiederkehrend erkannt hat, fließen ein - einmalige/unregelmäßige
-    Ausgaben (z.B. spontane Einkäufe) werden NICHT vorhergesagt, die Kurve bleibt
-    zwischen zwei Terminen flach. Das ist eine bewusste Einschränkung, keine
-    Wettervorhersage für Spontanausgaben - im Frontend entsprechend kommuniziert."""
+    Zahlungen (Abos, Miete, Gehalt, ...) und die laufenden Kreditraten (siehe unten)
+    im gewählten Zeitraum weitergeschrieben werden. Bewusst begrenzt: nur Muster,
+    die crud.detect_recurring_transactions bereits als wiederkehrend erkannt hat,
+    fließen ein - einmalige/unregelmäßige Ausgaben (z.B. spontane Einkäufe) werden
+    NICHT vorhergesagt, die Kurve bleibt zwischen zwei Terminen flach. Das ist eine
+    bewusste Einschränkung, keine Wettervorhersage für Spontanausgaben - im Frontend
+    entsprechend kommuniziert.
+
+    Kreditraten fließen NUR mit der monatlichen Rate ein, nicht mit der gesamten
+    Restschuld (Nutzerwunsch: eine Ratenzahlung über z.B. 24 Monate darf den
+    Kontostand nicht so behandeln, als würde die ganze Schuld sofort fällig)."""
     accounts = get_accounts(db, space_id)
     start_balance = round(sum(account_balance(db, a) for a in accounts), 2)
 
@@ -342,6 +347,21 @@ def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> sch
         while occ_date <= end:
             events.append({"date": occ_date, "amount": r["avg_amount"], "description": r["description"]})
             occ_date += timedelta(days=interval)
+
+    # Laufende Kreditraten fließen mit ein - bewusst nur die monatliche Rate
+    # (inkl. Zins-/Nebenkostenanteil), NICHT die gesamte Restschuld auf einen
+    # Schlag. debts.projection() übernimmt die eigentliche Tilgungsrechnung
+    # (kennt Zins, Laufzeitende, Kreditart) statt das hier zu duplizieren -
+    # sie bricht von selbst ab, sobald die Restschuld getilgt ist.
+    for d in get_debts(db, space_id):
+        if d.status != models.DebtStatus.active:
+            continue
+        rows, _ = debts.projection(d)
+        for row in rows:
+            if row.date > end:
+                break
+            events.append({"date": row.date, "amount": -abs(row.payment), "description": f"Kredit: {d.name}"})
+
     events.sort(key=lambda e: e["date"])
 
     points: list[schemas.CashflowPoint] = []
