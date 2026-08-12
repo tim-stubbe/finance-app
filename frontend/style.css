@@ -1609,6 +1609,139 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 .cmdk-trigger:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
 
+/* ---------- Jahresrückblick ("Wrapped"-artige Story) ---------- */
+.year-review-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a0c;
+  animation: overlay-in 0.3s var(--ease);
+  overflow: hidden;
+}
+
+.year-review-dots {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.year-review-dot {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+.year-review-dot.is-done { background: rgba(255, 255, 255, 0.85); }
+.year-review-dot.is-active { background: rgba(255, 255, 255, 0.35); position: relative; }
+.year-review-dot.is-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  animation: year-review-fill 5s linear forwards;
+}
+@keyframes year-review-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.year-review-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.year-review-close:hover { background: rgba(255, 255, 255, 0.22); }
+
+.year-review-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  z-index: 1;
+}
+.year-review-zone-prev { left: 0; }
+.year-review-zone-next { right: 0; }
+
+.year-review-slide {
+  width: min(480px, 100vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 32px;
+  color: #fff;
+  box-sizing: border-box;
+  background: var(--yr-bg, radial-gradient(circle at 50% 20%, #3987e5, #16223a 70%));
+  animation: year-review-slide-in 0.4s var(--ease-spring);
+}
+@keyframes year-review-slide-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.year-review-eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+  margin: 0 0 18px;
+}
+.year-review-icon { width: 52px; height: 52px; margin-bottom: 18px; opacity: 0.9; }
+.year-review-value {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0 0 14px;
+}
+.year-review-label {
+  font-size: 19px;
+  font-weight: 600;
+  opacity: 0.92;
+  margin: 0;
+  max-width: 380px;
+}
+.year-review-sub {
+  margin: 14px 0 0;
+  font-size: 14px;
+  opacity: 0.65;
+  max-width: 340px;
+}
+.year-review-slide .btn-primary {
+  margin-top: 28px;
+  background: #fff;
+  color: #16223a;
+  border-color: #fff;
+}
+
+@media (max-width: 560px) {
+  .year-review-value { font-size: 44px; }
+  .year-review-label { font-size: 16px; }
+}
+
 .cmdk-overlay {
   position: fixed;
   inset: 0;

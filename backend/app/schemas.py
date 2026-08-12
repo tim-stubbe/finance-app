@@ -570,6 +570,35 @@ class DashboardTrendOut(BaseModel):
     points: List[DashboardTrendPoint]
 
 
+# ---------- Jahresrückblick ----------
+class YearReviewStat(BaseModel):
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    total: Optional[float] = None
+    count: Optional[int] = None
+    month: Optional[int] = None
+    date: Optional[str] = None
+    category_name: Optional[str] = None
+
+
+class YearReviewOut(BaseModel):
+    year: int
+    total_income: float
+    total_expense: float
+    saved: float
+    savings_rate: Optional[float] = None
+    transaction_count: int
+    biggest_expense: Optional[YearReviewStat] = None
+    top_category: Optional[YearReviewStat] = None
+    most_frequent_category: Optional[YearReviewStat] = None
+    busiest_month: Optional[YearReviewStat] = None
+    income_change_pct: Optional[float] = None
+    expense_change_pct: Optional[float] = None
+    investment_return_pct: Optional[float] = None
+    net_worth_now: float
+    monthly_points: List[DashboardTrendPoint]
+
+
 # ---------- Wiederkehrende Zahlungen ----------
 class RecurringPaymentOut(BaseModel):
     description: Optional[str] = None

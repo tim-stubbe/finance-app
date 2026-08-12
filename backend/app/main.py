@@ -3737,6 +3737,13 @@ def dashboard_trend(months: int = 6, db: Session = Depends(get_db), space_id: in
     ])
 
 
+@api_router.get("/year-review", response_model=schemas.YearReviewOut)
+def year_review(year: int = date.today().year, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Jahresrueckblick - reine Auswertung, keine neue Datenerfassung."""
+    data = crud.year_review(db, space_id, year)
+    return schemas.YearReviewOut(**data)
+
+
 # ---------------- Geschäftlich (Filter auf is_business-Konten, kein eigener Bereich) ----------------
 @api_router.get("/business/summary", response_model=schemas.DashboardSummary)
 def business_summary(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):

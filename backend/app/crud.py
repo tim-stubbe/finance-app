@@ -2143,3 +2143,117 @@ def monthly_flow_trend(db: Session, space_id: int, months: int = 6) -> list[dict
         {"year": y, "month": m, "income": round(v["income"], 2), "expense": round(v["expense"], 2)}
         for (y, m), v in sorted(buckets.items())
     ]
+
+
+def _year_transactions(db: Session, space_id: int, year: int):
+    start, end = date(year, 1, 1), date(year, 12, 31)
+    return (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.date >= start,
+            models.Transaction.date <= end,
+            models.Transaction.is_transfer.is_(False),
+        )
+        .all()
+    )
+
+
+def year_review(db: Session, space_id: int, year: int) -> dict:
+    """Jahresrueckblick - reine Auswertung bereits vorhandener Daten, keine neue
+    Datenerfassung. 'Vermoegensentwicklung' bewusst nur als Investment-Rendite
+    der letzten 12 Monate (dafuer gibt es echte Historie ueber portfolio_history),
+    NICHT als Netto-Vermoegensverlauf - dafuer fehlt eine Snapshot-Historie
+    (siehe Begruendung bei den Hub-Sparklines, die aus demselben Grund keine
+    Nettovermoegen-Kurve zeigen)."""
+    transactions = _year_transactions(db, space_id, year)
+    total_income = round(sum(t.amount for t in transactions if t.amount > 0), 2)
+    total_expense = round(sum(t.amount for t in transactions if t.amount < 0), 2)
+    saved = round(total_income + total_expense, 2)
+    savings_rate = round(saved / total_income * 100, 1) if total_income else None
+
+    expenses = [t for t in transactions if t.amount < 0]
+    biggest = None
+    if expenses:
+        t = min(expenses, key=lambda x: x.amount)
+        cat = get_category(db, t.category_id) if t.category_id else None
+        biggest = {
+            "name": t.description or "Ohne Beschreibung",
+            "amount": round(abs(t.amount), 2),
+            "date": t.date.isoformat(),
+            "category_name": cat.name if cat else None,
+        }
+
+    by_cat_total: dict[int | None, float] = {}
+    by_cat_count: dict[int | None, int] = {}
+    cat_names: dict[int | None, str] = {}
+    for t in expenses:
+        key = t.category_id
+        by_cat_total[key] = by_cat_total.get(key, 0.0) + t.amount
+        by_cat_count[key] = by_cat_count.get(key, 0) + 1
+        if key is None:
+            cat_names[key] = "Ohne Kategorie"
+        elif key not in cat_names:
+            cat = get_category(db, key)
+            cat_names[key] = cat.name if cat else "Unbekannt"
+
+    top_category = None
+    if by_cat_total:
+        key = min(by_cat_total, key=lambda k: by_cat_total[k])
+        top_category = {"name": cat_names[key], "total": round(abs(by_cat_total[key]), 2), "count": by_cat_count[key]}
+
+    most_frequent_category = None
+    if by_cat_count:
+        key = max(by_cat_count, key=lambda k: by_cat_count[k])
+        most_frequent_category = {"name": cat_names[key], "count": by_cat_count[key], "total": round(abs(by_cat_total[key]), 2)}
+
+    month_counts: dict[int, int] = {}
+    monthly_points = []
+    for m in range(1, 13):
+        m_income = round(sum(t.amount for t in transactions if t.amount > 0 and t.date.month == m), 2)
+        m_expense = round(sum(t.amount for t in transactions if t.amount < 0 and t.date.month == m), 2)
+        m_count = sum(1 for t in transactions if t.date.month == m)
+        month_counts[m] = m_count
+        monthly_points.append({"year": year, "month": m, "income": m_income, "expense": m_expense})
+
+    busiest_month = None
+    if any(month_counts.values()):
+        m = max(month_counts, key=lambda k: month_counts[k])
+        busiest_month = {"month": m, "count": month_counts[m]}
+
+    prev_transactions = _year_transactions(db, space_id, year - 1)
+    prev_income = round(sum(t.amount for t in prev_transactions if t.amount > 0), 2)
+    prev_expense = round(sum(t.amount for t in prev_transactions if t.amount < 0), 2)
+    income_change_pct = round((total_income - prev_income) / prev_income * 100, 1) if prev_income else None
+    expense_change_pct = (
+        round((abs(total_expense) - abs(prev_expense)) / abs(prev_expense) * 100, 1) if prev_expense else None
+    )
+
+    investment_return_pct = None
+    try:
+        history = portfolio_history(db, space_id, "1J")
+        if history.points:
+            last = history.points[-1]
+            if last.return_pct is not None:
+                investment_return_pct = last.return_pct
+    except Exception:
+        pass
+
+    return {
+        "year": year,
+        "total_income": total_income,
+        "total_expense": total_expense,
+        "saved": saved,
+        "savings_rate": savings_rate,
+        "transaction_count": len(transactions),
+        "biggest_expense": biggest,
+        "top_category": top_category,
+        "most_frequent_category": most_frequent_category,
+        "busiest_month": busiest_month,
+        "income_change_pct": income_change_pct,
+        "expense_change_pct": expense_change_pct,
+        "investment_return_pct": investment_return_pct,
+        "net_worth_now": net_worth(db, space_id).total,
+        "monthly_points": monthly_points,
+    }

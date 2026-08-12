@@ -162,6 +162,12 @@
           <h1>Hub</h1>
           <p class="page-sub">Überblick über alles auf einen Blick – Finanzen und angebundene Dienste</p>
         </div>
+        <div class="page-head-actions">
+          <button type="button" id="year-review-open" class="btn-ghost">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L13.8 8.2L19 10L13.8 11.8L12 17L10.2 11.8L5 10L10.2 8.2L12 3Z"/></svg>
+            Jahresrückblick
+          </button>
+        </div>
       </header>
 
       <div class="hub-bento" id="hub-finance-cards"></div>
@@ -2035,6 +2041,15 @@
     </div>
     <div class="cmdk-results" id="cmdk-results"></div>
   </div>
+</div>
+
+<!-- JAHRESRÜCKBLICK ("Wrapped"-artige Story) -->
+<div id="year-review-overlay" class="year-review-overlay hidden">
+  <button type="button" id="year-review-close" class="year-review-close" aria-label="Schließen">&times;</button>
+  <div class="year-review-dots" id="year-review-dots"></div>
+  <div class="year-review-slide" id="year-review-slide"></div>
+  <button type="button" class="year-review-zone year-review-zone-prev" id="year-review-prev" aria-label="Zurück"></button>
+  <button type="button" class="year-review-zone year-review-zone-next" id="year-review-next" aria-label="Weiter"></button>
 </div>
 
 <div id="photo-lightbox" class="modal-overlay hidden">
