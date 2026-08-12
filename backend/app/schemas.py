@@ -685,6 +685,15 @@ class SpendingAnomalyOut(BaseModel):
     deviation_pct: float
 
 
+class CalendarConflictOut(BaseModel):
+    event_a_id: int
+    event_a_title: str
+    event_a_start: datetime
+    event_b_id: int
+    event_b_title: str
+    event_b_start: datetime
+
+
 class OverlappingContractGroupOut(BaseModel):
     category_id: int
     category_name: str

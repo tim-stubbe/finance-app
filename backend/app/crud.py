@@ -2344,6 +2344,45 @@ def get_upcoming_calendar_events(db: Session, days: int = 7, limit: int = 20) ->
     )
 
 
+def detect_calendar_conflicts(db: Session, days: int = 14) -> list[dict]:
+    """Findet sich zeitlich überschneidende Termine in den nächsten `days`
+    Tagen - reine Auswertung der ohnehin geladenen Termine, kein Ändern.
+    Ganztägige Termine werden bewusst ausgeklammert (die überschneiden sich
+    fast immer mit irgendwas, ohne dass das ein echtes Problem wäre). Termine
+    ohne Ende gelten für den Vergleich als 30 Minuten lang - eine Annahme nur
+    für diese Prüfung, nicht gespeichert."""
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=days)
+    events = (
+        db.query(models.CalendarEvent)
+        .filter(
+            models.CalendarEvent.pending_delete.is_(False),
+            models.CalendarEvent.all_day.is_(False),
+            models.CalendarEvent.start >= now,
+            models.CalendarEvent.start <= cutoff,
+        )
+        .order_by(models.CalendarEvent.start)
+        .all()
+    )
+
+    def effective_end(ev):
+        return ev.end or (ev.start + timedelta(minutes=30))
+
+    conflicts = []
+    for i in range(len(events)):
+        a = events[i]
+        a_end = effective_end(a)
+        for j in range(i + 1, len(events)):
+            b = events[j]
+            if b.start >= a_end:
+                break  # nach Start sortiert - ab hier kann nichts mehr ueberlappen
+            conflicts.append({
+                "event_a_id": a.id, "event_a_title": a.title, "event_a_start": a.start,
+                "event_b_id": b.id, "event_b_title": b.title, "event_b_start": b.start,
+            })
+    return conflicts
+
+
 def delete_todo(db: Session, todo: models.Todo):
     # Erst zum Löschen markieren, damit der nächste Sync die Löschung noch auf
     # den Server übertragen kann - direktes db.delete() würde die Radicale-

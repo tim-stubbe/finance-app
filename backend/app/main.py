@@ -3769,6 +3769,11 @@ def get_upcoming_calendar_events(days: int = 7, db: Session = Depends(get_db)):
     return crud.get_upcoming_calendar_events(db, days=days)
 
 
+@api_router.get("/calendar/conflicts", response_model=List[schemas.CalendarConflictOut])
+def get_calendar_conflicts(days: int = 14, db: Session = Depends(get_db)):
+    return crud.detect_calendar_conflicts(db, days=days)
+
+
 def _calendar_urls(db: Session) -> list[str]:
     settings = auth.get_or_create_settings(db)
     if not settings.radicale_calendar_url:
@@ -4525,18 +4530,20 @@ def _scheduled_ai_maintenance():
 
 
 def _scheduled_anomaly_check():
-    """Alle 30 Minuten: Preiserhöhungen bei Abos und Ausgaben-Ausreißer sofort
-    per Telegram melden, statt nur im 3-Stunden-Digest aufzutauchen - beides
-    nutzt die schon vorhandenen Auswertungen (detect_price_increases/
-    detect_spending_anomalies, sonst nur passiv in der App sichtbar).
-    NotifiedAnomaly verhindert, dieselbe Auffälligkeit bei jedem Lauf erneut
-    zu schicken (siehe dort für die Begründung)."""
+    """Alle 30 Minuten: Preiserhöhungen bei Abos, Ausgaben-Ausreißer und
+    überschneidende Termine sofort per Telegram melden, statt nur im
+    3-Stunden-Digest aufzutauchen - nutzt die schon vorhandenen Auswertungen
+    (detect_price_increases/detect_spending_anomalies/detect_calendar_conflicts,
+    sonst nur passiv in der App sichtbar). NotifiedAnomaly verhindert, dieselbe
+    Auffälligkeit bei jedem Lauf erneut zu schicken (siehe dort für die
+    Begründung)."""
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
         if not settings.notifications_enabled:
             return
-        for space in crud.get_spaces(db):
+        spaces = crud.get_spaces(db)
+        for space in spaces:
             try:
                 for inc in crud.detect_price_increases(db, space.id):
                     key = f"price:{space.id}:{inc['account_id']}:{inc['description']}:{inc['new_amount']}"
@@ -4561,6 +4568,25 @@ def _scheduled_anomaly_check():
                         f"+{an['deviation_pct']:.0f}%).",
                     )
                     crud.mark_anomaly_notified(db, space.id, key)
+            except Exception:
+                db.rollback()
+
+        # Termine sind bereichsübergreifend (kein space_id) - Konflikte deshalb
+        # nur einmal prüfen, nicht pro Bereich, sonst käme dieselbe Meldung
+        # mehrfach. NotifiedAnomaly braucht trotzdem ein space_id (FK
+        # not null) - der erste Bereich dient hier nur als Namensraum.
+        if spaces:
+            try:
+                for c in crud.detect_calendar_conflicts(db):
+                    key = f"conflict:{min(c['event_a_id'], c['event_b_id'])}:{max(c['event_a_id'], c['event_b_id'])}"
+                    if crud.is_anomaly_notified(db, spaces[0].id, key):
+                        continue
+                    notifications.notify(
+                        settings,
+                        f"⚠️ Terminüberschneidung: „{c['event_a_title']}“ ({c['event_a_start'].strftime('%d.%m. %H:%M')}) "
+                        f"und „{c['event_b_title']}“ ({c['event_b_start'].strftime('%d.%m. %H:%M')}).",
+                    )
+                    crud.mark_anomaly_notified(db, spaces[0].id, key)
             except Exception:
                 db.rollback()
     finally:
