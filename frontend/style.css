@@ -1961,6 +1961,44 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .loading-pulse { animation: none; }
 }
 
+/* ---------- Skeleton-Loader (Form nachgebildet statt reinem Pulstext) ---------- */
+.skel {
+  display: inline-block;
+  border-radius: 8px;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--muted) 22%, var(--surface-2)) 30%,
+    color-mix(in srgb, var(--muted) 55%, var(--surface-2)) 50%,
+    color-mix(in srgb, var(--muted) 22%, var(--surface-2)) 70%
+  );
+  background-size: 220% 100%;
+  animation: skel-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -20% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; background: var(--surface-2); }
+}
+
+.skel-hero {
+  grid-column: span 2;
+  grid-row: span 2;
+  border: 1px solid var(--border);
+}
+.skel-tile { grid-column: span 1; grid-row: span 1; border: 1px solid var(--border); border-radius: var(--radius); }
+
+.skel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 4px;
+  gap: 16px;
+}
+.skel-row .skel:first-child { width: 55%; height: 13px; }
+.skel-row .skel:last-child { width: 60px; height: 13px; }
+
 @media (prefers-reduced-motion: reduce) {
   .toast { animation: none; transition: opacity 0.15s linear; }
   .toast-out { transform: none; }

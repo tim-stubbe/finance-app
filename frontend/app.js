@@ -1744,6 +1744,7 @@ let returnDeadlinesCache = [];
 
 async function loadTransactions() {
   loadGlobalTopbar();
+  document.getElementById("tx-list").innerHTML = skelTableRows(7, 8);
   if (!accountsCache.length) await loadAccounts();
   if (!categoriesCache.length) await loadCategories();
   if (!tripsCache.length) await loadTrips();
@@ -4781,9 +4782,25 @@ function goToTab(tabName) {
   document.querySelector(`.nav-btn[data-tab="${tabName}"]`)?.click();
 }
 
+// ---------- Skeleton-Loader-Bausteine ----------
+function skelBento() {
+  return `<div class="skel skel-hero"></div><div class="skel skel-tile"></div><div class="skel skel-tile"></div><div class="skel skel-tile"></div>`;
+}
+function skelRows(n) {
+  return Array.from({ length: n }, () => `<div class="skel-row"><span class="skel"></span><span class="skel"></span></div>`).join("");
+}
+function skelTableRows(colspan, n) {
+  return Array.from({ length: n }, () =>
+    `<tr class="skel-table-row"><td colspan="${colspan}"><span class="skel" style="height:15px;width:${40 + Math.random() * 40}%"></span></td></tr>`
+  ).join("");
+}
+
 // ---------- Hub (Startseite) ----------
 async function loadHubTab() {
   const cardsEl = document.getElementById("hub-finance-cards");
+  cardsEl.innerHTML = skelBento();
+  document.getElementById("hub-todos-body").innerHTML = skelRows(3);
+  document.getElementById("hub-transactions-body").innerHTML = skelRows(5);
   try {
     const [dash, nw, trend] = await Promise.all([api("/dashboard"), api("/net-worth"), api("/dashboard/trend?months=6")]);
     const hasDebts = nw.debts_total > 0;
