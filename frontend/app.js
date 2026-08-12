@@ -1364,8 +1364,6 @@ document.getElementById("ai-receipts-btn").addEventListener("click", async () =>
 
 async function loadAiTab() {
   await loadBelegChatModelSelect();
-  await loadFileSortSettings();
-  await loadFileSortLog();
 }
 
 // ================= BELEG-CHAT =================
@@ -3823,126 +3821,6 @@ window.deleteBackupFile = async filename => {
 
 document.getElementById("backup-btn").addEventListener("click", () => {
   window.location.href = API + "/backup";
-});
-
-// ---------- Datei-Sortierung ----------
-let fileSortEnabled = false;
-
-function renderFileSortToggle() {
-  const btn = document.getElementById("file-sort-stop-toggle");
-  btn.textContent = fileSortEnabled ? "⏹ Alles stoppen" : "▶️ Wieder aktivieren";
-  btn.classList.toggle("btn-danger", fileSortEnabled);
-}
-
-async function loadFileSortSettings() {
-  const s = await api("/settings/file-sort");
-  document.getElementById("file-sort-source").value = s.source_path || "";
-  document.getElementById("file-sort-target").value = s.target_path || "";
-  document.getElementById("file-sort-review").value = s.review_path || "";
-  document.getElementById("file-sort-categories").value = s.categories || "";
-  document.getElementById("file-sort-subfolder-category").value = s.subfolder_category || "";
-  document.getElementById("file-sort-model").value = s.model || "";
-  document.getElementById("file-sort-statements-subfolder").value = s.statements_subfolder || "";
-  fileSortEnabled = s.enabled;
-  renderFileSortToggle();
-}
-
-document.getElementById("file-sort-stop-toggle").addEventListener("click", async () => {
-  const next = !fileSortEnabled;
-  if (fileSortEnabled && !confirm("Automatische Datei-Sortierung und Kontoauszug-Import wirklich stoppen? Der 10-Minuten-Hintergrundjob läuft dann nicht mehr, bis du hier wieder aktivierst.")) return;
-  const s = await api("/settings/file-sort/enabled", { method: "PUT", body: JSON.stringify({ enabled: next }) });
-  fileSortEnabled = s.enabled;
-  renderFileSortToggle();
-  toast(fileSortEnabled ? "Datei-Sortierung wieder aktiv." : "Datei-Sortierung gestoppt - läuft nicht mehr automatisch.");
-});
-
-document.getElementById("file-sort-settings-form").addEventListener("submit", async e => {
-  e.preventDefault();
-  const payload = {
-    source_path: document.getElementById("file-sort-source").value.trim(),
-    target_path: document.getElementById("file-sort-target").value.trim(),
-    review_path: document.getElementById("file-sort-review").value.trim(),
-    categories: document.getElementById("file-sort-categories").value.trim(),
-    subfolder_category: document.getElementById("file-sort-subfolder-category").value.trim(),
-    model: document.getElementById("file-sort-model").value.trim(),
-    statements_subfolder: document.getElementById("file-sort-statements-subfolder").value.trim(),
-  };
-  if (!payload.source_path || !payload.target_path || !payload.categories) {
-    alert("Bitte Eingangsordner, Zielordner und mindestens eine Kategorie angeben.");
-    return;
-  }
-  await api("/settings/file-sort", { method: "PUT", body: JSON.stringify(payload) });
-  toast("Datei-Sortierung gespeichert - läuft ab jetzt automatisch alle 10 Minuten.");
-  loadFileSortLog();
-});
-
-const FILE_SORT_ACTION_LABELS = {
-  moved: "einsortiert",
-  review: "zum Prüfen verschoben",
-  deleted: "gelöscht (Datenmüll)",
-  skipped_uncertain: "unsicher – übersprungen",
-  skipped_unsupported: "Dateityp übersprungen",
-  error: "Fehler",
-  statement_imported: "Kontoauszug importiert",
-};
-
-async function loadFileSortLog() {
-  const tbody = document.getElementById("file-sort-log");
-  let log;
-  try {
-    log = await api("/file-sort/log?limit=50");
-  } catch (e) {
-    tbody.innerHTML = emptyRow(4, "alert-triangle", e.message);
-    return;
-  }
-  tbody.innerHTML = "";
-  if (log.length === 0) {
-    tbody.innerHTML = emptyRow(4, "folder", "Noch keine Einträge.");
-  }
-  log.forEach(l => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${esc(l.filename)}</td>
-      <td>${FILE_SORT_ACTION_LABELS[l.action] || l.action}${l.category ? ` (${esc(l.category)})` : ""}</td>
-      <td class="page-sub">${esc(l.detail || "")}</td>
-      <td>${new Date(l.created_at).toLocaleString("de-DE")}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-document.getElementById("file-sort-run-now").addEventListener("click", async () => {
-  const statusEl = document.getElementById("file-sort-status");
-  statusEl.textContent = "Läuft …";
-  try {
-    const r = await api("/file-sort/run", { method: "POST" });
-    const belegHinweis = r.receipts_added ? ` ${r.receipts_added} davon zusätzlich in den Beleg-Eingang übernommen.` : "";
-    statusEl.textContent = r.error
-      ? `Fehler: ${r.error}`
-      : `${r.processed} geprüft, ${r.moved} einsortiert, ${r.skipped} zur manuellen Prüfung übersprungen.${belegHinweis}`;
-  } catch (e) {
-    statusEl.textContent = "Fehler: " + e.message;
-  }
-  loadFileSortLog();
-});
-
-document.getElementById("statement-import-run-now").addEventListener("click", async () => {
-  const statusEl = document.getElementById("file-sort-status");
-  statusEl.textContent = "Läuft …";
-  try {
-    const r = await api("/file-sort/run-statements", { method: "POST" });
-    statusEl.textContent = r.error
-      ? `Fehler: ${r.error}`
-      : `${r.processed} Kontoauszug/-züge geprüft, ${r.imported} Buchung(en) importiert, ${r.duplicates} Duplikat(e) übersprungen.`;
-  } catch (e) {
-    statusEl.textContent = "Fehler: " + e.message;
-  }
-  loadFileSortLog();
-});
-
-document.getElementById("file-sort-log-clear").addEventListener("click", async () => {
-  if (!confirm("Protokoll der Datei-/Belegerkennung wirklich vollständig löschen?")) return;
-  await api("/file-sort/log", { method: "DELETE" });
-  loadFileSortLog();
 });
 
 document.getElementById("restore-btn").addEventListener("click", async () => {

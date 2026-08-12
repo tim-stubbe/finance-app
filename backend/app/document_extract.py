@@ -27,7 +27,7 @@ def extract_pdf(data: bytes, max_chars: int = MAX_TEXT_CHARS) -> tuple[str | Non
     `max_chars` ist für die meisten Belege (ein Datum/ein Betrag) großzügig
     genug - ein mehrseitiger Kontoauszug mit vielen Buchungszeilen braucht
     dagegen mehr Spielraum, sonst gehen die hinteren Zeilen beim Import
-    einfach verloren (siehe statement_import.py)."""
+    einfach verloren."""
     doc = pymupdf.open(stream=data, filetype="pdf")
     text_parts = []
     for page in doc:

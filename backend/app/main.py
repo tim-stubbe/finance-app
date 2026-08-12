@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, file_sort, statement_import, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -138,24 +138,6 @@ ensure_columns("settings", {
 })
 ensure_columns("todos", {
     "completed_at": "DATETIME",
-})
-ensure_columns("settings", {
-    "file_sort_source_path": "VARCHAR",
-    "file_sort_target_path": "VARCHAR",
-    "file_sort_categories": "VARCHAR DEFAULT 'Behoerde,Bericht,Rechnung,Sonstiges,Vertrag'",
-    "file_sort_enabled": "BOOLEAN DEFAULT 0",
-})
-ensure_columns("settings", {
-    "file_sort_subfolder_category": "VARCHAR DEFAULT 'Rechnung'",
-})
-ensure_columns("settings", {
-    "file_sort_model": "VARCHAR",
-})
-ensure_columns("settings", {
-    "file_sort_review_path": "VARCHAR",
-})
-ensure_columns("settings", {
-    "file_sort_statements_subfolder": "VARCHAR",
 })
 ensure_columns("settings", {
     "mail_enabled": "BOOLEAN DEFAULT 0",
@@ -3617,137 +3599,6 @@ def settings_has_radicale(db: Session) -> bool:
     return bool(settings.radicale_url)
 
 
-# ---------------- Datei-Sortierung ----------------
-@api_router.get("/settings/file-sort", response_model=schemas.FileSortSettingsOut)
-def get_file_sort_settings(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.FileSortSettingsOut(
-        source_path=settings.file_sort_source_path,
-        target_path=settings.file_sort_target_path,
-        categories=settings.file_sort_categories,
-        subfolder_category=settings.file_sort_subfolder_category,
-        model=settings.file_sort_model,
-        review_path=settings.file_sort_review_path,
-        statements_subfolder=settings.file_sort_statements_subfolder,
-        enabled=settings.file_sort_enabled,
-    )
-
-
-@api_router.put("/settings/file-sort", response_model=schemas.FileSortSettingsOut)
-def update_file_sort_settings(data: schemas.FileSortSettingsUpdate, db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    settings.file_sort_source_path = data.source_path
-    settings.file_sort_target_path = data.target_path
-    settings.file_sort_categories = data.categories
-    settings.file_sort_subfolder_category = data.subfolder_category or None
-    settings.file_sort_model = data.model or None
-    settings.file_sort_review_path = data.review_path or None
-    settings.file_sort_statements_subfolder = data.statements_subfolder or None
-    settings.file_sort_enabled = True
-    db.commit()
-    return schemas.FileSortSettingsOut(
-        source_path=settings.file_sort_source_path,
-        target_path=settings.file_sort_target_path,
-        categories=settings.file_sort_categories,
-        subfolder_category=settings.file_sort_subfolder_category,
-        model=settings.file_sort_model,
-        review_path=settings.file_sort_review_path,
-        statements_subfolder=settings.file_sort_statements_subfolder,
-        enabled=settings.file_sort_enabled,
-    )
-
-
-@api_router.put("/settings/file-sort/enabled", response_model=schemas.FileSortSettingsOut)
-def toggle_file_sort_enabled(data: schemas.FileSortEnabledUpdate, db: Session = Depends(get_db)):
-    """Eigener, schneller Ein/Aus-Schalter unabhängig vom restlichen Formular -
-    "Alles stoppen" soll mit einem Klick greifen, ohne dass dafür erst alle
-    Pfade/Kategorien im Formular korrekt ausgefüllt sein müssen. Stoppt sowohl
-    die normale Kategorie-Einsortierung als auch den Kontoauszug-Import, beide
-    hängen am selben Schalter (siehe _scheduled_file_sort)."""
-    settings = auth.get_or_create_settings(db)
-    settings.file_sort_enabled = data.enabled
-    db.commit()
-    return schemas.FileSortSettingsOut(
-        source_path=settings.file_sort_source_path,
-        target_path=settings.file_sort_target_path,
-        categories=settings.file_sort_categories,
-        subfolder_category=settings.file_sort_subfolder_category,
-        model=settings.file_sort_model,
-        review_path=settings.file_sort_review_path,
-        statements_subfolder=settings.file_sort_statements_subfolder,
-        enabled=settings.file_sort_enabled,
-    )
-
-
-@api_router.get("/file-sort/log", response_model=List[schemas.FileSortLogOut])
-def get_file_sort_log(limit: int = 50, db: Session = Depends(get_db)):
-    limit = max(1, min(limit, 200))
-    return (
-        db.query(models.FileSortLog)
-        .order_by(models.FileSortLog.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-
-
-@api_router.delete("/file-sort/log")
-def clear_file_sort_log(db: Session = Depends(get_db)):
-    deleted = db.query(models.FileSortLog).delete()
-    db.commit()
-    return {"deleted": deleted}
-
-
-def _create_mail_attachments_from_receipts(db: Session, settings: models.Settings, receipts: list[dict]) -> int:
-    """Legt für automatisch als Rechnung einsortierte Dateien zusätzlich einen
-    Eintrag im bestehenden Beleg-Eingang an (gleiche Tabelle/Oberfläche wie
-    beim E-Mail-Import) - Datum/Betrag werden vorausgefüllt, die eigentliche
-    Zuordnung zu einer Buchung bleibt aber wie überall in dieser App eine
-    bewusste Entscheidung des Nutzers, kein automatisches Zubuchen."""
-    added = 0
-    for r in receipts:
-        message_id = f"file-sort:{r['filename']}"
-        vorhanden = db.query(models.MailAttachment).filter(
-            models.MailAttachment.message_id == message_id,
-            models.MailAttachment.filename == r["filename"],
-        ).first()
-        if vorhanden:
-            continue
-
-        endung = os.path.splitext(r["filename"])[1]
-        speichername = f"filesort_{uuid.uuid4().hex}{endung}"
-        with open(os.path.join(UPLOAD_DIR, speichername), "wb") as f:
-            f.write(r["content"])
-
-        datum, betrag, fehler = document_extract.parse_receipt_fields(
-            settings.ollama_url, settings.ollama_model, settings.beleg_chat_model,
-            r["content"], r["filename"],
-        )
-        db.add(models.MailAttachment(
-            message_id=message_id, filename=r["filename"], stored_filename=speichername,
-            content_type="application/pdf", size_bytes=len(r["content"]),
-            sender="Datei-Sortierung", subject=r["rel"],
-            parsed_amount=betrag, parsed_date=datum, parse_error=fehler,
-        ))
-        db.commit()
-        added += 1
-    return added
-
-
-@api_router.post("/file-sort/run", response_model=schemas.FileSortRunResult)
-def run_file_sort(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    result = file_sort.run(db, settings)
-    receipts = result.pop("receipts", [])
-    added = _create_mail_attachments_from_receipts(db, settings, receipts) if receipts else 0
-    return schemas.FileSortRunResult(**result, receipts_added=added)
-
-
-@api_router.post("/file-sort/run-statements", response_model=schemas.StatementImportRunResult)
-def run_statement_import(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.StatementImportRunResult(**statement_import.process_statement_inbox(db, settings, space_id))
-
-
 # ---------------- Dashboard ----------------
 @api_router.get("/dashboard", response_model=schemas.DashboardSummary)
 def dashboard(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
@@ -4384,31 +4235,6 @@ def _scheduled_radicale_sync():
         db.close()
 
 
-def _scheduled_file_sort():
-    """Alle 10 Minuten den Eingangsordner pruefen und einsortieren - kein
-    zeitkritischer Vorgang, neue Dateien duerfen ein paar Minuten warten."""
-    db = SessionLocal()
-    try:
-        settings = auth.get_or_create_settings(db)
-        if not settings.file_sort_enabled or not settings.file_sort_source_path:
-            return
-        try:
-            result = file_sort.run(db, settings)
-            receipts = result.get("receipts") or []
-            if receipts:
-                _create_mail_attachments_from_receipts(db, settings, receipts)
-        except Exception:
-            pass
-        if settings.file_sort_statements_subfolder:
-            try:
-                for space in crud.get_spaces(db):
-                    statement_import.process_statement_inbox(db, settings, space.id)
-            except Exception:
-                pass
-    finally:
-        db.close()
-
-
 def _scheduled_immich_quality_scan():
     """Scannt alle paar Minuten eine weitere Seite der Immich-Bibliothek auf
     unscharfe/leere Fotos. Läuft absichtlich in kleinen Häppchen statt in
@@ -4492,10 +4318,6 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_radicale_sync, CronTrigger(minute="*/3"),
     id="radicale_sync", misfire_grace_time=300,
-)
-scheduler.add_job(
-    _scheduled_file_sort, CronTrigger(minute="*/10"),
-    id="file_sort", misfire_grace_time=600,
 )
 scheduler.add_job(
     _scheduled_net_worth_snapshot, CronTrigger(hour=23, minute=55),
