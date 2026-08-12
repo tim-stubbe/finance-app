@@ -4916,6 +4916,29 @@ async function loadHubTab() {
     goalPanel.classList.add("hidden");
   }
 
+  // Nächste fällige Zahlungen - dieselbe (jetzt Kreditraten einschließende)
+  // Cashflow-Prognose wie im Abos-Tab, hier nur die ersten paar Termine.
+  const upcomingPanel = document.getElementById("hub-upcoming-panel");
+  try {
+    const forecast = await api("/forecast/cashflow?days=30");
+    const events = forecast.upcoming_events.slice(0, 5);
+    if (events.length) {
+      upcomingPanel.classList.remove("hidden");
+      document.getElementById("hub-upcoming-body").innerHTML = events.map(e => `
+        <div class="hub-list-row" style="cursor:default">
+          <span>${esc(e.description || "–")}</span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span class="page-sub">${fmtDate(e.date)}</span>
+            <span class="${e.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(e.amount)}</span>
+          </span>
+        </div>`).join("");
+    } else {
+      upcomingPanel.classList.add("hidden");
+    }
+  } catch {
+    upcomingPanel.classList.add("hidden");
+  }
+
   const body = document.getElementById("hub-services-body");
   const parts = [];
   try {
