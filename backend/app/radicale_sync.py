@@ -174,6 +174,110 @@ def new_uid() -> str:
     return f"{uuid.uuid4()}@finance-app"
 
 
+def _parse_ical_datetime(value: str) -> tuple[datetime, bool]:
+    """Liest DTSTART/DTEND: entweder ein reines Datum (ganztägiger Termin,
+    z.B. "20260820") oder Datum+Zeit ("20260820T140000" bzw. mit "Z" für UTC).
+    Gibt (datetime, all_day) zurück."""
+    value = value.strip()
+    if "T" not in value:
+        return datetime.strptime(value, "%Y%m%d"), True
+    if value.endswith("Z"):
+        return datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc), False
+    return datetime.strptime(value, "%Y%m%dT%H%M%S"), False
+
+
+def parse_vevent(ics: str) -> dict | None:
+    """Liest die für die Anzeige relevanten Felder aus einem VEVENT. Wie bei
+    parse_vtodo werden Parameter nach `;` (z.B. Zeitzonen-Angaben) ignoriert -
+    für eine reine Anzeige im Digest/Hub reicht der rohe Zeitstempel."""
+    fields: dict[str, str] = {}
+    in_event = False
+    for line in _unfold(ics):
+        if line == "BEGIN:VEVENT":
+            in_event = True
+            continue
+        if line == "END:VEVENT":
+            break
+        if not in_event or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        name = key.split(";")[0].upper()
+        fields[name] = value
+    if "UID" not in fields or "DTSTART" not in fields:
+        return None
+    try:
+        start, all_day = _parse_ical_datetime(fields["DTSTART"])
+    except ValueError:
+        return None
+    end = None
+    if fields.get("DTEND"):
+        try:
+            end, _ = _parse_ical_datetime(fields["DTEND"])
+        except ValueError:
+            end = None
+    return {
+        "uid": fields["UID"],
+        "title": fields.get("SUMMARY", "").strip() or "Ohne Titel",
+        "start": start,
+        "end": end,
+        "location": fields.get("LOCATION", "").strip() or None,
+        "all_day": all_day,
+    }
+
+
+def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
+    """Nur lesend: Termine der nächsten Zeit von Radicale abholen und lokal
+    spiegeln. Kein Push, keine Konfliktbehandlung - der echte Kalender bleibt
+    die alleinige Quelle. Vergangene Termine werden beim Abgleich mit entfernt
+    (siehe main._scheduled_radicale_sync, ruft das mit der ganzen Liste auf -
+    das haelt die Tabelle klein, Digest/Hub interessieren sich ohnehin nur
+    für die Zukunft)."""
+    pulled, errors = 0, []
+    try:
+        remote = list_resources(url, username, password)
+    except Exception as e:
+        return {"pulled": 0, "errors": [f"Kalender nicht erreichbar: {e}"]}
+
+    local_by_href = {e.href: e for e in db.query(models.CalendarEvent).filter(models.CalendarEvent.href.isnot(None)).all()}
+    seen_hrefs = set()
+    for item in remote:
+        seen_hrefs.add(item["href"])
+        local = local_by_href.get(item["href"])
+        if local and local.etag == item["etag"]:
+            continue
+        try:
+            ics = fetch_ics(url, item["href"], username, password)
+            parsed = parse_vevent(ics)
+        except Exception as e:
+            errors.append(f"Laden von {item['href']}: {e}")
+            continue
+        if not parsed:
+            continue
+        existing = db.query(models.CalendarEvent).filter(models.CalendarEvent.uid == parsed["uid"]).first()
+        if existing:
+            existing.title = parsed["title"]
+            existing.start = parsed["start"]
+            existing.end = parsed["end"]
+            existing.location = parsed["location"]
+            existing.all_day = parsed["all_day"]
+            existing.href = item["href"]
+            existing.etag = item["etag"]
+        else:
+            db.add(models.CalendarEvent(
+                uid=parsed["uid"], title=parsed["title"], start=parsed["start"], end=parsed["end"],
+                location=parsed["location"], all_day=parsed["all_day"], href=item["href"], etag=item["etag"],
+            ))
+        pulled += 1
+    db.commit()
+
+    for href, local in local_by_href.items():
+        if href not in seen_hrefs:
+            db.delete(local)
+    db.commit()
+
+    return {"pulled": pulled, "errors": errors}
+
+
 # ---------- Zwei-Wege-Abgleich ----------
 
 def sync(db: Session, url: str, username: str, password: str) -> dict:

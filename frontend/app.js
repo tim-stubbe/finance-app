@@ -4710,6 +4710,7 @@ async function loadRadicaleSettings() {
   const s = await api("/settings/radicale");
   document.getElementById("radicale-url").value = s.url || "";
   document.getElementById("radicale-username").value = s.username || "";
+  document.getElementById("radicale-calendar-url").value = s.calendar_url || "";
   document.getElementById("radicale-status").textContent = s.password_set
     ? "Zugangsdaten sind hinterlegt (Passwort wird aus Sicherheitsgründen nicht wieder angezeigt)."
     : "Noch keine Zugangsdaten hinterlegt.";
@@ -4720,11 +4721,12 @@ document.getElementById("radicale-settings-form").addEventListener("submit", asy
   const url = document.getElementById("radicale-url").value.trim();
   const username = document.getElementById("radicale-username").value.trim();
   const password = document.getElementById("radicale-password").value;
+  const calendar_url = document.getElementById("radicale-calendar-url").value.trim();
   if (!url || !password) {
     alert("Bitte Adresse und Passwort eingeben.");
     return;
   }
-  await api("/settings/radicale", { method: "PUT", body: JSON.stringify({ url, username, password }) });
+  await api("/settings/radicale", { method: "PUT", body: JSON.stringify({ url, username, password, calendar_url }) });
   document.getElementById("radicale-password").value = "";
   loadRadicaleSettings();
   toast("Radicale-Zugang gespeichert.");

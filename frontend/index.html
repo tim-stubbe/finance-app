@@ -1889,7 +1889,7 @@
       </div>
 
       <div class="panel" data-integration-key="radicale">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Radicale – To-Dos vom Handy</h3>
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Radicale – To-Dos &amp; Termine vom Handy</h3>
         <p class="page-sub">
           Zweiseitiger Abgleich mit einer CalDAV-Todo-Liste auf deinem Radicale-Server – trag die
           volle Adresse der Todo-Liste ein (die Kalender-Collection, z.B.
@@ -1899,6 +1899,13 @@
           <label class="wide">Adresse der Todo-Liste <input type="text" id="radicale-url" placeholder="https://…/user/todo-list/"></label>
           <label>Benutzername <input type="text" id="radicale-username"></label>
           <label>Passwort <input type="password" id="radicale-password" placeholder="wird verschlüsselt gespeichert"></label>
+          <label class="wide">Adresse des Termin-Kalenders (optional)
+            <input type="text" id="radicale-calendar-url" placeholder="https://…/user/calendar/">
+          </label>
+          <p class="page-sub wide">
+            Nur lesend: zeigt anstehende Termine im Status-Update/Hub, legt aber nichts im Kalender an
+            oder ändert dort etwas – dieselben Zugangsdaten wie oben.
+          </p>
           <div class="form-actions">
             <button type="button" id="radicale-test" class="btn-ghost">Verbindung testen</button>
             <button type="submit" class="btn-primary">Speichern</button>

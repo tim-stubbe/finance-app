@@ -188,6 +188,11 @@ class Settings(Base):
     radicale_url = Column(String, nullable=True)
     radicale_username = Column(String, nullable=True)
     radicale_password_encrypted = Column(String, nullable=True)
+    # Eigene Collection-URL fuer echte Kalender-Termine (VEVENT) - separat von
+    # radicale_url (To-Dos/VTODO), da Radicale Termine und To-Dos typischerweise
+    # in zwei verschiedenen Listen fuehrt. Nur lesend synchronisiert (siehe
+    # CalendarEvent) - Termine werden im echten Kalender angelegt, nicht hier.
+    radicale_calendar_url = Column(String, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -774,6 +779,26 @@ class Todo(Base):
     # Löschung erst als Markierung, damit der nächste Sync sie noch zum Server
     # übertragen kann, bevor die Zeile tatsächlich verschwindet.
     pending_delete = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CalendarEvent(Base):
+    """Echter Kalender-Termin (VEVENT), NUR lesend von Radicale abgeholt -
+    anders als Todo kein Zwei-Wege-Sync: Termine werden im echten
+    Kalender/Handy angelegt, Kies zeigt sie nur an (Hub/Digest), damit der
+    Nutzer sie nicht doppelt pflegen muss. Kein space_id, analog zu Todo."""
+
+    __tablename__ = "calendar_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    uid = Column(String, nullable=False, unique=True, index=True)
+    title = Column(String, nullable=False)
+    start = Column(DateTime, nullable=False)
+    end = Column(DateTime, nullable=True)
+    location = Column(String, nullable=True)
+    all_day = Column(Boolean, nullable=False, default=False)
+    href = Column(String, nullable=True)
+    etag = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

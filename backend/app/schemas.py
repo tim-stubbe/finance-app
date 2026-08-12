@@ -1428,12 +1428,24 @@ class RadicaleSettingsUpdate(BaseModel):
     url: str
     username: str
     password: str
+    calendar_url: Optional[str] = None
 
 
 class RadicaleSettingsOut(BaseModel):
     url: Optional[str] = None
     username: Optional[str] = None
     password_set: bool = False
+    calendar_url: Optional[str] = None
+
+
+class CalendarEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    start: datetime
+    end: Optional[datetime] = None
+    location: Optional[str] = None
+    all_day: bool = False
 
 
 class TodoCreate(BaseModel):

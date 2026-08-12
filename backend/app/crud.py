@@ -1833,6 +1833,14 @@ def build_digest(db: Session, space_id: int) -> str:
         for e in upcoming:
             lines.append(f"- {e.date.strftime('%d.%m.')}: {e.description or '–'} ({e.amount:.2f} EUR)")
 
+    events = get_upcoming_calendar_events(db, days=3)
+    if events:
+        lines.append("\n🗓 Termine (nächste 3 Tage):")
+        for ev in events[:5]:
+            zeit = "ganztägig" if ev.all_day else ev.start.strftime("%d.%m. %H:%M")
+            ort = f" @ {ev.location}" if ev.location else ""
+            lines.append(f"- {zeit}: {ev.title}{ort}")
+
     offen = (
         db.query(models.Transaction)
         .join(models.Account)
@@ -2196,6 +2204,18 @@ def cleanup_old_done_todos(db: Session, days: int = 2) -> int:
     if old:
         db.commit()
     return len(old)
+
+
+def get_upcoming_calendar_events(db: Session, days: int = 7, limit: int = 20) -> list[models.CalendarEvent]:
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=days)
+    return (
+        db.query(models.CalendarEvent)
+        .filter(models.CalendarEvent.start >= now, models.CalendarEvent.start <= cutoff)
+        .order_by(models.CalendarEvent.start)
+        .limit(limit)
+        .all()
+    )
 
 
 def delete_todo(db: Session, todo: models.Todo):

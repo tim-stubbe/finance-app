@@ -136,6 +136,7 @@ ensure_columns("settings", {
     "radicale_url": "VARCHAR",
     "radicale_username": "VARCHAR",
     "radicale_password_encrypted": "VARCHAR",
+    "radicale_calendar_url": "VARCHAR",
 })
 ensure_columns("todos", {
     "completed_at": "DATETIME",
@@ -3656,6 +3657,7 @@ def get_radicale_settings(db: Session = Depends(get_db)):
     return schemas.RadicaleSettingsOut(
         url=settings.radicale_url, username=settings.radicale_username,
         password_set=bool(settings.radicale_password_encrypted),
+        calendar_url=settings.radicale_calendar_url,
     )
 
 
@@ -3665,8 +3667,12 @@ def update_radicale_settings(data: schemas.RadicaleSettingsUpdate, db: Session =
     settings.radicale_url = data.url
     settings.radicale_username = data.username
     settings.radicale_password_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.password)
+    settings.radicale_calendar_url = (data.calendar_url or "").strip() or None
     db.commit()
-    return schemas.RadicaleSettingsOut(url=settings.radicale_url, username=settings.radicale_username, password_set=True)
+    return schemas.RadicaleSettingsOut(
+        url=settings.radicale_url, username=settings.radicale_username, password_set=True,
+        calendar_url=settings.radicale_calendar_url,
+    )
 
 
 @api_router.post("/radicale/test")
@@ -3691,6 +3697,11 @@ def _radicale_credentials(db: Session) -> tuple[str, str, str]:
         raise HTTPException(400, "Radicale ist noch nicht eingerichtet. Trage unter Einstellungen die Adresse ein.")
     password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
     return settings.radicale_url, settings.radicale_username, password
+
+
+@api_router.get("/calendar/upcoming", response_model=List[schemas.CalendarEventOut])
+def get_upcoming_calendar_events(days: int = 7, db: Session = Depends(get_db)):
+    return crud.get_upcoming_calendar_events(db, days=days)
 
 
 @api_router.get("/todos", response_model=List[schemas.TodoOut])
@@ -4435,6 +4446,11 @@ def _scheduled_radicale_sync():
             radicale_sync.sync(db, settings.radicale_url, settings.radicale_username, password)
         except Exception:
             pass
+        if settings.radicale_calendar_url:
+            try:
+                radicale_sync.sync_calendar(db, settings.radicale_calendar_url, settings.radicale_username, password)
+            except Exception:
+                pass
     finally:
         db.close()
 
