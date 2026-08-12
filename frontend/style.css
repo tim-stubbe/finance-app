@@ -2043,7 +2043,10 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .global-ai-fab {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  /* env(safe-area-inset-bottom) faellt auf normalen Geraeten/im Browser weg
+     (Wert 0) - nur in der installierten PWA auf einem Geraet mit Home-
+     Indicator schiebt es den Button aus dessen Wischbereich heraus. */
+  bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 150;
   width: 52px;
   height: 52px;
@@ -2210,7 +2213,12 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     position: sticky;
     top: 0;
     z-index: 20;
-    padding: 10px 10px;
+    /* env(safe-area-inset-top): als installierte PWA (display:standalone,
+       siehe manifest.json) laeuft die App randlos unter Notch/Dynamic Island -
+       ohne diesen Zuschlag klebt die obere Leiste direkt an der Systemuhr/
+       Kamera-Aussparung, auf dem Desktop/in normalen Browsern ist der Wert 0,
+       richtet also nichts an. */
+    padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
     flex-direction: row;
     align-items: center;
     border-right: none;
@@ -2253,13 +2261,16 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   /* max-width/margin:auto hier zuruecknehmen: in der Spalten-Flexbox schaltet
      ein automatischer Seitenrand das Dehnen auf die Containerbreite ab, main
      bemisst sich dann am Inhalt und wird breiter als der Bildschirm. */
-  main { padding: 20px 16px 48px; max-width: none; margin: 0; width: 100%; }
+  /* Unten zusaetzlich env(safe-area-inset-bottom): sonst landet der letzte
+     Inhalt/das Formular-Ende genau hinter dem Home-Indicator der installierten
+     PWA - faellt auf normalen Geraeten/im Browser einfach weg (Wert 0). */
+  main { padding: 20px 16px calc(48px + env(safe-area-inset-bottom)); max-width: none; margin: 0; width: 100%; }
   /* Sidebar wird hier selbst zur sticky Kopfleiste - eine zweite sticky Leiste
      würde beide beim Scrollen übereinander pinnen. Läuft daher mit weg. */
   .global-topbar { position: static; margin: -20px -16px 16px; }
   .form-grid { grid-template-columns: 1fr; }
   .modal-box { padding: 20px; max-height: none; }
-  .modal-overlay { padding: 16px 10px; }
+  .modal-overlay { padding: calc(16px + env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom)); }
 
   /* Tabellen sind auf dem Handy fast immer breiter als der Bildschirm und
      scrollen waagrecht (siehe .table-wrap oben) - ohne sichtbaren Hinweis
