@@ -1226,6 +1226,15 @@ class ImmichTrashResult(BaseModel):
     freed_bytes: int
 
 
+class ImmichAiSuggestionRequest(BaseModel):
+    asset_ids: List[str]
+
+
+class ImmichAiSuggestionResult(BaseModel):
+    reason: Optional[str] = None
+    error: Optional[str] = None
+
+
 class ImmichQualityAssetOut(ImmichAssetOut):
     reason: str  # "blur" oder "blank"
     score: Optional[float] = None

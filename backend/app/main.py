@@ -2347,6 +2347,60 @@ def immich_stats(db: Session = Depends(get_db)):
     return schemas.ImmichStatsOut(**stats, available=True)
 
 
+_IMMICH_AI_MAX_IMAGES = 4
+
+
+@api_router.post("/immich/ai-suggestion", response_model=schemas.ImmichAiSuggestionResult)
+def immich_ai_suggestion(data: schemas.ImmichAiSuggestionRequest, db: Session = Depends(get_db)):
+    """Lässt das Vision-Modell kurz einschätzen, warum ein Foto zum Aufräumen
+    taugt bzw. (bei mehreren Bildern) welches einer Duplikat-Gruppe am besten
+    ist. Bewusst rein auf Anfrage (Klick), nie automatisch für ganze Listen -
+    ein Vision-Modell pro Bild ist auf bescheidener Hardware langsam, und
+    niemand braucht eine KI-Begründung für jedes der hunderten Fotos."""
+    settings = auth.get_or_create_settings(db)
+    model = settings.beleg_chat_model or settings.ollama_model
+    if not settings.ollama_url or not model:
+        return schemas.ImmichAiSuggestionResult(error="Bitte zuerst Ollama-Server-URL und Modell in den Einstellungen hinterlegen")
+    asset_ids = data.asset_ids[:_IMMICH_AI_MAX_IMAGES]
+    if not asset_ids:
+        return schemas.ImmichAiSuggestionResult(error="Keine Aufnahme ausgewählt")
+
+    url, key = _immich_credentials(db)
+    images = []
+    for asset_id in asset_ids:
+        try:
+            content, _ = immich.fetch_thumbnail(url, key, asset_id, size="preview")
+        except Exception as e:
+            return schemas.ImmichAiSuggestionResult(error=f"Vorschaubild konnte nicht geladen werden: {e}")
+        images.append(base64.b64encode(content).decode())
+
+    if len(images) == 1:
+        prompt = (
+            "Das ist ein Foto aus einer privaten Fotobibliothek, das als möglicher "
+            "Aufräum-Kandidat markiert wurde (z.B. unscharf, wirkt wie Bildschirmfoto "
+            "oder Beleg statt Erinnerungsfoto, oder leer/uninteressant). Schätze in "
+            "maximal 2 kurzen Sätzen auf Deutsch ein, ob das Foto wirklich zum Löschen "
+            "taugt und warum (oder warum nicht, falls es doch ein Erinnerungswert-Foto ist)."
+        )
+    else:
+        labels = ", ".join(f"Bild {i + 1}" for i in range(len(images)))
+        prompt = (
+            f"Das sind {len(images)} sehr ähnliche Fotos ({labels}) aus einer Duplikat-Gruppe "
+            "einer privaten Fotobibliothek. Schätze in maximal 2 kurzen Sätzen auf Deutsch ein, "
+            "welches davon (nach Bildnummer) am besten ist (Schärfe, Bildausschnitt, Belichtung) "
+            "und damit behalten werden sollte."
+        )
+    try:
+        reply = ollama_client.chat(
+            settings.ollama_url, model,
+            [{"role": "user", "content": prompt, "images": images}],
+            timeout=900,
+        )
+    except Exception as e:
+        return schemas.ImmichAiSuggestionResult(error=str(e))
+    return schemas.ImmichAiSuggestionResult(reason=reply[:600])
+
+
 @api_router.get("/immich/duplicates", response_model=schemas.ImmichDuplicatesOut)
 def immich_duplicates(
     offset: int = 0,

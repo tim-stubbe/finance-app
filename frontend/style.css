@@ -2914,3 +2914,14 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
      untereinander als zwei winzige Spalten. */
   .lightbox-box.is-compare .lightbox-images { flex-direction: column; }
 }
+
+.lightbox-ai {
+  margin-top: 12px;
+  text-align: center;
+}
+.lightbox-ai #lightbox-ai-result {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  max-width: 620px;
+  margin: 10px auto 0;
+}

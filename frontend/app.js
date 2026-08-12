@@ -2550,6 +2550,8 @@ function renderPhotoGroups() {
 // Baut 1 bis 4 Figuren dynamisch auf, statt fest verdrahteter 2 Slots -
 // damit sich sowohl das einzelne Vergrößern als auch der Nebeneinander-
 // Vergleich (jetzt bis zu 4 Aufnahmen) dieselbe Funktion teilen.
+let lightboxAssetIds = [];
+
 function renderLightbox(items) {
   const box = document.getElementById("lightbox-images");
   box.innerHTML = items.map((it, i) => `<figure class="lightbox-figure">
@@ -2558,6 +2560,8 @@ function renderLightbox(items) {
     </figure>`).join("");
   document.getElementById("lightbox-box").classList.toggle("is-compare", items.length > 1);
   document.getElementById("photo-lightbox").classList.remove("hidden");
+  lightboxAssetIds = items.map(it => it.id);
+  document.getElementById("lightbox-ai-result").textContent = "";
 }
 
 function openLightbox(assetId, caption) {
@@ -2574,10 +2578,30 @@ function openLightboxCompare(items) {
 function closeLightbox() {
   document.getElementById("photo-lightbox").classList.add("hidden");
   document.getElementById("lightbox-images").innerHTML = "";
+  lightboxAssetIds = [];
 }
 document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
 document.getElementById("photo-lightbox").addEventListener("click", e => {
   if (e.target.id === "photo-lightbox") closeLightbox();
+});
+
+document.getElementById("lightbox-ai-btn").addEventListener("click", async () => {
+  if (!lightboxAssetIds.length) return;
+  const btn = document.getElementById("lightbox-ai-btn");
+  const resultEl = document.getElementById("lightbox-ai-result");
+  btn.disabled = true;
+  resultEl.textContent = "Analysiere … (kann bei kleinen Modellen auf bescheidener Hardware einige Minuten dauern)";
+  try {
+    const res = await api("/immich/ai-suggestion", {
+      method: "POST",
+      body: JSON.stringify({ asset_ids: lightboxAssetIds }),
+    });
+    resultEl.textContent = res.error ? `Fehler: ${res.error}` : res.reason || "Keine Einschätzung erhalten.";
+  } catch (err) {
+    resultEl.textContent = "Fehler: " + err.message;
+  } finally {
+    btn.disabled = false;
+  }
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeLightbox();
