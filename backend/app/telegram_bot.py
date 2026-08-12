@@ -1,14 +1,19 @@
 """Long-Polling-Bot: beantwortet Nachrichten an den konfigurierten Telegram-Bot
 über denselben Ollama-Assistenten wie der schwebende Web-Chat (inkl. Websuche
-und Steuer-Einschätzungen). Reiner Lesezugriff/Auskunft über die KI-Chat-Runde -
-bewusste Nutzerentscheidung, um das Risiko bei einem geleakten Bot-Token gering
-zu halten. Ausnahmen sind ausschließlich fest kodierte, deterministische
-Kommandos (Regex, keine KI-Interpretation): /saldo (Kontostand setzen,
-_BALANCE_CMD_RE), /todo (To-Do anlegen, _TODO_CMD_RE), /erledigt (To-Do
-abhaken, _DONE_CMD_RE), /termin (Kalender-Termin anlegen, _TERMIN_CMD_RE) und
-/termin_absagen (Termin absagen, _CANCEL_TERMIN_CMD_RE) - bei Geld/Terminen/
-Aufgaben soll nichts geraten werden. Jede Saldo-Änderung landet
-nachvollziehbar in AccountBalanceLog.
+und Steuer-Einschätzungen). Reiner Lesezugriff/Auskunft für Finanzdaten - der
+Saldo bleibt bewusst ausschließlich über das feste Kommando /saldo (Regex,
+_BALANCE_CMD_RE, keine KI-Interpretation) änderbar, bei Geld soll nichts
+geraten werden. Jede Saldo-Änderung landet nachvollziehbar in AccountBalanceLog.
+
+Termine und To-Dos dürfen dagegen auch in normaler Sprache angelegt/abgehakt/
+abgesagt werden (Nutzerentscheidung, das Risiko einer Fehlinterpretation hier
+in Kauf zu nehmen) - die KI antwortet dafür mit einem ```action```-Block
+(_ACTION_BLOCK_RE, siehe _execute_action), den der Bot statt der KI ausführt
+und danach IMMER eine Bestätigung mit dem tatsächlich verstandenen Ergebnis
+zurückschickt, damit ein Missverständnis sofort auffällt (und sich per
+/erledigt bzw. /termin_absagen korrigieren lässt). Die festen Kommandos
+(/todo, /erledigt, /termin, /termin_absagen) bleiben parallel nutzbar, wenn
+Präzision wichtiger ist als Bequemlichkeit.
 
 Läuft als Dauerschleife in einem Hintergrund-Thread statt über einen Webhook,
 weil die App nur über Tailscale erreichbar ist, kein öffentlicher HTTPS-Endpunkt
@@ -19,6 +24,7 @@ Chat - Nachrichten von jeder anderen Chat-ID werden stillschweigend ignoriert
 (aber trotzdem als "gesehen" markiert), damit niemand sonst, der die Bot-ID
 errät, an Finanzdaten oder Ollama-Antworten herankommt."""
 
+import json
 import re
 import time
 from datetime import date, datetime
@@ -35,6 +41,7 @@ ERROR_BACKOFF_SECONDS = 15
 MAX_HISTORY = 20  # Nachrichten (User+Assistant zusammen); nur im Prozessspeicher
 
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
+_ACTION_BLOCK_RE = re.compile(r"```action\s*(.*?)\s*```", re.DOTALL)
 # Bewusst ein explizites Kommando statt Freitext-Interpretation durch die KI -
 # bei einer Geldsumme soll nichts geraten werden. Format: /saldo <Kontoname> <Betrag>
 _BALANCE_CMD_RE = re.compile(r"^/saldo\s+(.+?)\s+(-?\d+(?:[.,]\d{1,2})?)\s*€?\s*$", re.IGNORECASE)
@@ -57,14 +64,29 @@ TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Fi
 Antworte immer kurz und freundlich auf Deutsch.
 
 Du kannst hier nichts in Buchungen schreiben oder Konten anlegen/löschen - dafür sag dem Nutzer freundlich, dass \
-er das in der App (schwebender KI-Chat oder direkt) erledigen soll. Es gibt fünf feste Ausnahmen, jeweils über ein \
-exaktes Kommando (nicht selbst als Fließtext nachbauen, sondern dem Nutzer das Kommando nennen):
-- Saldo setzen: "/saldo <Name> <Betrag>" (z.B. "/saldo Tagesgeld 772,57") - für Konten UND Schulden/Kreditlinien.
-- To-Do anlegen: "/todo <Text> [TT.MM.[JJJJ]]" (z.B. "/todo Wäsche waschen" oder "/todo Steuererklärung 15.09.").
-- To-Do abhaken: "/erledigt <Text>" (z.B. "/erledigt Wäsche").
-- Termin anlegen: "/termin <Titel>; TT.MM.[JJJJ] [HH:MM][; Ort]" (z.B. "/termin Zahnarzt; 20.08. 14:30; Praxis Müller" \
-oder ganztägig ohne Uhrzeit: "/termin Urlaub Start; 01.09.").
-- Termin absagen: "/termin_absagen <Text>" (z.B. "/termin_absagen Zahnarzt").
+er das in der App (schwebender KI-Chat oder direkt) erledigen soll. Der Kontostand ist NUR über das feste Kommando \
+"/saldo <Name> <Betrag>" änderbar (z.B. "/saldo Tagesgeld 772,57") - das musst du dem Nutzer nennen, nicht selbst \
+als Fließtext nachbauen, bei Geld wird nichts geraten.
+
+Termine und To-Dos darfst du dagegen direkt aus normaler Sprache heraus anlegen/abhaken/absagen, ohne dass der \
+Nutzer ein Kommando tippen muss. Erkennst du eindeutig eine solche Absicht, antworte AUSSCHLIESSLICH mit einem \
+Aktions-Block (kein Fließtext davor/danach), einer der folgenden Formen:
+```action
+{"type": "create_todo", "title": "<Text>", "due_date": "JJJJ-MM-TT oder null"}
+```
+```action
+{"type": "complete_todo", "title": "<Stichwort aus dem Titel>"}
+```
+```action
+{"type": "create_termin", "title": "<Text>", "date": "JJJJ-MM-TT", "time": "HH:MM oder null bei ganztägig", "location": "<Ort oder null>"}
+```
+```action
+{"type": "cancel_termin", "title": "<Stichwort aus dem Titel>"}
+```
+Rechne relative Datumsangaben ("morgen", "übermorgen", "nächsten Montag") anhand des unten mitgelieferten heutigen \
+Datums selbst in JJJJ-MM-TT um. Ist bei einem Termin kein Datum erkennbar, frag lieber kurz im Fließtext nach, \
+statt zu raten oder einen Aktions-Block ohne Datum zu schicken. Der Bot führt den Aktions-Block aus und schickt dem \
+Nutzer danach selbst eine Bestätigung - du musst dem Aktions-Block nichts hinzufügen.
 
 Für Fragen zum aktuellen Stand (Kontostand, Vermögen, Ausgaben, anstehende Termine, offene To-Dos) nutze NUR die \
 unten mitgelieferten Fakten und erfinde keine Zahlen/Termine.
@@ -244,6 +266,86 @@ def _handle_cancel_termin_command(db, settings, token: str, chat_id: str, text: 
     return True
 
 
+def _execute_action(db, settings, action: dict) -> str:
+    """Führt einen von der KI erkannten Aktions-Block aus und gibt die
+    Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
+    dieselben crud-Funktionen wie die festen Kommandos (/todo, /erledigt,
+    /termin, /termin_absagen), nur mit von der KI statt per Regex extrahierten
+    Parametern. Jede Rückgabe macht explizit, was verstanden wurde, damit ein
+    Missverständnis sofort auffällt."""
+    action_type = action.get("type")
+
+    if action_type == "create_todo":
+        title = (action.get("title") or "").strip()
+        if not title:
+            return "Konnte kein To-Do-Titel erkannt werden."
+        due_date = None
+        if action.get("due_date"):
+            try:
+                due_date = date.fromisoformat(action["due_date"])
+            except ValueError:
+                pass
+        todo = crud.create_todo(db, title, due_date)
+        if settings.radicale_url:
+            try:
+                radicale_sync.sync(db, settings.radicale_url, settings.radicale_username,
+                                    bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted))
+            except Exception:
+                pass
+        return f"✓ To-Do „{todo.title}“ angelegt" + (f", fällig am {due_date.strftime('%d.%m.%Y')}." if due_date else ".")
+
+    if action_type == "complete_todo":
+        title = (action.get("title") or "").strip()
+        todo, error = crud.complete_todo_by_name(db, title)
+        db.commit()
+        return error or f"✓ „{todo.title}“ abgehakt."
+
+    if action_type == "create_termin":
+        title = (action.get("title") or "").strip()
+        if not title or not action.get("date"):
+            return "Konnte Titel oder Datum für den Termin nicht eindeutig erkennen - bitte genauer beschreiben."
+        try:
+            event_date = date.fromisoformat(action["date"])
+        except ValueError:
+            return f"„{action.get('date')}“ ist kein gültiges Datum."
+        time_str = action.get("time")
+        all_day = not time_str
+        hour, minute = 0, 0
+        if time_str:
+            try:
+                hour, minute = (int(p) for p in time_str.split(":"))
+            except (ValueError, TypeError):
+                all_day = True
+        start = datetime(event_date.year, event_date.month, event_date.day, hour, minute)
+        calendar_url = _first_calendar_url(settings)
+        location = (action.get("location") or "").strip() or None
+        event = crud.create_calendar_event(db, title, start, None, location, all_day, calendar_url)
+        if calendar_url:
+            try:
+                radicale_sync.sync_calendar(db, calendar_url, settings.radicale_username,
+                                             bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted))
+            except Exception:
+                pass
+        when = "ganztägig" if all_day else start.strftime("%H:%M")
+        return f"✓ Termin „{event.title}“ am {event_date.strftime('%d.%m.%Y')} ({when}) angelegt."
+
+    if action_type == "cancel_termin":
+        title = (action.get("title") or "").strip()
+        event, error = crud.cancel_calendar_event_by_name(db, title)
+        if error:
+            return error
+        calendar_url = event.calendar_url or _first_calendar_url(settings)
+        if calendar_url:
+            try:
+                radicale_sync.sync_calendar(db, calendar_url, settings.radicale_username,
+                                             bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted))
+            except Exception:
+                pass
+        return f"✓ Termin „{event.title}“ am {event.start.strftime('%d.%m.%Y')} abgesagt."
+
+    return "Konnte die Anfrage nicht eindeutig einer Aktion zuordnen."
+
+
 def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_balance_command(db, token, chat_id, text):
         return
@@ -262,12 +364,29 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
         return
 
     space = crud.get_spaces(db)[0]
-    system_content = TELEGRAM_SYSTEM_PROMPT + "\n\n" + _context_facts(db, space.id)
+    today = date.today()
+    weekday_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"][today.weekday()]
+    heute_zeile = f"\n\nHeutiges Datum: {today.isoformat()} ({weekday_de})."
+    system_content = TELEGRAM_SYSTEM_PROMPT + heute_zeile + "\n\n" + _context_facts(db, space.id)
     messages = [{"role": "system", "content": system_content}]
     messages.extend(_history[-MAX_HISTORY:])
     messages.append({"role": "user", "content": text})
 
     reply = ollama_client.chat(settings.ollama_url, chat_model, messages)
+
+    action_match = _ACTION_BLOCK_RE.search(reply)
+    if action_match:
+        try:
+            action = json.loads(action_match.group(1).strip())
+            confirmation = _execute_action(db, settings, action)
+        except (json.JSONDecodeError, AttributeError):
+            confirmation = "Habe die Anfrage nicht als eindeutige Aktion verstanden - bitte anders formulieren " \
+                            "oder das passende Kommando nutzen (/todo, /erledigt, /termin, /termin_absagen)."
+        _history.append({"role": "user", "content": text})
+        _history.append({"role": "assistant", "content": confirmation})
+        del _history[:-MAX_HISTORY]
+        _send(token, chat_id, confirmation)
+        return
 
     match = _SEARCH_BLOCK_RE.search(reply)
     if match:
