@@ -343,6 +343,11 @@ def list_categories(db: Session = Depends(get_db)):
     return crud.get_categories(db)
 
 
+@api_router.get("/categories/totals")
+def get_category_totals(year: int = date.today().year, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.category_totals(db, space_id, year)
+
+
 @api_router.post("/categories", response_model=schemas.CategoryOut)
 def create_category(category: schemas.CategoryCreate, db: Session = Depends(get_db)):
     return crud.create_category(db, category)

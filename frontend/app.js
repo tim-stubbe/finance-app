@@ -334,17 +334,23 @@ window.deleteAccount = async id => {
 
 // ================= CATEGORIES =================
 async function loadCategories() {
-  categoriesCache = await api("/categories");
+  const [categories, totals] = await Promise.all([
+    api("/categories"), api(`/categories/totals?year=${new Date().getFullYear()}`),
+  ]);
+  categoriesCache = categories;
   const tbody = document.getElementById("cat-list");
   tbody.innerHTML = "";
   if (categoriesCache.length === 0) {
-    tbody.innerHTML = emptyRow(4, "tag", "Noch keine Kategorien angelegt.");
+    tbody.innerHTML = emptyRow(5, "tag", "Noch keine Kategorien angelegt.");
   }
   categoriesCache.forEach(c => {
     const parent = categoriesCache.find(p => p.id === c.parent_id);
     const tr = document.createElement("tr");
     const icon = CATEGORY_TYPE_ICONS[c.type] || "tag";
+    const total = totals[c.id];
+    const totalCls = total == null ? "" : total >= 0 ? "row-amount-pos" : "row-amount-neg";
     tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${svgIcon(icon)}</span>${c.name}</span></td><td>${c.type}</td><td>${parent ? parent.name : "–"}</td>
+      <td class="${totalCls}">${total == null ? "–" : eur(total)}</td>
       <td>
         <button class="link-btn" onclick="editCategory(${c.id})">Bearbeiten</button>
         <button class="link-btn" onclick="deleteCategory(${c.id})">Löschen</button>
