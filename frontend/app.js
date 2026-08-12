@@ -5924,6 +5924,35 @@ async function loadHubTab() {
     goalPanel.classList.add("hidden");
   }
 
+  // Überfällige Projekte/Lebensbereiche/Wunschliste - dasselbe "seit wie
+  // lange nicht bestätigt"-Kriterium wie die jeweiligen Telegram-Erinnerungen
+  // (main._scheduled_*_reminder), hier zusätzlich sofort sichtbar statt nur
+  // abzuwarten, bis die tägliche Erinnerung kommt.
+  const attentionPanel = document.getElementById("hub-attention-panel");
+  try {
+    const [projects, areas, wishlist] = await Promise.all([
+      api("/business-projects").catch(() => []),
+      api("/life-areas").catch(() => []),
+      api("/wishlist").catch(() => []),
+    ]);
+    const rows = [];
+    projects.filter(projectIsOverdue).forEach(p => rows.push({ icon: "📋", label: p.name, jump: "projects" }));
+    areas.filter(lifeAreaIsOverdue).forEach(a => rows.push({ icon: "🎯", label: a.name, jump: "life" }));
+    wishlist.filter(wishlistItemIsOverdue).forEach(w => rows.push({ icon: "🛒", label: w.name, jump: "wishlist" }));
+    if (rows.length) {
+      attentionPanel.classList.remove("hidden");
+      document.getElementById("hub-attention-body").innerHTML = rows.map(r => `
+        <button type="button" class="hub-list-row" data-hub-jump="${r.jump}">
+          <span>${r.icon} ${esc(r.label)}</span>
+          <span class="page-sub">ansehen →</span>
+        </button>`).join("");
+    } else {
+      attentionPanel.classList.add("hidden");
+    }
+  } catch {
+    attentionPanel.classList.add("hidden");
+  }
+
   // Nächste fällige Zahlungen - dieselbe (jetzt Kreditraten einschließende)
   // Cashflow-Prognose wie im Abos-Tab, hier nur die ersten paar Termine.
   const upcomingPanel = document.getElementById("hub-upcoming-panel");
