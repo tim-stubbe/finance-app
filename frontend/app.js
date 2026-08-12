@@ -5015,6 +5015,16 @@ async function loadDashboard() {
     tbody.appendChild(tr);
   });
 
+  const recipients = await api("/dashboard/top-recipients?" + params.toString());
+  const recipientsPanel = document.getElementById("top-recipients-panel");
+  recipientsPanel.classList.toggle("hidden", recipients.length === 0);
+  document.getElementById("top-recipients-list").innerHTML = recipients.map(r => `
+    <tr>
+      <td>${esc(r.description)}</td>
+      <td>${r.count}</td>
+      <td class="row-amount-neg">${eur(r.total)}</td>
+    </tr>`).join("");
+
   const budgetListEl = document.getElementById("budget-progress-list");
   const budgetPanel = document.getElementById("budget-panel");
   budgetListEl.innerHTML = "";

@@ -3746,6 +3746,15 @@ def dashboard(year: int = date.today().year, month: Optional[int] = None, db: Se
     return crud.dashboard_summary(db, space_id, year, month)
 
 
+@api_router.get("/dashboard/top-recipients", response_model=List[schemas.TopExpenseRecipientOut])
+def dashboard_top_recipients(
+    year: int = date.today().year, month: Optional[int] = None, limit: int = 10,
+    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
+):
+    limit = max(1, min(limit, 50))
+    return crud.top_expense_recipients(db, space_id, year, month, limit)
+
+
 @api_router.get("/dashboard/trend", response_model=schemas.DashboardTrendOut)
 def dashboard_trend(months: int = 6, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     """Kleine monatliche Einnahmen/Ausgaben-Reihe fuer die Sparklines auf dem

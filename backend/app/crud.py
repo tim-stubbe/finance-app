@@ -2167,6 +2167,40 @@ def dashboard_summary(db: Session, space_id: int, year: int, month: int | None =
     )
 
 
+def top_expense_recipients(db: Session, space_id: int, year: int, month: int | None = None, limit: int = 10) -> list[dict]:
+    """Wo das Geld tatsaechlich hingeht, konkret statt nur nach Kategorie -
+    "Rewe: 450 EUR" ist oft aussagekraeftiger als "Lebensmittel: 1200 EUR" ueber
+    fuenf verschiedene Laeden verteilt. Gruppiert nach derselben normalisierten
+    Beschreibung wie die Abo-Erkennung (_normalize_description), damit
+    "REWE SAGT DANKE 12345" und "Rewe Sagt Danke 67890" zusammenfallen."""
+    query = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            extract("year", models.Transaction.date) == year,
+            models.Transaction.is_transfer.is_(False),
+            models.Transaction.amount < 0,
+        )
+    )
+    if month:
+        query = query.filter(extract("month", models.Transaction.date) == month)
+
+    groups: dict[str, dict] = {}
+    for t in query.all():
+        key = _normalize_description(t.description) or "(ohne Beschreibung)"
+        g = groups.setdefault(key, {"label": t.description or "Ohne Beschreibung", "total": 0.0, "count": 0})
+        g["total"] += t.amount
+        g["count"] += 1
+
+    results = [
+        {"description": g["label"], "total": round(abs(g["total"]), 2), "count": g["count"]}
+        for g in groups.values()
+    ]
+    results.sort(key=lambda r: -r["total"])
+    return results[:limit]
+
+
 def monthly_flow_trend(db: Session, space_id: int, months: int = 6) -> list[dict]:
     """Einnahmen/Ausgaben je Monat der letzten `months` Monate (aktueller Monat
     eingeschlossen) - fuer kleine Trend-Sparklines auf dem Hub, keine

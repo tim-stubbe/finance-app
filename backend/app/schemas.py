@@ -561,6 +561,12 @@ class CategorySummary(BaseModel):
     total: float
 
 
+class TopExpenseRecipientOut(BaseModel):
+    description: str
+    total: float
+    count: int
+
+
 class DashboardSummary(BaseModel):
     year: int
     month: Optional[int]
