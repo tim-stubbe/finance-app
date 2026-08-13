@@ -1,0 +1,93 @@
+import Foundation
+import GRDB
+
+/// Modelle für die erste vertikale Scheibe. Eigenschaften heißen bewusst wie
+/// die Server-Spalten (snake_case), nicht idiomatisch camelCase - vermeidet
+/// jedes Mapping-Risiko zwischen JSON/DB/Swift in diesem ersten Durchgang,
+/// den ich (anders als bei der Web-App) nicht mit einer Testsuite absichern
+/// kann. `public`, weil Kies (GUI) und KiesCLI (Test-Tool) beide gegen
+/// KiesCore als eigenes Modul bauen.
+
+public struct Space: Codable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "spaces"
+    public var id: Int64
+    public var name: String
+    public var icon: String
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+public struct Account: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "accounts"
+    public var id: Int64
+    public var name: String
+    public var type: String
+    public var initial_balance: Double
+    public var is_business: Bool
+    public var space_id: Int64
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+public struct Category: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "categories"
+    public var id: Int64
+    public var name: String
+    public var type: String
+    public var parent_id: Int64?
+    public var updated_at: String?
+}
+
+// "Transaction" kollidiert mit SwiftUI.Transaction (Animations-Kontext) -
+// deshalb TransactionRecord statt des naheliegenderen Namens.
+public struct TransactionRecord: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "transactions"
+    public var id: Int64
+    public var date: String
+    public var amount: Double
+    public var description: String?
+    public var notes: String?
+    public var account_id: Int64
+    public var category_id: Int64?
+    public var is_transfer: Bool
+    public var created_at: String?
+    public var updated_at: String?
+    public var pending_client_id: String?
+}
+
+public struct Todo: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "todos"
+    public var id: Int64
+    public var uid: String?
+    public var title: String
+    public var done: Bool
+    public var due_date: String?
+    public var created_at: String?
+    public var updated_at: String?
+    public var pending_client_id: String?
+}
+
+/// Lokal-only: Sync-Cursor (Singleton-Zeile, id fest auf 1).
+public struct SyncState: Codable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "sync_state"
+    public var id: Int64 = 1
+    public var cursor: String?
+}
+
+/// Lokal-only: ausstehende Schreibvorgänge, die per Push an den Server gehen,
+/// sobald wieder eine Verbindung besteht.
+public struct SyncOutboxEntry: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "sync_outbox"
+    public var id: Int64?
+    public var entity_type: String
+    public var op: String  // "create" | "update" | "delete"
+    public var client_id: String?
+    public var server_id: Int64?
+    public var base_updated_at: String?
+    public var data_json: String
+    public var created_at: String
+
+    public mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}

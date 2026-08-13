@@ -1,4 +1,5 @@
 import SwiftUI
+import KiesCore
 
 struct PairingView: View {
     @ObservedObject var pairing = PairingStore.shared

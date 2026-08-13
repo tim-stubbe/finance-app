@@ -5,8 +5,8 @@ import GRDB
 /// GRDB statt Core Data, weil das additive Migrations-Muster hier (jede
 /// Version fügt nur Spalten/Tabellen hinzu, nie ein Reset) genau dem
 /// `ensure_columns`-Stil des Backends entspricht (siehe backend/app/database.py).
-enum AppDatabase {
-    static let shared = try! makeShared()
+public enum AppDatabase {
+    public static let shared = try! makeShared()
 
     static func makeShared() throws -> DatabaseQueue {
         let appSupport = try FileManager.default.url(

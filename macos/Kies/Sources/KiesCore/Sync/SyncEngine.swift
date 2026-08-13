@@ -7,12 +7,12 @@ import GRDB
 /// Teilfehlern - sonst könnten unsynchronisierte lokale Änderungen beim
 /// nächsten Pull verloren gehen (der Server würde sie nicht erneut senden).
 @MainActor
-final class SyncEngine: ObservableObject {
-    static let shared = SyncEngine()
+public final class SyncEngine: ObservableObject {
+    public static let shared = SyncEngine()
 
-    @Published var isSyncing = false
-    @Published var lastError: String?
-    @Published var lastSyncedAt: Date?
+    @Published public var isSyncing = false
+    @Published public var lastError: String?
+    @Published public var lastSyncedAt: Date?
 
     private let client = SyncClient()
     private let db = AppDatabase.shared
@@ -21,7 +21,7 @@ final class SyncEngine: ObservableObject {
     // anderen Server-Entitäten aus der Pull-Antwort werden ignoriert.
     private nonisolated static let localEntityTypes: Set<String> = ["Account", "Category", "Transaction", "Todo", "Space"]
 
-    func run() async {
+    public func run() async {
         guard PairingStore.shared.isPaired, !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
@@ -168,7 +168,7 @@ final class SyncEngine: ObservableObject {
 
     /// Legt eine Buchung lokal an (Platzhalter-ID, negativ - Server-IDs sind
     /// immer positiv) und reiht sie in die Outbox ein.
-    func createTransactionOffline(accountID: Int64, date: String, amount: Double, description: String?) throws {
+    public func createTransactionOffline(accountID: Int64, date: String, amount: Double, description: String?) throws {
         try db.write { db in
             let clientID = UUID().uuidString
             let placeholderID = -Int64(Date().timeIntervalSince1970 * 1000)
@@ -182,7 +182,7 @@ final class SyncEngine: ObservableObject {
 
             let data: [String: Any] = ["account_id": accountID, "date": date, "amount": amount, "description": description as Any]
             let jsonData = try JSONSerialization.data(withJSONObject: data)
-            var entry = SyncOutboxEntry(
+            let entry = SyncOutboxEntry(
                 id: nil, entity_type: "Transaction", op: "create", client_id: clientID, server_id: nil,
                 base_updated_at: nil, data_json: String(data: jsonData, encoding: .utf8)!,
                 created_at: ISO8601DateFormatter().string(from: Date())
