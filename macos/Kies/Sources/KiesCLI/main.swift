@@ -37,6 +37,15 @@ func printOutbox() throws {
     for e in entries { print("  \(e.id ?? -1)\t\(e.op)\t\(e.entity_type)\t\(e.client_id ?? "-")") }
 }
 
+func printTodos() throws {
+    let todos = try AppDatabase.shared.read { db in try Todo.order(Column("created_at").desc).fetchAll(db) }
+    print("Todos (\(todos.count)):")
+    for t in todos.prefix(10) {
+        let pending = t.pending_client_id != nil ? " [PENDING]" : ""
+        print("  \(t.id)\t\(t.done ? "[x]" : "[ ]")\t\(t.title)\(pending)")
+    }
+}
+
 let args = CommandLine.arguments
 let command = args.count > 1 ? args[1] : "pull"
 
@@ -67,6 +76,51 @@ case "create-tx":
         print("Sync-Fehler: \(error ?? "keiner")")
         try printOutbox()
         try printTransactions()
+    } catch {
+        print("Fehler: \(error)")
+    }
+
+case "create-todo":
+    guard args.count > 2 else {
+        print("Verwendung: create-todo <title>")
+        exit(1)
+    }
+    do {
+        try await MainActor.run {
+            try SyncEngine.shared.createTodoOffline(title: args[2], dueDate: nil)
+        }
+        print("Lokal angelegt.")
+        try printOutbox()
+        await SyncEngine.shared.run()
+        let error = SyncEngine.shared.lastError
+        print("Sync-Fehler: \(error ?? "keiner")")
+        try printOutbox()
+        try printTodos()
+    } catch {
+        print("Fehler: \(error)")
+    }
+
+case "toggle-todo":
+    guard args.count > 2, let id = Int64(args[2]) else {
+        print("Verwendung: toggle-todo <id>")
+        exit(1)
+    }
+    do {
+        let current = try AppDatabase.shared.read { db in try Todo.fetchOne(db, key: id) }
+        guard let current else {
+            print("Todo \(id) nicht lokal gefunden.")
+            exit(1)
+        }
+        try await MainActor.run {
+            try SyncEngine.shared.setTodoDoneOffline(id: id, done: !current.done)
+        }
+        print("Lokal umgeschaltet auf done=\(!current.done).")
+        try printOutbox()
+        await SyncEngine.shared.run()
+        let error = SyncEngine.shared.lastError
+        print("Sync-Fehler: \(error ?? "keiner")")
+        try printOutbox()
+        try printTodos()
     } catch {
         print("Fehler: \(error)")
     }

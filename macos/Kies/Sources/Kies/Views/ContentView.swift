@@ -14,6 +14,7 @@ struct ContentView: View {
                 List(selection: selection.binding) {
                     Label("Konten", systemImage: "banknote").tag("accounts" as String?)
                     Label("Buchungen", systemImage: "list.bullet.rectangle").tag("transactions" as String?)
+                    Label("Todos", systemImage: "checklist").tag("todos" as String?)
                 }
                 .navigationTitle("Kies")
                 .safeAreaInset(edge: .bottom) {
@@ -32,6 +33,7 @@ struct ContentView: View {
                 switch selection.value {
                 case "accounts": AccountsListView()
                 case "transactions": TransactionsListView()
+                case "todos": TodosListView()
                 default: Text("Wähle einen Bereich")
                 }
             }

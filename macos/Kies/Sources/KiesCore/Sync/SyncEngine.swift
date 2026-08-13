@@ -190,4 +190,50 @@ public final class SyncEngine: ObservableObject {
             try entry.insert(db)
         }
     }
+
+    /// Legt ein Todo lokal an (Platzhalter-ID) und reiht es in die Outbox ein.
+    public func createTodoOffline(title: String, dueDate: String?) throws {
+        try db.write { db in
+            let clientID = UUID().uuidString
+            let placeholderID = -Int64(Date().timeIntervalSince1970 * 1000)
+            let todo = Todo(
+                id: placeholderID, uid: nil, title: title, done: false, due_date: dueDate,
+                created_at: ISO8601DateFormatter().string(from: Date()), updated_at: nil,
+                pending_client_id: clientID
+            )
+            try todo.insert(db)
+            let data: [String: Any] = ["title": title, "due_date": dueDate as Any]
+            try Self.enqueueOutbox(db, entityType: "Todo", op: "create", clientID: clientID, serverID: nil, baseUpdatedAt: nil, data: data)
+        }
+    }
+
+    /// Hakt ein bereits synchronisiertes Todo ab/wieder auf - nur für Todos
+    /// mit echter Server-ID (positive id), noch nicht synchronisierte (Pending)
+    /// Todos werden bewusst nicht editierbar angeboten (siehe UI), das würde
+    /// einen zweiten, komplizierteren Fall (Update auf eine noch ausstehende
+    /// Outbox-Create-Operation) nötig machen.
+    public func setTodoDoneOffline(id: Int64, done: Bool) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var todo = try Todo.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = todo.updated_at
+            todo.done = done
+            try todo.save(db)
+            let data: [String: Any] = ["done": done]
+            try Self.enqueueOutbox(db, entityType: "Todo", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
+    private nonisolated static func enqueueOutbox(
+        _ db: Database, entityType: String, op: String, clientID: String?, serverID: Int64?,
+        baseUpdatedAt: String?, data: [String: Any]
+    ) throws {
+        let jsonData = try JSONSerialization.data(withJSONObject: data)
+        var entry = SyncOutboxEntry(
+            id: nil, entity_type: entityType, op: op, client_id: clientID, server_id: serverID,
+            base_updated_at: baseUpdatedAt, data_json: String(data: jsonData, encoding: .utf8)!,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        )
+        try entry.insert(db)
+    }
 }
