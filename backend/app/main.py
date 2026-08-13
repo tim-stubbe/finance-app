@@ -5045,6 +5045,59 @@ def _scheduled_wishlist_reminder():
         db.close()
 
 
+EVENING_REVIEW_HOUR = 21
+
+
+def _scheduled_evening_review():
+    """Einmal täglich abends: fester Tagesrhythmus statt nur der Intervall-
+    basierten Einzel-Erinnerungen oben - Nutzerwunsch nach einem täglichen
+    Fixpunkt ("strenger Vater"-Prinzip: nicht nur bei einer überfälligen
+    Woche nachhaken, sondern jeden Abend kurz Bilanz). Ergänzt die
+    intervallbasierten Jobs, ersetzt sie nicht - die bleiben für längere
+    Rhythmen (wöchentlich etc.) zuständig. Läuft nur, wenn überhaupt ein
+    Lebensbereich existiert, sonst wäre es ein Ping ins Leere."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        areas = db.query(models.LifeArea).filter(models.LifeArea.active.is_(True)).all()
+        if not areas:
+            return
+
+        today_start = datetime.combine(date.today(), datetime.min.time())
+        lines = ["🌙 Tagesbilanz:"]
+        missing_today = [
+            a.name for a in areas
+            if not db.query(models.LifeCheckIn)
+            .filter(models.LifeCheckIn.area_id == a.id, models.LifeCheckIn.created_at >= today_start)
+            .first()
+        ]
+        if missing_today:
+            lines.append("Heute noch kein Check-in: " + ", ".join(f"„{n}“" for n in missing_today) + ".")
+        else:
+            lines.append("Alle Lebensbereiche heute schon eingecheckt. 👍")
+
+        open_issues = db.query(models.BusinessIssue).filter(models.BusinessIssue.resolved.is_(False)).count()
+        if open_issues:
+            lines.append(f"📋 {open_issues} offene Projekt-Punkt(e) insgesamt.")
+
+        now = datetime.utcnow()
+        overdue_wishlist = [
+            w for w in db.query(models.WishlistItem).filter(
+                models.WishlistItem.active.is_(True), models.WishlistItem.purchased.is_(False),
+                models.WishlistItem.check_interval_days.isnot(None),
+            ).all()
+            if (now - (w.last_checked_at or w.created_at)).days >= w.check_interval_days
+        ]
+        if overdue_wishlist:
+            lines.append(f"🛒 {len(overdue_wishlist)} Wunschlisten-Eintrag/Einträge überfällig.")
+
+        notifications.notify(settings, "\n".join(lines))
+    finally:
+        db.close()
+
+
 WISHLIST_AUTO_CHECK_BATCH_SIZE = 3
 WISHLIST_AUTO_CHECK_MIN_HOURS = 20  # nicht öfter als ~1x/Tag pro Eintrag, Suchanfragen sind begrenzt
 
@@ -5440,6 +5493,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_wishlist_reminder, CronTrigger(hour=8, minute=45),
     id="wishlist_reminder", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_evening_review, CronTrigger(hour=EVENING_REVIEW_HOUR, minute=0),
+    id="evening_review", misfire_grace_time=3600,
 )
 scheduler.add_job(
     _scheduled_wishlist_auto_check, CronTrigger(hour=9, minute=0),
