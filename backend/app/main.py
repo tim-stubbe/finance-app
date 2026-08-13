@@ -205,6 +205,9 @@ ensure_columns("business_projects", {
 ensure_columns("settings", {
     "native_sync_secret_encrypted": "VARCHAR",
 })
+ensure_columns("spaces", {
+    "last_digest_net_worth": "FLOAT",
+})
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
 # bisher auf fast allen Tabellen ausser todos/calendar_events, ohne die Spalte
@@ -4629,59 +4632,71 @@ app.include_router(sync_router)
 
 
 # ---------------- Automatischer Sync (Bank, Bitvavo, PayPal, Enable Banking) ----------------
+def _sync_all_connections(db, settings):
+    """Synct alle Bank-/Broker-/Marktplatz-Verbindungen (FinTS, Bitvavo,
+    PayPal, Enable Banking, eBay) - bewusst OHNE Kurs-Refresh der Investments
+    (das ist ein separater, nutzer-getriggerter Schritt, siehe POST
+    /holdings/refresh-prices). Gemeinsam genutzt vom taeglichen
+    _scheduled_bank_sync UND vom Digest (siehe _scheduled_digest), der vor
+    jeder Meldung frische Zahlen braucht statt auf den naechsten taeglichen
+    Sync zu warten. Jede Verbindung isoliert in try/except, damit eine
+    fehlschlagende Verbindung die anderen nicht blockiert."""
+    if settings.fints_product_id:
+        for conn in crud.get_all_bank_connections(db):
+            try:
+                pin = bank_sync.decrypt_pin(settings.secret_key, conn.pin_encrypted)
+                since = conn.last_sync_at.date() if conn.last_sync_at else date.today() - timedelta(days=90)
+                bank_sync.start_sync(db, conn, pin, settings.fints_product_id, since)
+            except Exception as e:
+                conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+                db.commit()
+
+    for bv_conn in crud.get_all_bitvavo_connections(db):
+        try:
+            api_key = bank_sync.decrypt_secret(settings.secret_key, bv_conn.api_key_encrypted)
+            api_secret = bank_sync.decrypt_secret(settings.secret_key, bv_conn.api_secret_encrypted)
+            exchange_sync.sync(db, bv_conn, api_key, api_secret, bv_conn.space_id)
+        except Exception as e:
+            bv_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+            db.commit()
+
+    for pp_conn in crud.get_all_paypal_connections(db):
+        try:
+            client_id = bank_sync.decrypt_secret(settings.secret_key, pp_conn.client_id_encrypted)
+            client_secret = bank_sync.decrypt_secret(settings.secret_key, pp_conn.client_secret_encrypted)
+            paypal_sync.sync(db, pp_conn, client_id, client_secret)
+        except Exception as e:
+            pp_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+            db.commit()
+
+    if settings.enablebanking_app_id and settings.enablebanking_private_key_encrypted:
+        private_key = bank_sync.decrypt_secret(settings.secret_key, settings.enablebanking_private_key_encrypted)
+        for eb_conn in crud.get_all_enablebanking_connections(db):
+            if eb_conn.status != "linked":
+                continue
+            try:
+                enablebanking_sync.sync(db, eb_conn, settings.enablebanking_app_id, private_key)
+            except Exception as e:
+                eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+                db.commit()
+
+    if settings.ebay_app_id and settings.ebay_cert_id_encrypted:
+        cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
+        for eb_conn in crud.get_all_ebay_connections(db):
+            if eb_conn.status != "connected":
+                continue
+            try:
+                ebay_sync.sync(db, eb_conn, settings.ebay_app_id, cert_id)
+            except Exception as e:
+                eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+                db.commit()
+
+
 def _scheduled_bank_sync():
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
-        if settings.fints_product_id:
-            for conn in crud.get_all_bank_connections(db):
-                try:
-                    pin = bank_sync.decrypt_pin(settings.secret_key, conn.pin_encrypted)
-                    since = conn.last_sync_at.date() if conn.last_sync_at else date.today() - timedelta(days=90)
-                    bank_sync.start_sync(db, conn, pin, settings.fints_product_id, since)
-                except Exception as e:
-                    conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                    db.commit()
-
-        for bv_conn in crud.get_all_bitvavo_connections(db):
-            try:
-                api_key = bank_sync.decrypt_secret(settings.secret_key, bv_conn.api_key_encrypted)
-                api_secret = bank_sync.decrypt_secret(settings.secret_key, bv_conn.api_secret_encrypted)
-                exchange_sync.sync(db, bv_conn, api_key, api_secret, bv_conn.space_id)
-            except Exception as e:
-                bv_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                db.commit()
-
-        for pp_conn in crud.get_all_paypal_connections(db):
-            try:
-                client_id = bank_sync.decrypt_secret(settings.secret_key, pp_conn.client_id_encrypted)
-                client_secret = bank_sync.decrypt_secret(settings.secret_key, pp_conn.client_secret_encrypted)
-                paypal_sync.sync(db, pp_conn, client_id, client_secret)
-            except Exception as e:
-                pp_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                db.commit()
-
-        if settings.enablebanking_app_id and settings.enablebanking_private_key_encrypted:
-            private_key = bank_sync.decrypt_secret(settings.secret_key, settings.enablebanking_private_key_encrypted)
-            for eb_conn in crud.get_all_enablebanking_connections(db):
-                if eb_conn.status != "linked":
-                    continue
-                try:
-                    enablebanking_sync.sync(db, eb_conn, settings.enablebanking_app_id, private_key)
-                except Exception as e:
-                    eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                    db.commit()
-
-        if settings.ebay_app_id and settings.ebay_cert_id_encrypted:
-            cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
-            for eb_conn in crud.get_all_ebay_connections(db):
-                if eb_conn.status != "connected":
-                    continue
-                try:
-                    ebay_sync.sync(db, eb_conn, settings.ebay_app_id, cert_id)
-                except Exception as e:
-                    eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                    db.commit()
+        _sync_all_connections(db, settings)
     finally:
         db.close()
 
@@ -5314,10 +5329,17 @@ def _scheduled_digest():
     DIGEST_HOURS) - Nutzerwunsch nach einem Assistenten, der sich von selbst
     meldet statt nur auf Nachfrage zu antworten. Bewusst reine Auswertung
     (crud.build_digest), keine eigene "notified"-Logik wie die Sofort-
-    Warnungen in _check_daily_alerts - beides laeuft unabhaengig nebeneinander."""
+    Warnungen in _check_daily_alerts - beides laeuft unabhaengig nebeneinander.
+
+    Synct vor jeder Meldung erst alle Bank-/Broker-Verbindungen (siehe
+    _sync_all_connections), damit das gemeldete Nettovermögen nicht auf dem
+    Stand vom letzten taeglichen Sync-Lauf haengt, sondern frisch ist -
+    bewusst OHNE Investment-Kurse (siehe _sync_all_connections-Docstring)."""
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
+        _sync_all_connections(db, settings)
+
         home_coords = (settings.home_lat, settings.home_lon) if settings.home_lat and settings.home_lon else None
         ors_api_key = (
             bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
@@ -5332,6 +5354,10 @@ def _scheduled_digest():
                     since=since, transfers_marked=transfers_marked,
                 )
                 notifications.notify(settings, text)
+                # Erst NACH erfolgreichem Versand fortschreiben - sonst wuerde
+                # ein Fehler beim Senden den Vergleichswert trotzdem verbrauchen
+                # und der naechste Digest faelschlich "keine Aenderung" zeigen.
+                space.last_digest_net_worth = crud.net_worth(db, space.id).total
             except Exception:
                 db.rollback()
         settings.last_digest_sent_at = datetime.utcnow()

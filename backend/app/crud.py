@@ -2082,17 +2082,17 @@ def build_digest(
     nw = net_worth(db, space_id)
     lines = [f"📊 Kies-Update ({datetime.now().strftime('%H:%M')})", ""]
     verlauf = ""
-    gestern = (
-        db.query(models.NetWorthSnapshot)
-        .filter(models.NetWorthSnapshot.space_id == space_id, models.NetWorthSnapshot.date < date.today())
-        .order_by(models.NetWorthSnapshot.date.desc())
-        .first()
-    )
-    if gestern:
-        delta = round(nw.total - gestern.total, 2)
+    # Vergleich zur vorherigen DIGEST-NACHRICHT (Space.last_digest_net_worth),
+    # nicht zum taeglichen NetWorthSnapshot - der Digest laeuft mehrmals
+    # taeglich (siehe main.DIGEST_HOURS), ein Tages-Snapshot waere fuer
+    # "seit der letzten Meldung" zu grob. main._scheduled_digest schreibt
+    # last_digest_net_worth erst NACH erfolgreichem Versand fort.
+    space = db.query(models.Space).filter(models.Space.id == space_id).first()
+    if space and space.last_digest_net_worth is not None:
+        delta = round(nw.total - space.last_digest_net_worth, 2)
         if delta:
             pfeil = "📈" if delta > 0 else "📉"
-            verlauf = f" ({pfeil} {delta:+.2f} EUR seit {gestern.date.strftime('%d.%m.')})"
+            verlauf = f" ({pfeil} {delta:+.2f} EUR zur letzten Nachricht)"
     lines.append(f"Nettovermögen: {nw.total:.2f} EUR{verlauf}")
     lines.append(
         f"Konten: {nw.accounts_total:.2f} EUR · Investments: {nw.investments_total:.2f} EUR · "

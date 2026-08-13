@@ -37,6 +37,11 @@ class Space(Base):
     icon = Column(String, nullable=False, default="🏠")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Nettovermögen beim letzten gesendeten Digest (main._scheduled_digest) -
+    # Grundlage für den "seit der letzten Nachricht"-Vergleich dort, statt
+    # gegen den taeglichen NetWorthSnapshot zu vergleichen (der Digest laeuft
+    # mehrmals taeglich, ein Tages-Snapshot waere fuer diesen Vergleich zu grob).
+    last_digest_net_worth = Column(Float, nullable=True)
 
     accounts = relationship("Account", back_populates="space", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="space", cascade="all, delete-orphan")
