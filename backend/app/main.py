@@ -27,6 +27,8 @@ from sqlalchemy.exc import IntegrityError
 import threading
 
 from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time, weather, tax_export
+from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
+from .sync import sync_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -200,6 +202,33 @@ ensure_columns("account_balance_log", {
 ensure_columns("business_projects", {
     "account_id": "INTEGER",
 })
+ensure_columns("settings", {
+    "native_sync_secret_encrypted": "VARCHAR",
+})
+
+# updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
+# bisher auf fast allen Tabellen ausser todos/calendar_events, ohne die Spalte
+# ist kein Diff-Sync ("was hat sich seit dem letzten Pull geaendert") moeglich.
+# Backfill laeuft idempotent bei jedem Start mit (WHERE updated_at IS NULL),
+# kein separates Migrations-Tracking noetig.
+_SYNC_UPDATED_AT_TABLES = [
+    "spaces", "accounts", "categories", "budgets", "trips", "holdings",
+    "holding_lots", "transactions", "debts", "debt_payments", "goals",
+    "goal_triggers", "goal_progress", "alert_rules", "contract_reminders",
+    "return_deadlines", "net_worth_snapshots", "business_projects",
+    "business_issues", "life_areas", "life_checkins", "wishlist_items",
+    "account_balance_log", "creditcard_bills",
+]
+for _table in _SYNC_UPDATED_AT_TABLES:
+    ensure_columns(_table, {"updated_at": "DATETIME"})
+with engine.connect() as _conn:
+    for _table in _SYNC_UPDATED_AT_TABLES:
+        _cols = {row[1] for row in _conn.exec_driver_sql(f"PRAGMA table_info({_table})")}
+        _fallback = "created_at" if "created_at" in _cols else "CURRENT_TIMESTAMP"
+        _conn.exec_driver_sql(
+            f"UPDATE {_table} SET updated_at = {_fallback} WHERE updated_at IS NULL"
+        )
+    _conn.commit()
 
 _bootstrap_db = SessionLocal()
 _settings = auth.get_or_create_settings(_bootstrap_db)
@@ -2622,6 +2651,33 @@ def remove_webhook_secret(db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# ---------------- Nativer macOS-Client (Offline-Sync) ----------------
+@api_router.get("/settings/native-sync", response_model=schemas.WebhookSettingsOut)
+def get_native_sync_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not s.native_sync_secret_encrypted:
+        return schemas.WebhookSettingsOut(secret=None, configured=False)
+    secret = bank_sync.decrypt_secret(s.secret_key, s.native_sync_secret_encrypted)
+    return schemas.WebhookSettingsOut(secret=secret, configured=True)
+
+
+@api_router.post("/settings/native-sync/regenerate", response_model=schemas.WebhookSettingsOut)
+def regenerate_native_sync_secret(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    new_secret = secrets.token_urlsafe(32)
+    s.native_sync_secret_encrypted = bank_sync.encrypt_secret(s.secret_key, new_secret)
+    db.commit()
+    return schemas.WebhookSettingsOut(secret=new_secret, configured=True)
+
+
+@api_router.delete("/settings/native-sync")
+def remove_native_sync_secret(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.native_sync_secret_encrypted = None
+    db.commit()
+    return {"ok": True}
+
+
 @api_router.post("/webhook/business-issue", response_model=schemas.BusinessIssueOut)
 def webhook_create_business_issue(
     data: schemas.WebhookIssueCreate, db: Session = Depends(get_db),
@@ -4569,6 +4625,7 @@ def restore(file: UploadFile = File(...)):
 
 
 app.include_router(api_router)
+app.include_router(sync_router)
 
 
 # ---------------- Automatischer Sync (Bank, Bitvavo, PayPal, Enable Banking) ----------------

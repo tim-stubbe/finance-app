@@ -2229,6 +2229,22 @@
         </div>
       </div>
 
+      <div class="panel" data-integration-key="native-sync">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 18h.01"/></svg> Nativer macOS-Client (Offline-Sync)</h3>
+        <p class="page-sub">
+          Secret zum Koppeln der nativen macOS-App – ermöglicht Offline-Zugriff mit Synchronisierung,
+          sobald wieder eine Verbindung besteht. Wird beim Einrichten der App einmalig dort eingetragen.
+        </p>
+        <div class="filter-row">
+          <input type="text" id="native-sync-secret" readonly placeholder="Noch kein Secret erzeugt">
+          <button type="button" id="native-sync-copy" class="btn-ghost">Kopieren</button>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="native-sync-regenerate" class="btn-primary">Neues Secret erzeugen</button>
+          <button type="button" id="native-sync-remove" class="btn-ghost hidden">Deaktivieren</button>
+        </div>
+      </div>
+
       <div class="panel" data-integration-key="radicale">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Radicale – To-Dos &amp; Termine vom Handy</h3>
         <p class="page-sub">

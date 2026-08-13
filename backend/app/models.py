@@ -36,6 +36,7 @@ class Space(Base):
     name = Column(String, nullable=False)
     icon = Column(String, nullable=False, default="🏠")
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     accounts = relationship("Account", back_populates="space", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="space", cascade="all, delete-orphan")
@@ -62,6 +63,7 @@ class Account(Base):
     # Einzelunternehmern ohnehin alles Privatvermögen, dient nur der Übersicht.
     is_business = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
     # True, solange der Saldo negativ ist UND dafür schon einmal per Telegram
     # gewarnt wurde - verhindert taegliche Wiederholmeldungen, waehrend das Konto
@@ -93,6 +95,7 @@ class AccountBalanceLog(Base):
     new_balance = Column(Float, nullable=False)
     source = Column(String, nullable=False)  # "app" oder "telegram"
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     account = relationship("Account")
     debt = relationship("Debt")
@@ -142,6 +145,7 @@ class AlertRule(Base):
     active = Column(Boolean, nullable=False, default=True)
     last_triggered_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     category = relationship("Category")
     account = relationship("Account")
@@ -154,6 +158,7 @@ class Category(Base):
     name = Column(String, nullable=False)
     type = Column(Enum(CategoryType), nullable=False)
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     parent = relationship("Category", remote_side=[id], backref="children")
     transactions = relationship("Transaction", back_populates="category")
@@ -201,6 +206,10 @@ class Settings(Base):
     # angezeigt (zum Eintragen in n8n), deshalb verschluesselt statt gehasht
     # gespeichert - anders als ein Passwort muss er wieder lesbar sein.
     n8n_webhook_secret_encrypted = Column(String, nullable=True)
+    # --- Nativer macOS-Client (Offline-Sync) --- Gleiches Muster wie oben:
+    # Klartext einmalig angezeigt zum Eintragen in der nativen App, deshalb
+    # verschluesselt statt gehasht gespeichert (muss wieder lesbar sein).
+    native_sync_secret_encrypted = Column(String, nullable=True)
     # --- Echte Anrufe (Twilio) für wirklich zeitkritische Fälle ---
     # Default False (anders als notifications_enabled): eine kostenpflichtige,
     # das Telefon klingelnde Aktion sollte nie ungefragt aktiv sein.
@@ -297,6 +306,7 @@ class Budget(Base):
     space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     monthly_limit = Column(Float, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     space = relationship("Space", back_populates="budgets")
     category = relationship("Category")
@@ -313,6 +323,7 @@ class Trip(Base):
     # Optional - ohne Budget zeigt die App weiterhin nur die Ist-Ausgaben wie
     # bisher, kein erzwungenes Feld.
     budget = Column(Float, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     space = relationship("Space", back_populates="trips")
     transactions = relationship("Transaction", back_populates="trip")
@@ -350,6 +361,7 @@ class Holding(Base):
     # (z.B. nach der naechsten tatsaechlichen Zahlung neu berechnet), wird wieder
     # frisch erinnert.
     next_dividend_notified_for = Column(Date, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     space = relationship("Space", back_populates="holdings")
     lots = relationship("HoldingLot", back_populates="holding", cascade="all, delete-orphan", order_by="HoldingLot.date")
@@ -366,6 +378,7 @@ class HoldingLot(Base):
     price_per_unit = Column(Float, nullable=False)
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     holding = relationship("Holding", back_populates="lots")
 
@@ -499,6 +512,7 @@ class Transaction(Base):
     # siehe crud.detect_and_mark_transfers). Zählt nicht als Einnahme/Ausgabe.
     is_transfer = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     account = relationship("Account", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
@@ -560,6 +574,7 @@ class Debt(Base):
     status = Column(Enum(DebtStatus), nullable=False, default=DebtStatus.active)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     space = relationship("Space", back_populates="debts")
     account = relationship("Account")
@@ -593,6 +608,7 @@ class DebtPayment(Base):
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     debt = relationship("Debt", back_populates="payments")
     transaction = relationship("Transaction")
@@ -649,6 +665,7 @@ class Goal(Base):
     # einmalig "Neu erreicht" markieren kann.
     completion_seen = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
     space = relationship("Space", back_populates="goals")
@@ -686,6 +703,7 @@ class GoalTrigger(Base):
     # Zeitfenster in Monaten (savings_rate: so viele Monate in Folge;
     # custom_category_sum: Summe der letzten so vielen Monate).
     evaluation_window_months = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     goal = relationship("Goal", back_populates="trigger")
     scope_account = relationship("Account")
@@ -704,6 +722,7 @@ class GoalProgress(Base):
     goal_id = Column(Integer, ForeignKey("goals.id"), nullable=False, index=True)
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
     current_value = Column(Float, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     goal = relationship("Goal", back_populates="progress_points")
 
@@ -787,6 +806,7 @@ class CreditCardBill(Base):
     amount = Column(Float, nullable=True)
     mail_attachment_id = Column(Integer, ForeignKey("mail_attachments.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     notified = Column(Boolean, nullable=False, default=False)
 
     account = relationship("Account")
@@ -937,6 +957,7 @@ class ContractReminder(Base):
     notes = Column(Text, nullable=True)
     should_cancel = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint("account_id", "description_key", name="uq_contract_reminder_account_desc"),
@@ -966,6 +987,7 @@ class ReturnDeadline(Base):
     reminded = Column(Boolean, nullable=False, default=False)
     returned = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class NetWorthSnapshot(Base):
@@ -988,6 +1010,7 @@ class NetWorthSnapshot(Base):
     debts_total = Column(Float, nullable=False)
     total = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint("space_id", "date", name="uq_net_worth_snapshot_space_date"),
@@ -1023,6 +1046,7 @@ class BusinessProject(Base):
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     account = relationship("Account")
 
@@ -1042,6 +1066,7 @@ class BusinessIssue(Base):
     notes = Column(Text, nullable=True)
     resolved = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
 
     project = relationship("BusinessProject")
@@ -1069,6 +1094,7 @@ class LifeArea(Base):
     last_reminded_date = Column(Date, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class LifeCheckIn(Base):
@@ -1083,6 +1109,7 @@ class LifeCheckIn(Base):
     area_id = Column(Integer, ForeignKey("life_areas.id"), nullable=False)
     note = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     area = relationship("LifeArea")
 
@@ -1117,3 +1144,20 @@ class WishlistItem(Base):
     purchased = Column(Boolean, nullable=False, default=False)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SyncTombstone(Base):
+    """Lösch-Protokoll für den Offline-Sync des nativen Clients - fast alle
+    Löschungen in dieser App sind Hard Deletes (siehe crud.py), ohne dieses
+    Protokoll wäre eine Löschung für einen zweiten Client zwischen zwei
+    Sync-Läufen unsichtbar. Wird ausschließlich automatisch über den
+    SQLAlchemy-Session-Event in sync_tombstones.py befüllt, nie manuell."""
+
+    __tablename__ = "sync_tombstones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String, nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False)
+    space_id = Column(Integer, nullable=True, index=True)
+    deleted_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
