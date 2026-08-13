@@ -197,6 +197,9 @@ ensure_columns("creditcard_bills", {
 ensure_columns("account_balance_log", {
     "debt_id": "INTEGER",
 })
+ensure_columns("business_projects", {
+    "account_id": "INTEGER",
+})
 
 _bootstrap_db = SessionLocal()
 _settings = auth.get_or_create_settings(_bootstrap_db)

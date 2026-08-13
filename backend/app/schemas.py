@@ -1666,12 +1666,14 @@ class BusinessProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     check_interval_days: Optional[int] = None
+    account_id: Optional[int] = None
 
 
 class BusinessProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     check_interval_days: Optional[int] = None
+    account_id: Optional[int] = None
     active: Optional[bool] = None
 
 
@@ -1685,6 +1687,10 @@ class BusinessProjectOut(BaseModel):
     created_at: datetime
     active: bool
     open_issue_count: int = 0
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
+    income_this_month: float = 0.0
+    income_total: float = 0.0
 
 
 class BusinessIssueCreate(BaseModel):

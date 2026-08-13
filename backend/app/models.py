@@ -1015,8 +1015,16 @@ class BusinessProject(Base):
     check_interval_days = Column(Integer, nullable=True)
     last_checked_at = Column(DateTime, nullable=True)
     last_reminded_date = Column(Date, nullable=True)
+    # Optionale Verknuepfung zu einem bestehenden Konto - macht sichtbar, was
+    # das Nebenprojekt tatsaechlich einbringt (z.B. Roblox-Auszahlungen laufen
+    # auf einem PayPal-Konto auf). Bewusst ein ganzes Konto statt einer
+    # Kategorie: die App hat schon das Konzept "geschaeftliches Konto" fuer
+    # genau diesen Zweck, eine weitere Kategorie-Zuordnung waere doppelt.
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account")
 
 
 class BusinessIssue(Base):

@@ -3158,19 +3158,47 @@ def year_review(db: Session, space_id: int, year: int) -> dict:
 
 
 # ---------- Business-Projekte (Nebenprojekte) ----------
+def _enrich_business_project(db: Session, project: models.BusinessProject) -> models.BusinessProject:
+    """Setzt die nicht in der Tabelle gespeicherten Anzeige-Felder (offene
+    Punkte, Konto-Name, Einnahmen) - gemeinsam genutzt von allen Funktionen,
+    die ein BusinessProject nach außen geben, damit keine davon vergisst,
+    eines der Felder zu befüllen."""
+    project.open_issue_count = (
+        db.query(models.BusinessIssue)
+        .filter(models.BusinessIssue.project_id == project.id, models.BusinessIssue.resolved.is_(False))
+        .count()
+    )
+    project.account_name = None
+    project.income_this_month = 0.0
+    project.income_total = 0.0
+    if project.account_id:
+        account = db.query(models.Account).filter(models.Account.id == project.account_id).first()
+        if account:
+            project.account_name = account.name
+            month_start = date.today().replace(day=1)
+            # Nur Einnahmen (positive Betraege), keine Umbuchungen - eine
+            # interne Umbuchung auf das verknuepfte Konto ist kein Verdienst
+            # des Projekts.
+            base_query = (
+                db.query(func.sum(models.Transaction.amount))
+                .filter(
+                    models.Transaction.account_id == project.account_id,
+                    models.Transaction.amount > 0,
+                    models.Transaction.is_transfer.is_(False),
+                )
+            )
+            project.income_total = base_query.scalar() or 0.0
+            project.income_this_month = base_query.filter(models.Transaction.date >= month_start).scalar() or 0.0
+    return project
+
+
 def get_business_projects(db: Session, include_inactive: bool = False) -> list[models.BusinessProject]:
     query = db.query(models.BusinessProject)
     if not include_inactive:
         query = query.filter(models.BusinessProject.active.is_(True))
     projects = query.order_by(models.BusinessProject.name).all()
-    counts = dict(
-        db.query(models.BusinessIssue.project_id, func.count(models.BusinessIssue.id))
-        .filter(models.BusinessIssue.resolved.is_(False))
-        .group_by(models.BusinessIssue.project_id)
-        .all()
-    )
     for p in projects:
-        p.open_issue_count = counts.get(p.id, 0)
+        _enrich_business_project(db, p)
     return projects
 
 
@@ -3181,12 +3209,12 @@ def get_business_project(db: Session, project_id: int) -> models.BusinessProject
 def create_business_project(db: Session, data: schemas.BusinessProjectCreate) -> models.BusinessProject:
     project = models.BusinessProject(
         name=data.name, description=data.description, check_interval_days=data.check_interval_days,
+        account_id=data.account_id,
     )
     db.add(project)
     db.commit()
     db.refresh(project)
-    project.open_issue_count = 0
-    return project
+    return _enrich_business_project(db, project)
 
 
 def update_business_project(db: Session, project: models.BusinessProject, data: schemas.BusinessProjectUpdate) -> models.BusinessProject:
@@ -3194,24 +3222,14 @@ def update_business_project(db: Session, project: models.BusinessProject, data: 
         setattr(project, key, value)
     db.commit()
     db.refresh(project)
-    project.open_issue_count = (
-        db.query(models.BusinessIssue)
-        .filter(models.BusinessIssue.project_id == project.id, models.BusinessIssue.resolved.is_(False))
-        .count()
-    )
-    return project
+    return _enrich_business_project(db, project)
 
 
 def mark_business_project_checked(db: Session, project: models.BusinessProject) -> models.BusinessProject:
     project.last_checked_at = datetime.utcnow()
     db.commit()
     db.refresh(project)
-    project.open_issue_count = (
-        db.query(models.BusinessIssue)
-        .filter(models.BusinessIssue.project_id == project.id, models.BusinessIssue.resolved.is_(False))
-        .count()
-    )
-    return project
+    return _enrich_business_project(db, project)
 
 
 def _business_issue_out(issue: models.BusinessIssue) -> schemas.BusinessIssueOut:

@@ -1788,6 +1788,9 @@ window.deleteTrip = async id => {
 let projectsCache = [];
 
 async function loadProjectsTab() {
+  if (!accountsCache.length) await loadAccounts();
+  document.getElementById("project-account").innerHTML = '<option value="">– keins –</option>' +
+    accountsCache.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join("");
   const [projects, issues] = await Promise.all([
     api("/business-projects"),
     api("/business-issues"),
@@ -1835,6 +1838,7 @@ function renderProjectCard(p, openIssues) {
       <span class="goal-chip ${openIssues.length ? "is-warn" : ""}">${openIssues.length} offen</span>
     </div>
     ${p.description ? `<p class="goal-desc">${esc(p.description)}</p>` : ""}
+    ${p.account_name ? `<p class="goal-values">${esc(p.account_name)} · diesen Monat ${eur(p.income_this_month)} · gesamt ${eur(p.income_total)}</p>` : ""}
     <p class="goal-meta ${overdue ? "goal-error" : ""}">
       ${overdue ? "⚠️ " : ""}Zuletzt geprüft: ${lastChecked}${p.check_interval_days ? ` · Intervall ${p.check_interval_days} Tage` : ""}
     </p>
@@ -1888,6 +1892,7 @@ function openProjectModal(project) {
   document.getElementById("project-name").value = project ? project.name : "";
   document.getElementById("project-description").value = project?.description || "";
   document.getElementById("project-interval").value = project?.check_interval_days || "";
+  document.getElementById("project-account").value = project?.account_id || "";
   document.getElementById("project-archive").classList.toggle("hidden", !project);
   document.getElementById("project-modal").classList.remove("hidden");
 }
@@ -1907,6 +1912,8 @@ document.getElementById("project-form").addEventListener("submit", async e => {
     description: document.getElementById("project-description").value || null,
     check_interval_days: document.getElementById("project-interval").value
       ? parseInt(document.getElementById("project-interval").value) : null,
+    account_id: document.getElementById("project-account").value
+      ? parseInt(document.getElementById("project-account").value) : null,
   };
   if (id) {
     await api(`/business-projects/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
