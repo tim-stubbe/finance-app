@@ -5098,6 +5098,70 @@ def _scheduled_evening_review():
         db.close()
 
 
+WEEKLY_REVIEW_WEEKDAY = "sun"
+WEEKLY_REVIEW_HOUR = 20
+
+
+def _scheduled_weekly_review():
+    """Einmal wöchentlich (Sonntagabend): Rückblick über ALLE Bereiche der
+    App, nicht nur Finanzen - Nutzerwunsch nach einem regelmäßigen
+    Gesamtüberblick. Ergänzt _scheduled_evening_review (täglich, nur Leben)
+    und build_digest (mehrmals täglich, nur Finanzen je Space) um eine
+    wöchentliche bereichsübergreifende Sicht. Bewusst ein eigener,
+    standalone Job statt Erweiterung von build_digest - das würde bei
+    mehreren Spaces die space-losen Bereiche (Projekte/Leben/Wunschliste)
+    mehrfach melden, siehe crud.build_digest-Docstring."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        lines = ["📅 Wochenrückblick:"]
+
+        week_ago = date.today() - timedelta(days=7)
+        for space in crud.get_spaces(db):
+            nw = crud.net_worth(db, space.id)
+            snapshot = (
+                db.query(models.NetWorthSnapshot)
+                .filter(models.NetWorthSnapshot.space_id == space.id, models.NetWorthSnapshot.date <= week_ago)
+                .order_by(models.NetWorthSnapshot.date.desc())
+                .first()
+            )
+            verlauf = ""
+            if snapshot:
+                delta = round(nw.total - snapshot.total, 2)
+                pfeil = "📈" if delta > 0 else ("📉" if delta < 0 else "➡️")
+                verlauf = f" ({pfeil} {delta:+.2f} EUR diese Woche)"
+            lines.append(f"💰 {space.name}: {nw.total:.2f} EUR{verlauf}")
+
+        projects = db.query(models.BusinessProject).filter(models.BusinessProject.active.is_(True)).all()
+        if projects:
+            open_issues = db.query(models.BusinessIssue).filter(models.BusinessIssue.resolved.is_(False)).count()
+            lines.append(f"📋 {len(projects)} aktive(s) Projekt(e), {open_issues} offene Punkt(e).")
+
+        areas = db.query(models.LifeArea).filter(models.LifeArea.active.is_(True)).all()
+        if areas:
+            teile = []
+            for a in areas:
+                _, streak = crud._life_area_streak_and_history(db, a.id)
+                teile.append(f"„{a.name}“ {streak}d" if streak else f"„{a.name}“ –")
+            lines.append("🔥 Streaks: " + ", ".join(teile))
+
+        wishlist_count = (
+            db.query(models.WishlistItem)
+            .filter(models.WishlistItem.active.is_(True), models.WishlistItem.purchased.is_(False))
+            .count()
+        )
+        if wishlist_count:
+            lines.append(f"🛒 {wishlist_count} offene(r) Wunschlisten-Eintrag/Einträge.")
+
+        if len(lines) == 1:
+            return
+        notifications.notify(settings, "\n".join(lines))
+    finally:
+        db.close()
+
+
 WISHLIST_AUTO_CHECK_BATCH_SIZE = 3
 WISHLIST_AUTO_CHECK_MIN_HOURS = 20  # nicht öfter als ~1x/Tag pro Eintrag, Suchanfragen sind begrenzt
 
@@ -5497,6 +5561,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_evening_review, CronTrigger(hour=EVENING_REVIEW_HOUR, minute=0),
     id="evening_review", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_weekly_review, CronTrigger(day_of_week=WEEKLY_REVIEW_WEEKDAY, hour=WEEKLY_REVIEW_HOUR, minute=0),
+    id="weekly_review", misfire_grace_time=3600,
 )
 scheduler.add_job(
     _scheduled_wishlist_auto_check, CronTrigger(hour=9, minute=0),
