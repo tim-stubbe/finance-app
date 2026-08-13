@@ -1987,6 +1987,19 @@ function lifeAreaIsOverdue(a) {
   return days >= a.check_interval_days;
 }
 
+function renderLifeAreaHeatmap(a) {
+  const days = a.checkin_days_30 || [];
+  const daySet = new Set(days);
+  const cells = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    cells.push(`<span class="life-heatmap-day${daySet.has(iso) ? " filled" : ""}" title="${iso}"></span>`);
+  }
+  return `<div class="life-heatmap">${cells.join("")}</div>`;
+}
+
 function renderLifeAreaCard(a, recentCheckins) {
   const card = document.createElement("div");
   card.className = "goal-card";
@@ -1995,6 +2008,7 @@ function renderLifeAreaCard(a, recentCheckins) {
     ? new Date(a.last_checked_at).toLocaleDateString("de-DE")
     : "noch kein Check-in";
   const progress = a.progress_percent != null ? a.progress_percent : null;
+  const streak = a.streak_days || 0;
   card.innerHTML = `
     <div class="goal-card-head">
       <h4>${esc(a.name)}</h4>
@@ -2008,6 +2022,8 @@ function renderLifeAreaCard(a, recentCheckins) {
     <p class="goal-meta ${overdue ? "goal-error" : ""}">
       ${overdue ? "⚠️ " : ""}Letzter Check-in: ${lastChecked}${a.check_interval_days ? ` · Intervall ${a.check_interval_days} Tage` : ""}
     </p>
+    <div class="life-streak${streak > 0 ? " active" : ""}">${streak > 0 ? `🔥 ${streak} Tag${streak === 1 ? "" : "e"} Streak` : "Noch keine Streak"}</div>
+    ${renderLifeAreaHeatmap(a)}
     <div class="todo-row-list">
       ${recentCheckins.map(c => `
         <div class="todo-row">

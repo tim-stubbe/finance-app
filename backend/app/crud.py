@@ -3308,15 +3308,54 @@ def find_open_business_issue(db: Session, project_id: int, title_query: str) -> 
 
 
 # ---------- Leben (persönliche Lebensbereiche) ----------
+LIFE_AREA_HISTORY_DAYS = 30
+
+
+def _life_area_streak_and_history(db: Session, area_id: int, days: int = LIFE_AREA_HISTORY_DAYS) -> tuple[list[str], int]:
+    """Liefert (Tage mit mind. einem Check-in der letzten `days` Tage als
+    ISO-Strings, aktuelle Streak-Länge) für die visuelle Historie im Frontend
+    (Nutzerwunsch: Konsequenz sichtbar machen, nicht nur eine Liste). Die
+    Streak zählt rückwärts ab heute - hat der Nutzer heute noch nicht
+    eingecheckt, aber gestern schon, bricht die Streak dadurch noch nicht ab
+    (Kulanz bis Tagesende, wie bei den gängigen Streak-Apps)."""
+    since = date.today() - timedelta(days=days - 1)
+    rows = (
+        db.query(func.date(models.LifeCheckIn.created_at))
+        .filter(
+            models.LifeCheckIn.area_id == area_id,
+            models.LifeCheckIn.created_at >= datetime.combine(since, datetime.min.time()),
+        )
+        .distinct()
+        .all()
+    )
+    checkin_days = {r[0] for r in rows}
+
+    streak = 0
+    cursor = date.today()
+    if cursor.isoformat() not in checkin_days:
+        cursor -= timedelta(days=1)
+    while cursor.isoformat() in checkin_days:
+        streak += 1
+        cursor -= timedelta(days=1)
+
+    return sorted(checkin_days), streak
+
+
 def get_life_areas(db: Session, include_inactive: bool = False) -> list[models.LifeArea]:
     query = db.query(models.LifeArea)
     if not include_inactive:
         query = query.filter(models.LifeArea.active.is_(True))
-    return query.order_by(models.LifeArea.name).all()
+    areas = query.order_by(models.LifeArea.name).all()
+    for a in areas:
+        a.checkin_days_30, a.streak_days = _life_area_streak_and_history(db, a.id)
+    return areas
 
 
 def get_life_area(db: Session, area_id: int) -> models.LifeArea | None:
-    return db.query(models.LifeArea).filter(models.LifeArea.id == area_id).first()
+    area = db.query(models.LifeArea).filter(models.LifeArea.id == area_id).first()
+    if area:
+        area.checkin_days_30, area.streak_days = _life_area_streak_and_history(db, area.id)
+    return area
 
 
 def create_life_area(db: Session, data: schemas.LifeAreaCreate) -> models.LifeArea:
@@ -3331,6 +3370,7 @@ def create_life_area(db: Session, data: schemas.LifeAreaCreate) -> models.LifeAr
     db.add(area)
     db.commit()
     db.refresh(area)
+    area.checkin_days_30, area.streak_days = _life_area_streak_and_history(db, area.id)
     return area
 
 
@@ -3344,6 +3384,7 @@ def update_life_area(db: Session, area: models.LifeArea, data: schemas.LifeAreaU
         setattr(area, key, value)
     db.commit()
     db.refresh(area)
+    area.checkin_days_30, area.streak_days = _life_area_streak_and_history(db, area.id)
     return area
 
 

@@ -1752,6 +1752,8 @@ class LifeAreaOut(BaseModel):
     last_checked_at: Optional[datetime] = None
     created_at: datetime
     active: bool
+    streak_days: int = 0
+    checkin_days_30: List[str] = []
 
 
 class LifeCheckInCreate(BaseModel):
