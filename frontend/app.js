@@ -282,6 +282,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "investments") loadInvestmentsTab();
     if (btn.dataset.tab === "debts") loadDebtsTab();
     if (btn.dataset.tab === "goals") loadGoalsTab();
+    if (btn.dataset.tab === "schweiz") loadSchweizGoalsTab();
     if (btn.dataset.tab === "ai") loadAiTab();
     if (btn.dataset.tab === "trips") loadTrips();
     if (btn.dataset.tab === "projects") loadProjectsTab();
@@ -7014,12 +7015,22 @@ function goalValueText(g) {
   return `${eur(g.current_value)} von ${eur(g.target_value)}`;
 }
 
+// Ziele mit dieser Kategorie gehören in den eigenen Schweiz-Tab statt in die
+// normale Ziele-Liste - reine Kategorie-Filterung auf demselben /goals-Datenbestand,
+// keine eigene Tabelle (analog zum Geschäftlich-Tab, der auch nur eine gefilterte
+// Sicht auf dieselben Konten ist).
+const SCHWEIZ_GOAL_CATEGORY = "Schweiz";
+function isSchweizGoal(g) {
+  return (g.category || "").trim().toLowerCase() === SCHWEIZ_GOAL_CATEGORY.toLowerCase();
+}
+
 async function loadGoalsTab() {
   goalsCache = await api("/goals");
   if (!accountsCache.length) await loadAccounts();
 
-  const open = goalsCache.filter(g => g.status === "open");
-  const done = goalsCache.filter(g => g.status !== "open");
+  const relevant = goalsCache.filter(g => !isSchweizGoal(g));
+  const open = relevant.filter(g => g.status === "open");
+  const done = relevant.filter(g => g.status !== "open");
   const newlyReached = goalsCache.filter(g => !g.completion_seen).length;
   const nextDue = open
     .filter(g => g.target_date)
@@ -7032,7 +7043,7 @@ async function loadGoalsTab() {
     </div>
     <div class="card card-pos">
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-      <div><h3>Erreicht</h3><p class="pos">${goalsCache.filter(g => g.status === "completed").length}</p></div>
+      <div><h3>Erreicht</h3><p class="pos">${relevant.filter(g => g.status === "completed").length}</p></div>
     </div>
     <div class="card">
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10H21M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
@@ -7061,6 +7072,45 @@ async function loadGoalsTab() {
   updateGoalsBadge(0);
   loadTodos();
   loadCalendarTab();
+}
+
+async function loadSchweizGoalsTab() {
+  if (!goalsCache.length) goalsCache = await api("/goals");
+  if (!accountsCache.length) await loadAccounts();
+
+  const schweizGoals = goalsCache.filter(isSchweizGoal);
+  const open = schweizGoals.filter(g => g.status === "open");
+  const done = schweizGoals.filter(g => g.status !== "open");
+  const nextDue = open
+    .filter(g => g.target_date)
+    .sort((a, b) => a.target_date.localeCompare(b.target_date))[0];
+
+  document.getElementById("schweiz-summary-cards").innerHTML = `
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></div>
+      <div><h3>Offene Ziele</h3><p>${open.length}</p></div>
+    </div>
+    <div class="card card-pos">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><h3>Erreicht</h3><p class="pos">${schweizGoals.filter(g => g.status === "completed").length}</p></div>
+    </div>
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10H21M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+      <div><h3>Nächste Frist</h3><p>${nextDue ? fmtDate(nextDue.target_date) : "–"}</p></div>
+    </div>`;
+
+  const openGrid = document.getElementById("schweiz-open-grid");
+  openGrid.innerHTML = open.length
+    ? ""
+    : `<div class="empty-state"><span class="empty-icon">${svgIcon("target")}</span><span>Noch keine offenen Schweiz-Ziele. Leg oben rechts eins an.</span></div>`;
+  open.forEach(g => openGrid.appendChild(renderGoalCard(g)));
+
+  const doneGrid = document.getElementById("schweiz-done-grid");
+  doneGrid.innerHTML = done.length
+    ? ""
+    : `<div class="empty-state"><span class="empty-icon">${svgIcon("check-circle")}</span><span>Noch nichts abgeschlossen.</span></div>`;
+  done.forEach(g => doneGrid.appendChild(renderGoalCard(g)));
+  document.getElementById("schweiz-done-count").textContent = done.length;
 }
 
 function updateGoalsBadge(count) {
@@ -7124,13 +7174,19 @@ function renderGoalCard(g) {
 
 window.toggleGoalDone = async (id, completed) => {
   await api(`/goals/${id}/complete?completed=${completed}`, { method: "POST" });
-  loadGoalsTab();
+  await loadGoalsTab();
+  loadSchweizGoalsTab();
 };
 
-document.getElementById("goal-done-toggle").addEventListener("click", () => {
+document.getElementById("goal-done-toggle").addEventListener("click", e => {
   const grid = document.getElementById("goal-done-grid");
   grid.classList.toggle("hidden");
-  document.querySelector(".goal-section-caret").textContent = grid.classList.contains("hidden") ? "▶" : "▼";
+  e.currentTarget.querySelector(".goal-section-caret").textContent = grid.classList.contains("hidden") ? "▶" : "▼";
+});
+document.getElementById("schweiz-done-toggle").addEventListener("click", e => {
+  const grid = document.getElementById("schweiz-done-grid");
+  grid.classList.toggle("hidden");
+  e.currentTarget.querySelector(".goal-section-caret").textContent = grid.classList.contains("hidden") ? "▶" : "▼";
 });
 
 function syncGoalFormVisibility() {
@@ -7151,7 +7207,7 @@ function syncGoalFormVisibility() {
 document.getElementById("goal-type").addEventListener("change", syncGoalFormVisibility);
 document.getElementById("goal-metric").addEventListener("change", syncGoalFormVisibility);
 
-window.openGoalModal = async (goalId = null) => {
+window.openGoalModal = async (goalId = null, defaultCategory = null) => {
   if (!accountsCache.length) await loadAccounts();
   if (!categoriesCache.length) await loadCategories();
   if (!goalsCache.length) goalsCache = await api("/goals");
@@ -7177,7 +7233,7 @@ window.openGoalModal = async (goalId = null) => {
   document.getElementById("goal-id").value = g ? g.id : "";
   document.getElementById("goal-title").value = g ? g.title : "";
   document.getElementById("goal-description").value = g?.description || "";
-  document.getElementById("goal-category").value = g?.category || "";
+  document.getElementById("goal-category").value = g?.category || defaultCategory || "";
   document.getElementById("goal-target-date").value = g?.target_date || "";
   document.getElementById("goal-type").value = g ? g.goal_type : "manual";
   document.getElementById("goal-predecessor").value = g?.predecessor_goal_id || "";
@@ -7247,6 +7303,7 @@ function closeGoalModal() {
   document.getElementById("goal-modal").classList.add("hidden");
 }
 document.getElementById("goal-new-btn").addEventListener("click", () => openGoalModal(null));
+document.getElementById("schweiz-goal-new-btn").addEventListener("click", () => openGoalModal(null, SCHWEIZ_GOAL_CATEGORY));
 document.getElementById("goal-modal-close").addEventListener("click", closeGoalModal);
 document.getElementById("goal-cancel").addEventListener("click", closeGoalModal);
 
@@ -7283,7 +7340,8 @@ document.getElementById("goal-form").addEventListener("submit", async e => {
     body: JSON.stringify(payload),
   });
   closeGoalModal();
-  loadGoalsTab();
+  await loadGoalsTab();
+  loadSchweizGoalsTab();
 });
 
 document.getElementById("goal-delete").addEventListener("click", async () => {
@@ -7291,7 +7349,8 @@ document.getElementById("goal-delete").addEventListener("click", async () => {
   if (!id || !confirm("Ziel wirklich löschen?")) return;
   await api(`/goals/${id}`, { method: "DELETE" });
   closeGoalModal();
-  loadGoalsTab();
+  await loadGoalsTab();
+  loadSchweizGoalsTab();
 });
 
 // ================= INIT =================
@@ -7426,6 +7485,7 @@ const CMDK_NAV = [
   { label: "Geschäftlich", tab: "business", icon: "briefcase" },
   { label: "Schulden", tab: "debts", icon: "banknote-stack" },
   { label: "Ziele", tab: "goals", icon: "target" },
+  { label: "Schweiz", tab: "schweiz", icon: "target" },
   { label: "KI-Assistent", tab: "ai", icon: "sparkles" },
   { label: "Fotos", tab: "photos", icon: "image" },
   { label: "Urlaube", tab: "trips", icon: "map" },
@@ -7445,6 +7505,7 @@ const CMDK_ACTIONS = [
   { label: "Neues Konto", icon: "plus", run: () => { goToTab("accounts"); setTimeout(() => document.getElementById("acc-new-btn")?.click(), 150); } },
   { label: "Neuer Kredit", icon: "plus", run: () => { goToTab("debts"); setTimeout(() => document.getElementById("debt-new-btn")?.click(), 150); } },
   { label: "Neues Ziel", icon: "plus", run: () => { goToTab("goals"); setTimeout(() => document.getElementById("goal-new-btn")?.click(), 150); } },
+  { label: "Neues Schweiz-Ziel", icon: "plus", run: () => { goToTab("schweiz"); setTimeout(() => document.getElementById("schweiz-goal-new-btn")?.click(), 150); } },
   { label: "Neue Kategorie", icon: "plus", run: () => { goToTab("categories"); setTimeout(() => document.getElementById("cat-name")?.focus(), 150); } },
   { label: "Neues Projekt", icon: "plus", run: () => { goToTab("projects"); setTimeout(() => document.getElementById("project-new-btn")?.click(), 150); } },
   { label: "Neuer Lebensbereich", icon: "plus", run: () => { goToTab("life"); setTimeout(() => document.getElementById("life-area-new-btn")?.click(), 150); } },
