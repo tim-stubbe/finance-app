@@ -197,6 +197,11 @@ class Settings(Base):
     # Reine Anzeige-Einstellung: gespeichert wird immer in EUR, hier steht nur,
     # in welcher Währung das Frontend umrechnet/anzeigt.
     display_currency = Column(String, nullable=False, default="EUR")
+    # Wohnsitzland - rein zum Ein-/Ausblenden landesspezifischer Anbindungen
+    # in den Einstellungen (z.B. FinTS ist deutschlandspezifisch). Bewusst
+    # unabhängig von display_currency: wer in der Schweiz wohnt, will trotzdem
+    # in EUR anzeigen können und umgekehrt.
+    residence_country = Column(String, nullable=False, default="DE")
     # --- Benachrichtigungen (Telegram) ---
     notifications_enabled = Column(Boolean, nullable=False, default=True)
     telegram_bot_token_encrypted = Column(String, nullable=True)

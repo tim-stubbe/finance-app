@@ -6050,6 +6050,7 @@ async function refreshIntegrationBadge() {
 }
 
 async function loadSettingsTab() {
+  await loadCountrySettings();
   await loadIntegrationStatus();
   await loadBudgets();
   await loadOllamaSettings();
@@ -7376,6 +7377,35 @@ function updateCurrencyToggleUI() {
     btn.classList.toggle("active", btn.dataset.currency === displayCurrency);
   });
 }
+
+// Wohnsitzland - unabhaengig von der Anzeige-Waehrung (EUR/CHF oben), blendet
+// nur landesspezifische Anbindungs-Panels in den Einstellungen ein/aus (siehe
+// [data-country-only] in index.html, z.B. FinTS ist deutschlandspezifisch).
+function applyCountryVisibility(country) {
+  document.querySelectorAll("[data-country-only]").forEach(panel => {
+    panel.classList.toggle("hidden", panel.dataset.countryOnly !== country);
+  });
+  document.querySelectorAll("#country-switch [data-country-option]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.countryOption === country);
+  });
+}
+
+async function loadCountrySettings() {
+  try {
+    const s = await api("/settings/country");
+    applyCountryVisibility(s.country);
+  } catch (e) {
+    applyCountryVisibility("DE");
+  }
+}
+
+document.querySelectorAll("#country-switch [data-country-option]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const country = btn.dataset.countryOption;
+    await api("/settings/country", { method: "PUT", body: JSON.stringify({ country }) });
+    applyCountryVisibility(country);
+  });
+});
 
 document.querySelectorAll(".currency-toggle-btn").forEach(btn => {
   btn.addEventListener("click", async () => {

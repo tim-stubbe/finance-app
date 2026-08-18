@@ -16,7 +16,7 @@
 #
 set -euo pipefail
 
-LIVE_URL="${LIVE_URL:-http://100.72.226.91:8000}"
+LIVE_URL="${LIVE_URL:-https://100.72.226.91:8000}"
 
 # Projektwurzel bestimmen, damit das Skript aus jedem Verzeichnis heraus geht.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,7 +27,9 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "==> Hole Live-Backup von $LIVE_URL"
-http_code="$(curl -sS -m 120 -o "$TMP_DIR/backup.zip" -w '%{http_code}' "$LIVE_URL/api/backup" || true)"
+# -k: TrueNAS terminiert TLS mit einem selbstsignierten Zertifikat, nur ueber
+# Tailscale erreichbar - kein oeffentlich vertrauenswuerdiges Zertifikat noetig.
+http_code="$(curl -sSk -m 120 -o "$TMP_DIR/backup.zip" -w '%{http_code}' "$LIVE_URL/api/backup" || true)"
 
 if [ "$http_code" != "200" ]; then
     echo "FEHLER: Server antwortete mit HTTP $http_code." >&2
@@ -35,15 +37,18 @@ if [ "$http_code" != "200" ]; then
     exit 1
 fi
 
-# Pruefen, dass wirklich ein brauchbares Archiv ankam, bevor irgendetwas
-# Lokales angefasst wird.
-if ! unzip -l "$TMP_DIR/backup.zip" | grep -q 'finance\.db'; then
+unzip -q "$TMP_DIR/backup.zip" -d "$TMP_DIR/entpackt"
+NEW_DB="$TMP_DIR/entpackt/finance.db"
+
+# Pruefen, dass wirklich eine brauchbare finance.db entpackt wurde, bevor
+# irgendetwas Lokales angefasst wird. (Vorher wurde das ueber `unzip -l | grep`
+# auf dem noch nicht entpackten Archiv geprueft - das schlug auf diesem Mac
+# sporadisch fehl, obwohl die Datei nachweislich enthalten war; die Pruefung
+# nach dem tatsaechlichen Entpacken ist robuster.)
+if [ ! -f "$NEW_DB" ]; then
     echo "FEHLER: Das Archiv enthaelt keine finance.db - Abbruch." >&2
     exit 1
 fi
-
-unzip -q "$TMP_DIR/backup.zip" -d "$TMP_DIR/entpackt"
-NEW_DB="$TMP_DIR/entpackt/finance.db"
 
 # Die heruntergeladene Datei pruefen, solange die lokale noch unberuehrt ist.
 integrity="$(sqlite3 "$NEW_DB" 'PRAGMA integrity_check;')"

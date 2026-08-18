@@ -111,6 +111,9 @@ ensure_columns("settings", {
     "display_currency": "VARCHAR DEFAULT 'EUR'",
 })
 ensure_columns("settings", {
+    "residence_country": "VARCHAR DEFAULT 'DE'",
+})
+ensure_columns("settings", {
     "notifications_enabled": "BOOLEAN DEFAULT 1",
     "telegram_bot_token_encrypted": "VARCHAR",
     "telegram_chat_id": "VARCHAR",
@@ -2338,6 +2341,24 @@ def update_currency_settings(data: schemas.CurrencySettingsUpdate, db: Session =
     settings.display_currency = currency
     db.commit()
     return schemas.CurrencySettingsOut(currency=settings.display_currency)
+
+
+# ---------------- Wohnsitzland (blendet landesspezifische Anbindungen in den Einstellungen ein/aus) ----------------
+@api_router.get("/settings/country", response_model=schemas.CountrySettingsOut)
+def get_country_settings(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    return schemas.CountrySettingsOut(country=settings.residence_country)
+
+
+@api_router.put("/settings/country", response_model=schemas.CountrySettingsOut)
+def update_country_settings(data: schemas.CountrySettingsUpdate, db: Session = Depends(get_db)):
+    country = data.country.upper().strip()
+    if country not in ("DE", "CH"):
+        raise HTTPException(400, "Nur DE oder CH werden unterstützt")
+    settings = auth.get_or_create_settings(db)
+    settings.residence_country = country
+    db.commit()
+    return schemas.CountrySettingsOut(country=settings.residence_country)
 
 
 @api_router.get("/fx/rate", response_model=schemas.FxRateOut)

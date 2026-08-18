@@ -1158,6 +1158,14 @@ class CurrencySettingsUpdate(BaseModel):
     currency: str
 
 
+class CountrySettingsOut(BaseModel):
+    country: str = "DE"
+
+
+class CountrySettingsUpdate(BaseModel):
+    country: str
+
+
 class FxRateOut(BaseModel):
     from_currency: str
     to_currency: str

@@ -1839,6 +1839,15 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M3 12h18"/></svg> Land</h3>
+        <p class="page-sub">Blendet landesspezifische Anbindungen unten aus (z.B. FinTS ist deutschlandspezifisch). Betrifft nicht die Anzeige-Währung (EUR/CHF oben in der Kopfzeile) - die bleibt unabhängig davon einstellbar.</p>
+        <div class="theme-switch" id="country-switch">
+          <button type="button" class="theme-option" data-country-option="DE">Deutschland</button>
+          <button type="button" class="theme-option" data-country-option="CH">Schweiz</button>
+        </div>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.5 0 2-1 2-2s-.5-1.5-.5-2.5A2.5 2.5 0 0 1 16 15h2a4 4 0 0 0 4-4c0-5-4.5-9-10-9z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg> Erscheinungsbild</h3>
         <p class="page-sub">Wähle dein Farbschema. Die Auswahl wird auf diesem Gerät gespeichert.</p>
         <div class="theme-switch" id="theme-switch">
@@ -1902,7 +1911,7 @@
       </div>
 
       <div id="settings-view-banken" class="hidden">
-      <div class="panel" data-integration-key="fints">
+      <div class="panel" data-integration-key="fints" data-country-only="DE">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M4 21V10M20 21V10M12 3L21 8H3z"/><path d="M8 10v7M12 10v7M16 10v7"/></svg> Bank-Anbindung (FinTS)</h3>
         <p class="page-sub">
           Direkte Anbindung an deine Bank, ohne Drittanbieter. Voraussetzung: deine Bank unterstützt FinTS für
