@@ -969,6 +969,29 @@ class ContractReminder(Base):
     )
 
 
+class IgnoredRecurringPayment(Base):
+    """Markiert eine von crud.detect_recurring_transactions erkannte Gruppe
+    (account_id + normalisierte Bezeichnung) als Fehlerkennung, die nicht mehr
+    in der Abo-Übersicht/Cashflow-Prognose/Überschneidungs-Erkennung auftauchen
+    soll. Wie bei ContractReminder gibt es dafür keine eigene Identität in den
+    Buchungen selbst - die Erkennung bleibt eine reine Live-Berechnung, hier
+    wird nur pro (Konto, Bezeichnung) ein dauerhafter Ausschluss vermerkt.
+    `label` ist rein zur Anzeige in der "Ignoriert"-Liste hinterlegt."""
+
+    __tablename__ = "ignored_recurring_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    description_key = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "description_key", name="uq_ignored_recurring_account_desc"),
+    )
+
+
 class ReturnDeadline(Base):
     """Rückgabefrist zu einer einzelnen Buchung (z.B. "auf Probe" gekauft,
     kostenlose Rückgabe nur innerhalb von N Tagen). Bewusst manuell pro Buchung

@@ -566,10 +566,65 @@ def cashflow_scenario(
     return schemas.CashflowScenarioOut(baseline=baseline, scenario=scenario)
 
 
+# ---------- Ignorierte wiederkehrende Zahlungen (Fehlerkennungen) ----------
+def get_ignored_recurring_payments(db: Session, space_id: int) -> list[schemas.IgnoredRecurringPaymentOut]:
+    rows = (
+        db.query(models.IgnoredRecurringPayment)
+        .filter(models.IgnoredRecurringPayment.space_id == space_id)
+        .order_by(models.IgnoredRecurringPayment.label)
+        .all()
+    )
+    accounts = {a.id: a.name for a in get_accounts(db, space_id)}
+    return [
+        schemas.IgnoredRecurringPaymentOut(
+            id=r.id, account_id=r.account_id, account_name=accounts.get(r.account_id),
+            description_key=r.description_key, label=r.label,
+        )
+        for r in rows
+    ]
+
+
+def create_ignored_recurring_payment(db: Session, space_id: int, data: schemas.IgnoredRecurringPaymentCreate) -> schemas.IgnoredRecurringPaymentOut:
+    existing = db.query(models.IgnoredRecurringPayment).filter(
+        models.IgnoredRecurringPayment.space_id == space_id,
+        models.IgnoredRecurringPayment.account_id == data.account_id,
+        models.IgnoredRecurringPayment.description_key == data.description_key,
+    ).first()
+    row = existing or models.IgnoredRecurringPayment(space_id=space_id, **data.model_dump())
+    row.label = data.label
+    if not existing:
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    account = db.get(models.Account, row.account_id)
+    return schemas.IgnoredRecurringPaymentOut(
+        id=row.id, account_id=row.account_id, account_name=account.name if account else None,
+        description_key=row.description_key, label=row.label,
+    )
+
+
+def delete_ignored_recurring_payment(db: Session, ignore_id: int, space_id: int) -> bool:
+    row = db.query(models.IgnoredRecurringPayment).filter(
+        models.IgnoredRecurringPayment.id == ignore_id, models.IgnoredRecurringPayment.space_id == space_id,
+    ).first()
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
 def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
     """Gruppiert Buchungen je Konto nach (normalisierter) Bezeichnung und erkennt
     Gruppen mit regelmäßigem zeitlichem Abstand und ähnlichem Betrag als
-    wiederkehrende Zahlung (Abo, Miete, Gehalt, ...). Heuristik, kein Vertragsdatenabgleich."""
+    wiederkehrende Zahlung (Abo, Miete, Gehalt, ...). Heuristik, kein Vertragsdatenabgleich.
+    Als Fehlerkennung ignorierte (Konto, Bezeichnung)-Paare (siehe
+    IgnoredRecurringPayment) werden dabei übersprungen - wirkt dadurch auch auf
+    Cashflow-Prognose und Überschneidungs-Erkennung, die auf dieser Funktion aufbauen."""
+    ignored_keys = {
+        (r.account_id, r.description_key)
+        for r in db.query(models.IgnoredRecurringPayment).filter(models.IgnoredRecurringPayment.space_id == space_id).all()
+    }
     txs = (
         db.query(models.Transaction)
         .join(models.Account)
@@ -583,7 +638,7 @@ def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
     groups: dict[tuple[int, str], list[models.Transaction]] = {}
     for tx in txs:
         norm = _normalize_description(tx.description)
-        if not norm:
+        if not norm or (tx.account_id, norm) in ignored_keys:
             continue
         groups.setdefault((tx.account_id, norm), []).append(tx)
 

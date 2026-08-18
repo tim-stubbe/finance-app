@@ -684,6 +684,31 @@ def get_recurring_transactions(db: Session = Depends(get_db), space_id: int = De
     return crud.detect_recurring_transactions(db, space_id)
 
 
+@api_router.get("/recurring-ignores", response_model=List[schemas.IgnoredRecurringPaymentOut])
+def list_ignored_recurring_payments(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.get_ignored_recurring_payments(db, space_id)
+
+
+@api_router.post("/recurring-ignores", response_model=schemas.IgnoredRecurringPaymentOut)
+def add_ignored_recurring_payment(
+    data: schemas.IgnoredRecurringPaymentCreate,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    return crud.create_ignored_recurring_payment(db, space_id, data)
+
+
+@api_router.delete("/recurring-ignores/{ignore_id}")
+def remove_ignored_recurring_payment(
+    ignore_id: int,
+    db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    if not crud.delete_ignored_recurring_payment(db, ignore_id, space_id):
+        raise HTTPException(404, "Eintrag nicht gefunden.")
+    return {"ok": True}
+
+
 @api_router.get("/transactions/price-increases", response_model=List[schemas.PriceIncreaseOut])
 def get_price_increases(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.detect_price_increases(db, space_id)

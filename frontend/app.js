@@ -2663,7 +2663,7 @@ let recurringItemsCache = [];
 
 async function loadRecurringTab() {
   await loadCashflowForecast();
-  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders(), loadPriceIncreases(), loadOverlappingContracts()]);
+  const [items] = await Promise.all([api("/transactions/recurring"), loadContractReminders(), loadPriceIncreases(), loadOverlappingContracts(), loadIgnoredRecurring()]);
   recurringItemsCache = items;
   document.getElementById("scenario-cancel").innerHTML = '<option value="">– keins –</option>' +
     items.filter(it => it.avg_amount < 0).map(it =>
@@ -2672,7 +2672,7 @@ async function loadRecurringTab() {
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {
-    tbody.innerHTML = emptyRow(9, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
+    tbody.innerHTML = emptyRow(10, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
   }
   let monthlyTotal = 0;
   items.forEach(it => {
@@ -2688,13 +2688,28 @@ async function loadRecurringTab() {
       <td>${eur(monthlyCost * 12)}</td>
       <td>${fmtDate(it.next_expected_date)}</td>
       <td>${eur(it.total_amount)}</td>
-      <td><button type="button" class="btn-ghost btn-sm" data-cr-account="${it.account_id}" data-cr-key="${esc(it.description_key)}" data-cr-label="${esc(it.description || "")}" data-cr-freq="${it.frequency}">📄 Frist</button></td>`;
+      <td><button type="button" class="btn-ghost btn-sm" data-cr-account="${it.account_id}" data-cr-key="${esc(it.description_key)}" data-cr-label="${esc(it.description || "")}" data-cr-freq="${it.frequency}">📄 Frist</button></td>
+      <td><button type="button" class="btn-ghost btn-sm" data-ignore-account="${it.account_id}" data-ignore-key="${esc(it.description_key)}" data-ignore-label="${esc(it.description || "")}">🚫 Ignorieren</button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-cr-account]").forEach(btn => {
     btn.addEventListener("click", () => openContractReminderModal(
       parseInt(btn.dataset.crAccount), btn.dataset.crKey, btn.dataset.crLabel, btn.dataset.crFreq,
     ));
+  });
+  tbody.querySelectorAll("[data-ignore-account]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm(`„${btn.dataset.ignoreLabel || "?"}“ als Fehlerkennung ignorieren? Taucht dann nirgends mehr auf, bis du sie in der Liste unten wieder aktivierst.`)) return;
+      await api("/recurring-ignores", {
+        method: "POST",
+        body: JSON.stringify({
+          account_id: parseInt(btn.dataset.ignoreAccount),
+          description_key: btn.dataset.ignoreKey,
+          label: btn.dataset.ignoreLabel || btn.dataset.ignoreKey,
+        }),
+      });
+      loadRecurringTab();
+    });
   });
 
   document.getElementById("recurring-summary-cards").innerHTML = `
@@ -2706,6 +2721,25 @@ async function loadRecurringTab() {
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="3" width="8" height="6" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="11" width="8" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/></svg></div>
       <div><h3>Hochgerechnet pro Monat</h3><p>${eur(monthlyTotal)}</p></div>
     </div>`;
+}
+
+async function loadIgnoredRecurring() {
+  const items = await api("/recurring-ignores");
+  const panel = document.getElementById("recurring-ignored-panel");
+  panel.classList.toggle("hidden", items.length === 0);
+  const tbody = document.getElementById("recurring-ignored-list");
+  tbody.innerHTML = items.map(it => `
+    <tr>
+      <td>${esc(it.label)}</td>
+      <td>${esc(it.account_name || "–")}</td>
+      <td><button type="button" class="btn-ghost btn-sm" data-unignore="${it.id}">Wieder anzeigen</button></td>
+    </tr>`).join("");
+  tbody.querySelectorAll("[data-unignore]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await api(`/recurring-ignores/${btn.dataset.unignore}`, { method: "DELETE" });
+      loadRecurringTab();
+    });
+  });
 }
 
 let contractRemindersCache = [];

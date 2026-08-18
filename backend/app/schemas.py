@@ -764,6 +764,22 @@ class ContractReminderOut(BaseModel):
     should_cancel: bool = False
 
 
+# ---------- Ignorierte wiederkehrende Zahlungen (Fehlerkennungen) ----------
+class IgnoredRecurringPaymentCreate(BaseModel):
+    account_id: int
+    description_key: str
+    label: str
+
+
+class IgnoredRecurringPaymentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    account_id: int
+    account_name: Optional[str] = None
+    description_key: str
+    label: str
+
+
 # ---------- Rückgabefristen ----------
 class ReturnDeadlineCreate(BaseModel):
     transaction_id: int
