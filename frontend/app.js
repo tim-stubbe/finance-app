@@ -325,33 +325,69 @@ document.getElementById("acc-form").addEventListener("submit", async e => {
   const payload = {
     name: document.getElementById("acc-name").value,
     type: document.getElementById("acc-type").value,
-    initial_balance: parseFloat(document.getElementById("acc-balance").value || 0),
     is_business: document.getElementById("acc-business").checked,
   };
   if (editingAccId) {
+    // Beim Bearbeiten wird statt des Startsaldos der aktuelle Kontostand gezeigt/korrigiert -
+    // rechnerisch bleibt initial_balance die Stellschraube (siehe crud.set_balance_by_name).
+    const a = accountsCache.find(x => x.id === editingAccId);
+    const newCurrentBalance = parseFloat(document.getElementById("acc-current-balance").value || 0);
+    payload.initial_balance = round2(a.initial_balance - a.current_balance + newCurrentBalance);
     await api(`/accounts/${editingAccId}`, { method: "PUT", body: JSON.stringify(payload) });
   } else {
+    payload.initial_balance = parseFloat(document.getElementById("acc-balance").value || 0);
     await api("/accounts", { method: "POST", body: JSON.stringify(payload) });
   }
   resetAccForm();
+  closeAccModal();
   loadAccounts();
   loadGlobalTopbar();
 });
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+function openAccModal() {
+  document.getElementById("acc-modal").classList.remove("hidden");
+}
+function closeAccModal() {
+  document.getElementById("acc-modal").classList.add("hidden");
+}
 
 window.editAccount = async id => {
   const a = accountsCache.find(x => x.id === id);
   editingAccId = id;
   document.getElementById("acc-name").value = a.name;
   document.getElementById("acc-type").value = a.type;
-  document.getElementById("acc-balance").value = a.initial_balance;
+  document.getElementById("acc-current-balance").value = a.current_balance;
   document.getElementById("acc-business").checked = a.is_business;
-  document.getElementById("acc-cancel").style.display = "inline-block";
+  document.getElementById("acc-balance-label").classList.add("hidden");
+  document.getElementById("acc-current-balance-label").classList.remove("hidden");
+  document.getElementById("acc-current-balance-hint").classList.remove("hidden");
+  document.getElementById("acc-cancel").classList.remove("hidden");
+  document.getElementById("acc-submit").textContent = "Änderungen speichern";
+  document.getElementById("acc-modal-title").textContent = "Konto bearbeiten";
+  openAccModal();
 };
-document.getElementById("acc-cancel").addEventListener("click", resetAccForm);
+document.getElementById("acc-new-btn").addEventListener("click", () => {
+  resetAccForm();
+  document.getElementById("acc-modal-title").textContent = "Neues Konto";
+  openAccModal();
+});
+document.getElementById("acc-modal-close").addEventListener("click", closeAccModal);
+document.getElementById("acc-cancel").addEventListener("click", () => {
+  resetAccForm();
+  closeAccModal();
+});
 function resetAccForm() {
   editingAccId = null;
   document.getElementById("acc-form").reset();
-  document.getElementById("acc-cancel").style.display = "none";
+  document.getElementById("acc-balance-label").classList.remove("hidden");
+  document.getElementById("acc-current-balance-label").classList.add("hidden");
+  document.getElementById("acc-current-balance-hint").classList.add("hidden");
+  document.getElementById("acc-cancel").classList.add("hidden");
+  document.getElementById("acc-submit").textContent = "Speichern";
 }
 window.deleteAccount = async id => {
   if (!confirm("Konto wirklich löschen? Zugehörige Buchungen werden mitgelöscht.")) return;
@@ -6198,27 +6234,29 @@ async function loadDashboard() {
   const ctx = document.getElementById("chart-categories");
   const labels = data.by_category.map(c => c.category_name);
   const values = data.by_category.map(c => Math.abs(c.total));
+  const total = values.reduce((a, b) => a + b, 0);
   const catColors = getCatColors();
   const colors = labels.map((_, i) => catColors[i % catColors.length]);
   if (chartInstance) chartInstance.destroy();
   chartInstance = new Chart(ctx, {
-    type: "bar",
+    type: "pie",
     data: {
       labels,
       datasets: [{
         data: values,
         backgroundColor: colors,
-        borderRadius: 4,
-        borderSkipped: false,
-        maxBarThickness: 22,
+        borderColor: cssVar("--surface"),
+        borderWidth: 2,
       }],
     },
     options: {
-      indexAxis: "y",
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: {
+          position: "right",
+          labels: { color: cssVar("--text-secondary"), font: { size: 12 }, boxWidth: 12, padding: 10 },
+        },
         tooltip: {
           backgroundColor: cssVar("--surface-2"),
           borderColor: cssVar("--border-strong"),
@@ -6228,19 +6266,9 @@ async function loadDashboard() {
           padding: 10,
           cornerRadius: 8,
           displayColors: false,
-          callbacks: { label: ctx => eur(ctx.parsed.x) },
-        },
-      },
-      scales: {
-        x: {
-          grid: { color: cssVar("--border"), drawTicks: false },
-          border: { display: false },
-          ticks: { color: cssVar("--muted"), font: { size: 11 }, callback: v => eur(v) },
-        },
-        y: {
-          grid: { display: false },
-          border: { display: false },
-          ticks: { color: cssVar("--text-secondary"), font: { size: 12 } },
+          callbacks: {
+            label: ctx => `${eur(ctx.parsed)} (${total ? (ctx.parsed / total * 100).toFixed(0) : 0}%)`,
+          },
         },
       },
     },
@@ -7216,7 +7244,7 @@ function cmdkGoTo(tab) {
 
 const CMDK_ACTIONS = [
   { label: "Neue Buchung", icon: "plus", run: () => { goToTab("transactions"); setTimeout(() => document.getElementById("tx-new-btn")?.click(), 150); } },
-  { label: "Neues Konto", icon: "plus", run: () => { goToTab("accounts"); setTimeout(() => document.getElementById("acc-name")?.focus(), 150); } },
+  { label: "Neues Konto", icon: "plus", run: () => { goToTab("accounts"); setTimeout(() => document.getElementById("acc-new-btn")?.click(), 150); } },
   { label: "Neuer Kredit", icon: "plus", run: () => { goToTab("debts"); setTimeout(() => document.getElementById("debt-new-btn")?.click(), 150); } },
   { label: "Neues Ziel", icon: "plus", run: () => { goToTab("goals"); setTimeout(() => document.getElementById("goal-new-btn")?.click(), 150); } },
   { label: "Neue Kategorie", icon: "plus", run: () => { goToTab("categories"); setTimeout(() => document.getElementById("cat-name")?.focus(), 150); } },

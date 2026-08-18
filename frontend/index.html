@@ -491,6 +491,39 @@
       </div>
     </div>
 
+    <div id="acc-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="acc-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="acc-modal-title">Neues Konto</h2>
+        </div>
+        <form id="acc-form" class="form-grid">
+          <label>Name <input type="text" id="acc-name" required></label>
+          <label>Typ
+            <select id="acc-type">
+              <option value="girokonto">Girokonto</option>
+              <option value="bargeld">Bargeld</option>
+              <option value="sparkonto">Sparkonto</option>
+              <option value="tagesgeldkonto">Tagesgeldkonto</option>
+              <option value="depot">Depot</option>
+              <option value="sonstiges">Sonstiges</option>
+            </select>
+          </label>
+          <label id="acc-balance-label">Startsaldo <input type="number" step="0.01" id="acc-balance" value="0"></label>
+          <label id="acc-current-balance-label" class="hidden">Aktueller Kontostand <input type="number" step="0.01" id="acc-current-balance"></label>
+          <p class="page-sub wide hidden" id="acc-current-balance-hint">Korrektur landet nachvollziehbar im Änderungsprotokoll.</p>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="acc-business">
+            <span>Geschäftlich (erscheint im Geschäftlich-Tab)</span>
+          </label>
+          <div class="form-actions wide">
+            <button type="submit" id="acc-submit" class="btn-primary">Speichern</button>
+            <button type="button" id="acc-cancel" class="btn-ghost hidden">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="return-deadline-modal" class="modal-overlay hidden">
       <div class="modal-box">
         <button type="button" id="return-deadline-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
@@ -520,34 +553,11 @@
           <h1>Konten</h1>
           <p class="page-sub">Girokonten, Bargeld, Sparkonten und mehr verwalten</p>
         </div>
+        <div class="page-head-actions">
+          <button type="button" id="acc-new-btn" class="btn-primary"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Neues Konto</button>
+        </div>
       </header>
 
-      <div class="panel">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M4 21V10M20 21V10M12 3L21 8H3z"/><path d="M8 10v7M12 10v7M16 10v7"/></svg> Neues Konto</h3>
-        <form id="acc-form" class="form-grid">
-          <input type="hidden" id="acc-id">
-          <label>Name <input type="text" id="acc-name" required></label>
-          <label>Typ
-            <select id="acc-type">
-              <option value="girokonto">Girokonto</option>
-              <option value="bargeld">Bargeld</option>
-              <option value="sparkonto">Sparkonto</option>
-              <option value="tagesgeldkonto">Tagesgeldkonto</option>
-              <option value="depot">Depot</option>
-              <option value="sonstiges">Sonstiges</option>
-            </select>
-          </label>
-          <label>Startsaldo <input type="number" step="0.01" id="acc-balance" value="0"></label>
-          <label class="checkbox-label wide">
-            <input type="checkbox" id="acc-business">
-            <span>Geschäftlich (erscheint im Geschäftlich-Tab)</span>
-          </label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="acc-cancel" class="btn-ghost" style="display:none">Abbrechen</button>
-          </div>
-        </form>
-      </div>
       <div class="panel">
         <div class="table-wrap">
           <table class="data-table">
