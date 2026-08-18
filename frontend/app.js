@@ -6,6 +6,10 @@ let editingTxId = null;
 let editingAccId = null;
 let editingCatId = null;
 let chartInstance = null;
+let catIncomeChartInstance = null;
+let catExpenseChartInstance = null;
+let balanceHistoryChart = null;
+let catTrendChartInstance = null;
 let holdingsCache = [];
 let portfolioHistoryChart = null;
 let holdingHistoryChart = null;
@@ -176,6 +180,53 @@ function startApp() {
 // ---------- Theme ----------
 function getCatColors() {
   return [1, 2, 3, 4, 5, 6, 7, 8].map(i => cssVar(`--cat-${i}`));
+}
+
+// Gemeinsames Pie-Chart für Kategorie-Aufschlüsselungen (Dashboard-Ausgaben,
+// Kategorien-Tab Einnahmen/Ausgaben) - zerstört eine evtl. vorhandene
+// Chart.js-Instanz und gibt die neue zurück, damit der Aufrufer sie in seiner
+// eigenen Variable weiterverfolgen kann.
+function renderCategoryPieChart(canvasId, existingInstance, labels, values) {
+  if (existingInstance) existingInstance.destroy();
+  const ctx = document.getElementById(canvasId);
+  const total = values.reduce((a, b) => a + b, 0);
+  const catColors = getCatColors();
+  const colors = labels.map((_, i) => catColors[i % catColors.length]);
+  return new Chart(ctx, {
+    type: "pie",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderColor: cssVar("--surface"),
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "right",
+          labels: { color: cssVar("--text-secondary"), font: { size: 12 }, boxWidth: 12, padding: 10 },
+        },
+        tooltip: {
+          backgroundColor: cssVar("--surface-2"),
+          borderColor: cssVar("--border-strong"),
+          borderWidth: 1,
+          titleColor: cssVar("--text"),
+          bodyColor: cssVar("--text-secondary"),
+          padding: 10,
+          cornerRadius: 8,
+          displayColors: false,
+          callbacks: {
+            label: ctx => `${eur(ctx.parsed)} (${total ? (ctx.parsed / total * 100).toFixed(0) : 0}%)`,
+          },
+        },
+      },
+    },
+  });
 }
 
 const THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a" };
@@ -438,6 +489,79 @@ async function loadCategories() {
     tbody.appendChild(tr);
   });
   populateCategorySelects();
+
+  const incomeCats = categoriesCache.filter(c => c.type === "einnahme" && totals[c.id] > 0);
+  const expenseCats = categoriesCache.filter(c => c.type === "ausgabe" && totals[c.id] < 0);
+  document.getElementById("cat-charts-grid").classList.toggle("hidden", incomeCats.length === 0 && expenseCats.length === 0);
+  catIncomeChartInstance = renderCategoryPieChart(
+    "chart-cat-income", catIncomeChartInstance,
+    incomeCats.map(c => c.name), incomeCats.map(c => totals[c.id]),
+  );
+  catExpenseChartInstance = renderCategoryPieChart(
+    "chart-cat-expense", catExpenseChartInstance,
+    expenseCats.map(c => c.name), expenseCats.map(c => Math.abs(totals[c.id])),
+  );
+
+  const trend = await api("/categories/trend?months=6");
+  const trendPanel = document.getElementById("cat-trend-panel");
+  trendPanel.classList.toggle("hidden", trend.series.length === 0);
+  if (trend.series.length > 0) {
+    if (catTrendChartInstance) catTrendChartInstance.destroy();
+    const catColors = getCatColors();
+    // Zu viele Linien machen das Chart unlesbar - die 8 ausgabenstärksten
+    // Kategorien reichen für einen Trend-Überblick (Backend sortiert bereits
+    // absteigend nach Gesamtsumme).
+    const topSeries = trend.series.slice(0, 8);
+    catTrendChartInstance = new Chart(document.getElementById("chart-cat-trend"), {
+      type: "line",
+      data: {
+        labels: trend.months.map(m => {
+          const [y, mo] = m.split("-");
+          return new Date(`${y}-${mo}-01T00:00:00`).toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+        }),
+        datasets: topSeries.map((s, i) => ({
+          label: s.category_name,
+          data: s.points,
+          borderColor: catColors[i % catColors.length],
+          backgroundColor: catColors[i % catColors.length],
+          tension: 0.3,
+          pointRadius: 3,
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "right",
+            labels: { color: cssVar("--text-secondary"), font: { size: 12 }, boxWidth: 12, padding: 10 },
+          },
+          tooltip: {
+            backgroundColor: cssVar("--surface-2"),
+            borderColor: cssVar("--border-strong"),
+            borderWidth: 1,
+            titleColor: cssVar("--text"),
+            bodyColor: cssVar("--text-secondary"),
+            padding: 10,
+            cornerRadius: 8,
+            callbacks: { label: ctx => `${ctx.dataset.label}: ${eur(ctx.parsed.y)}` },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: cssVar("--muted"), font: { size: 11 } },
+          },
+          y: {
+            grid: { color: cssVar("--border"), drawTicks: false },
+            border: { display: false },
+            ticks: { color: cssVar("--muted"), font: { size: 11 }, callback: v => eur(v) },
+          },
+        },
+      },
+    });
+  }
 }
 
 function populateCategorySelects() {
@@ -2643,11 +2767,32 @@ document.getElementById("cashflow-scenario-form").addEventListener("submit", asy
     (data.scenario.goes_negative ? " ⚠️ rutscht ins Minus" : "");
 });
 
+// Gemeinsamer Ignorieren-Button für erkannte wiederkehrende Zahlungen und
+// Preiserhöhungen (beide bauen auf derselben account_id+description_key-
+// Gruppierung auf, siehe crud.detect_recurring_transactions/detect_price_increases).
+function bindIgnoreButtons(container) {
+  container.querySelectorAll("[data-ignore-account]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm(`„${btn.dataset.ignoreLabel || "?"}“ als Fehlerkennung ignorieren? Taucht dann nirgends mehr auf, bis du sie in der Liste wieder aktivierst.`)) return;
+      await api("/recurring-ignores", {
+        method: "POST",
+        body: JSON.stringify({
+          account_id: parseInt(btn.dataset.ignoreAccount),
+          description_key: btn.dataset.ignoreKey,
+          label: btn.dataset.ignoreLabel || btn.dataset.ignoreKey,
+        }),
+      });
+      loadRecurringTab();
+    });
+  });
+}
+
 async function loadPriceIncreases() {
   const increases = await api("/transactions/price-increases");
   const panel = document.getElementById("price-increase-panel");
   panel.classList.toggle("hidden", increases.length === 0);
-  document.getElementById("price-increase-list").innerHTML = increases.map(p => `
+  const tbody = document.getElementById("price-increase-list");
+  tbody.innerHTML = increases.map(p => `
     <tr>
       <td>${esc(p.description || "–")}</td>
       <td>${esc(p.account_name || "–")}</td>
@@ -2655,7 +2800,9 @@ async function loadPriceIncreases() {
       <td class="row-amount-neg">${eur(p.new_amount)}</td>
       <td class="row-amount-neg">+${p.increase_pct.toFixed(1).replace(".", ",")}%</td>
       <td>${fmtDate(p.changed_date)}</td>
+      <td><button type="button" class="btn-ghost btn-sm" data-ignore-account="${p.account_id}" data-ignore-key="${esc(p.description_key)}" data-ignore-label="${esc(p.description || "")}">🚫 Ignorieren</button></td>
     </tr>`).join("");
+  bindIgnoreButtons(tbody);
 }
 
 async function loadOverlappingContracts() {
@@ -2714,20 +2861,7 @@ async function loadRecurringTab() {
       parseInt(btn.dataset.crAccount), btn.dataset.crKey, btn.dataset.crLabel, btn.dataset.crFreq,
     ));
   });
-  tbody.querySelectorAll("[data-ignore-account]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      if (!confirm(`„${btn.dataset.ignoreLabel || "?"}“ als Fehlerkennung ignorieren? Taucht dann nirgends mehr auf, bis du sie in der Liste unten wieder aktivierst.`)) return;
-      await api("/recurring-ignores", {
-        method: "POST",
-        body: JSON.stringify({
-          account_id: parseInt(btn.dataset.ignoreAccount),
-          description_key: btn.dataset.ignoreKey,
-          label: btn.dataset.ignoreLabel || btn.dataset.ignoreKey,
-        }),
-      });
-      loadRecurringTab();
-    });
-  });
+  bindIgnoreButtons(tbody);
 
   document.getElementById("recurring-summary-cards").innerHTML = `
     <div class="card">
@@ -6231,6 +6365,57 @@ async function loadDashboard() {
     tbody.appendChild(tr);
   });
 
+  const nwHistory = await api("/net-worth/history?days=365");
+  const historyPanel = document.getElementById("balance-history-panel");
+  historyPanel.classList.toggle("hidden", nwHistory.points.length < 2);
+  if (nwHistory.points.length >= 2) {
+    if (balanceHistoryChart) balanceHistoryChart.destroy();
+    balanceHistoryChart = new Chart(document.getElementById("chart-balance-history"), {
+      type: "line",
+      data: {
+        labels: nwHistory.points.map(p => fmtDate(p.date)),
+        datasets: [{
+          data: nwHistory.points.map(p => p.accounts_total),
+          borderColor: cssVar("--accent"),
+          backgroundColor: cssVar("--accent"),
+          tension: 0.3,
+          pointRadius: 0,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: cssVar("--surface-2"),
+            borderColor: cssVar("--border-strong"),
+            borderWidth: 1,
+            titleColor: cssVar("--text"),
+            bodyColor: cssVar("--text-secondary"),
+            padding: 10,
+            cornerRadius: 8,
+            displayColors: false,
+            callbacks: { label: ctx => eur(ctx.parsed.y) },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: cssVar("--muted"), font: { size: 11 }, maxTicksLimit: 8 },
+          },
+          y: {
+            grid: { color: cssVar("--border"), drawTicks: false },
+            border: { display: false },
+            ticks: { color: cssVar("--muted"), font: { size: 11 }, callback: v => eur(v) },
+          },
+        },
+      },
+    });
+  }
+
   const recipients = await api("/dashboard/top-recipients?" + params.toString());
   const recipientsPanel = document.getElementById("top-recipients-panel");
   recipientsPanel.classList.toggle("hidden", recipients.length === 0);
@@ -6282,48 +6467,10 @@ async function loadDashboard() {
       <span class="budget-projection">bei diesem Tempo: ~${eur(a.projected_spent)} am Monatsende (+${a.deviation_pct.toFixed(0)}%)</span>
     </div>`).join("");
 
-  const ctx = document.getElementById("chart-categories");
-  const labels = data.by_category.map(c => c.category_name);
-  const values = data.by_category.map(c => Math.abs(c.total));
-  const total = values.reduce((a, b) => a + b, 0);
-  const catColors = getCatColors();
-  const colors = labels.map((_, i) => catColors[i % catColors.length]);
-  if (chartInstance) chartInstance.destroy();
-  chartInstance = new Chart(ctx, {
-    type: "pie",
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        borderColor: cssVar("--surface"),
-        borderWidth: 2,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "right",
-          labels: { color: cssVar("--text-secondary"), font: { size: 12 }, boxWidth: 12, padding: 10 },
-        },
-        tooltip: {
-          backgroundColor: cssVar("--surface-2"),
-          borderColor: cssVar("--border-strong"),
-          borderWidth: 1,
-          titleColor: cssVar("--text"),
-          bodyColor: cssVar("--text-secondary"),
-          padding: 10,
-          cornerRadius: 8,
-          displayColors: false,
-          callbacks: {
-            label: ctx => `${eur(ctx.parsed)} (${total ? (ctx.parsed / total * 100).toFixed(0) : 0}%)`,
-          },
-        },
-      },
-    },
-  });
+  chartInstance = renderCategoryPieChart(
+    "chart-categories", chartInstance,
+    data.by_category.map(c => c.category_name), data.by_category.map(c => Math.abs(c.total)),
+  );
 
   loadIntegrationsWidget();
 }
@@ -7574,6 +7721,27 @@ function closeYearReview() {
   document.getElementById("year-review-overlay").classList.add("hidden");
 }
 
+document.getElementById("sync-all-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("sync-all-btn");
+  const resultEl = document.getElementById("sync-all-result");
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.textContent = "Synchronisiere …";
+  resultEl.classList.add("hidden");
+  try {
+    const result = await api("/sync-all", { method: "POST" });
+    if (result.connections.length === 0) {
+      resultEl.textContent = "Keine Bank-/Broker-Verbindungen eingerichtet (siehe Einstellungen).";
+    } else {
+      resultEl.textContent = result.connections.map(c => `${c.name} (${c.kind}): ${c.status || "–"}`).join(" · ");
+    }
+    resultEl.classList.remove("hidden");
+    loadHubTab();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+});
 document.getElementById("year-review-open").addEventListener("click", openYearReview);
 document.getElementById("year-review-close").addEventListener("click", closeYearReview);
 document.getElementById("year-review-next").addEventListener("click", yearReviewNext);

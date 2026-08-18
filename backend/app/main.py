@@ -4279,6 +4279,16 @@ def dashboard_trend(months: int = 6, db: Session = Depends(get_db), space_id: in
     ])
 
 
+@api_router.get("/categories/trend", response_model=schemas.CategoryTrendOut)
+def get_category_trend(months: int = 6, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    months = max(2, min(months, 24))
+    data = crud.category_spending_trend(db, space_id, months)
+    return schemas.CategoryTrendOut(
+        months=data["months"],
+        series=[schemas.CategoryTrendSeries(**s) for s in data["series"]],
+    )
+
+
 @api_router.get("/year-review", response_model=schemas.YearReviewOut)
 def year_review(year: int = date.today().year, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     """Jahresrueckblick - reine Auswertung, keine neue Datenerfassung."""
@@ -4715,6 +4725,31 @@ def _sync_all_connections(db, settings):
             except Exception as e:
                 eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
                 db.commit()
+
+
+@api_router.post("/sync-all", response_model=schemas.SyncAllResult)
+def sync_all_connections_now(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Stößt denselben Sync an, den sonst nur der tägliche Job und der Digest
+    vor jeder Meldung auslösen (siehe _sync_all_connections) - manuell per
+    Knopfdruck statt zu warten. Das Ergebnis wird aus last_sync_status/-at je
+    Verbindung gelesen, die _sync_all_connections für jede Verbindung ohnehin
+    schon setzt (Erfolg wie Fehlschlag), statt die leicht unterschiedlichen
+    Rückgabewerte der einzelnen sync()-Funktionen selbst zu vereinheitlichen."""
+    settings = auth.get_or_create_settings(db)
+    _sync_all_connections(db, settings)
+
+    results = []
+    for conn in crud.get_all_bank_connections(db):
+        results.append(schemas.SyncAllConnectionResult(name=conn.name, kind="Bank (FinTS)", status=conn.last_sync_status))
+    for conn in crud.get_all_bitvavo_connections(db):
+        results.append(schemas.SyncAllConnectionResult(name=conn.name, kind="Bitvavo", status=conn.last_sync_status))
+    for conn in crud.get_all_paypal_connections(db):
+        results.append(schemas.SyncAllConnectionResult(name=conn.name, kind="PayPal", status=conn.last_sync_status))
+    for conn in crud.get_all_enablebanking_connections(db):
+        results.append(schemas.SyncAllConnectionResult(name=conn.aspsp_name, kind="Enable Banking", status=conn.last_sync_status))
+    for conn in crud.get_all_ebay_connections(db):
+        results.append(schemas.SyncAllConnectionResult(name=conn.ebay_username or "eBay", kind="eBay", status=conn.last_sync_status))
+    return schemas.SyncAllResult(connections=results)
 
 
 def _scheduled_bank_sync():

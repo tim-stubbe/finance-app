@@ -488,6 +488,16 @@ class TanSubmit(BaseModel):
     tan: str
 
 
+class SyncAllConnectionResult(BaseModel):
+    name: str
+    kind: str
+    status: Optional[str] = None
+
+
+class SyncAllResult(BaseModel):
+    connections: List[SyncAllConnectionResult]
+
+
 # ---------- Bitvavo (Krypto-Börse) ----------
 class BitvavoConnectionCreate(BaseModel):
     name: str
@@ -645,6 +655,17 @@ class DashboardTrendOut(BaseModel):
     points: List[DashboardTrendPoint]
 
 
+class CategoryTrendSeries(BaseModel):
+    category_id: int
+    category_name: str
+    points: List[float]
+
+
+class CategoryTrendOut(BaseModel):
+    months: List[str]
+    series: List[CategoryTrendSeries]
+
+
 # ---------- Jahresrückblick ----------
 class YearReviewStat(BaseModel):
     name: Optional[str] = None
@@ -692,6 +713,7 @@ class RecurringPaymentOut(BaseModel):
 
 class PriceIncreaseOut(BaseModel):
     description: Optional[str] = None
+    description_key: str
     account_id: int
     account_name: Optional[str] = None
     frequency: str

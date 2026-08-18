@@ -736,7 +736,12 @@ def detect_price_increases(db: Session, space_id: int) -> list[dict]:
     vorherige, zeitlich und betragsmäßig konsistente Zahlungen, um eine echte
     Preiserhöhung von normaler Schwankung (Rundungsdifferenzen, Fremdwährungskurs)
     zu unterscheiden - dieselbe Heuristik wie detect_recurring_transactions, nur mit
-    Blick auf die letzte Zahlung statt auf den Gesamt-Median."""
+    Blick auf die letzte Zahlung statt auf den Gesamt-Median. Ebenfalls dieselbe
+    Ignorierliste (IgnoredRecurringPayment) wie dort."""
+    ignored_keys = {
+        (r.account_id, r.description_key)
+        for r in db.query(models.IgnoredRecurringPayment).filter(models.IgnoredRecurringPayment.space_id == space_id).all()
+    }
     txs = (
         db.query(models.Transaction)
         .join(models.Account)
@@ -749,12 +754,12 @@ def detect_price_increases(db: Session, space_id: int) -> list[dict]:
     groups: dict[tuple[int, str], list[models.Transaction]] = {}
     for tx in txs:
         norm = _normalize_description(tx.description)
-        if not norm:
+        if not norm or (tx.account_id, norm) in ignored_keys:
             continue
         groups.setdefault((tx.account_id, norm), []).append(tx)
 
     results = []
-    for (account_id, _norm), items in groups.items():
+    for (account_id, norm), items in groups.items():
         if len(items) < 4:
             continue
         items.sort(key=lambda t: t.date)
@@ -789,6 +794,7 @@ def detect_price_increases(db: Session, space_id: int) -> list[dict]:
 
         results.append({
             "description": last.description,
+            "description_key": norm,
             "account_id": account_id,
             "account_name": accounts.get(account_id),
             "frequency": freq_label,
@@ -3096,6 +3102,62 @@ def monthly_flow_trend(db: Session, space_id: int, months: int = 6) -> list[dict
         {"year": y, "month": m, "income": round(v["income"], 2), "expense": round(v["expense"], 2)}
         for (y, m), v in sorted(buckets.items())
     ]
+
+
+def category_spending_trend(db: Session, space_id: int, months: int = 6) -> dict:
+    """Ausgaben je Kategorie und Monat der letzten `months` Monate (aktueller
+    Monat eingeschlossen) - fürs Trend-Chart im Kategorien-Tab, eine Linie
+    pro Kategorie. Nur Ausgaben (analog zu dashboard_summary), Kategorien
+    ohne Buchung in diesem Zeitraum tauchen gar nicht erst auf."""
+    today = date.today()
+    start_year, start_month = today.year, today.month - (months - 1)
+    while start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    start = date(start_year, start_month, 1)
+
+    month_keys = []
+    y, m = start_year, start_month
+    for _ in range(months):
+        month_keys.append((y, m))
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+
+    txs = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.date >= start,
+            models.Transaction.amount < 0,
+            models.Transaction.is_transfer.is_(False),
+        )
+        .all()
+    )
+
+    cat_totals: dict[int, dict[tuple, float]] = {}
+    cat_names: dict[int, str] = {}
+    for t in txs:
+        if not t.category_id:
+            continue
+        cat_totals.setdefault(t.category_id, {})
+        key = (t.date.year, t.date.month)
+        cat_totals[t.category_id][key] = cat_totals[t.category_id].get(key, 0.0) + t.amount
+        if t.category_id not in cat_names:
+            cat = get_category(db, t.category_id)
+            cat_names[t.category_id] = cat.name if cat else "Unbekannt"
+
+    series = [
+        {
+            "category_id": cat_id,
+            "category_name": cat_names[cat_id],
+            "points": [round(abs(totals.get(mk, 0.0)), 2) for mk in month_keys],
+        }
+        for cat_id, totals in cat_totals.items()
+    ]
+    series.sort(key=lambda s: -sum(s["points"]))
+    return {"months": [f"{y:04d}-{m:02d}" for y, m in month_keys], "series": series}
 
 
 def _year_transactions(db: Session, space_id: int, year: int):
