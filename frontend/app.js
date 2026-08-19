@@ -2287,14 +2287,32 @@ function renderLifeAreaCard(a, recentCheckins) {
       `).join("")}
     </div>
     <div class="filter-row" style="margin-top:4px">
-      <button type="button" class="btn-ghost btn-sm" data-life-checkin="${a.id}">+ Check-in</button>
+      ${checkedInToday(a)
+        ? `<span class="btn-ghost btn-sm" style="cursor:default;opacity:0.7">✓ Heute erledigt</span>`
+        : `<button type="button" class="btn-primary btn-sm" data-life-tick="${a.id}">✓ Heute</button>`}
+      <button type="button" class="btn-ghost btn-sm" data-life-checkin="${a.id}">+ Check-in mit Notiz</button>
       <button type="button" class="link-btn" data-life-edit="${a.id}">Bearbeiten</button>
     </div>
   `;
   return card;
 }
 
-document.getElementById("life-areas-list").addEventListener("click", e => {
+// Für den Ein-Klick-Häkchen-Button: heute schon abgehakt, wenn ein Streak-Tag
+// den heutigen ISO-Tag enthält - dieselbe Datenquelle wie die Heatmap, kein
+// zusätzlicher Serverstatus nötig.
+function checkedInToday(a) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (a.checkin_days_30 || []).includes(today);
+}
+
+document.getElementById("life-areas-list").addEventListener("click", async e => {
+  const tickId = e.target.closest("[data-life-tick]")?.dataset.lifeTick;
+  if (tickId) {
+    await api("/life-checkins", { method: "POST", body: JSON.stringify({ area_id: parseInt(tickId), note: "Erledigt" }) });
+    toast("Häkchen gesetzt.");
+    loadLifeTab();
+    return;
+  }
   const checkinId = e.target.closest("[data-life-checkin]")?.dataset.lifeCheckin;
   if (checkinId) {
     document.getElementById("life-checkin-area-id").value = checkinId;
