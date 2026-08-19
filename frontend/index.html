@@ -1300,17 +1300,32 @@
 
       <div class="cards" id="goal-summary-cards"></div>
 
-      <div class="panel">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg> Offene Ziele</h3>
-        <div class="goal-grid" id="goal-open-grid"></div>
+      <div class="range-tabs" id="goal-view-tabs" style="margin-bottom:16px">
+        <button type="button" class="range-tab active" data-goal-view="cards">Kacheln</button>
+        <button type="button" class="range-tab" data-goal-view="roadmap">Zeitstrahl</button>
       </div>
 
-      <div class="panel">
-        <button type="button" class="goal-section-toggle" id="goal-done-toggle">
-          <span class="goal-section-caret">▶</span>
-          <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Erreicht &amp; archiviert (<span id="goal-done-count">0</span>)</h3>
-        </button>
-        <div class="goal-grid hidden" id="goal-done-grid"></div>
+      <div id="goal-cards-view">
+        <div class="panel">
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg> Offene Ziele</h3>
+          <div class="goal-grid" id="goal-open-grid"></div>
+        </div>
+
+        <div class="panel">
+          <button type="button" class="goal-section-toggle" id="goal-done-toggle">
+            <span class="goal-section-caret">▶</span>
+            <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Erreicht &amp; archiviert (<span id="goal-done-count">0</span>)</h3>
+          </button>
+          <div class="goal-grid hidden" id="goal-done-grid"></div>
+        </div>
+      </div>
+
+      <div id="goal-roadmap-view" class="hidden">
+        <div class="panel">
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
+          <div class="roadmap-legend" id="goal-roadmap-legend"></div>
+          <div class="roadmap-list" id="goal-roadmap-list"></div>
+        </div>
       </div>
 
       <div class="panel">
@@ -1351,17 +1366,32 @@
 
       <div class="cards" id="schweiz-summary-cards"></div>
 
-      <div class="panel">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg> Offene Ziele</h3>
-        <div class="goal-grid" id="schweiz-open-grid"></div>
+      <div class="range-tabs" id="schweiz-view-tabs" style="margin-bottom:16px">
+        <button type="button" class="range-tab active" data-schweiz-view="cards">Kacheln</button>
+        <button type="button" class="range-tab" data-schweiz-view="roadmap">Zeitstrahl</button>
       </div>
 
-      <div class="panel">
-        <button type="button" class="goal-section-toggle" id="schweiz-done-toggle">
-          <span class="goal-section-caret">▶</span>
-          <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Erreicht &amp; archiviert (<span id="schweiz-done-count">0</span>)</h3>
-        </button>
-        <div class="goal-grid hidden" id="schweiz-done-grid"></div>
+      <div id="schweiz-cards-view">
+        <div class="panel">
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg> Offene Ziele</h3>
+          <div class="goal-grid" id="schweiz-open-grid"></div>
+        </div>
+
+        <div class="panel">
+          <button type="button" class="goal-section-toggle" id="schweiz-done-toggle">
+            <span class="goal-section-caret">▶</span>
+            <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Erreicht &amp; archiviert (<span id="schweiz-done-count">0</span>)</h3>
+          </button>
+          <div class="goal-grid hidden" id="schweiz-done-grid"></div>
+        </div>
+      </div>
+
+      <div id="schweiz-roadmap-view" class="hidden">
+        <div class="panel">
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
+          <div class="roadmap-legend" id="schweiz-roadmap-legend"></div>
+          <div class="roadmap-list" id="schweiz-roadmap-list"></div>
+        </div>
       </div>
 
       <div class="panel">

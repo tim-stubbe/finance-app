@@ -7147,6 +7147,7 @@ async function loadGoalsTab() {
     : `<div class="empty-state"><span class="empty-icon">${svgIcon("check-circle")}</span><span>Noch nichts abgeschlossen.</span></div>`;
   done.forEach(g => doneGrid.appendChild(renderGoalCard(g)));
   document.getElementById("goal-done-count").textContent = done.length;
+  renderGoalsRoadmap(relevant, "goal-roadmap-list", "goal-roadmap-legend");
 
   // Die Karten zeigen die "Neu erreicht"-Markierung noch in diesem Durchgang,
   // der Zähler in der Navigation ist mit dem Ansehen aber erledigt.
@@ -7196,6 +7197,7 @@ async function loadSchweizGoalsTab() {
     : `<div class="empty-state"><span class="empty-icon">${svgIcon("check-circle")}</span><span>Noch nichts abgeschlossen.</span></div>`;
   done.forEach(g => doneGrid.appendChild(renderGoalCard(g)));
   document.getElementById("schweiz-done-count").textContent = done.length;
+  renderGoalsRoadmap(schweizGoals, "schweiz-roadmap-list", "schweiz-roadmap-legend");
 
   loadCostOfLivingComparison();
 }
@@ -7338,6 +7340,83 @@ function renderGoalCard(g) {
     <button class="link-btn" onclick="openGoalModal(${g.id})">Bearbeiten</button>`;
   return card;
 }
+
+// ---------- Ziele-Roadmap (Zeitstrahl statt Kartenraster) ----------
+// Kategorie -> Farbe konsistent zugewiesen (gleiche Palette wie die
+// Kategorie-Charts, siehe getCatColors) - nicht global fix, sondern je
+// Aufruf aus den tatsächlich vorkommenden Kategorien der übergebenen Ziele
+// abgeleitet, damit auch Freitext-Kategorien außerhalb der Buchungs-
+// Kategorien eine Farbe bekommen.
+function displayGoalCategory(category) {
+  if (!category) return null;
+  return category.replace(/^schweiz:\s*/i, "");
+}
+
+function renderGoalsRoadmap(goals, listElId, legendElId) {
+  const listEl = document.getElementById(listElId);
+  const legendEl = document.getElementById(legendElId);
+
+  const catColors = getCatColors();
+  const distinctCats = [...new Set(goals.map(g => displayGoalCategory(g.category) || "Ohne Kategorie"))];
+  const colorFor = cat => catColors[distinctCats.indexOf(cat) % catColors.length];
+
+  legendEl.innerHTML = distinctCats.map(cat => `
+    <span class="roadmap-legend-item">
+      <span class="roadmap-legend-dot" style="background:${colorFor(cat)}"></span>${esc(cat)}
+    </span>`).join("");
+
+  const withDate = goals.filter(g => g.target_date).sort((a, b) => a.target_date.localeCompare(b.target_date));
+  const withoutDate = goals.filter(g => !g.target_date);
+
+  function renderItem(g) {
+    const cat = displayGoalCategory(g.category) || "Ohne Kategorie";
+    const isDone = g.status !== "open";
+    const overdue = !isDone && g.target_date && g.target_date < new Date().toISOString().slice(0, 10);
+    const checkbox = g.goal_type === "manual"
+      ? `<input type="checkbox" class="roadmap-check" ${isDone ? "checked" : ""} onchange="toggleGoalDone(${g.id}, this.checked)" title="Als erledigt markieren">`
+      : `<span title="${isDone ? "Erreicht" : "Automatisch gemessenes Ziel"}">${isDone ? "✅" : "📈"}</span>`;
+    const notes = g.description
+      ? `<details class="roadmap-notes"><summary>Notiz</summary><p>${esc(g.description)}</p></details>`
+      : "";
+    return `
+      <div class="roadmap-item${isDone ? " is-done" : ""}">
+        <span class="roadmap-dot" style="background:${colorFor(cat)}"></span>
+        <div class="roadmap-item-head">
+          ${checkbox}
+          <span class="roadmap-title">${esc(g.title)}</span>
+          <span class="goal-chip">${esc(cat)}</span>
+          ${g.target_date ? `<span class="roadmap-date">${overdue ? "⚠️ " : ""}${fmtDate(g.target_date)}</span>` : ""}
+        </div>
+        ${notes}
+      </div>`;
+  }
+
+  let html = "";
+  if (withDate.length) html += withDate.map(renderItem).join("");
+  if (withoutDate.length) {
+    html += `<div class="roadmap-section-label">Ohne festes Datum</div>` + withoutDate.map(renderItem).join("");
+  }
+  listEl.innerHTML = html || `<div class="empty-state"><span class="empty-icon">${svgIcon("target")}</span><span>Keine Ziele für die Roadmap.</span></div>`;
+}
+
+document.querySelectorAll("#goal-view-tabs [data-goal-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#goal-view-tabs [data-goal-view]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const isRoadmap = btn.dataset.goalView === "roadmap";
+    document.getElementById("goal-cards-view").classList.toggle("hidden", isRoadmap);
+    document.getElementById("goal-roadmap-view").classList.toggle("hidden", !isRoadmap);
+  });
+});
+document.querySelectorAll("#schweiz-view-tabs [data-schweiz-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#schweiz-view-tabs [data-schweiz-view]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const isRoadmap = btn.dataset.schweizView === "roadmap";
+    document.getElementById("schweiz-cards-view").classList.toggle("hidden", isRoadmap);
+    document.getElementById("schweiz-roadmap-view").classList.toggle("hidden", !isRoadmap);
+  });
+});
 
 window.toggleGoalDone = async (id, completed) => {
   await api(`/goals/${id}/complete?completed=${completed}`, { method: "POST" });
