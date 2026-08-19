@@ -7356,6 +7356,8 @@ function displayGoalCategory(category) {
   return category.replace(/^schweiz:\s*/i, "");
 }
 
+const ROADMAP_MONTH_SHORT = ["JAN", "FEB", "MÄR", "APR", "MAI", "JUN", "JUL", "AUG", "SEP", "OKT", "NOV", "DEZ"];
+
 function renderGoalsRoadmap(goals, listElId, legendElId) {
   const listEl = document.getElementById(listElId);
   const legendEl = document.getElementById(legendElId);
@@ -7369,37 +7371,72 @@ function renderGoalsRoadmap(goals, listElId, legendElId) {
       <span class="roadmap-legend-dot" style="background:${colorFor(cat)}"></span>${esc(cat)}
     </span>`).join("");
 
+  const today = new Date().toISOString().slice(0, 10);
   const withDate = goals.filter(g => g.target_date).sort((a, b) => a.target_date.localeCompare(b.target_date));
   const withoutDate = goals.filter(g => !g.target_date);
 
-  function renderItem(g) {
+  // Ein "Heute"-Marker wird an der chronologisch richtigen Stelle in die
+  // datierten Ziele eingefügt, damit die Zeitachse zeigt, wo man gerade steht.
+  const todayIndex = withDate.findIndex(g => g.target_date >= today);
+  const insertTodayAt = withDate.length === 0 ? -1 : (todayIndex === -1 ? withDate.length : todayIndex);
+
+  function renderRow(g, { first, last }) {
     const cat = displayGoalCategory(g.category) || "Ohne Kategorie";
     const isDone = g.status !== "open";
-    const overdue = !isDone && g.target_date && g.target_date < new Date().toISOString().slice(0, 10);
+    const overdue = !isDone && g.target_date && g.target_date < today;
+    const color = colorFor(cat);
     const checkbox = g.goal_type === "manual"
       ? `<input type="checkbox" class="roadmap-check" ${isDone ? "checked" : ""} onchange="toggleGoalDone(${g.id}, this.checked)" title="Als erledigt markieren">`
       : `<span title="${isDone ? "Erreicht" : "Automatisch gemessenes Ziel"}">${isDone ? "✅" : "📈"}</span>`;
     const notes = g.description
       ? `<details class="roadmap-notes"><summary>Notiz</summary><p>${esc(g.description)}</p></details>`
       : "";
+    const d = g.target_date ? new Date(g.target_date + "T00:00:00") : null;
     return `
-      <div class="roadmap-item${isDone ? " is-done" : ""}">
-        <span class="roadmap-dot" style="background:${colorFor(cat)}"></span>
-        <div class="roadmap-item-head">
-          ${checkbox}
-          <span class="roadmap-title">${esc(g.title)}</span>
-          <span class="goal-chip">${esc(cat)}</span>
-          ${g.target_date ? `<span class="roadmap-date">${overdue ? "⚠️ " : ""}${fmtDate(g.target_date)}</span>` : ""}
+      <div class="roadmap-row${isDone ? " is-done" : ""}" style="--roadmap-accent:${color}">
+        <div class="roadmap-when">${d ? `<span class="month">${ROADMAP_MONTH_SHORT[d.getMonth()]}</span><span class="day">${d.getDate()}.${d.getFullYear()}</span>` : ""}</div>
+        <div class="roadmap-spine">
+          <div class="roadmap-spine-line${first ? " is-top" : ""}"></div>
+          <div class="roadmap-dot" style="box-shadow:0 0 0 2px ${color}">${isDone ? '<span class="roadmap-dot-check" style="background:' + color + '"></span>' : ""}</div>
+          <div class="roadmap-spine-line${last ? " is-top" : ""}"></div>
         </div>
-        ${notes}
+        <div class="roadmap-card">
+          <div class="roadmap-item-head">
+            ${checkbox}
+            <span class="roadmap-title">${esc(g.title)}</span>
+            <span class="goal-chip">${esc(cat)}</span>
+            <span class="roadmap-date-inline">${overdue ? "⚠️ " : ""}${g.target_date ? fmtDate(g.target_date) : ""}</span>
+          </div>
+          ${notes}
+        </div>
       </div>`;
   }
 
+  const todayMarker = `
+    <div class="roadmap-today">
+      <span class="roadmap-today-line"></span>
+      <span class="roadmap-today-label">Heute</span>
+      <span class="roadmap-today-line"></span>
+    </div>`;
+
   let html = "";
-  if (withDate.length) html += withDate.map(renderItem).join("");
+  let lastYear = null;
+  withDate.forEach((g, i) => {
+    if (insertTodayAt === i) html += todayMarker;
+    const year = g.target_date.slice(0, 4);
+    if (year !== lastYear) {
+      html += `<div class="roadmap-year"><span class="roadmap-year-num">${year}</span><span class="roadmap-year-line"></span></div>`;
+      lastYear = year;
+    }
+    html += renderRow(g, { first: i === 0 || year !== withDate[i - 1]?.target_date.slice(0, 4), last: i === withDate.length - 1 });
+  });
+  if (insertTodayAt === withDate.length && withDate.length) html += todayMarker;
+
   if (withoutDate.length) {
-    html += `<div class="roadmap-section-label">Ohne festes Datum</div>` + withoutDate.map(renderItem).join("");
+    html += `<div class="roadmap-section-label">Ohne festes Datum</div>`;
+    html += withoutDate.map((g, i) => renderRow(g, { first: true, last: i === withoutDate.length - 1 })).join("");
   }
+
   listEl.innerHTML = html || `<div class="empty-state"><span class="empty-icon">${svgIcon("target")}</span><span>Keine Ziele für die Roadmap.</span></div>`;
 }
 

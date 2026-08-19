@@ -1327,65 +1327,134 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .goal-desc { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 
-/* ---------- Ziele-Roadmap (Zeitstrahl-Ansicht) ---------- */
-.roadmap-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 18px; }
-.roadmap-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); }
+/* ---------- Ziele-Roadmap (grafische Zeitstrahl-Ansicht) ---------- */
+.roadmap-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 26px; }
+.roadmap-legend-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); }
 .roadmap-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
 .roadmap-list {
-  position: relative;
-  padding-left: 26px;
-  /* Einspaltig von Natur aus (keine horizontale Zeitachse) - passt ohne
-     eigenes Responsive-Handling auf schmale Viewports. */
+  display: flex;
+  flex-direction: column;
+  /* Spalten: Datum | Spine (Linie+Punkt) | Karte. Bleibt eine einzige
+     senkrechte Abfolge (keine horizontale Zeitachse) - auf schmalen Viewports
+     schrumpft nur die Datumsspalte, siehe Media-Query unten. */
 }
-.roadmap-list::before {
-  content: "";
-  position: absolute;
-  left: 8px;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  background: var(--border-strong);
+.roadmap-year {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 30px 0 6px;
 }
+.roadmap-year:first-child { margin-top: 0; }
+.roadmap-year-num {
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.roadmap-year-line { flex: 1; height: 1px; background: var(--border-strong); }
+
 .roadmap-section-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
-  margin: 22px 0 10px;
+  margin: 30px 0 6px;
 }
-.roadmap-section-label:first-child { margin-top: 0; }
 
-.roadmap-item {
-  position: relative;
-  padding: 2px 0 18px 20px;
+.roadmap-row {
+  display: grid;
+  grid-template-columns: 56px 28px 1fr;
+  column-gap: 4px;
 }
+
+.roadmap-when {
+  grid-column: 1;
+  text-align: right;
+  padding-top: 13px;
+  padding-right: 6px;
+}
+.roadmap-when .month { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.roadmap-when .day { display: block; font-size: 17px; font-weight: 700; color: var(--text-secondary); line-height: 1.1; }
+.roadmap-row.is-done .roadmap-when .day,
+.roadmap-row.is-done .roadmap-when .month { color: var(--muted); }
+
+.roadmap-spine {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.roadmap-spine-line { width: 2px; flex: 1; background: var(--border-strong); }
+.roadmap-spine-line.is-top { visibility: hidden; }
 .roadmap-dot {
-  position: absolute;
-  left: -26px;
-  top: 3px;
-  width: 18px;
-  height: 18px;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin: 13px 0;
   border-radius: 50%;
-  border: 3px solid var(--surface-2);
+  border: 3px solid var(--surface);
   box-shadow: 0 0 0 2px var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.roadmap-item.is-done .roadmap-dot { box-shadow: 0 0 0 2px var(--pos); }
-
-.roadmap-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.roadmap-title { font-weight: 600; font-size: 14px; }
-.roadmap-item.is-done .roadmap-title { text-decoration: line-through; color: var(--muted); }
-.roadmap-item.is-done { opacity: 0.65; }
-.roadmap-date { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.roadmap-check { flex-shrink: 0; accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
-
-.roadmap-notes {
-  margin-top: 4px;
-  font-size: 12.5px;
+.roadmap-row.is-done .roadmap-dot { box-shadow: 0 0 0 2px var(--pos); }
+.roadmap-dot-check {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--pos);
 }
+
+.roadmap-card {
+  grid-column: 3;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--roadmap-accent, var(--accent));
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 6px 0 16px;
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.roadmap-card:hover { transform: translateX(2px); box-shadow: var(--shadow-lift); }
+.roadmap-row.is-done .roadmap-card { opacity: 0.6; }
+
+.roadmap-item-head { display: flex; align-items: flex-start; gap: 9px; flex-wrap: wrap; }
+.roadmap-title { font-weight: 600; font-size: 14.5px; }
+.roadmap-row.is-done .roadmap-title { text-decoration: line-through; color: var(--muted); }
+.roadmap-date-inline { display: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.roadmap-check { flex-shrink: 0; margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+.roadmap-notes { margin-top: 6px; font-size: 12.5px; }
 .roadmap-notes summary { cursor: pointer; color: var(--text-secondary); }
 .roadmap-notes p { margin: 4px 0 0; color: var(--text-secondary); }
+
+.roadmap-today {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 10px;
+  padding-left: 84px;
+}
+.roadmap-today-line { flex: 1; height: 1.5px; background: repeating-linear-gradient(to right, var(--accent) 0 6px, transparent 6px 11px); }
+.roadmap-today-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+@media (max-width: 460px) {
+  .roadmap-row { grid-template-columns: 22px 1fr; }
+  .roadmap-when { display: none; }
+  .roadmap-spine { grid-column: 1; }
+  .roadmap-card { grid-column: 2; }
+  .roadmap-date-inline { display: inline; }
+  .roadmap-today { padding-left: 32px; }
+}
 .goal-metric { margin: 0; font-size: 12px; color: var(--muted); }
 .goal-values { margin: 0; font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .goal-meta { margin: 0; font-size: 11.5px; color: var(--muted); }
