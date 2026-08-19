@@ -1369,7 +1369,10 @@
           <h1>Schweiz</h1>
           <p class="page-sub">Eigene, langfristige Ziele (~15 Jahre) getrennt von den übrigen Zielen.</p>
         </div>
-        <button id="schweiz-goal-new-btn" class="btn-primary">+ Neues Ziel</button>
+        <div class="page-head-actions">
+          <button type="button" class="btn-ghost" data-notes-entity="schweiz" data-notes-id="0" data-notes-label="Schweiz-Tab">📝 Notizen</button>
+          <button id="schweiz-goal-new-btn" class="btn-primary">+ Neues Ziel</button>
+        </div>
       </header>
 
       <div class="cards" id="schweiz-summary-cards"></div>
@@ -2698,6 +2701,22 @@
       <button type="button" id="lightbox-ai-btn" class="btn-ghost">🤖 KI-Einschätzung</button>
       <p id="lightbox-ai-result" class="page-sub"></p>
     </div>
+  </div>
+</div>
+
+<div id="notes-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <button type="button" id="notes-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+    <div class="modal-header">
+      <h2 id="notes-modal-title">Notizen</h2>
+    </div>
+    <form id="notes-add-form" class="form-grid">
+      <label class="wide">Neue Notiz <textarea id="notes-add-text" rows="2" required placeholder="Notiz eintragen …"></textarea></label>
+      <div class="form-actions wide">
+        <button type="submit" class="btn-primary">Hinzufügen</button>
+      </div>
+    </form>
+    <div id="notes-modal-list" class="todo-row-list" style="margin-top:14px"></div>
   </div>
 </div>
 

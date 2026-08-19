@@ -622,6 +622,64 @@ def create_life_checkin(data: schemas.LifeCheckInCreate, db: Session = Depends(g
     return crud.create_life_checkin(db, data.area_id, data.note, data.progress_percent)
 
 
+# ---------------- Kontextbezogene Notizen ----------------
+def _note_entity_label(db: Session, entity_type: str, entity_id: int) -> Optional[str]:
+    """Für die Notiz-Suche: ein lesbarer Titel des Objekts, an dem die Notiz
+    hängt, damit ein Treffer nicht nur "Notiz #17" zeigt. Best-effort - fehlt
+    das Objekt (gelöscht), bleibt es None statt eines Fehlers."""
+    if entity_type == "goal":
+        g = db.query(models.Goal).filter(models.Goal.id == entity_id).first()
+        return g.title if g else None
+    if entity_type == "todo":
+        t = db.query(models.Todo).filter(models.Todo.id == entity_id).first()
+        return t.title if t else None
+    if entity_type == "business_project":
+        p = db.query(models.BusinessProject).filter(models.BusinessProject.id == entity_id).first()
+        return p.name if p else None
+    if entity_type == "life_area":
+        a = db.query(models.LifeArea).filter(models.LifeArea.id == entity_id).first()
+        return a.name if a else None
+    if entity_type == "schweiz":
+        return "Schweiz-Tab"
+    return None
+
+
+@api_router.get("/notes", response_model=List[schemas.NoteOut])
+def list_notes(entity_type: str, entity_id: int, db: Session = Depends(get_db)):
+    return crud.get_notes(db, entity_type, entity_id)
+
+
+@api_router.post("/notes", response_model=schemas.NoteOut)
+def create_note(data: schemas.NoteCreate, db: Session = Depends(get_db)):
+    if data.entity_type not in schemas.NOTE_ENTITY_TYPES:
+        raise HTTPException(400, "Unbekannter Notiz-Typ")
+    if not data.text.strip():
+        raise HTTPException(400, "Notiz ist leer")
+    return crud.create_note(db, data)
+
+
+@api_router.delete("/notes/{note_id}")
+def remove_note(note_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_note(db, note_id):
+        raise HTTPException(404, "Notiz nicht gefunden")
+    return {"ok": True}
+
+
+@api_router.get("/notes/search", response_model=List[schemas.NoteSearchResult])
+def search_notes(q: str, db: Session = Depends(get_db)):
+    if len(q.strip()) < 2:
+        return []
+    notes = crud.search_notes(db, q.strip())
+    results = []
+    for n in notes:
+        results.append(schemas.NoteSearchResult(
+            id=n.id, entity_type=n.entity_type, entity_id=n.entity_id, text=n.text,
+            created_at=n.created_at, updated_at=n.updated_at,
+            entity_label=_note_entity_label(db, n.entity_type, n.entity_id),
+        ))
+    return results
+
+
 # ---------------- Wunschliste (Deal-Wecker) ----------------
 @api_router.get("/wishlist", response_model=List[schemas.WishlistItemOut])
 def list_wishlist_items(include_inactive: bool = False, db: Session = Depends(get_db)):

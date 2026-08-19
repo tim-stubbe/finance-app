@@ -1935,3 +1935,27 @@ class TodayOut(BaseModel):
     deadlines: List[TodayDeadline]
     goals: List[TodayGoal]
     balance: TodayBalance
+
+
+# ---------- Kontextbezogene Notizen ----------
+NOTE_ENTITY_TYPES = ("goal", "todo", "business_project", "life_area", "schweiz")
+
+
+class NoteCreate(BaseModel):
+    entity_type: str
+    entity_id: int
+    text: str
+
+
+class NoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    entity_type: str
+    entity_id: int
+    text: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class NoteSearchResult(NoteOut):
+    entity_label: Optional[str] = None

@@ -3686,3 +3686,40 @@ def day_balance(db: Session, space_id: int, day: date) -> schemas.TodayBalance:
         income=round(income, 2), expense=round(expense, 2),
         balance=round(income + expense, 2), transaction_count=len(rows),
     )
+
+
+# ---------- Kontextbezogene Notizen ----------
+def get_notes(db: Session, entity_type: str, entity_id: int) -> list[models.Note]:
+    return (
+        db.query(models.Note)
+        .filter(models.Note.entity_type == entity_type, models.Note.entity_id == entity_id)
+        .order_by(models.Note.created_at.desc())
+        .all()
+    )
+
+
+def create_note(db: Session, data: schemas.NoteCreate) -> models.Note:
+    note = models.Note(entity_type=data.entity_type, entity_id=data.entity_id, text=data.text)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+def delete_note(db: Session, note_id: int) -> bool:
+    note = db.query(models.Note).filter(models.Note.id == note_id).first()
+    if not note:
+        return False
+    db.delete(note)
+    db.commit()
+    return True
+
+
+def search_notes(db: Session, q: str, limit: int = 30) -> list[models.Note]:
+    return (
+        db.query(models.Note)
+        .filter(models.Note.text.ilike(f"%{q}%"))
+        .order_by(models.Note.created_at.desc())
+        .limit(limit)
+        .all()
+    )

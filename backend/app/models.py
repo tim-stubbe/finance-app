@@ -1183,6 +1183,36 @@ class WishlistItem(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Note(Base):
+    """Freie, durchsuchbare Notiz, die an ein beliebiges anderes Objekt gehängt
+    ist (Ziel, To-Do, Business-Projekt, den Schweiz-Tab, ...) - bewusst EINE
+    generische Tabelle statt eines eigenen Notizfelds pro Modell: die Objekte,
+    an denen Notizen sinnvoll sind, kommen laufend dazu (Nutzerwunsch nennt
+    fünf verschiedene), ein Notizfeld pro Modell würde bei jedem neuen Ort
+    eine Migration brauchen UND ließe sich nicht gemeinsam durchsuchen.
+
+    `entity_type` + `entity_id` sind bewusst ein loser Verweis ohne Foreign
+    Key (kein Objekt, an dem Notizen hängen sollen, hat eine gemeinsame
+    Basistabelle) - beim Laden filtert das Frontend/Backend gezielt nach
+    diesem Paar. Für Objekte ohne echte ID (Schweiz-Tab als Ganzes) wird
+    `entity_id=0` als feste Konvention verwendet, analog zur einzigen Space
+    dieser App.
+
+    KEIN Ersatz für Transaction.notes/ContractReminder.notes/BusinessIssue.notes
+    - dort ist die Notiz Teil des fachlichen Datensatzes selbst (ein einzelnes
+    Feld reicht), hier geht es um ein offenes Tagebuch mit mehreren Einträgen
+    über die Zeit."""
+
+    __tablename__ = "notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String, nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class SyncTombstone(Base):
     """Lösch-Protokoll für den Offline-Sync des nativen Clients - fast alle
     Löschungen in dieser App sind Hard Deletes (siehe crud.py), ohne dieses
