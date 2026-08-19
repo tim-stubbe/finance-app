@@ -838,13 +838,13 @@ document.getElementById("holding-form").addEventListener("submit", async e => {
 });
 
 function openHoldingModal() {
-  document.getElementById("holding-modal").classList.remove("hidden");
+  document.getElementById("holding-new-modal").classList.remove("hidden");
 }
 function closeHoldingModal() {
-  document.getElementById("holding-modal").classList.add("hidden");
+  document.getElementById("holding-new-modal").classList.add("hidden");
 }
 document.getElementById("holding-new-btn").addEventListener("click", openHoldingModal);
-document.getElementById("holding-modal-close").addEventListener("click", closeHoldingModal);
+document.getElementById("holding-new-modal-close").addEventListener("click", closeHoldingModal);
 
 window.deleteHolding = async id => {
   if (!confirm("Position wirklich löschen?")) return;
