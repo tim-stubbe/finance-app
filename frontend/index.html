@@ -563,6 +563,36 @@
       </div>
     </div>
 
+    <div id="holding-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="holding-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2>Neue Position</h2>
+        </div>
+        <form id="holding-form" class="form-grid">
+          <label>Anlageklasse
+            <select id="holding-type">
+              <option value="aktie">Aktie</option>
+              <option value="etf">ETF</option>
+              <option value="anleihe">Anleihe</option>
+              <option value="krypto">Krypto</option>
+              <option value="sonstiges">Sonstiges</option>
+            </select>
+          </label>
+          <label>Name <input type="text" id="holding-name" placeholder="z.B. Apple Inc." required></label>
+          <label>Symbol <input type="text" id="holding-symbol" placeholder="z.B. AAPL / bitcoin" required></label>
+          <label>Sektor (optional) <input type="text" id="holding-sector" placeholder="wird bei Aktien/ETFs automatisch versucht"></label>
+          <label>Stückzahl <input type="number" step="0.00000001" id="holding-quantity" required></label>
+          <label>Kaufpreis pro Stück (€) <input type="number" step="0.01" id="holding-purchase-price" required></label>
+          <label>Kaufdatum <input type="date" id="holding-purchase-date"></label>
+          <p class="page-sub wide">Symbol bei Aktien/ETFs: Yahoo-Finance-Ticker (z.B. <code>AAPL</code>, <code>VWCE.DE</code>). Bei Krypto: CoinGecko-ID (z.B. <code>bitcoin</code>, <code>ethereum</code>). Bei Anleihen ohne Live-Kurs einfach den Kaufpreis stehen lassen und Kurs manuell in der Tabelle pflegen.</p>
+          <div class="form-actions wide">
+            <button type="submit" class="btn-primary">Anlegen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="return-deadline-modal" class="modal-overlay hidden">
       <div class="modal-box">
         <button type="button" id="return-deadline-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
@@ -829,6 +859,7 @@
         <div class="page-head-actions">
           <p id="prices-last-updated" class="page-sub"></p>
           <button id="refresh-prices-btn" class="btn-primary">Kurse aktualisieren</button>
+          <button type="button" id="holding-new-btn" class="btn-primary"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Neue Position</button>
         </div>
       </header>
 
@@ -921,31 +952,6 @@
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a6 6 0 0 0 6-6c0-2.5-1.5-4-2.5-5.5C14.5 9 14 7 14 5c-2 1.5-3.5 4-3.5 6.5C9 10 8.5 8.5 8.5 7 7 8.5 6 11 6 13.5A6 6 0 0 0 12 22z"/></svg> Rendite-Heatmap</h3>
         <p class="page-sub">Farbe zeigt die Rendite je Position (rot = Verlust, grün = Gewinn).</p>
         <div class="heatmap" id="heatmap-grid"></div>
-      </div>
-
-      <div class="panel">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/></svg> Neue Position</h3>
-        <form id="holding-form" class="form-grid">
-          <label>Anlageklasse
-            <select id="holding-type">
-              <option value="aktie">Aktie</option>
-              <option value="etf">ETF</option>
-              <option value="anleihe">Anleihe</option>
-              <option value="krypto">Krypto</option>
-              <option value="sonstiges">Sonstiges</option>
-            </select>
-          </label>
-          <label>Name <input type="text" id="holding-name" placeholder="z.B. Apple Inc." required></label>
-          <label>Symbol <input type="text" id="holding-symbol" placeholder="z.B. AAPL / bitcoin" required></label>
-          <label>Sektor (optional) <input type="text" id="holding-sector" placeholder="wird bei Aktien/ETFs automatisch versucht"></label>
-          <label>Stückzahl <input type="number" step="0.00000001" id="holding-quantity" required></label>
-          <label>Kaufpreis pro Stück (€) <input type="number" step="0.01" id="holding-purchase-price" required></label>
-          <label>Kaufdatum <input type="date" id="holding-purchase-date"></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Anlegen</button>
-          </div>
-        </form>
-        <p class="page-sub">Symbol bei Aktien/ETFs: Yahoo-Finance-Ticker (z.B. <code>AAPL</code>, <code>VWCE.DE</code>). Bei Krypto: CoinGecko-ID (z.B. <code>bitcoin</code>, <code>ethereum</code>). Bei Anleihen ohne Live-Kurs einfach den Kaufpreis stehen lassen und Kurs manuell in der Tabelle pflegen.</p>
       </div>
 
       <div class="panel">
@@ -1651,23 +1657,29 @@
           <h1>Urlaube</h1>
           <p class="page-sub">Ausgaben nach Reise/Anlass gruppieren</p>
         </div>
+        <button type="button" id="trip-new-btn" class="btn-primary"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Neuer Urlaub</button>
       </header>
 
-      <div class="panel">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/><path d="M9 4v14M15 6v14"/></svg> Neuer Urlaub</h3>
+      <div id="trip-grid" class="trip-grid"></div>
+    </section>
+
+    <div id="trip-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="trip-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2>Neuer Urlaub</h2>
+        </div>
         <form id="trip-form" class="form-grid">
           <label>Name <input type="text" id="trip-name" placeholder="z.B. Italien 2026" required></label>
           <label>Von <input type="date" id="trip-start"></label>
           <label>Bis <input type="date" id="trip-end"></label>
           <label>Budget (€, optional) <input type="number" step="0.01" min="0" id="trip-budget" placeholder="z.B. 1500"></label>
-          <div class="form-actions">
+          <div class="form-actions wide">
             <button type="submit" class="btn-primary">Anlegen</button>
           </div>
         </form>
       </div>
-
-      <div id="trip-grid" class="trip-grid"></div>
-    </section>
+    </div>
 
     <!-- PROJEKTE (Nebengeschäfte, Kies hat keinen Datenzugriff, sammelt nur gemeldete offene Punkte) -->
     <section id="tab-projects" class="tab-content">

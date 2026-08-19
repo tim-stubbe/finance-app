@@ -833,8 +833,18 @@ document.getElementById("holding-form").addEventListener("submit", async e => {
   };
   await api("/holdings", { method: "POST", body: JSON.stringify(payload) });
   document.getElementById("holding-form").reset();
+  closeHoldingModal();
   loadInvestmentsTab();
 });
+
+function openHoldingModal() {
+  document.getElementById("holding-modal").classList.remove("hidden");
+}
+function closeHoldingModal() {
+  document.getElementById("holding-modal").classList.add("hidden");
+}
+document.getElementById("holding-new-btn").addEventListener("click", openHoldingModal);
+document.getElementById("holding-modal-close").addEventListener("click", closeHoldingModal);
 
 window.deleteHolding = async id => {
   if (!confirm("Position wirklich löschen?")) return;
@@ -2009,8 +2019,18 @@ document.getElementById("trip-form").addEventListener("submit", async e => {
   const budget = budgetVal ? parseFloat(budgetVal) : null;
   await api("/trips", { method: "POST", body: JSON.stringify({ name, start_date, end_date, budget }) });
   document.getElementById("trip-form").reset();
+  closeTripModal();
   loadTrips();
 });
+
+function openTripModal() {
+  document.getElementById("trip-modal").classList.remove("hidden");
+}
+function closeTripModal() {
+  document.getElementById("trip-modal").classList.add("hidden");
+}
+document.getElementById("trip-new-btn").addEventListener("click", openTripModal);
+document.getElementById("trip-modal-close").addEventListener("click", closeTripModal);
 
 window.deleteTrip = async id => {
   if (!confirm("Urlaub wirklich löschen? Zugehörige Buchungen bleiben erhalten, verlieren aber die Zuordnung.")) return;
