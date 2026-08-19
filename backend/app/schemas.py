@@ -125,6 +125,11 @@ class TransactionUpdate(BaseModel):
     account_id: Optional[int] = None
     category_id: Optional[int] = None
     trip_id: Optional[int] = None
+    # Manuelle Korrektur, falls die automatische Umbuchungs-Erkennung (siehe
+    # crud.detect_transfers) eine interne Bewegung zwischen eigenen Konten
+    # nicht erkannt hat (z.B. Rundungssparen mit ungleichem Betrag auf beiden
+    # Seiten, oder PayPal-Kartendeckung ohne exaktes Gegenstück).
+    is_transfer: Optional[bool] = None
 
 
 class TransactionOut(TransactionBase):
