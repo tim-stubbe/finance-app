@@ -7559,10 +7559,52 @@ async function renderSavingsGap() {
   document.getElementById("sd-explainer").textContent = gap > 0
     ? `Bis „${goal.title}" am ${fmtDate(goal.target_date)} bleiben ${monthsUntil.toFixed(1).replace(".", ",")} Monate. Für einen Puffer von ${bufferMonths} Monaten geschätzter Schweizer Lebenshaltungskosten (${eur(totalSchweiz)}/Monat) fehlen noch ${eur(gap)} - das sind ${eur(requiredMonthly)}/Monat ab jetzt.`
     : `Der Zielpuffer von ${eur(targetAmount)} ist mit deinem aktuellen Kontostand (${eur(nw.accounts_total)}) bereits gedeckt.`;
+
+  // "Wie lange bis zur Spardistanz bei aktueller vs. erhöhter Rate?" - eigenes
+  // Feld statt Wiederverwendung von cashflow_scenario: hier ist die Frage
+  // "wie viele Monate bis GAP gedeckt ist" bei einer FESTEN Sparrate, nicht
+  // "wie sieht der Kontostand nach N Tagen aus" wie beim Cashflow-Szenario.
+  renderSavingsGapScenario(gap);
+}
+
+function monthsToClose(gap, monthlyRate) {
+  if (gap <= 0) return 0;
+  if (monthlyRate <= 0) return Infinity;
+  return gap / monthlyRate;
+}
+
+function renderSavingsGapScenario(gap) {
+  const currentRate = parseFloat(document.getElementById("sd-current-rate").value) || 0;
+  const scenarioWrap = document.getElementById("sd-scenario-wrap");
+  if (!currentRate) {
+    scenarioWrap.classList.add("hidden");
+    return;
+  }
+  scenarioWrap.classList.remove("hidden");
+  const scenarioRate = parseFloat(document.getElementById("sd-scenario-rate").value) || 0;
+  const resultEl = document.getElementById("sd-scenario-result");
+
+  const currentMonths = monthsToClose(gap, currentRate);
+  const currentText = currentMonths === Infinity
+    ? "wird bei dieser Rate nie erreicht"
+    : currentMonths === 0 ? "schon gedeckt" : `${currentMonths.toFixed(1).replace(".", ",")} Monate`;
+
+  if (!scenarioRate || scenarioRate <= currentRate) {
+    resultEl.textContent = `Bei ${eur(currentRate)}/Monat: ${currentText}. Trag oben eine höhere Sparrate ein, um zu vergleichen.`;
+    return;
+  }
+  const scenarioMonths = monthsToClose(gap, scenarioRate);
+  const scenarioText = scenarioMonths === 0 ? "schon gedeckt" : `${scenarioMonths.toFixed(1).replace(".", ",")} Monate`;
+  const saved = currentMonths === Infinity ? null : currentMonths - scenarioMonths;
+  resultEl.innerHTML = `Bei ${eur(currentRate)}/Monat: <strong>${currentText}</strong> · ` +
+    `bei ${eur(scenarioRate)}/Monat: <strong>${scenarioText}</strong>` +
+    (saved != null && saved > 0.05 ? ` – das spart ${saved.toFixed(1).replace(".", ",")} Monate.` : "");
 }
 
 document.getElementById("sd-milestone").addEventListener("change", renderSavingsGap);
 document.getElementById("sd-buffer-months").addEventListener("change", renderSavingsGap);
+document.getElementById("sd-current-rate").addEventListener("input", renderSavingsGap);
+document.getElementById("sd-scenario-rate").addEventListener("input", renderSavingsGap);
 
 function updateGoalsBadge(count) {
   const badge = document.getElementById("goals-nav-badge");

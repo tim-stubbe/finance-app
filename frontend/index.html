@@ -1440,9 +1440,17 @@
         <div class="filter-row">
           <label>Meilenstein <select id="sd-milestone"></select></label>
           <label>Ziel-Puffer (Monate Lebenshaltungskosten) <input type="number" id="sd-buffer-months" value="3" min="0" step="0.5" style="width:80px"></label>
+          <label>Aktuelle Sparrate/Monat (€, optional) <input type="number" id="sd-current-rate" min="0" step="10" style="width:100px" placeholder="0"></label>
         </div>
         <div class="cards" id="sd-summary-cards"></div>
         <p class="page-sub" id="sd-explainer"></p>
+        <div id="sd-scenario-wrap" class="hidden">
+          <h4 style="margin:16px 0 6px">Was-wäre-wenn: höhere Sparrate</h4>
+          <div class="filter-row">
+            <label>Erhöhte Sparrate/Monat (€) <input type="number" id="sd-scenario-rate" min="0" step="10" style="width:100px"></label>
+          </div>
+          <p class="page-sub" id="sd-scenario-result"></p>
+        </div>
       </div>
     </section>
 
