@@ -20,6 +20,37 @@ MAX_PENDING_PER_RUN = 200
 
 _ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
 
+# Feste, KI-freie Regeln fuer Faelle, in denen dieselbe Gegenstelle je nach
+# Vorzeichen etwas komplett anderes bedeutet - z.B. eBay: negativer Betrag
+# = Einkauf (Ausgabe), positiver Betrag = Verkaufserloes (Einnahme). Live
+# beobachtet: die KI ordnete positive eBay-Gutschriften der Ausgaben-Kategorie
+# "Shopping & Kleidung" zu (passte nur zum Haendlernamen, nicht zum
+# Vorzeichen) - das liess die Kategorie rechnerisch positiv werden. Fest
+# codiert statt der KI überlassen, weil es eine eindeutige Nutzer-Vorgabe ist,
+# kein Graubereich ("eBay ist immer Verkaufserlös, alles andere ist Retoure").
+DETERMINISTIC_RULES = [
+    (re.compile(r"ebay", re.IGNORECASE), lambda amount: amount > 0, "Nebeneinkommen"),
+]
+
+
+def _apply_deterministic_rules(pending: list[models.Transaction], cat_by_name: dict) -> tuple[list[models.Transaction], int]:
+    remaining = []
+    matched = 0
+    for t in pending:
+        hit = False
+        for pattern, sign_ok, cat_name in DETERMINISTIC_RULES:
+            if pattern.search(t.description or "") and sign_ok(t.amount):
+                cat = cat_by_name.get(cat_name.strip().lower())
+                if cat:
+                    t.category_id = cat.id
+                    t.categorized_at = datetime.utcnow()
+                    matched += 1
+                    hit = True
+                break
+        if not hit:
+            remaining.append(t)
+    return remaining, matched
+
 
 class CategorizeResult(NamedTuple):
     categorized: int
@@ -88,7 +119,15 @@ def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> Ca
     if not pending:
         return CategorizeResult(0, 0, None)
 
-    categorized, skipped = 0, 0
+    categorized = 0
+    skipped = 0
+    pending, deterministic_hits = _apply_deterministic_rules(pending, cat_by_name)
+    categorized += deterministic_hits
+    if deterministic_hits:
+        db.commit()
+    if not pending:
+        return CategorizeResult(categorized, skipped, None)
+
     for i in range(0, len(pending), BATCH_SIZE):
         batch = pending[i:i + BATCH_SIZE]
         by_id = {t.id: t for t in batch}
