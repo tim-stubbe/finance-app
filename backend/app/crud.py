@@ -279,6 +279,37 @@ def category_totals(db: Session, space_id: int, year: int, month: int | None = N
     return {cat_id: round(total, 2) for cat_id, total in rows}
 
 
+def category_sign_mismatches(db: Session, space_id: int) -> list[dict]:
+    """Kategorien, in denen mindestens eine Buchung ein zum Kategorie-Typ
+    unpassendes Vorzeichen hat (Ausgabe-Kategorie mit positivem Betrag oder
+    Einnahme-Kategorie mit negativem) - der zuverlässigste (wenn auch nicht
+    vollständige) automatische Hinweis auf durcheinandergeratene Zuordnungen,
+    z.B. nach einem Kategorien-Reset mit wiederverwendeten IDs (live erlebt:
+    alle Kategorien neu angelegt, alte Buchungen zeigten seitdem unter
+    derselben ID eine andere Kategorie). Erfasst nicht jede Fehlzuordnung
+    (eine Ausgabe in der falschen, aber vorzeichen-passenden Kategorie fällt
+    nicht auf), ist aber günstig genug für einen Hinweis bei jedem Laden des
+    Kategorien-Tabs."""
+    rows = (
+        db.query(models.Transaction, models.Category)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .join(models.Category, models.Transaction.category_id == models.Category.id)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.is_transfer.is_(False),
+        )
+        .all()
+    )
+    by_category: dict[int, dict] = {}
+    for t, c in rows:
+        mismatch = (c.type == "ausgabe" and t.amount > 0) or (c.type == "einnahme" and t.amount < 0)
+        if not mismatch:
+            continue
+        entry = by_category.setdefault(c.id, {"category_id": c.id, "category_name": c.name, "category_type": c.type, "count": 0})
+        entry["count"] += 1
+    return sorted(by_category.values(), key=lambda e: -e["count"])
+
+
 def update_category(db: Session, category_id: int, data: schemas.CategoryUpdate):
     db_category = get_category(db, category_id)
     if not db_category:

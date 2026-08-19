@@ -436,6 +436,11 @@ def get_category_totals(year: int = date.today().year, month: Optional[int] = No
     return crud.category_totals(db, space_id, year, month)
 
 
+@api_router.get("/categories/sign-mismatches", response_model=List[schemas.CategorySignMismatch])
+def get_category_sign_mismatches(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.category_sign_mismatches(db, space_id)
+
+
 @api_router.post("/categories", response_model=schemas.CategoryOut)
 def create_category(category: schemas.CategoryCreate, db: Session = Depends(get_db)):
     return crud.create_category(db, category)

@@ -474,10 +474,20 @@ async function loadCategories() {
   const periodParam = month ? `year=${year}&month=${month}` : `year=${year}`;
   const periodLabel = month ? `${MONTH_NAMES_DE[month - 1]} ${year}` : `${year}`;
 
-  const [categories, yearTotals, periodTotals] = await Promise.all([
+  const [categories, yearTotals, periodTotals, mismatches] = await Promise.all([
     api("/categories"), api(`/categories/totals?year=${year}`), api(`/categories/totals?${periodParam}`),
+    api("/categories/sign-mismatches"),
   ]);
   categoriesCache = categories;
+
+  const mismatchWarning = document.getElementById("cat-mismatch-warning");
+  mismatchWarning.classList.toggle("hidden", mismatches.length === 0);
+  if (mismatches.length > 0) {
+    const parts = mismatches.map(m => `${esc(m.category_name)} (${m.count})`).join(", ");
+    mismatchWarning.innerHTML = `⚠️ ${mismatches.reduce((s, m) => s + m.count, 0)} Buchungen mit unpassendem Vorzeichen für ihre Kategorie
+      (z.B. eine Ausgabe-Kategorie mit positivem Betrag) - oft ein Zeichen für falsch zugeordnete Kategorien:
+      ${parts}. Im Buchungen-Tab nach Kategorie filtern und prüfen.`;
+  }
   document.getElementById("cat-list-year-header").textContent = year === new Date().getFullYear() ? "Dieses Jahr" : String(year);
   const tbody = document.getElementById("cat-list");
   tbody.innerHTML = "";
@@ -622,8 +632,16 @@ document.getElementById("cat-form").addEventListener("submit", async e => {
     await api("/categories", { method: "POST", body: JSON.stringify(payload) });
   }
   resetCatForm();
+  closeCatModal();
   loadCategories();
 });
+
+function openCatModal() {
+  document.getElementById("cat-modal").classList.remove("hidden");
+}
+function closeCatModal() {
+  document.getElementById("cat-modal").classList.add("hidden");
+}
 
 window.editCategory = id => {
   const c = categoriesCache.find(x => x.id === id);
@@ -631,13 +649,26 @@ window.editCategory = id => {
   document.getElementById("cat-name").value = c.name;
   document.getElementById("cat-type").value = c.type;
   document.getElementById("cat-parent").value = c.parent_id || "";
-  document.getElementById("cat-cancel").style.display = "inline-block";
+  document.getElementById("cat-cancel").classList.remove("hidden");
+  document.getElementById("cat-submit").textContent = "Änderungen speichern";
+  document.getElementById("cat-modal-title").textContent = "Kategorie bearbeiten";
+  openCatModal();
 };
-document.getElementById("cat-cancel").addEventListener("click", resetCatForm);
+document.getElementById("cat-new-btn").addEventListener("click", () => {
+  resetCatForm();
+  document.getElementById("cat-modal-title").textContent = "Neue Kategorie";
+  openCatModal();
+});
+document.getElementById("cat-modal-close").addEventListener("click", closeCatModal);
+document.getElementById("cat-cancel").addEventListener("click", () => {
+  resetCatForm();
+  closeCatModal();
+});
 function resetCatForm() {
   editingCatId = null;
   document.getElementById("cat-form").reset();
-  document.getElementById("cat-cancel").style.display = "none";
+  document.getElementById("cat-cancel").classList.add("hidden");
+  document.getElementById("cat-submit").textContent = "Speichern";
 }
 window.deleteCategory = async id => {
   if (!confirm("Kategorie wirklich löschen?")) return;
@@ -7569,7 +7600,7 @@ const CMDK_ACTIONS = [
   { label: "Neuer Kredit", icon: "plus", run: () => { goToTab("debts"); setTimeout(() => document.getElementById("debt-new-btn")?.click(), 150); } },
   { label: "Neues Ziel", icon: "plus", run: () => { goToTab("goals"); setTimeout(() => document.getElementById("goal-new-btn")?.click(), 150); } },
   { label: "Neues Schweiz-Ziel", icon: "plus", run: () => { goToTab("schweiz"); setTimeout(() => document.getElementById("schweiz-goal-new-btn")?.click(), 150); } },
-  { label: "Neue Kategorie", icon: "plus", run: () => { goToTab("categories"); setTimeout(() => document.getElementById("cat-name")?.focus(), 150); } },
+  { label: "Neue Kategorie", icon: "plus", run: () => { goToTab("categories"); setTimeout(() => document.getElementById("cat-new-btn")?.click(), 150); } },
   { label: "Neues Projekt", icon: "plus", run: () => { goToTab("projects"); setTimeout(() => document.getElementById("project-new-btn")?.click(), 150); } },
   { label: "Neuer Lebensbereich", icon: "plus", run: () => { goToTab("life"); setTimeout(() => document.getElementById("life-area-new-btn")?.click(), 150); } },
   { label: "Neuer Wunsch", icon: "plus", run: () => { goToTab("wishlist"); setTimeout(() => document.getElementById("wishlist-new-btn")?.click(), 150); } },

@@ -540,6 +540,29 @@
       </div>
     </div>
 
+    <div id="cat-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="cat-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="cat-modal-title">Neue Kategorie</h2>
+        </div>
+        <form id="cat-form" class="form-grid">
+          <label>Name <input type="text" id="cat-name" required></label>
+          <label>Typ
+            <select id="cat-type">
+              <option value="ausgabe">Ausgabe</option>
+              <option value="einnahme">Einnahme</option>
+            </select>
+          </label>
+          <label>Oberkategorie <select id="cat-parent"><option value="">–</option></select></label>
+          <div class="form-actions wide">
+            <button type="submit" id="cat-submit" class="btn-primary">Speichern</button>
+            <button type="button" id="cat-cancel" class="btn-ghost hidden">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="return-deadline-modal" class="modal-overlay hidden">
       <div class="modal-box">
         <button type="button" id="return-deadline-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
@@ -763,6 +786,12 @@
         </div>
       </header>
 
+      <div class="page-head-actions" style="margin-bottom:16px">
+        <button type="button" id="cat-new-btn" class="btn-primary"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Neue Kategorie</button>
+      </div>
+
+      <p class="beleg-warning hidden" id="cat-mismatch-warning"></p>
+
       <div class="panel-grid" id="cat-charts-grid">
         <div class="panel chart-panel">
           <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor"/></svg> <span id="cat-income-chart-title">Einnahmen nach Kategorie</span></h3>
@@ -774,24 +803,6 @@
         </div>
       </div>
 
-      <div class="panel">
-        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H4a2 2 0 0 0-2 2v8l11 11 10-10L12 2z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></svg> Neue Kategorie</h3>
-        <form id="cat-form" class="form-grid">
-          <input type="hidden" id="cat-id">
-          <label>Name <input type="text" id="cat-name" required></label>
-          <label>Typ
-            <select id="cat-type">
-              <option value="ausgabe">Ausgabe</option>
-              <option value="einnahme">Einnahme</option>
-            </select>
-          </label>
-          <label>Oberkategorie <select id="cat-parent"><option value="">–</option></select></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="cat-cancel" class="btn-ghost" style="display:none">Abbrechen</button>
-          </div>
-        </form>
-      </div>
       <div class="panel">
         <div class="table-wrap">
           <table class="data-table">

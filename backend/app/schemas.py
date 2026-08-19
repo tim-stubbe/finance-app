@@ -64,6 +64,13 @@ class CategoryOut(CategoryBase):
     id: int
 
 
+class CategorySignMismatch(BaseModel):
+    category_id: int
+    category_name: str
+    category_type: str
+    count: int
+
+
 # ---------- Space ----------
 class SpaceCreate(BaseModel):
     name: str
