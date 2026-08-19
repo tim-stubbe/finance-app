@@ -7106,7 +7106,11 @@ function goalValueText(g) {
 // Sicht auf dieselben Konten ist).
 const SCHWEIZ_GOAL_CATEGORY = "Schweiz";
 function isSchweizGoal(g) {
-  return (g.category || "").trim().toLowerCase() === SCHWEIZ_GOAL_CATEGORY.toLowerCase();
+  // Exaktes "Schweiz" ODER "Schweiz: <Unterthema>" (siehe scripts/seed_schweiz_goals.py,
+  // das feinere Kategorien wie "Schweiz: Gewerbe" für die Roadmap-Farbcodierung braucht).
+  const cat = (g.category || "").trim().toLowerCase();
+  const prefix = SCHWEIZ_GOAL_CATEGORY.toLowerCase();
+  return cat === prefix || cat.startsWith(prefix + ":");
 }
 
 async function loadGoalsTab() {
