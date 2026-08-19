@@ -291,7 +291,13 @@ if os.environ.get("DEV_NO_CACHE"):
 @app.middleware("http")
 async def no_cache_static_shell(request, call_next):
     response = await call_next(request)
-    if request.url.path in ("/style.css", "/app.js", "/sw.js"):
+    # "/" und "/index.html" fehlten hier bisher - normales heuristisches
+    # Browser-Caching konnte die HTML-Seite tagelang veraltet halten, waehrend
+    # style.css/app.js (schon abgesichert) frisch nachgeladen wurden. Neues JS
+    # gegen eine alte, gecachte Seite ohne die dort erwarteten Elemente
+    # (fehlende IDs -> addEventListener auf null -> Abbruch mitten im Skript)
+    # sah dann wie "alle Daten weg" aus, obwohl der Server alles hatte.
+    if request.url.path in ("/", "/index.html", "/style.css", "/app.js", "/sw.js"):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
