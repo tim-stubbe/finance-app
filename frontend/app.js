@@ -466,10 +466,19 @@ window.deleteAccount = async id => {
 
 // ================= CATEGORIES =================
 async function loadCategories() {
-  const [categories, totals] = await Promise.all([
-    api("/categories"), api(`/categories/totals?year=${new Date().getFullYear()}`),
+  const yearInput = document.getElementById("cat-filter-year");
+  const monthSelect = document.getElementById("cat-filter-month");
+  if (!yearInput.value) yearInput.value = new Date().getFullYear();
+  const year = parseInt(yearInput.value);
+  const month = monthSelect.value ? parseInt(monthSelect.value) : null;
+  const periodParam = month ? `year=${year}&month=${month}` : `year=${year}`;
+  const periodLabel = month ? `${MONTH_NAMES_DE[month - 1]} ${year}` : `${year}`;
+
+  const [categories, yearTotals, periodTotals] = await Promise.all([
+    api("/categories"), api(`/categories/totals?year=${year}`), api(`/categories/totals?${periodParam}`),
   ]);
   categoriesCache = categories;
+  document.getElementById("cat-list-year-header").textContent = year === new Date().getFullYear() ? "Dieses Jahr" : String(year);
   const tbody = document.getElementById("cat-list");
   tbody.innerHTML = "";
   if (categoriesCache.length === 0) {
@@ -479,7 +488,7 @@ async function loadCategories() {
     const parent = categoriesCache.find(p => p.id === c.parent_id);
     const tr = document.createElement("tr");
     const icon = CATEGORY_TYPE_ICONS[c.type] || "tag";
-    const total = totals[c.id];
+    const total = yearTotals[c.id];
     const totalCls = total == null ? "" : total >= 0 ? "row-amount-pos" : "row-amount-neg";
     tr.innerHTML = `<td><span class="row-name"><span class="row-icon">${svgIcon(icon)}</span>${c.name}</span></td><td>${c.type}</td><td>${parent ? parent.name : "–"}</td>
       <td class="${totalCls}">${total == null ? "–" : eur(total)}</td>
@@ -491,6 +500,10 @@ async function loadCategories() {
   });
   populateCategorySelects();
 
+  document.getElementById("cat-income-chart-title").textContent = `Einnahmen nach Kategorie (${periodLabel})`;
+  document.getElementById("cat-expense-chart-title").textContent = `Ausgaben nach Kategorie (${periodLabel})`;
+
+  const totals = periodTotals;
   const incomeCats = categoriesCache.filter(c => c.type === "einnahme" && totals[c.id] > 0);
   const expenseCats = categoriesCache.filter(c => c.type === "ausgabe" && totals[c.id] < 0);
   document.getElementById("cat-charts-grid").classList.toggle("hidden", incomeCats.length === 0 && expenseCats.length === 0);
@@ -503,7 +516,7 @@ async function loadCategories() {
     expenseCats.map(c => c.name), expenseCats.map(c => Math.abs(totals[c.id])),
   );
 
-  const trend = await api("/categories/trend?months=6");
+  const trend = await api("/categories/trend?months=12");
   const trendPanel = document.getElementById("cat-trend-panel");
   trendPanel.classList.toggle("hidden", trend.series.length === 0);
   if (trend.series.length > 0) {
@@ -532,6 +545,18 @@ async function loadCategories() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        onClick: (evt, elements) => {
+          const points = catTrendChartInstance.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+          const idx = points[0]?.index;
+          if (idx == null) return;
+          const [y, mo] = trend.months[idx].split("-");
+          document.getElementById("cat-filter-year").value = y;
+          document.getElementById("cat-filter-month").value = String(parseInt(mo));
+          loadCategories();
+        },
+        onHover: (evt, elements, chart) => {
+          chart.canvas.style.cursor = elements.length ? "pointer" : "default";
+        },
         plugins: {
           legend: {
             position: "right",
@@ -3184,27 +3209,34 @@ async function loadPhotosTab(offset = 0) {
     auch alle oder keins. ${trashNote}`;
 
   // Auf Wunsch zuerst die staerksten Uebereinstimmungen zeigen (100% zuerst,
-  // absteigend) statt Immichs eigener Reihenfolge - dafuer muss die
-  // Uebereinstimmung schon VOR dem ersten Rendern je Gruppe feststehen, die
-  // Seite wartet also kurz laenger (nur die eine geladene Seite von 20
-  // Gruppen, dank Hash-Cache in immich.py bei erneutem Besuch sofort da).
-  wrap.innerHTML = `<p class="page-sub loading-pulse">Vergleiche Aufnahmen …</p>`;
-  await loadSimilarities(data.groups);
-  data.groups.sort((a, b) => groupMaxSimilarity(b.duplicate_id) - groupMaxSimilarity(a.duplicate_id));
+  // absteigend) statt Immichs eigener Reihenfolge. Das Backend liefert schon
+  // best_similarity_percent je Gruppe mit (billiger Vorab-Vergleich, siehe
+  // main._best_similarity) - damit steht die Sortierung sofort, ohne auf die
+  // vollstaendigen Paar-Vergleiche zu warten. Sobald loadSimilarities() die
+  // genauen Werte nachliefert, wird nochmal nachsortiert (kann die Reihenfolge
+  // leicht verfeinern, das grobe Bild stimmt aber von Anfang an).
+  data.groups.sort((a, b) => (b.best_similarity_percent ?? 0) - (a.best_similarity_percent ?? 0));
   photoGroupsCache = data.groups;
+  renderPhotoGroups();
 
+  await loadSimilarities(data.groups);
+  data.groups.sort((a, b) => groupMaxSimilarity(b) - groupMaxSimilarity(a));
+  photoGroupsCache = data.groups;
   renderPhotoGroups();
 }
 
-function groupMaxSimilarity(duplicateId) {
-  const pairs = photoSimilarity.get(duplicateId) || {};
+function groupMaxSimilarity(group) {
+  const pairs = photoSimilarity.get(group.duplicate_id) || {};
   let max = 0;
   for (const inner of Object.values(pairs)) {
     for (const pct of Object.values(inner)) {
       if (pct > max) max = pct;
     }
   }
-  return max;
+  // Fallback auf den billigen Backend-Wert, falls fuer diese Gruppe kein
+  // Paar-Vergleich zustande kam (z.B. Netzwerkfehler, siehe loadSimilarities)
+  // - sonst faellt eine an sich sehr aehnliche Gruppe faelschlich auf 0/ans Ende.
+  return max || group.best_similarity_percent || 0;
 }
 
 // Nacheinander statt alle gleichzeitig: jede Gruppe bedeutet mehrere
@@ -6525,6 +6557,7 @@ async function loadIntegrationsWidget() {
 }
 
 document.getElementById("db-refresh").addEventListener("click", loadDashboard);
+document.getElementById("cat-filter-btn").addEventListener("click", loadCategories);
 
 // ================= GESCHÄFTLICH (Filter auf is_business-Konten) =================
 let bizChartInstance = null;

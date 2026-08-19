@@ -432,8 +432,8 @@ def list_categories(db: Session = Depends(get_db)):
 
 
 @api_router.get("/categories/totals")
-def get_category_totals(year: int = date.today().year, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.category_totals(db, space_id, year)
+def get_category_totals(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.category_totals(db, space_id, year, month)
 
 
 @api_router.post("/categories", response_model=schemas.CategoryOut)
@@ -2791,6 +2791,29 @@ DUPLICATES_PAGE_SIZE = 20
 # echten Duplikate mehr, sondern eine Serienaufnahme o.ae. Fuer die Anzeige
 # gekuerzt; die Gesamtzahl steht weiterhin in `asset_count`.
 MAX_ASSETS_PER_GROUP = 24
+# Nur die ersten paar Bilder einer Gruppe fuer die Sortierung vergleichen -
+# manche Gruppen haben real bis zu 841 Aufnahmen, das waeren sonst hunderte
+# Paar-Vergleiche pro Gruppe allein fuer die Reihenfolge einer einzigen Seite.
+MAX_ASSETS_FOR_SORT_SIMILARITY = 6
+
+
+def _best_similarity(url: str, api_key: str, assets: list[dict]) -> float | None:
+    """Bester paarweiser Ähnlichkeitswert innerhalb einer Gruppe (fuer die
+    Sortierung der Duplikate-Seite, siehe immich_duplicates). None, wenn kein
+    einziges Bild dieser Gruppe hashbar war (Netzwerkfehler o.ae.) - eine
+    einzelne kaputte Gruppe darf die restliche Seite nicht blockieren."""
+    hashes = []
+    for a in assets[:MAX_ASSETS_FOR_SORT_SIMILARITY]:
+        try:
+            hashes.append(immich.asset_hash(url, api_key, a["id"]))
+        except Exception:
+            continue
+    if len(hashes) < 2:
+        return None
+    return max(
+        immich.similarity_percent(hashes[i], hashes[j])
+        for i in range(len(hashes)) for j in range(i + 1, len(hashes))
+    )
 
 
 @api_router.get("/immich/stats", response_model=schemas.ImmichStatsOut)
@@ -2872,10 +2895,8 @@ def immich_duplicates(
     except Exception as e:
         raise HTTPException(502, f"Immich nicht erreichbar oder Schlüssel abgelehnt: {e}")
 
-    # Byte-identische Gruppen (checksum-Duplikate, "100% Übereinstimmung") zuerst,
-    # der Rest in Immichs eigener Reihenfolge dahinter - stabil sortiert, damit
-    # Gruppen ohne exaktes Duplikat ihre relative Reihenfolge behalten. Das
-    # passiert VOR der Seiten-Aufteilung, damit die Sortierung über die ganze
+    # Byte-identische Gruppen (checksum-Duplikate, "100% Übereinstimmung") immer
+    # zuerst. Das passiert VOR der Seiten-Aufteilung, damit das über die ganze
     # Bibliothek gilt und nicht nur innerhalb der gerade geladenen Seite.
     raw.sort(key=lambda g: not immich.has_exact_duplicate(g.get("assets") or []))
 
@@ -2888,12 +2909,25 @@ def immich_duplicates(
     for g in page:
         all_assets = g.get("assets") or []
         shown = [immich.asset_summary(a) for a in all_assets[:MAX_ASSETS_PER_GROUP]]
-        groups.append(schemas.ImmichDuplicateGroupOut(
+        exact = immich.has_exact_duplicate(all_assets)
+        best = 100.0 if exact else _best_similarity(url, key, shown)
+        groups.append((schemas.ImmichDuplicateGroupOut(
             duplicate_id=g.get("duplicateId"),
             assets=[schemas.ImmichAssetOut(**a) for a in shown],
             suggested_keep_ids=g.get("suggestedKeepAssetIds") or [],
             asset_count=len(all_assets),
-        ))
+            best_similarity_percent=best,
+        ), exact, best if best is not None else -1.0))
+
+    # Innerhalb der Seite absteigend nach Ähnlichkeit - 100%-Treffer sind durch
+    # die Vorsortierung oben ohnehin schon vorne, `exact` haelt das beim Sortieren
+    # zusaetzlich stabil, falls eine Seite mehrere davon enthaelt. Eine echte
+    # Sortierung über ALLE tausenden Gruppen hinweg würde bedeuten, für jede
+    # ungeprüfte Gruppe erst Bilder herunterzuladen und zu hashen (siehe
+    # immich_similarity-Docstring zur selben Falle) - deshalb nur pro Seite,
+    # mit Hash-Cache über Seitenaufrufe hinweg (siehe immich._hash_cache).
+    groups.sort(key=lambda item: (not item[1], -item[2]))
+    groups = [g for g, _exact, _score in groups]
     # Fehlschlag hier darf die Anzeige nicht blockieren - die Sperre beim
     # tatsächlichen Anwenden greift ohnehin unabhängig davon.
     try:

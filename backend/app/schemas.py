@@ -1284,6 +1284,11 @@ class ImmichDuplicateGroupOut(BaseModel):
     # Gesamtzahl in der Gruppe. Kann groesser sein als len(assets), wenn die
     # Gruppe fuer die Anzeige gekuerzt wurde (siehe MAX_ASSETS_PER_GROUP).
     asset_count: int = 0
+    # Byte-identisch (checksum-Duplikat) = 100%, sonst der beste paarweise
+    # Perceptual-Hash-Vergleich innerhalb der Gruppe. Bestimmt die
+    # Sortierung der Seite (siehe main.immich_duplicates) und lässt sich
+    # direkt anzeigen, ohne dafür extra die Similarity-Route aufzurufen.
+    best_similarity_percent: Optional[float] = None
 
 
 class ImmichDuplicatesOut(BaseModel):

@@ -746,15 +746,30 @@
           <h1>Kategorien</h1>
           <p class="page-sub">Buchungen thematisch gruppieren</p>
         </div>
+        <div class="filter-row">
+          <label>Jahr <input type="number" id="cat-filter-year"></label>
+          <label>Monat
+            <select id="cat-filter-month">
+              <option value="">Alle</option>
+              <option value="1">Januar</option><option value="2">Februar</option>
+              <option value="3">März</option><option value="4">April</option>
+              <option value="5">Mai</option><option value="6">Juni</option>
+              <option value="7">Juli</option><option value="8">August</option>
+              <option value="9">September</option><option value="10">Oktober</option>
+              <option value="11">November</option><option value="12">Dezember</option>
+            </select>
+          </label>
+          <button id="cat-filter-btn" class="btn-primary">Aktualisieren</button>
+        </div>
       </header>
 
       <div class="panel-grid" id="cat-charts-grid">
         <div class="panel chart-panel">
-          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor"/></svg> Einnahmen nach Kategorie (dieses Jahr)</h3>
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor"/></svg> <span id="cat-income-chart-title">Einnahmen nach Kategorie</span></h3>
           <div class="chart-box"><canvas id="chart-cat-income"></canvas></div>
         </div>
         <div class="panel chart-panel">
-          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="currentColor"/></svg> Ausgaben nach Kategorie (dieses Jahr)</h3>
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5V19M12 19L6 13M12 19L18 13" stroke="currentColor"/></svg> <span id="cat-expense-chart-title">Ausgaben nach Kategorie</span></h3>
           <div class="chart-box"><canvas id="chart-cat-expense"></canvas></div>
         </div>
       </div>
@@ -780,7 +795,7 @@
       <div class="panel">
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Name</th><th>Typ</th><th>Oberkategorie</th><th>Dieses Jahr</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Typ</th><th>Oberkategorie</th><th id="cat-list-year-header">Dieses Jahr</th><th></th></tr></thead>
             <tbody id="cat-list"></tbody>
           </table>
         </div>
@@ -788,7 +803,7 @@
 
       <div class="panel hidden" id="cat-trend-panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Ausgaben-Trend je Kategorie</h3>
-        <p class="page-sub">Wie sich deine Ausgaben je Kategorie über die letzten Monate entwickelt haben.</p>
+        <p class="page-sub">Wie sich deine Ausgaben je Kategorie über die letzten Monate entwickelt haben. Klick auf einen Punkt springt mit den Pie-Charts oben in diesen Monat.</p>
         <div class="chart-box"><canvas id="chart-cat-trend"></canvas></div>
       </div>
     </section>

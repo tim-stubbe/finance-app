@@ -258,11 +258,12 @@ def create_category(db: Session, category: schemas.CategoryCreate):
     return db_category
 
 
-def category_totals(db: Session, space_id: int, year: int) -> dict[int, float]:
-    """Summe je Kategorie fuer ein Jahr - zeigt in der Kategorien-Liste auf einen
-    Blick, welche Kategorien ueberhaupt genutzt werden, ohne extra ins Dashboard
-    wechseln zu muessen. Kategorien sind global, die Summe aber je Bereich."""
-    rows = (
+def category_totals(db: Session, space_id: int, year: int, month: int | None = None) -> dict[int, float]:
+    """Summe je Kategorie fuer ein Jahr (optional auf einen Monat eingegrenzt) -
+    zeigt in der Kategorien-Liste auf einen Blick, welche Kategorien ueberhaupt
+    genutzt werden, ohne extra ins Dashboard wechseln zu muessen. Kategorien
+    sind global, die Summe aber je Bereich."""
+    query = (
         db.query(models.Transaction.category_id, func.sum(models.Transaction.amount))
         .join(models.Account)
         .filter(
@@ -271,9 +272,10 @@ def category_totals(db: Session, space_id: int, year: int) -> dict[int, float]:
             models.Transaction.is_transfer.is_(False),
             models.Transaction.category_id.isnot(None),
         )
-        .group_by(models.Transaction.category_id)
-        .all()
     )
+    if month:
+        query = query.filter(extract("month", models.Transaction.date) == month)
+    rows = query.group_by(models.Transaction.category_id).all()
     return {cat_id: round(total, 2) for cat_id, total in rows}
 
 
