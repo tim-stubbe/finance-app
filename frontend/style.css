@@ -214,14 +214,16 @@
   --warn: #e0a030;
   --sidebar-bg: rgba(20, 19, 18, 0.55);
 
-  /* Gewinn/Verlust nutzen bewusst dieselbe Gold-/Rot-Sprache wie der Rest
-     der Seite statt Gruen/Rot - im Design ist Gold die einzige "positive"
-     Farbe, ein zusaetzliches Gruen wuerde den auf eine Akzentfarbe reduzierten
-     Look wieder aufbrechen. */
-  --pos: #e1ad66;
-  --pos-wash: rgba(225, 173, 102, 0.14);
-  --neg: #d68f86;
-  --neg-wash: rgba(214, 143, 134, 0.14);
+  /* Gewinn/Verlust bewusst in klassischem Gruen/Rot statt Gold/Rot (Nutzer-
+     Feedback: gerade in der Rendite-Heatmap und bei Investments-Positionen/
+     -Buchungen soll positiv/negativ auf den ersten Blick erkennbar sein,
+     nicht in einer Gold-Abstufung untergehen). Gilt fuer denselben Token
+     ueberall in der App, nicht nur in Investments - --pos/--neg gibt es nur
+     einmal pro Theme. */
+  --pos: #4caf6e;
+  --pos-wash: rgba(76, 175, 110, 0.16);
+  --neg: #e05c52;
+  --neg-wash: rgba(224, 92, 82, 0.16);
 
   --cat-1: #e1ad66;
   --cat-2: #d68f86;
