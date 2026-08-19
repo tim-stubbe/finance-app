@@ -2838,10 +2838,22 @@ document.getElementById("cashflow-scenario-form").addEventListener("submit", asy
 
   const delta = data.scenario.points.at(-1).balance - data.baseline.points.at(-1).balance;
   const sign = delta >= 0 ? "+" : "";
+  // Bei einer Kündigung zusätzlich die Jahresersparnis nennen: der Endstand
+  // über den Prognose-Horizont (Standard 90 Tage) beantwortet "was spare ich?"
+  // nur für diesen Ausschnitt - die Frage meint aber fast immer aufs Jahr.
+  let cancelNote = "";
+  if (payload.cancel_description_key) {
+    const item = recurringItemsCache.find(it => it.description_key === payload.cancel_description_key);
+    if (item) {
+      const yearly = Math.abs(item.avg_amount) * (RECURRING_MONTHLY_FACTOR[item.frequency] || 0) * 12;
+      cancelNote = `<br><strong>Kündigung „${esc(item.description || "?")}“ spart ${eur(yearly)} pro Jahr</strong> ` +
+        `(${eur(yearly / 12)}/Monat).`;
+    }
+  }
   result.innerHTML = `Endstand normal: <strong>${eur(data.baseline.points.at(-1).balance)}</strong> · ` +
     `Szenario (gestrichelt): <strong>${eur(data.scenario.points.at(-1).balance)}</strong> ` +
     `(${sign}${eur(delta)}) · Tiefststand Szenario: ${eur(data.scenario.lowest_balance)}` +
-    (data.scenario.goes_negative ? " ⚠️ rutscht ins Minus" : "");
+    (data.scenario.goes_negative ? " ⚠️ rutscht ins Minus" : "") + cancelNote;
 });
 
 // Gemeinsamer Ignorieren-Button für erkannte wiederkehrende Zahlungen und
@@ -2913,13 +2925,33 @@ async function loadRecurringTab() {
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {
-    tbody.innerHTML = emptyRow(10, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
+    tbody.innerHTML = emptyRow(11, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
   }
   let monthlyTotal = 0;
   items.forEach(it => {
     const monthlyCost = Math.abs(it.avg_amount) * (RECURRING_MONTHLY_FACTOR[it.frequency] || 0);
     monthlyTotal += monthlyCost;
+    // Hinterlegte Kündigungsfrist direkt in der Abo-Zeile zeigen, statt sie nur
+    // in der separaten Tabelle darüber zu haben - hier entscheidet man, ob ein
+    // Abo bleibt, und dafür ist "wie lange kann ich noch kündigen" die Kernzahl.
+    const reminder = contractRemindersCache.find(
+      r => r.account_id === it.account_id && r.description_key === it.description_key,
+    );
+    let noticeCell;
+    if (reminder) {
+      const days = reminder.days_until_reminder;
+      const when = reminder.due
+        ? "jetzt kündbar ⚠️"
+        : `noch ${days} Tag${days !== 1 ? "e" : ""}`;
+      noticeCell = `<button type="button" class="link-btn" data-cr-edit="${reminder.id}">
+          ${reminder.should_cancel ? "🔴 " : ""}${when}
+          <span class="page-sub" style="display:block">bis ${fmtDate(reminder.renewal_date)}</span>
+        </button>`;
+    } else {
+      noticeCell = `<button type="button" class="btn-ghost btn-sm" data-cr-account="${it.account_id}" data-cr-key="${esc(it.description_key)}" data-cr-label="${esc(it.description || "")}" data-cr-freq="${it.frequency}">📄 Frist</button>`;
+    }
     const tr = document.createElement("tr");
+    if (reminder && reminder.due) tr.classList.add("row-warning");
     tr.innerHTML = `
       <td>${it.description || "–"}</td>
       <td>${it.account_name || "–"}</td>
@@ -2929,7 +2961,8 @@ async function loadRecurringTab() {
       <td>${eur(monthlyCost * 12)}</td>
       <td>${fmtDate(it.next_expected_date)}</td>
       <td>${eur(it.total_amount)}</td>
-      <td><button type="button" class="btn-ghost btn-sm" data-cr-account="${it.account_id}" data-cr-key="${esc(it.description_key)}" data-cr-label="${esc(it.description || "")}" data-cr-freq="${it.frequency}">📄 Frist</button></td>
+      <td>${noticeCell}</td>
+      <td>${it.avg_amount < 0 ? `<button type="button" class="btn-ghost btn-sm" data-savings-key="${esc(it.description_key)}">💡 Was spare ich?</button>` : ""}</td>
       <td><button type="button" class="btn-ghost btn-sm" data-ignore-account="${it.account_id}" data-ignore-key="${esc(it.description_key)}" data-ignore-label="${esc(it.description || "")}">🚫 Ignorieren</button></td>`;
     tbody.appendChild(tr);
   });
@@ -2937,6 +2970,22 @@ async function loadRecurringTab() {
     btn.addEventListener("click", () => openContractReminderModal(
       parseInt(btn.dataset.crAccount), btn.dataset.crKey, btn.dataset.crLabel, btn.dataset.crFreq,
     ));
+  });
+  tbody.querySelectorAll("[data-cr-edit]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const r = contractRemindersCache.find(x => x.id === parseInt(btn.dataset.crEdit));
+      if (r) openContractReminderModal(r.account_id, r.description_key, r.label, r.auto_advance_frequency, r);
+    });
+  });
+  // "Was spare ich?" nutzt das bestehende Kündigungs-Szenario (baseline vs.
+  // Prognose ohne dieses Abo) statt einer zweiten, eigenen Rechnung - so kann
+  // die Antwort nicht von dem abweichen, was das Szenario darunter zeigt.
+  tbody.querySelectorAll("[data-savings-key]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.getElementById("scenario-cancel").value = btn.dataset.savingsKey;
+      document.getElementById("cashflow-scenario-form").requestSubmit();
+      document.getElementById("cashflow-scenario-form").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   });
   bindIgnoreButtons(tbody);
 
