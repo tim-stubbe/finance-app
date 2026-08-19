@@ -1301,11 +1301,11 @@
       <div class="cards" id="goal-summary-cards"></div>
 
       <div class="range-tabs" id="goal-view-tabs" style="margin-bottom:16px">
-        <button type="button" class="range-tab active" data-goal-view="cards">Kacheln</button>
-        <button type="button" class="range-tab" data-goal-view="roadmap">Zeitstrahl</button>
+        <button type="button" class="range-tab" data-goal-view="cards">Kacheln</button>
+        <button type="button" class="range-tab active" data-goal-view="roadmap">Zeitstrahl</button>
       </div>
 
-      <div id="goal-cards-view">
+      <div id="goal-cards-view" class="hidden">
         <div class="panel">
           <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg> Offene Ziele</h3>
           <div class="goal-grid" id="goal-open-grid"></div>
@@ -1320,9 +1320,12 @@
         </div>
       </div>
 
-      <div id="goal-roadmap-view" class="hidden">
-        <div class="panel">
-          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
+      <div id="goal-roadmap-view">
+        <div class="panel" id="goal-roadmap-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
+            <button type="button" class="btn-ghost roadmap-print-btn" data-print-target="goal-roadmap-panel"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Drucken</button>
+          </div>
           <div class="roadmap-legend" id="goal-roadmap-legend"></div>
           <div class="roadmap-list" id="goal-roadmap-list"></div>
         </div>
@@ -1387,8 +1390,11 @@
       </div>
 
       <div id="schweiz-roadmap-view">
-        <div class="panel">
-          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
+        <div class="panel" id="schweiz-roadmap-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 class="panel-title" style="margin:0"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
+            <button type="button" class="btn-ghost roadmap-print-btn" data-print-target="schweiz-roadmap-panel"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg> Drucken</button>
+          </div>
           <div class="roadmap-legend" id="schweiz-roadmap-legend"></div>
           <div class="roadmap-list" id="schweiz-roadmap-list"></div>
         </div>
@@ -1414,6 +1420,21 @@
             <tbody id="col-list"></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Spardistanz zum Umzug</h3>
+        <p class="page-sub">
+          Verbindet den Zeitstrahl oben mit der Lebenshaltungskosten-Schätzung: wie viel du monatlich zurücklegen
+          müsstest, um bis zu einem Meilenstein einen bestimmten Puffer (in Monaten geschätzter Schweizer
+          Lebenshaltungskosten) aufgebaut zu haben. Grobe Orientierung, keine Finanzberatung.
+        </p>
+        <div class="filter-row">
+          <label>Meilenstein <select id="sd-milestone"></select></label>
+          <label>Ziel-Puffer (Monate Lebenshaltungskosten) <input type="number" id="sd-buffer-months" value="3" min="0" step="0.5" style="width:80px"></label>
+        </div>
+        <div class="cards" id="sd-summary-cards"></div>
+        <p class="page-sub" id="sd-explainer"></p>
       </div>
     </section>
 

@@ -7203,7 +7203,8 @@ async function loadSchweizGoalsTab() {
   document.getElementById("schweiz-done-count").textContent = done.length;
   renderGoalsRoadmap(schweizGoals, "schweiz-roadmap-list", "schweiz-roadmap-legend");
 
-  loadCostOfLivingComparison();
+  await loadCostOfLivingComparison();
+  loadSavingsGap(open.filter(g => g.target_date));
 }
 
 // ---------- Lebenshaltungskosten-Vergleich (Schweiz-Tab) ----------
@@ -7231,6 +7232,20 @@ async function loadCostOfLivingComparison() {
   })).filter(c => c.avg_monthly > 0.5); // Rauschen (Cent-Buchungen) nicht mit anzeigen
 
   renderCostOfLivingComparison();
+}
+
+// Von der Spardistanz-Rechnung (loadSavingsGap) mitgenutzt, damit beide
+// Panels bei einer Aufschlag-Änderung dieselbe Zahl zugrunde legen.
+function schweizMonthlyEstimate() {
+  const markups = getColMarkups();
+  const defaultMarkup = parseFloat(document.getElementById("col-default-markup")?.value) || 0;
+  let totalCurrent = 0, totalSchweiz = 0;
+  colAverages.forEach(c => {
+    const markup = markups[c.category_name] ?? defaultMarkup;
+    totalCurrent += c.avg_monthly;
+    totalSchweiz += c.avg_monthly * (1 + markup / 100);
+  });
+  return { totalCurrent, totalSchweiz };
 }
 
 function renderCostOfLivingComparison() {
@@ -7275,16 +7290,89 @@ function renderCostOfLivingComparison() {
     input.addEventListener("change", () => {
       setColMarkup(input.dataset.cat, parseFloat(input.value) || 0);
       renderCostOfLivingComparison();
+      renderSavingsGap();
     });
   });
 }
 
-document.getElementById("col-default-markup").addEventListener("change", renderCostOfLivingComparison);
+document.getElementById("col-default-markup").addEventListener("change", () => {
+  renderCostOfLivingComparison();
+  renderSavingsGap();
+});
 document.getElementById("col-apply-default").addEventListener("click", () => {
   const defaultMarkup = parseFloat(document.getElementById("col-default-markup").value) || 0;
   colAverages.forEach(c => setColMarkup(c.category_name, defaultMarkup));
   renderCostOfLivingComparison();
+  renderSavingsGap();
 });
+
+// ---------- Spardistanz zum Umzug (Schweiz-Tab) ----------
+// Verbindet zwei bereits vorhandene Bausteine: den Zeitstrahl (Meilenstein +
+// Zieldatum) und die Lebenshaltungskosten-Schätzung (monatlicher Bedarf in
+// der Schweiz). Zielbetrag = geschätzter Schweiz-Monatsbedarf * Puffer-Monate,
+// verglichen mit dem aktuellen liquiden Kontostand (ohne Investments - die
+// sind im Ernstfall nicht sofort ohne Verlustrisiko verfuegbar, gleiche
+// Logik wie die Notgroschen-Reichweite auf dem Hub).
+let sdMilestones = [];
+
+function loadSavingsGap(milestoneGoals) {
+  sdMilestones = milestoneGoals;
+  const select = document.getElementById("sd-milestone");
+  if (milestoneGoals.length === 0) {
+    select.innerHTML = '<option value="">Kein datiertes offenes Ziel vorhanden</option>';
+    document.getElementById("sd-summary-cards").innerHTML = "";
+    document.getElementById("sd-explainer").textContent = "";
+    return;
+  }
+  const sorted = [...milestoneGoals].sort((a, b) => a.target_date.localeCompare(b.target_date));
+  const defaultGoal = sorted.find(g => /umzug/i.test(g.title)) || sorted[0];
+  select.innerHTML = sorted.map(g =>
+    `<option value="${g.id}" ${g.id === defaultGoal.id ? "selected" : ""}>${esc(g.title)} (${fmtDate(g.target_date)})</option>`
+  ).join("");
+  renderSavingsGap();
+}
+
+async function renderSavingsGap() {
+  if (!sdMilestones.length) return;
+  const selectedId = parseInt(document.getElementById("sd-milestone").value);
+  const goal = sdMilestones.find(g => g.id === selectedId) || sdMilestones[0];
+  const bufferMonths = parseFloat(document.getElementById("sd-buffer-months").value) || 0;
+
+  const today = new Date();
+  const target = new Date(goal.target_date + "T00:00:00");
+  const monthsUntil = Math.max(1 / 30, (target - today) / (1000 * 60 * 60 * 24 * 30.44));
+
+  const { totalSchweiz } = schweizMonthlyEstimate();
+  const nw = await api("/net-worth");
+  const targetAmount = totalSchweiz * bufferMonths;
+  const gap = Math.max(0, targetAmount - nw.accounts_total);
+  const requiredMonthly = gap / monthsUntil;
+
+  document.getElementById("sd-summary-cards").innerHTML = `
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10H21M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+      <div><h3>Verbleibende Zeit</h3><p>${monthsUntil.toFixed(1).replace(".", ",")} Monate</p></div>
+    </div>
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><h3>Zielpuffer</h3><p>${eur(targetAmount)}</p></div>
+    </div>
+    <div class="card ${gap > 0 ? "card-neg" : "card-pos"}">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+      <div><h3>Noch fehlend</h3><p class="${gap > 0 ? "neg" : "pos"}">${eur(gap)}</p></div>
+    </div>
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><h3>Nötig pro Monat</h3><p>${eur(requiredMonthly)}</p></div>
+    </div>`;
+
+  document.getElementById("sd-explainer").textContent = gap > 0
+    ? `Bis „${goal.title}" am ${fmtDate(goal.target_date)} bleiben ${monthsUntil.toFixed(1).replace(".", ",")} Monate. Für einen Puffer von ${bufferMonths} Monaten geschätzter Schweizer Lebenshaltungskosten (${eur(totalSchweiz)}/Monat) fehlen noch ${eur(gap)} - das sind ${eur(requiredMonthly)}/Monat ab jetzt.`
+    : `Der Zielpuffer von ${eur(targetAmount)} ist mit deinem aktuellen Kontostand (${eur(nw.accounts_total)}) bereits gedeckt.`;
+}
+
+document.getElementById("sd-milestone").addEventListener("change", renderSavingsGap);
+document.getElementById("sd-buffer-months").addEventListener("change", renderSavingsGap);
 
 function updateGoalsBadge(count) {
   const badge = document.getElementById("goals-nav-badge");
@@ -7457,6 +7545,22 @@ document.querySelectorAll("#schweiz-view-tabs [data-schweiz-view]").forEach(btn 
     document.getElementById("schweiz-cards-view").classList.toggle("hidden", isRoadmap);
     document.getElementById("schweiz-roadmap-view").classList.toggle("hidden", !isRoadmap);
   });
+});
+
+// Isoliert per CSS (siehe @media print .print-target) nur das eine Panel für
+// den Druck - alles andere (Sidebar, Topbar, andere Panels) bleibt zwar im
+// DOM, wird aber unsichtbar/nicht mitgedruckt.
+document.querySelectorAll(".roadmap-print-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const target = document.getElementById(btn.dataset.printTarget);
+    target.classList.add("print-target");
+    document.body.classList.add("printing-roadmap");
+    window.print();
+  });
+});
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing-roadmap");
+  document.querySelectorAll(".print-target").forEach(el => el.classList.remove("print-target"));
 });
 
 window.toggleGoalDone = async (id, completed) => {

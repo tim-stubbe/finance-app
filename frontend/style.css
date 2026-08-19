@@ -3127,3 +3127,24 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   max-width: 620px;
   margin: 10px auto 0;
 }
+
+/* ---------- Roadmap drucken (isoliert nur das Ziel-Panel, siehe .roadmap-print-btn) ---------- */
+@media print {
+  body.printing-roadmap * { visibility: hidden; }
+  body.printing-roadmap .print-target,
+  body.printing-roadmap .print-target * { visibility: visible; }
+  body.printing-roadmap .print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none;
+    box-shadow: none;
+    background: #fff;
+    color: #111;
+  }
+  body.printing-roadmap .roadmap-print-btn { display: none !important; }
+  body.printing-roadmap .print-target .roadmap-card { border-color: #ccc; break-inside: avoid; }
+  body.printing-roadmap .print-target .roadmap-title { color: #111; }
+  body.printing-roadmap .print-target .goal-chip { background: #eee; color: #333; }
+}
