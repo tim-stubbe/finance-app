@@ -7176,7 +7176,89 @@ async function loadSchweizGoalsTab() {
     : `<div class="empty-state"><span class="empty-icon">${svgIcon("check-circle")}</span><span>Noch nichts abgeschlossen.</span></div>`;
   done.forEach(g => doneGrid.appendChild(renderGoalCard(g)));
   document.getElementById("schweiz-done-count").textContent = done.length;
+
+  loadCostOfLivingComparison();
 }
+
+// ---------- Lebenshaltungskosten-Vergleich (Schweiz-Tab) ----------
+// Reine Was-waere-wenn-Rechnung auf Basis der echten Ausgaben der letzten 6
+// Monate (wiederverwendet dieselben Trend-Daten wie der Kategorien-Tab) - kein
+// echter Laender-Vergleichsindex, nur ein vom Nutzer selbst einstellbarer
+// Aufschlag pro Kategorie. Bewusst lokal gespeichert (kein Backend-Feld):
+// das ist eine persoenliche Annahme zum Herumspielen, keine echte Buchung.
+function getColMarkups() {
+  try { return JSON.parse(localStorage.getItem("colMarkups") || "{}"); } catch (e) { return {}; }
+}
+function setColMarkup(categoryName, percent) {
+  const m = getColMarkups();
+  m[categoryName] = percent;
+  localStorage.setItem("colMarkups", JSON.stringify(m));
+}
+
+let colAverages = [];
+
+async function loadCostOfLivingComparison() {
+  const trend = await api("/categories/trend?months=6");
+  colAverages = trend.series.map(s => ({
+    category_name: s.category_name,
+    avg_monthly: s.points.reduce((a, b) => a + b, 0) / (trend.months.length || 1),
+  })).filter(c => c.avg_monthly > 0.5); // Rauschen (Cent-Buchungen) nicht mit anzeigen
+
+  renderCostOfLivingComparison();
+}
+
+function renderCostOfLivingComparison() {
+  const markups = getColMarkups();
+  const defaultMarkup = parseFloat(document.getElementById("col-default-markup").value) || 0;
+
+  let totalCurrent = 0, totalSchweiz = 0;
+  const rows = colAverages.map(c => {
+    const markup = markups[c.category_name] ?? defaultMarkup;
+    const schweiz = c.avg_monthly * (1 + markup / 100);
+    totalCurrent += c.avg_monthly;
+    totalSchweiz += schweiz;
+    return { ...c, markup, schweiz };
+  });
+
+  document.getElementById("col-summary-cards").innerHTML = `
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10H21M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+      <div><h3>Aktuell (Ø/Monat)</h3><p>${eur(totalCurrent)}</p></div>
+    </div>
+    <div class="card card-neg">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M3 12h18" stroke="currentColor" stroke-width="1.8"/></svg></div>
+      <div><h3>Geschätzt Schweiz (Ø/Monat)</h3><p class="neg">${eur(totalSchweiz)}</p></div>
+    </div>
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><h3>Differenz/Monat</h3><p>${eur(totalSchweiz - totalCurrent)} (${totalCurrent ? ((totalSchweiz / totalCurrent - 1) * 100).toFixed(0) : 0}%)</p></div>
+    </div>`;
+
+  const tbody = document.getElementById("col-list");
+  tbody.innerHTML = rows.length
+    ? rows.map(r => `
+      <tr>
+        <td>${esc(r.category_name)}</td>
+        <td>${eur(r.avg_monthly)}</td>
+        <td><input type="number" class="col-markup-input" data-cat="${esc(r.category_name)}" value="${r.markup}" style="width:70px"></td>
+        <td class="row-amount-neg">${eur(r.schweiz)}</td>
+      </tr>`).join("")
+    : emptyRow(4, "trending-up", "Noch nicht genug Ausgaben der letzten 6 Monate für eine Hochrechnung.");
+
+  tbody.querySelectorAll(".col-markup-input").forEach(input => {
+    input.addEventListener("change", () => {
+      setColMarkup(input.dataset.cat, parseFloat(input.value) || 0);
+      renderCostOfLivingComparison();
+    });
+  });
+}
+
+document.getElementById("col-default-markup").addEventListener("change", renderCostOfLivingComparison);
+document.getElementById("col-apply-default").addEventListener("click", () => {
+  const defaultMarkup = parseFloat(document.getElementById("col-default-markup").value) || 0;
+  colAverages.forEach(c => setColMarkup(c.category_name, defaultMarkup));
+  renderCostOfLivingComparison();
+});
 
 function updateGoalsBadge(count) {
   const badge = document.getElementById("goals-nav-badge");

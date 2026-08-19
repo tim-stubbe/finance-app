@@ -1357,6 +1357,28 @@
         </button>
         <div class="goal-grid hidden" id="schweiz-done-grid"></div>
       </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Lebenshaltungskosten-Vergleich</h3>
+        <p class="page-sub">
+          Dein tatsächlicher Ø-Monatsverbrauch der letzten 6 Monate (aus deinen echten Buchungen), hochgerechnet mit
+          einem Schweiz-Aufschlag – <strong>grobe Schätzung, kein regionaler Vergleichsindex</strong>. Die Schweiz ist
+          bei Miete/Lebensmitteln/Gesundheit typischerweise deutlich teurer als Deutschland, bei manchen Kategorien
+          (z.B. Elektronik, manche Dienstleistungen) aber auch ähnlich – pass den Aufschlag pro Kategorie unten an
+          deine eigene Einschätzung an, ohne Anspruch auf Genauigkeit.
+        </p>
+        <div class="filter-row">
+          <label>Pauschal-Aufschlag Schweiz (%) <input type="number" id="col-default-markup" value="40" min="-50" max="300" style="width:90px"></label>
+          <button type="button" id="col-apply-default" class="btn-ghost">Auf alle Kategorien anwenden</button>
+        </div>
+        <div class="cards" id="col-summary-cards"></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Kategorie</th><th>Ø/Monat aktuell</th><th>Aufschlag (%)</th><th>Ø/Monat Schweiz (geschätzt)</th></tr></thead>
+            <tbody id="col-list"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- TERMIN ANLEGEN/BEARBEITEN -->
