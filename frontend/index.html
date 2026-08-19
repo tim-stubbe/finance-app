@@ -11,7 +11,7 @@
   // app.js ueberhaupt geladen ist (verhindert ein kurzes Aufblitzen).
   // Muss NACH dem meta-Tag oben stehen - der Browser parst von oben nach
   // unten, querySelector faende das Tag sonst noch nicht.
-  var THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a" };
+  var THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a", "alpen-desktop": "#191817" };
   try {
     var theme = localStorage.getItem("financeAppTheme") || "dark";
     document.documentElement.setAttribute("data-theme", theme);
@@ -39,6 +39,12 @@
         integrity="sha384-DhxhYObIMeMNGyAG7iK11OHzBIKyEIeRL0ad1iFPAOwZB8iirUlTT0O/WJJUk8+o"
         crossorigin="anonymous"></script>
 <link rel="stylesheet" href="style.css">
+<!-- Nur für das Alpen-Desktop-Theme geladen (Cormorant Garamond/Lora) - ein
+     <link> im Kopf für alle Themes, die Schrift wirkt sich aber erst aus,
+     sobald style.css sie im [data-theme="alpen-desktop"]-Block referenziert. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="app" class="hidden">
@@ -176,6 +182,7 @@
     <section id="tab-hub" class="tab-content active">
       <header class="page-head">
         <div>
+          <span class="kies-kicker" id="hub-date-kicker"></span>
           <h1>Hub</h1>
           <p class="page-sub">Überblick über alles auf einen Blick – Finanzen und angebundene Dienste</p>
         </div>
@@ -1982,7 +1989,9 @@
           <button type="button" class="theme-option" data-theme-option="light"><span class="swatch theme-swatch-light"></span>Hell</button>
           <button type="button" class="theme-option" data-theme-option="yellow"><span class="swatch theme-swatch-yellow"></span>Gelb</button>
           <button type="button" class="theme-option" data-theme-option="alpen"><span class="swatch theme-swatch-alpen"></span>Alpen 🏔️</button>
+          <button type="button" class="theme-option" data-theme-option="alpen-desktop"><span class="swatch theme-swatch-alpen-desktop"></span>Alpen Desktop 🗻</button>
         </div>
+        <p class="page-sub" id="theme-desktop-hint" style="margin-top:10px">„Alpen Desktop“ ist für breite Bildschirme gedacht (Top-Navigation statt Seitenleiste) - auf schmalen Bildschirmen bleibt automatisch die normale Seitenleiste aktiv.</p>
       </div>
 
       <div class="panel" data-integration-key="ollama">

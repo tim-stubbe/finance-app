@@ -229,7 +229,7 @@ function renderCategoryPieChart(canvasId, existingInstance, labels, values) {
   });
 }
 
-const THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a" };
+const THEME_BG = { dark: "#0d0d0d", light: "#f4f5f8", yellow: "#fdf6e0", alpen: "#16223a", "alpen-desktop": "#191817" };
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
@@ -6375,6 +6375,8 @@ async function loadTodayPanel() {
 }
 
 async function loadHubTab() {
+  document.getElementById("hub-date-kicker").textContent = new Date()
+    .toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   loadTodayPanel();
   const cardsEl = document.getElementById("hub-finance-cards");
   cardsEl.innerHTML = skelBento();
@@ -8171,6 +8173,7 @@ const CMDK_ACTIONS = [
   { label: "Theme: Hell", icon: "palette", run: () => applyTheme("light") },
   { label: "Theme: Gelb", icon: "palette", run: () => applyTheme("yellow") },
   { label: "Theme: Alpen", icon: "palette", run: () => applyTheme("alpen") },
+  { label: "Theme: Alpen Desktop", icon: "palette", run: () => applyTheme("alpen-desktop") },
 ];
 
 let cmdkActiveIndex = 0;

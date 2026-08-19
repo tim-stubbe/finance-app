@@ -183,6 +183,66 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
 }
 
+/* Alpen Desktop: eigenständiges 5. Theme nach dem "Kies Desktop Design"-
+   Handoff (siehe design_handoff_desktop_ui/) - dunkler, warmer Grundton,
+   Gold als einzige Akzentfarbe, Serifenschrift (Cormorant Garamond fuer
+   Ueberschriften/grosse Zahlen, Lora fuer Fliesstext), Matterhorn-Foto als
+   Hintergrund wie beim "alpen"-Theme, aber mit eigener Foto-Deckkraft/
+   Verlaufsueberlagerung statt dem Mesh-Farbverlauf der anderen Themes.
+   --font-heading/--font-body sind neue Tokens, die es in keinem anderen
+   Theme gibt - alle anderen Themes fallen weiter auf die System-Font
+   zurueck (siehe body{font-family}). */
+:root[data-theme="alpen-desktop"] {
+  --bg: #191817;
+  --surface: rgba(25, 24, 23, 0.4);
+  --surface-glass: rgba(25, 24, 23, 0.55);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --text: #f4f1ec;
+  --text-secondary: rgba(244, 241, 236, 0.75);
+  --muted: rgba(244, 241, 236, 0.5);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e1ad66' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+
+  --accent: #e1ad66;
+  --accent-strong: #eec089;
+  --accent-wash: rgba(225, 173, 102, 0.14);
+  --accent-deep: #b9884b;
+  --accent-shadow: rgba(225, 173, 102, 0.35);
+  --accent-shadow-soft: rgba(225, 173, 102, 0.2);
+  --on-accent: #191817;
+  --warn: #e0a030;
+  --sidebar-bg: rgba(20, 19, 18, 0.55);
+
+  /* Gewinn/Verlust nutzen bewusst dieselbe Gold-/Rot-Sprache wie der Rest
+     der Seite statt Gruen/Rot - im Design ist Gold die einzige "positive"
+     Farbe, ein zusaetzliches Gruen wuerde den auf eine Akzentfarbe reduzierten
+     Look wieder aufbrechen. */
+  --pos: #e1ad66;
+  --pos-wash: rgba(225, 173, 102, 0.14);
+  --neg: #d68f86;
+  --neg-wash: rgba(214, 143, 134, 0.14);
+
+  --cat-1: #e1ad66;
+  --cat-2: #d68f86;
+  --cat-3: #c9d3e0;
+  --cat-4: #a8b5c4;
+  --cat-5: #eec089;
+  --cat-6: #8a97ad;
+  --cat-7: #b9884b;
+  --cat-8: #9aa5b1;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-lift: 0 4px 10px rgba(0, 0, 0, 0.34), 0 16px 36px rgba(0, 0, 0, 0.36);
+
+  --noise-opacity: 0;
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+
+  --font-heading: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-body: "Lora", Georgia, "Times New Roman", serif;
+}
+:root[data-theme="alpen-desktop"] { color-scheme: dark; }
+
 :root {
   --radius: 14px;
   --radius-sm: 9px;
@@ -257,6 +317,27 @@ body::after {
 @keyframes mesh-drift-slow {
   0% { transform: scale(1.02) translateY(0); }
   100% { transform: scale(1.06) translateY(-1%); }
+}
+
+/* Alpen Desktop: dasselbe Matterhorn-Foto wie beim "alpen"-Theme, aber nach
+   exakter Vorgabe des Design-Handoffs - Foto bei 72% Deckkraft (body::before,
+   schon vorhandener fixed-Layer, deckt dadurch die ganze scrollbare Seite ab,
+   nicht nur den ersten Viewport) plus ein separater, oben heller/unten
+   dunklerer Verlauf bei voller Deckkraft (body::after, das in jedem anderen
+   Theme das Rausch-Textur-Overlay ist - hier stattdessen zweckentfremdet,
+   --noise-opacity ist fuer dieses Theme bewusst 0). */
+:root[data-theme="alpen-desktop"] body::before {
+  background-image: url("alpen-bg.jpg");
+  background-size: cover;
+  background-position: center 55%;
+  background-repeat: no-repeat;
+  opacity: 0.72;
+  animation: mesh-drift-slow 90s ease-in-out infinite alternate;
+}
+:root[data-theme="alpen-desktop"] body::after {
+  background-image: linear-gradient(180deg, rgba(25, 24, 23, 0.3) 0%, rgba(25, 24, 23, 0.62) 42%, rgba(25, 24, 23, 0.94) 100%);
+  mix-blend-mode: normal;
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -654,6 +735,11 @@ main {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+
+/* Nur im Alpen-Desktop-Theme sichtbar (siehe Theme-Overrides unten) - in
+   den anderen vier Themes bleibt die Datumszeile ueber dem Hub-Titel
+   ausgeblendet statt als unpassendes Deko-Element aufzutauchen. */
+.kies-kicker { display: none; }
 
 .page-head-actions {
   display: flex;
@@ -1635,6 +1721,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .theme-swatch-light { background: linear-gradient(135deg, #ffffff, #2f6fd6); }
 .theme-swatch-yellow { background: linear-gradient(135deg, #fdf6e0, #d98c0f); }
 .theme-swatch-alpen { background: linear-gradient(135deg, #16223a, #d52b1e); }
+.theme-swatch-alpen-desktop { background: linear-gradient(135deg, #191817, #e1ad66); }
 
 /* ---------- Range tabs ---------- */
 .range-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -3168,4 +3255,223 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* =====================================================================
+   ALPEN DESKTOP - Struktur-Overrides
+   Alles unten gilt nur unter [data-theme="alpen-desktop"] und stylt die
+   BESTEHENDEN Elemente (.sidebar/.nav/.panel/.data-table/...) um, statt
+   neue Tabs/Markup zu bauen - siehe design_handoff_desktop_ui/README.md:
+   "reuse the existing data-tab nav-switching mechanism", "keep the real,
+   existing markup/logic for [other] tabs, just apply the new visual
+   language". Nur Hub bekommt unten eine kleine Zusatz-Kickerzeile, weil
+   das Handoff dort explizit High-Fidelity verlangt.
+   ===================================================================== */
+
+/* ---- Typografie: Serifenschrift fuer Ueberschriften/grosse Zahlen ---- */
+:root[data-theme="alpen-desktop"] body {
+  font-family: var(--font-body);
+}
+:root[data-theme="alpen-desktop"] h1,
+:root[data-theme="alpen-desktop"] h2,
+:root[data-theme="alpen-desktop"] .panel-title,
+:root[data-theme="alpen-desktop"] .brand-name,
+:root[data-theme="alpen-desktop"] .stat-value,
+:root[data-theme="alpen-desktop"] .hub-hero p,
+:root[data-theme="alpen-desktop"] .card h3 + p,
+:root[data-theme="alpen-desktop"] h4 {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+:root[data-theme="alpen-desktop"] .page-head h1 {
+  font-size: 38px;
+  font-weight: 400;
+}
+:root[data-theme="alpen-desktop"] .panel-title {
+  font-size: 20px;
+  font-weight: 500;
+}
+:root[data-theme="alpen-desktop"] input,
+:root[data-theme="alpen-desktop"] select,
+:root[data-theme="alpen-desktop"] textarea,
+:root[data-theme="alpen-desktop"] button {
+  font-family: var(--font-body);
+}
+/* Zahlenspalten/-werte: tabular-nums ueberall, wo Ziffern im Design als
+   Tabellenspalte/Betrag auftreten - konsistente Ziffernbreite. */
+:root[data-theme="alpen-desktop"] .data-table td,
+:root[data-theme="alpen-desktop"] .card p,
+:root[data-theme="alpen-desktop"] .hub-hero p,
+:root[data-theme="alpen-desktop"] .row-amount-pos,
+:root[data-theme="alpen-desktop"] .row-amount-neg {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Kicker-Zeile ueber dem Hub-H1 (einzige neue Markup-Ergaenzung,
+   siehe #hub-date-kicker in app.js - nur fuer den Hub, da das Handoff nur
+   dort High-Fidelity verlangt) ---- */
+:root[data-theme="alpen-desktop"] .kies-kicker {
+  display: block;
+  font: 400 10px var(--font-body);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* ---- Sidebar -> sticky Top-Nav (nur auf breiten Bildschirmen - auf
+   schmalen bleibt die normale Seitenleiste, eine horizontale Nav mit 19
+   Eintraegen ist auf einem Handy nicht bedienbar) ---- */
+@media (min-width: 1100px) {
+  :root[data-theme="alpen-desktop"] #app { display: block; }
+  :root[data-theme="alpen-desktop"] .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 22px;
+    padding: 0 30px;
+    background: rgba(20, 19, 18, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-right: none;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  :root[data-theme="alpen-desktop"] .brand {
+    width: auto;
+    padding: 16px 0;
+    flex-shrink: 0;
+  }
+  :root[data-theme="alpen-desktop"] .brand-mark {
+    background: none;
+    box-shadow: none;
+    border: 1px solid var(--accent-deep);
+    color: var(--accent);
+    border-radius: 0;
+    width: 26px;
+    height: 26px;
+  }
+  :root[data-theme="alpen-desktop"] .brand-name {
+    font-size: 23px;
+    letter-spacing: 0.06em;
+  }
+  :root[data-theme="alpen-desktop"] .brand-flag { display: none; }
+  :root[data-theme="alpen-desktop"] .nav-indicator { display: none; }
+  :root[data-theme="alpen-desktop"] .nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 2px;
+    overflow: visible;
+    margin-left: 6px;
+  }
+  :root[data-theme="alpen-desktop"] .nav-section-label { display: none; }
+  :root[data-theme="alpen-desktop"] .nav-btn {
+    width: auto;
+    padding: 8px 13px;
+    font-size: 12.5px;
+    font-weight: 400;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    color: rgba(244, 241, 236, 0.62);
+  }
+  :root[data-theme="alpen-desktop"] .nav-btn svg { display: none; }
+  :root[data-theme="alpen-desktop"] .nav-btn:hover { background: none; color: var(--text); }
+  :root[data-theme="alpen-desktop"] .nav-btn.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+    background: none;
+  }
+  :root[data-theme="alpen-desktop"] .nav-badge,
+  :root[data-theme="alpen-desktop"] .nav-warn-badge { top: 2px; right: 2px; }
+  :root[data-theme="alpen-desktop"] .nav-bottom {
+    flex-direction: row;
+    gap: 2px;
+    margin-left: auto;
+    padding: 0;
+    border-top: none;
+  }
+  :root[data-theme="alpen-desktop"] .version-watermark { display: none; }
+
+  :root[data-theme="alpen-desktop"] main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 30px 34px 50px;
+  }
+  :root[data-theme="alpen-desktop"] .global-topbar {
+    position: static;
+    background: none;
+    border: none;
+    padding: 0;
+    margin-bottom: 22px;
+  }
+  :root[data-theme="alpen-desktop"] .cmdk-trigger {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 0;
+    min-width: 200px;
+  }
+}
+
+/* ---- Panels/Karten/Zeilen/Tabellen: Klassisches Kies-Look (Haarlinien
+   statt Glass-Blur+Schatten, kein Rundung, keine Eintritts-Animation) ---- */
+:root[data-theme="alpen-desktop"] .panel,
+:root[data-theme="alpen-desktop"] .card {
+  background: rgba(25, 24, 23, 0.4);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  box-shadow: none;
+  opacity: 1;
+  animation: none;
+}
+:root[data-theme="alpen-desktop"] .card-icon { display: none; }
+:root[data-theme="alpen-desktop"] .btn-primary,
+:root[data-theme="alpen-desktop"] .btn-ghost {
+  border-radius: 0;
+  font-weight: 400;
+  box-shadow: none;
+}
+:root[data-theme="alpen-desktop"] .btn-primary {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+:root[data-theme="alpen-desktop"] .btn-primary:hover { background: var(--accent-wash); }
+:root[data-theme="alpen-desktop"] input,
+:root[data-theme="alpen-desktop"] select,
+:root[data-theme="alpen-desktop"] textarea {
+  border-radius: 0;
+}
+:root[data-theme="alpen-desktop"] .hub-list-row,
+:root[data-theme="alpen-desktop"] .todo-row,
+:root[data-theme="alpen-desktop"] .overlap-item,
+:root[data-theme="alpen-desktop"] .today-balance {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  border-radius: 0;
+}
+:root[data-theme="alpen-desktop"] .data-table th {
+  font: 400 10px var(--font-body);
+  letter-spacing: 0.14em;
+  border-bottom: 1px solid var(--border-strong);
+}
+:root[data-theme="alpen-desktop"] .data-table td {
+  font-size: 12.5px;
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+:root[data-theme="alpen-desktop"] .data-table tbody tr {
+  animation: none;
+}
+
+/* Grosse Kennzahl (Gesamtvermoegen) auf dem Hub - der eine Ort, an dem das
+   Handoff eine feste Groesse (56px) statt eines generischen Tokens vorgibt. */
+:root[data-theme="alpen-desktop"] .hub-hero p {
+  font-size: 42px;
+  line-height: 1.1;
 }
