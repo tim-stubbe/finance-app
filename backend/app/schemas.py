@@ -187,6 +187,7 @@ class AlertRuleCreate(BaseModel):
     rule_type: AlertRuleType
     category_id: Optional[int] = None
     account_id: Optional[int] = None
+    goal_id: Optional[int] = None
     threshold: float
     active: bool = True
 
@@ -204,6 +205,8 @@ class AlertRuleOut(BaseModel):
     category_name: Optional[str] = None
     account_id: Optional[int] = None
     account_name: Optional[str] = None
+    goal_id: Optional[int] = None
+    goal_title: Optional[str] = None
     threshold: float
     active: bool
 

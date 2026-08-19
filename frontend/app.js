@@ -5152,6 +5152,7 @@ const ALERT_RULE_LABELS = {
   category_spend_above: "Ausgaben über Betrag",
   account_balance_below: "Kontostand unter Betrag",
   category_deviation: "Abweichung vom Schnitt",
+  goal_progress_above: "Ziel-Fortschritt erreicht",
 };
 
 async function loadAlertRules() {
@@ -5163,6 +5164,14 @@ async function loadAlertRules() {
     .map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   const accSel = document.getElementById("alert-rule-account");
   accSel.innerHTML = accountsCache.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join("");
+  // Nur offene, automatisch messbare Ziele - manuelle Meilensteine haben keinen
+  // Fortschritt in Prozent, das Backend lehnt sie fuer diese Regel auch ab.
+  const goalSel = document.getElementById("alert-rule-goal");
+  const measurableGoals = (await api("/goals").catch(() => []))
+    .filter(g => g.status === "open" && g.goal_type === "auto_financial");
+  goalSel.innerHTML = measurableGoals.length
+    ? measurableGoals.map(g => `<option value="${g.id}">${esc(g.title)}</option>`).join("")
+    : `<option value="">Kein automatisch messbares Ziel vorhanden</option>`;
 
   const rules = await api("/alert-rules");
   const list = document.getElementById("alert-rules-list");
@@ -5171,8 +5180,8 @@ async function loadAlertRules() {
     return;
   }
   list.innerHTML = rules.map(r => {
-    const target = r.category_name || r.account_name || "?";
-    const unit = r.rule_type === "category_deviation" ? "%" : "€";
+    const target = r.category_name || r.account_name || r.goal_title || "?";
+    const unit = (r.rule_type === "category_deviation" || r.rule_type === "goal_progress_above") ? "%" : "€";
     return `
       <div class="todo-row">
         <span class="todo-title">
@@ -5190,10 +5199,12 @@ async function loadAlertRules() {
 
 function syncAlertRuleFormFields() {
   const type = document.getElementById("alert-rule-type").value;
-  document.getElementById("alert-rule-category-wrap").classList.toggle("hidden", type === "account_balance_below");
+  const usesCategory = type === "category_spend_above" || type === "category_deviation";
+  document.getElementById("alert-rule-category-wrap").classList.toggle("hidden", !usesCategory);
   document.getElementById("alert-rule-account-wrap").classList.toggle("hidden", type !== "account_balance_below");
+  document.getElementById("alert-rule-goal-wrap").classList.toggle("hidden", type !== "goal_progress_above");
   document.getElementById("alert-rule-threshold-wrap").firstChild.textContent =
-    type === "category_deviation" ? "Schwellwert (%) " : "Schwellwert (€) ";
+    (type === "category_deviation" || type === "goal_progress_above") ? "Schwellwert (%) " : "Schwellwert (€) ";
 }
 document.getElementById("alert-rule-type").addEventListener("change", syncAlertRuleFormFields);
 
@@ -5203,9 +5214,15 @@ document.getElementById("alert-rule-form").addEventListener("submit", async e =>
   const payload = {
     rule_type: type,
     threshold: parseFloat(document.getElementById("alert-rule-threshold").value),
-    category_id: type === "account_balance_below" ? null : parseInt(document.getElementById("alert-rule-category").value, 10),
+    category_id: (type === "category_spend_above" || type === "category_deviation")
+      ? parseInt(document.getElementById("alert-rule-category").value, 10) : null,
     account_id: type === "account_balance_below" ? parseInt(document.getElementById("alert-rule-account").value, 10) : null,
+    goal_id: type === "goal_progress_above" ? parseInt(document.getElementById("alert-rule-goal").value, 10) || null : null,
   };
+  if (type === "goal_progress_above" && !payload.goal_id) {
+    toast("Kein automatisch messbares Ziel vorhanden – erst ein Ziel mit Auswertungsregel anlegen.");
+    return;
+  }
   await api("/alert-rules", { method: "POST", body: JSON.stringify(payload) });
   document.getElementById("alert-rule-threshold").value = "";
   toast("Regel angelegt.");

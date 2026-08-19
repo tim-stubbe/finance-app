@@ -125,14 +125,15 @@ class AlertRuleType(str, enum.Enum):
     category_spend_above = "category_spend_above"   # Ausgaben in Kategorie diesen Monat > Schwelle
     account_balance_below = "account_balance_below"  # Kontostand < Schwelle
     category_deviation = "category_deviation"        # Kategorie weicht > Schwelle% vom 3-Monats-Schnitt ab
+    goal_progress_above = "goal_progress_above"      # Ziel zu >= Schwelle% erreicht
 
 
 class AlertRule(Base):
     """Nutzerdefinierte Schwellwert-Regel, die main._scheduled_alert_rules im
     selben 30-Minuten-Takt wie die eingebauten Sofort-Alarme (Preiserhöhung/
     Ausgaben-Ausreißer/Terminüberschneidung) prüft und bei Auslösung per
-    Telegram meldet - bewusst nur drei feste Regeltypen statt einer freien
-    Regel-Engine (Nutzerwunsch: "keine komplexe visuelle Regel-Engine
+    Telegram meldet - bewusst eine Handvoll fester Regeltypen statt einer
+    freien Regel-Engine (Nutzerwunsch: "keine komplexe visuelle Regel-Engine
     bauen"). last_triggered_date verhindert Mehrfach-Meldungen am selben Tag,
     erlaubt aber eine erneute taegliche Erinnerung, solange die Regel weiter
     zutrifft (anders als NotifiedAnomaly, das dauerhaft nicht erneut meldet -
@@ -146,6 +147,7 @@ class AlertRule(Base):
     rule_type = Column(Enum(AlertRuleType), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=True)
     threshold = Column(Float, nullable=False)
     active = Column(Boolean, nullable=False, default=True)
     last_triggered_date = Column(Date, nullable=True)
@@ -154,6 +156,7 @@ class AlertRule(Base):
 
     category = relationship("Category")
     account = relationship("Account")
+    goal = relationship("Goal")
 
 
 class Category(Base):

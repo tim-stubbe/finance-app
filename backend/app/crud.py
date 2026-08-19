@@ -934,19 +934,22 @@ def get_alert_rules(db: Session, space_id: int) -> list[models.AlertRule]:
     for r in rules:
         r.category_name = r.category.name if r.category else None
         r.account_name = r.account.name if r.account else None
+        r.goal_title = r.goal.title if r.goal else None
     return rules
 
 
 def create_alert_rule(db: Session, space_id: int, data: schemas.AlertRuleCreate) -> models.AlertRule:
     rule = models.AlertRule(
         space_id=space_id, rule_type=data.rule_type, category_id=data.category_id,
-        account_id=data.account_id, threshold=data.threshold, active=data.active,
+        account_id=data.account_id, goal_id=data.goal_id,
+        threshold=data.threshold, active=data.active,
     )
     db.add(rule)
     db.commit()
     db.refresh(rule)
     rule.category_name = rule.category.name if rule.category else None
     rule.account_name = rule.account.name if rule.account else None
+    rule.goal_title = rule.goal.title if rule.goal else None
     return rule
 
 
@@ -959,6 +962,7 @@ def update_alert_rule(db: Session, rule: models.AlertRule, data: schemas.AlertRu
     db.refresh(rule)
     rule.category_name = rule.category.name if rule.category else None
     rule.account_name = rule.account.name if rule.account else None
+    rule.goal_title = rule.goal.title if rule.goal else None
     return rule
 
 
@@ -970,7 +974,7 @@ def delete_alert_rule(db: Session, rule: models.AlertRule) -> None:
 def evaluate_alert_rule(db: Session, rule: models.AlertRule) -> tuple[bool, str]:
     """Prüft eine einzelne Regel rein lesend (kein last_triggered_date-
     Update) - main._scheduled_alert_rules entscheidet anhand dessen, ob heute
-    schon gemeldet wurde. Bewusst nur die drei Regeltypen aus AlertRuleType,
+    schon gemeldet wurde. Bewusst nur die Regeltypen aus AlertRuleType,
     keine freie Bedingungs-Engine."""
     if rule.rule_type == models.AlertRuleType.category_spend_above:
         if not rule.category_id:
@@ -1016,6 +1020,26 @@ def evaluate_alert_rule(db: Session, rule: models.AlertRule) -> tuple[bool, str]
             return True, (f"🔔 Regel ausgelöst: „{match['category_name']}“ liegt diesen Monat hochgerechnet bei "
                            f"{match['projected_spent']:.2f} € (sonst ø {match['avg_prior_months']:.2f} €, "
                            f"+{match['deviation_pct']:.0f}%, Schwelle {rule.threshold:.0f}%).")
+        return False, ""
+
+    if rule.rule_type == models.AlertRuleType.goal_progress_above:
+        if not rule.goal_id:
+            return False, ""
+        goal = db.query(models.Goal).filter(models.Goal.id == rule.goal_id).first()
+        if not goal or goal.status != models.GoalStatus.open:
+            return False, ""
+        # Lokaler Import: goals.py importiert seinerseits crud (fuer
+        # Kontostand/Depotwert), ein Modul-Import hier waere zirkulaer. Zur
+        # Laufzeit ist crud laengst vollstaendig geladen.
+        from . import goals as goals_module
+
+        result = goals_module.evaluate_metric(db, goal)
+        if result.value is None or result.threshold is None or result.error:
+            return False, ""
+        pct = goals_module.progress_percent(result.value, result.threshold, result.comparison)
+        if pct >= rule.threshold:
+            return True, (f"🔔 Regel ausgeloest: Ziel „{goal.title}“ ist zu {pct:.0f}% erreicht "
+                           f"(Schwelle {rule.threshold:.0f}%).")
         return False, ""
 
     return False, ""

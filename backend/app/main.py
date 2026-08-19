@@ -84,6 +84,10 @@ ensure_columns("debt_payments", {
 ensure_columns("transactions", {
     "is_transfer": "BOOLEAN DEFAULT 0",
 })
+# Ziel-Fortschritts-Regel kam nach den ersten drei Alarm-Regeltypen dazu.
+ensure_columns("alert_rules", {
+    "goal_id": "INTEGER",
+})
 ensure_columns("transactions", {
     "categorized_at": "DATETIME",
 })
@@ -657,6 +661,18 @@ def create_alert_rule(data: schemas.AlertRuleCreate, db: Session = Depends(get_d
         raise HTTPException(400, "Diese Regel braucht eine Kategorie")
     if data.rule_type == schemas.AlertRuleType.account_balance_below and not data.account_id:
         raise HTTPException(400, "Diese Regel braucht ein Konto")
+    if data.rule_type == schemas.AlertRuleType.goal_progress_above:
+        if not data.goal_id:
+            raise HTTPException(400, "Diese Regel braucht ein Ziel")
+        goal = db.query(models.Goal).filter(models.Goal.id == data.goal_id).first()
+        if not goal:
+            raise HTTPException(404, "Ziel nicht gefunden")
+        # Nur automatisch messbare Ziele haben ueberhaupt einen Fortschritt -
+        # ein manueller Meilenstein ist entweder abgehakt oder nicht, da gaebe
+        # es nichts zu ueberwachen (lieber hier klar ablehnen, als eine Regel
+        # anzulegen, die nie ausloest).
+        if goal.goal_type != models.GoalType.auto_financial or not goal.trigger:
+            raise HTTPException(400, "Nur automatisch messbare Ziele haben einen Fortschritt in Prozent")
     return crud.create_alert_rule(db, space_id, data)
 
 
