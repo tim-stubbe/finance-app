@@ -4319,6 +4319,118 @@ def settings_has_radicale(db: Session) -> bool:
     return bool(settings.radicale_url)
 
 
+# ---------------- Heute / Fokus ----------------
+# Fenster für den Fokus-View. Bewusst unterschiedlich weit: eine Kündigungs-
+# oder Rückgabefrist muss man ein paar Tage vorher sehen (sonst ist sie weg),
+# eine Abbuchung interessiert nur kurzfristig, und ein Ziel mit Datum darf
+# ruhig einen Monat vorher auftauchen, weil man dafür noch handeln kann.
+TODAY_DEADLINE_WINDOW_DAYS = 14
+TODAY_PAYMENT_WINDOW_DAYS = 7
+TODAY_GOAL_WINDOW_DAYS = 30
+TODAY_GOAL_NEAR_PERCENT = 80.0
+TODAY_MAX_DEADLINES = 8
+TODAY_MAX_GOALS = 5
+
+
+@api_router.get("/today", response_model=schemas.TodayOut)
+def today_overview(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Alles, was HEUTE ansteht, in einer Antwort - Termine, offene/überfällige
+    To-Dos, ablaufende Fristen, nahe Ziele und die Tagesbilanz.
+
+    Bewusst ein Backend-Endpunkt statt (wie beim übrigen Hub) mehrerer
+    Einzelaufrufe im Frontend: die Zusammenstellung „was ist heute dran" ist
+    fachliche Logik mit Schwellwerten (welche Frist gilt als bald, wie weit
+    schaut das Fenster für Zahlungen), die auch der Telegram-Digest brauchen
+    kann - die soll nicht doppelt im Frontend liegen.
+
+    Kein Kalender-Sync hier (anders als /calendar-events): der Fokus-View wird
+    bei jedem Hub-Aufruf geladen, ein CalDAV-Roundtrip pro Aufruf wäre zu teuer.
+    Der Hintergrund-Sync hält die Termine ohnehin aktuell."""
+    today = date.today()
+    day_start = datetime.combine(today, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+
+    # --- Termine des Tages, inkl. Fahrzeit/„losfahren um" wo berechenbar ---
+    events: list[schemas.TodayEvent] = []
+    raw_events = crud.get_calendar_events(db, day_start, day_end)
+    settings = auth.get_or_create_settings(db)
+    home_coords = None
+    ors_key = None
+    if settings.home_lat and settings.home_lon and settings.openroute_api_key_encrypted:
+        home_coords = (settings.home_lat, settings.home_lon)
+        ors_key = bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
+    for ev in raw_events:
+        minutes = None
+        if ors_key and home_coords and not ev.all_day and ev.lat and ev.lon and ev.start >= datetime.utcnow():
+            try:
+                minutes = travel_time.travel_time_minutes(ors_key, home_coords, (ev.lat, ev.lon))
+            except Exception:
+                minutes = None  # Fahrzeit ist Zusatzinfo, kein Grund den View zu kippen
+        events.append(schemas.TodayEvent(
+            id=ev.id, title=ev.title, start=ev.start, end=ev.end, location=ev.location,
+            all_day=ev.all_day, travel_minutes=minutes,
+            leave_at=(ev.start - timedelta(minutes=minutes)) if minutes else None,
+        ))
+    events.sort(key=lambda e: (not e.all_day, e.start))
+
+    # --- To-Dos: heute fällig oder überfällig (undatierte gehören nicht in
+    #     einen Tagesfokus - die stehen weiter unten in der normalen Liste) ---
+    todos = [
+        schemas.TodayTodo(id=t.id, title=t.title, due_date=t.due_date, overdue=t.due_date < today)
+        for t in crud.get_todos(db, include_done=False)
+        if t.due_date and t.due_date <= today
+    ]
+    todos.sort(key=lambda t: t.due_date)
+
+    # --- Fristen: Kündigung, Rücksendung, anstehende Abbuchungen ---
+    deadlines: list[schemas.TodayDeadline] = []
+    for r in crud.get_contract_reminders(db, space_id):
+        if r.days_until_reminder <= TODAY_DEADLINE_WINDOW_DAYS:
+            deadlines.append(schemas.TodayDeadline(
+                kind="kuendigung", label=r.label, date=r.reminder_date,
+                days_left=r.days_until_reminder,
+                detail=f"Verlängerung {r.renewal_date.strftime('%d.%m.%Y')}, {r.notice_period_days} Tage Frist",
+            ))
+    for d in crud.get_return_deadlines(db, space_id):
+        if not d.returned and d.days_left <= TODAY_DEADLINE_WINDOW_DAYS:
+            deadlines.append(schemas.TodayDeadline(
+                kind="ruecksendung", label=d.transaction_description or "Rückgabe",
+                date=d.deadline_date, days_left=d.days_left, amount=d.transaction_amount,
+            ))
+    try:
+        forecast = crud.cashflow_forecast(db, space_id, horizon_days=TODAY_PAYMENT_WINDOW_DAYS)
+        for e in forecast.upcoming_events:
+            deadlines.append(schemas.TodayDeadline(
+                kind="zahlung", label=e.description or "Abbuchung", date=e.date,
+                days_left=(e.date - today).days, amount=e.amount,
+            ))
+    except Exception:
+        pass  # Prognose braucht genug Historie - fehlt sie, bleibt der Rest nutzbar
+    deadlines.sort(key=lambda d: d.days_left)
+
+    # --- Ziele mit nahem Zieldatum bzw. kurz vor dem Ziel ---
+    goals: list[schemas.TodayGoal] = []
+    for g in crud.get_goals(db, space_id):
+        out = _goal_out(db, g, evaluate=True)
+        if out.status != schemas.GoalStatus.open:
+            continue
+        days_left = (out.target_date - today).days if out.target_date else None
+        near_date = days_left is not None and days_left <= TODAY_GOAL_WINDOW_DAYS
+        near_done = out.progress_percent is not None and out.progress_percent >= TODAY_GOAL_NEAR_PERCENT
+        if near_date or near_done:
+            goals.append(schemas.TodayGoal(
+                id=out.id, title=out.title, target_date=out.target_date,
+                progress_percent=out.progress_percent, days_left=days_left,
+            ))
+    db.commit()  # evtl. automatisch erreichte Ziele festschreiben (wie in list_goals)
+    goals.sort(key=lambda g: (g.days_left if g.days_left is not None else 99999))
+
+    return schemas.TodayOut(
+        date=today, events=events, todos=todos, deadlines=deadlines[:TODAY_MAX_DEADLINES],
+        goals=goals[:TODAY_MAX_GOALS], balance=crud.day_balance(db, space_id, today),
+    )
+
+
 # ---------------- Dashboard ----------------
 @api_router.get("/dashboard", response_model=schemas.DashboardSummary)
 def dashboard(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):

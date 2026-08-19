@@ -3639,3 +3639,26 @@ def find_wishlist_item_by_name(db: Session, name_query: str) -> tuple[models.Wis
         namen = ", ".join(i.name for i in matches)
         return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
     return matches[0], None
+
+
+# ---------- Heute-Übersicht ----------
+def day_balance(db: Session, space_id: int, day: date) -> schemas.TodayBalance:
+    """Einnahmen/Ausgaben genau eines Tages. Umbuchungen zwischen eigenen
+    Konten bleiben außen vor - dieselbe Regel wie im Dashboard, sonst würde
+    ein Übertrag den Tag künstlich als „viel bewegt" erscheinen lassen."""
+    rows = (
+        db.query(models.Transaction.amount)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            models.Transaction.date == day,
+            models.Transaction.is_transfer.is_(False),
+        )
+        .all()
+    )
+    income = sum(a for (a,) in rows if a > 0)
+    expense = sum(a for (a,) in rows if a < 0)
+    return schemas.TodayBalance(
+        income=round(income, 2), expense=round(expense, 2),
+        balance=round(income + expense, 2), transaction_count=len(rows),
+    )

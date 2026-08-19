@@ -3148,3 +3148,24 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   body.printing-roadmap .print-target .roadmap-title { color: #111; }
   body.printing-roadmap .print-target .goal-chip { background: #eee; color: #333; }
 }
+
+/* ---- Heute / Fokus-View im Hub ---- */
+.today-balance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 2px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.today-section { margin-top: 14px; }
+.today-section-title {
+  margin: 0 0 2px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

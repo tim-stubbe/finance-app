@@ -6185,7 +6185,110 @@ function skelTableRows(colspan, n) {
 }
 
 // ---------- Hub (Startseite) ----------
+// Uhrzeit eines Termins - bei ganztägigen Terminen gibt es keine sinnvolle
+// Zeit, dann steht dort "ganztägig" statt "00:00".
+function fmtTimeShort(iso) {
+  return new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+const TODAY_DEADLINE_META = {
+  kuendigung: { icon: "✂️", tab: "recurring" },
+  ruecksendung: { icon: "📦", tab: "transactions" },
+  zahlung: { icon: "💳", tab: "recurring" },
+};
+
+// Fokus-View: was heute ansteht. Kommt komplett aus /today (ein Aufruf), damit
+// die Schwellwerte "was gilt als bald fällig" im Backend bleiben und nicht
+// zwischen Hub, Telegram-Digest und hier auseinanderlaufen.
+async function loadTodayPanel() {
+  const body = document.getElementById("hub-today-body");
+  const titleEl = document.getElementById("hub-today-title");
+  body.innerHTML = skelRows(3);
+  let data;
+  try {
+    data = await api("/today");
+  } catch (e) {
+    body.innerHTML = `<p class="page-sub">${esc(e.message)}</p>`;
+    return;
+  }
+  titleEl.textContent = "Heute · " + new Date(data.date + "T00:00:00")
+    .toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+
+  const b = data.balance;
+  const balanceLine = b.transaction_count
+    ? `<div class="today-balance">
+         <span><strong>${b.transaction_count}</strong> Buchung${b.transaction_count !== 1 ? "en" : ""} heute</span>
+         <span class="row-amount-pos">${eur(b.income)}</span>
+         <span class="row-amount-neg">${eur(b.expense)}</span>
+         <span class="${b.balance >= 0 ? "row-amount-pos" : "row-amount-neg"}"><strong>${eur(b.balance)}</strong></span>
+       </div>`
+    : `<div class="today-balance"><span class="page-sub">Heute noch keine Buchung.</span></div>`;
+
+  const sections = [];
+
+  if (data.events.length) {
+    sections.push(section("Termine", data.events.map(e => {
+      const when = e.all_day ? "ganztägig" : fmtTimeShort(e.start);
+      const extras = [];
+      if (e.location) extras.push(esc(e.location));
+      if (e.leave_at) extras.push(`🚗 ${e.travel_minutes} Min., losfahren ${fmtTimeShort(e.leave_at)}`);
+      const sub = extras.length ? `<span class="page-sub" style="display:inline"> – ${extras.join(" · ")}</span>` : "";
+      return `<button type="button" class="hub-list-row" data-hub-jump="goals">
+        <span>${esc(e.title)}${sub}</span>
+        <span class="page-sub">${when}</span>
+      </button>`;
+    })));
+  }
+
+  if (data.todos.length) {
+    sections.push(section("Fällige To-Dos", data.todos.map(t => `
+      <button type="button" class="hub-list-row" data-hub-jump="goals">
+        <span>${t.overdue ? "⚠️ " : ""}${esc(t.title)}</span>
+        <span class="page-sub ${t.overdue ? "neg" : ""}">${fmtDate(t.due_date)}</span>
+      </button>`)));
+  }
+
+  if (data.deadlines.length) {
+    sections.push(section("Fristen &amp; Fälligkeiten", data.deadlines.map(d => {
+      const meta = TODAY_DEADLINE_META[d.kind] || { icon: "•", tab: "hub" };
+      const when = d.days_left <= 0 ? "heute" : `in ${d.days_left} Tag${d.days_left !== 1 ? "en" : ""}`;
+      const amount = d.amount != null
+        ? `<span class="${d.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(d.amount)}</span>` : "";
+      return `<button type="button" class="hub-list-row" data-hub-jump="${meta.tab}">
+        <span>${meta.icon} ${esc(d.label)}${d.detail ? `<span class="page-sub" style="display:inline"> – ${esc(d.detail)}</span>` : ""}</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="page-sub ${d.days_left <= 2 ? "neg" : ""}">${when}</span>${amount}
+        </span>
+      </button>`;
+    })));
+  }
+
+  if (data.goals.length) {
+    sections.push(section("Ziele in Reichweite", data.goals.map(g => {
+      const pct = g.progress_percent != null ? `${g.progress_percent.toFixed(0)}%` : "";
+      const when = g.days_left != null
+        ? (g.days_left < 0 ? `${-g.days_left} Tage überfällig` : `noch ${g.days_left} Tage`) : "";
+      return `<button type="button" class="hub-list-row" data-hub-jump="goals">
+        <span>🎯 ${esc(g.title)}</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="page-sub ${g.days_left != null && g.days_left < 0 ? "neg" : ""}">${when}</span>
+          ${pct ? `<strong>${pct}</strong>` : ""}
+        </span>
+      </button>`;
+    })));
+  }
+
+  body.innerHTML = balanceLine + (sections.length
+    ? sections.join("")
+    : `<p class="page-sub">Heute steht nichts an – keine Termine, Fristen oder fälligen To-Dos.</p>`);
+
+  function section(title, rows) {
+    return `<div class="today-section"><h4 class="today-section-title">${title}</h4>${rows.join("")}</div>`;
+  }
+}
+
 async function loadHubTab() {
+  loadTodayPanel();
   const cardsEl = document.getElementById("hub-finance-cards");
   cardsEl.innerHTML = skelBento();
   document.getElementById("hub-todos-body").innerHTML = skelRows(3);

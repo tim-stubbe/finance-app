@@ -1873,3 +1873,62 @@ class WishlistItemOut(BaseModel):
     auto_check_enabled: bool = False
     purchased: bool = False
     active: bool
+
+
+# ---------- Heute-Übersicht (Fokus-Ansicht im Hub) ----------
+class TodayEvent(BaseModel):
+    """Ein Termin des heutigen Tages. `travel_minutes` nur gefüllt, wenn
+    Startadresse + OpenRouteService-Schlüssel hinterlegt sind und der Termin
+    einen geokodierten Ort hat (siehe main.list_calendar_events)."""
+    id: int
+    title: str
+    start: datetime
+    end: Optional[datetime] = None
+    location: Optional[str] = None
+    all_day: bool = False
+    travel_minutes: Optional[int] = None
+    leave_at: Optional[datetime] = None
+
+
+class TodayTodo(BaseModel):
+    id: int
+    title: str
+    due_date: Optional[date] = None
+    overdue: bool = False
+
+
+class TodayDeadline(BaseModel):
+    """Vereinheitlichte Frist-Zeile - Kündigungsfrist (ContractReminder),
+    Rückgabefrist (ReturnDeadline) oder fällige Abbuchung. Bewusst ein
+    gemeinsamer Typ statt drei getrennter Listen: im Fokus-View interessiert
+    „was läuft mir heute weg", nicht die technische Herkunft."""
+    kind: str  # "kuendigung" | "ruecksendung" | "zahlung"
+    label: str
+    date: date
+    days_left: int
+    amount: Optional[float] = None
+    detail: Optional[str] = None
+
+
+class TodayGoal(BaseModel):
+    id: int
+    title: str
+    target_date: Optional[date] = None
+    progress_percent: Optional[float] = None
+    days_left: Optional[int] = None
+
+
+class TodayBalance(BaseModel):
+    income: float
+    expense: float
+    balance: float
+    transaction_count: int
+
+
+class TodayOut(BaseModel):
+    date: date
+    events: List[TodayEvent]
+    todos: List[TodayTodo]
+    deadlines: List[TodayDeadline]
+    goals: List[TodayGoal]
+    balance: TodayBalance
