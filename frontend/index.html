@@ -1367,11 +1367,11 @@
       <div class="cards" id="schweiz-summary-cards"></div>
 
       <div class="range-tabs" id="schweiz-view-tabs" style="margin-bottom:16px">
-        <button type="button" class="range-tab active" data-schweiz-view="cards">Kacheln</button>
-        <button type="button" class="range-tab" data-schweiz-view="roadmap">Zeitstrahl</button>
+        <button type="button" class="range-tab" data-schweiz-view="cards">Kacheln</button>
+        <button type="button" class="range-tab active" data-schweiz-view="roadmap">Zeitstrahl</button>
       </div>
 
-      <div id="schweiz-cards-view">
+      <div id="schweiz-cards-view" class="hidden">
         <div class="panel">
           <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg> Offene Ziele</h3>
           <div class="goal-grid" id="schweiz-open-grid"></div>
@@ -1386,7 +1386,7 @@
         </div>
       </div>
 
-      <div id="schweiz-roadmap-view" class="hidden">
+      <div id="schweiz-roadmap-view">
         <div class="panel">
           <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L9 11L13 15L21 6"/><path d="M15 6H21V12"/></svg> Roadmap</h3>
           <div class="roadmap-legend" id="schweiz-roadmap-legend"></div>
