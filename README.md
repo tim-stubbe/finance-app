@@ -18,15 +18,20 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 - ✅ Konten, Buchungen, Investments, Ziele, Schulden, Steuerauswertung
 - ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo, eBay)
 - ✅ KI-Assistent (Kategorisierung, Beleg-Auswertung, Chat) über eigenen Ollama-Server
-- ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen
+- ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen, Volltextsuche über alle Belege
 - ✅ Automatische Datei-Sortierung eines Eingangsordners (Kategorien, Kontoauszug-Import)
 - ✅ Immich-Anbindung: doppelte Fotos, alte Bildschirmfotos, unscharfe/leere Fotos
   aufräumen (inkl. Tinder-artigem Swipe-Modus), Personen durchsuchen
 - ✅ To-Dos zweiseitig mit dem Handy synchronisiert (Radicale/CalDAV)
-- ✅ Kündigungsfristen für Abos, Rückgabefristen für einzelne Käufe
+- ✅ Kündigungsfristen für Abos (inkl. Jahresersparnis bei Kündigung), Rückgabefristen für einzelne Käufe
+- ✅ „Heute“-Fokus-Ansicht im Hub: Termine, fällige To-Dos, Fristen, Ziele in Reichweite, Tagesbilanz
+- ✅ Frei definierbare Alarm-Regeln (Ausgaben-Schwelle, Kontostand, Kategorie-Ausreißer, Ziel-Fortschritt)
+- ✅ Kontextbezogene Notizen an Zielen, To-Dos, Projekten, Lebensbereichen und dem Schweiz-Tab, durchsuchbar
+- ✅ Was-wäre-wenn-Szenarien für Cashflow und Spardistanz (Abo kündigen, Sparrate erhöhen)
 - ✅ Telegram-Benachrichtigungen + Chat-Bot, Twilio-Notrufe für Notfälle
 - ✅ Vermögensvergleich mit der eigenen Altersgruppe
-- ✅ PWA (installierbar auf Handy/Desktop), vier Themes, EUR/CHF-Umschalter
+- ✅ PWA (installierbar auf Handy/Desktop), fünf Themes (inkl. Desktop-Variante mit Top-Navigation),
+  EUR/CHF-Umschalter
 - ✅ Automatisches Deployment (GitHub Actions → GHCR → Watchtower auf TrueNAS)
 
 Kein festes Datum, keine Garantie, keine feste Roadmap – das hier ist ein
@@ -54,25 +59,39 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 
 **Investitionen**
 - Positionen mit Einstandskursen und Lots, Gewinn/Verlust, Dividenden
+- Ein zweiter Kauf/Sparplan-Vorgang desselben Symbols wird automatisch als
+  weiterer Posten an die bestehende Position gehängt statt eine Dublette
+  anzulegen – Klick auf eine Position zeigt alle einzelnen Käufe/Verkäufe
 - Sortierbare Bestandstabelle, Anzeige des letzten Kursabrufs
 
 **Planung und Auswertung**
-- Hub-Startseite mit Überblick über Finanzen, offene Aufgaben und nächste Ziele
+- Hub-Startseite mit „Heute“-Fokus (Termine inkl. Fahrzeit, fällige To-Dos,
+  Fristen, Ziele in Reichweite, Tagesbilanz), Finanzüberblick und nächste Ziele
 - Dashboard mit Vermögensübersicht und Auswertung nach Kategorien
 - Vermögensvergleich mit der eigenen Altersgruppe (Bundesbank-Vermögensbefragung)
 - Budgets pro Kategorie
-- Wiederkehrende Zahlungen automatisch erkannt, Cashflow-Prognose darauf aufbauend
+- Frei definierbare Alarm-Regeln (Ausgaben in einer Kategorie über Schwelle,
+  Kontostand unter Schwelle, Kategorie weicht stark vom Schnitt ab, Ziel zu
+  X % erreicht), per Telegram gemeldet
+- Wiederkehrende Zahlungen automatisch erkannt, mit Kündigungsfrist direkt in
+  der Übersicht und Anzeige der Jahresersparnis bei Kündigung; Cashflow-Prognose
+  und Was-wäre-wenn-Szenarien (Abo kündigen, Sparrate ändern) darauf aufbauend
 - Kündigungsfristen für Abos (Verlängerungstermin rückt bei erkannter Häufigkeit
   automatisch weiter) und Rückgabefristen für einzelne Käufe – beide erinnern
   rechtzeitig per Telegram
 - Ziele (automatisch aus den App-Daten gemessen oder als manuelle Meilensteine,
-  optional in Ketten voneinander abhängig)
+  optional in Ketten voneinander abhängig), wahlweise als Kachelraster oder
+  grafischer Zeitstrahl
+- Kontextbezogene, durchsuchbare Notizen an Zielen, To-Dos, Projekten,
+  Lebensbereichen und dem Schweiz-Tab
+- Schweiz-Tab für den geplanten Umzug: eigener Zeitstrahl, Lebenshaltungskosten-
+  Vergleich und Spardistanz-Rechner (inkl. Vergleich aktuelle vs. erhöhte Sparrate)
 - Schulden mit Tilgungsplan, Zinsbindungsfristen, Bereitstellungszinsen,
   Gebühren und Restschuldversicherung
 - Eigener Tab für Geschäftliches (Einzelunternehmen – rechtlich ohnehin alles
   Privatvermögen, deshalb nur eine Ansicht, kein getrennter Datenbestand)
 - Reisekosten
-- Steuerauswertung
+- Steuerauswertung mit filterbarem CSV-/PDF-Export
 
 **Fotos** (über eine bestehende [Immich](https://immich.app)-Instanz)
 - Duplikate: Immichs eigene Erkennung wird angezeigt und lässt sich nach
@@ -100,7 +119,7 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 - Stündliche automatische Kategorisierung noch nicht zugeordneter Buchungen –
   nur wenn das Modell hinreichend sicher ist
 - Belege und Kontoauszüge als PDF oder Bild auslesen und in Buchungen umwandeln
-- Optionale Websuche über die Brave Search API
+- Optionale Websuche über die Brave Search API oder eine selbst gehostete SearXNG-Instanz
 
 Änderungen an der Datenbank schlägt die KI immer nur vor. Übernommen wird erst
 nach ausdrücklicher Bestätigung.
@@ -114,7 +133,8 @@ nach ausdrücklicher Bestätigung.
   (Ziel erreicht, akuter Liquiditätsengpass innerhalb von ein bis drei Tagen)
 
 **Sonstiges**
-- Vier Themes, umschaltbar zwischen EUR- und CHF-Anzeige
+- Fünf Themes (Dunkel, Hell, Gelb, Alpen, Alpen Desktop mit Top-Navigation für
+  breite Bildschirme), umschaltbar zwischen EUR- und CHF-Anzeige
 - Als PWA auf dem Handy installierbar
 - Automatische Backups mit einstellbarer Aufbewahrungsdauer
 - Versionsanzeige in der Seitenleiste – zeigt an, ob ein Update tatsächlich
@@ -124,7 +144,7 @@ nach ausdrücklicher Bestätigung.
 
 | Bereich   | Umsetzung                                                   |
 |-----------|-------------------------------------------------------------|
-| Backend   | FastAPI, SQLAlchemy, SQLite (197 Endpunkte)                  |
+| Backend   | FastAPI, SQLAlchemy, SQLite (265 Endpunkte)                  |
 | Frontend  | HTML/CSS/JavaScript ohne Build-Schritt, Chart.js über CDN   |
 | Jobs      | APScheduler für Sync, Kursabruf, Kategorisierung, Backups   |
 | Betrieb   | Docker, Python 3.14                                          |
@@ -147,7 +167,7 @@ ins Bild gemountet und uvicorn startet mit `--reload`.
 
 ### Einstellungen
 
-Zugangsdaten für Banken, PayPal, Bitvavo, Telegram, Twilio, Brave, das
+Zugangsdaten für Banken, PayPal, Bitvavo, Telegram, Twilio, Brave/SearXNG, das
 E-Mail-Postfach und Immich werden nicht über Umgebungsvariablen gesetzt,
 sondern in der Oberfläche unter **Einstellungen** hinterlegt. Sie liegen mit
 Fernet verschlüsselt in der Datenbank.
