@@ -2844,16 +2844,22 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 24px 0 40px;
+  gap: 8px;
+  padding: 12px 0 24px;
 }
 
 .swipe-progress { color: var(--muted); font-size: 12.5px; }
 
 .swipe-stack {
   position: relative;
-  width: min(560px, 92vw);
-  height: min(680px, 72vh);
+  /* Groesser als vorher (Nutzer-Feedback: Anzeige zu klein). */
+  width: min(720px, 96vw);
+  height: min(760px, 80vh);
+  /* Reine Absicherung: die "is-behind"-Karte dahinter ist durch scale(0.95)
+     rechnerisch immer kleiner als dieser Rahmen, kann ihn also nie
+     ueberragen - overflow:hidden aendert daran nichts, verhindert aber
+     zuverlaessig jedes kuenftige Durchscheinen, falls sich das mal aendert. */
+  overflow: hidden;
   touch-action: none;
 }
 
