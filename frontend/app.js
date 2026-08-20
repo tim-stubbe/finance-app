@@ -8296,7 +8296,7 @@ async function init() {
 startApp();
 
 async function loadVersionWatermark() {
-  const el = document.getElementById("version-watermark");
+  const el = document.getElementById("version-watermark-hub");
   if (!el) return;
   let v;
   try {

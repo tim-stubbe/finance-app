@@ -2659,10 +2659,13 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* ---------- Versions-Wasserzeichen ---------- */
 /* Dauerhaft sichtbar, aber bewusst unauffaellig - dient nur der Kontrolle,
    ob ein Update (Watchtower oder manuell) wirklich angekommen ist, nicht der
-   allgemeinen Wahrnehmung. */
+   allgemeinen Wahrnehmung. Sitzt im Hub unten im "Angebundene Dienste"-Panel
+   statt in der Seitenleiste - so muss sie nicht pro Theme/Layout (Sidebar vs.
+   Alpen-Desktop-Top-Nav) einzeln positioniert werden. */
 .version-watermark {
-  margin-top: auto;
-  padding: 10px 10px 2px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -2675,10 +2678,6 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 
 .version-watermark.is-outdated { color: var(--warn); }
-
-@media (max-width: 720px) {
-  .version-watermark { display: none; }
-}
 
 /* ---------- Fotos / Immich-Duplikate ---------- */
 .photos-summary {
@@ -3396,16 +3395,6 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     margin-left: auto;
     padding: 0;
     border-top: none;
-  }
-  /* Bleibt sichtbar statt zu verschwinden - zeigt weiterhin, ob ein Update
-     tatsaechlich angekommen ist. Rutscht ans Ende der Top-Nav statt unten in
-     der (jetzt nicht mehr existierenden) Seitenleiste zu stehen. */
-  :root[data-theme="alpen-desktop"] .version-watermark {
-    margin-top: 0;
-    margin-left: 10px;
-    padding: 0;
-    flex-shrink: 0;
-    order: 99;
   }
 
   :root[data-theme="alpen-desktop"] main {
