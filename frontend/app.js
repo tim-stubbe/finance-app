@@ -2069,7 +2069,47 @@ async function loadProjectsTab() {
   const badge = document.getElementById("projects-nav-badge");
   badge.textContent = totalOpen;
   badge.classList.toggle("hidden", !totalOpen);
+
+  loadProjectTimeSummaries();
 }
+
+function fmtMinutes(min) {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return h > 0 ? `${h} Std. ${m} Min.` : `${m} Min.`;
+}
+
+// Zeiterfassung pro Projekt - eine Summary fuer alle Projekte auf einmal statt
+// eines Aufrufs je Karte, damit das Laden der Projekte-Liste nicht mit der
+// Anzahl Projekte langsamer wird.
+async function loadProjectTimeSummaries() {
+  const summaries = await api("/time-entries/summary");
+  const byProject = new Map(summaries.map(s => [s.project_id, s]));
+  projectsCache.forEach(p => {
+    const s = byProject.get(p.id);
+    const el = document.getElementById(`project-time-${p.id}`);
+    const btn = document.querySelector(`[data-project-time-toggle="${p.id}"]`);
+    if (!el || !btn) return;
+    const running = s && s.running_entry_id;
+    el.textContent = s && s.total_minutes > 0 ? `⏱ ${fmtMinutes(s.total_minutes)} erfasst` : "";
+    btn.textContent = running ? "⏹ Stoppen" : "⏱ Start";
+    btn.dataset.projectTimeRunning = running ? s.running_entry_id : "";
+    btn.classList.toggle("btn-warn", !!running);
+  });
+}
+
+document.getElementById("projects-list").addEventListener("click", async e => {
+  const toggleId = e.target.closest("[data-project-time-toggle]")?.dataset.projectTimeToggle;
+  if (toggleId) {
+    const btn = e.target.closest("[data-project-time-toggle]");
+    if (btn.dataset.projectTimeRunning) {
+      await api(`/time-entries/${btn.dataset.projectTimeRunning}/stop`, { method: "POST" });
+    } else {
+      await api(`/projects/${toggleId}/time-entries/start`, { method: "POST" });
+    }
+    loadProjectTimeSummaries();
+  }
+});
 
 function projectIsOverdue(p) {
   if (!p.check_interval_days) return false;
@@ -2098,9 +2138,11 @@ function renderProjectCard(p, openIssues) {
       ${overdue ? "⚠️ " : ""}Zuletzt geprüft: ${lastChecked}${p.check_interval_days ? ` · Intervall ${p.check_interval_days} Tage` : ""}
     </p>
     <div id="project-issues-${p.id}" class="todo-row-list"></div>
+    <p class="goal-meta" id="project-time-${p.id}"></p>
     <div class="filter-row" style="margin-top:4px">
       <button type="button" class="btn-ghost btn-sm" data-project-checked="${p.id}">✓ Geprüft</button>
       <button type="button" class="btn-ghost btn-sm" data-project-add-issue="${p.id}">+ Punkt</button>
+      <button type="button" class="btn-ghost btn-sm" data-project-time-toggle="${p.id}">⏱ …</button>
       <button type="button" class="link-btn" data-project-edit="${p.id}">Bearbeiten</button>
       <button type="button" class="link-btn" data-notes-entity="business_project" data-notes-id="${p.id}" data-notes-label="${esc(p.name)}">📝 Notizen</button>
     </div>
@@ -2229,11 +2271,167 @@ async function loadLifeTab() {
   const list = document.getElementById("life-areas-list");
   if (!areas.length) {
     list.innerHTML = `<div class="empty-state"><span class="empty-icon">${svgIcon("target")}</span><span>Noch keine Lebensbereiche angelegt. Leg oben rechts einen an.</span></div>`;
+  } else {
+    list.innerHTML = "";
+    areas.forEach(a => list.appendChild(renderLifeAreaCard(a, (checkinsByArea.get(a.id) || []).slice(0, 5))));
+  }
+
+  loadContacts();
+  loadMediaItems();
+  loadHealthMetrics();
+}
+
+// ---------- Kontakte (People/CRM-Light) ----------
+async function loadContacts() {
+  const contacts = await api("/contacts");
+  const tbody = document.getElementById("contacts-list");
+  if (!contacts.length) {
+    tbody.innerHTML = emptyRow(4, "user", "Noch keine Kontakte.");
     return;
   }
-  list.innerHTML = "";
-  areas.forEach(a => list.appendChild(renderLifeAreaCard(a, (checkinsByArea.get(a.id) || []).slice(0, 5))));
+  tbody.innerHTML = contacts.map(c => `
+    <tr>
+      <td>${esc(c.name)}</td>
+      <td>${esc(c.notes || "–")}</td>
+      <td>${c.last_interaction_at ? fmtDate(c.last_interaction_at) : "–"}</td>
+      <td>
+        <button type="button" class="link-btn" data-contact-touch="${c.id}">Jetzt kontaktiert</button>
+        <button type="button" class="link-btn" data-contact-delete="${c.id}">Löschen</button>
+      </td>
+    </tr>`).join("");
 }
+
+document.getElementById("contact-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = document.getElementById("contact-name").value.trim();
+  if (!name) return;
+  await api("/contacts", {
+    method: "POST",
+    body: JSON.stringify({ name, notes: document.getElementById("contact-notes").value.trim() || null }),
+  });
+  document.getElementById("contact-form").reset();
+  loadContacts();
+});
+
+document.getElementById("contacts-list").addEventListener("click", async e => {
+  const touchId = e.target.closest("[data-contact-touch]")?.dataset.contactTouch;
+  if (touchId) {
+    await api(`/contacts/${touchId}/touch`, { method: "POST" });
+    loadContacts();
+    return;
+  }
+  const delId = e.target.closest("[data-contact-delete]")?.dataset.contactDelete;
+  if (delId) {
+    await api(`/contacts/${delId}`, { method: "DELETE" });
+    loadContacts();
+  }
+});
+
+// ---------- Leseliste / Medien-Tracking ----------
+let mediaCache = [];
+let mediaFilter = "alle";
+const MEDIA_STATUS_LABELS = { offen: "Offen", "läuft": "Läuft", fertig: "Fertig", abgebrochen: "Abgebrochen" };
+
+async function loadMediaItems() {
+  mediaCache = await api("/media");
+  renderMediaList();
+}
+
+function renderMediaList() {
+  const tbody = document.getElementById("media-list");
+  const items = mediaFilter === "alle" ? mediaCache : mediaCache.filter(m => m.status === mediaFilter);
+  if (!items.length) {
+    tbody.innerHTML = emptyRow(4, "file-text", "Nichts in der Leseliste.");
+    return;
+  }
+  tbody.innerHTML = items.map(m => `
+    <tr>
+      <td>${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a>` : esc(m.title)}</td>
+      <td>${esc(m.media_type)}</td>
+      <td>
+        <select data-media-status="${m.id}">
+          ${Object.entries(MEDIA_STATUS_LABELS).map(([v, l]) => `<option value="${v}" ${v === m.status ? "selected" : ""}>${l}</option>`).join("")}
+        </select>
+      </td>
+      <td><button type="button" class="link-btn" data-media-delete="${m.id}">Löschen</button></td>
+    </tr>`).join("");
+}
+
+document.querySelectorAll("#media-filter-tabs .range-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#media-filter-tabs .range-tab").forEach(b => b.classList.toggle("active", b === btn));
+    mediaFilter = btn.dataset.mediaFilter;
+    renderMediaList();
+  });
+});
+
+document.getElementById("media-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const title = document.getElementById("media-title").value.trim();
+  if (!title) return;
+  await api("/media", {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      media_type: document.getElementById("media-type").value.trim() || "Buch",
+      url: document.getElementById("media-url").value.trim() || null,
+    }),
+  });
+  document.getElementById("media-form").reset();
+  document.getElementById("media-type").value = "Buch";
+  loadMediaItems();
+});
+
+document.getElementById("media-list").addEventListener("change", async e => {
+  const id = e.target.closest("[data-media-status]")?.dataset.mediaStatus;
+  if (id) await api(`/media/${id}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) });
+});
+
+document.getElementById("media-list").addEventListener("click", async e => {
+  const delId = e.target.closest("[data-media-delete]")?.dataset.mediaDelete;
+  if (delId) {
+    await api(`/media/${delId}`, { method: "DELETE" });
+    loadMediaItems();
+  }
+});
+
+// ---------- Gesundheits-Grunddaten ----------
+let healthChart = null;
+
+async function loadHealthMetrics() {
+  const type = document.getElementById("health-metric-type").value;
+  const points = await api(`/health-metrics?metric_type=${type}&days=90`);
+  const ctx = document.getElementById("chart-health");
+  const label = type === "gewicht" ? "Gewicht (kg)" : "Schlaf (Std.)";
+  const data = {
+    labels: points.map(p => fmtDate(p.date)),
+    datasets: [{
+      label, data: points.map(p => p.value),
+      borderColor: cssVar("--accent"), backgroundColor: "transparent", tension: 0.25, pointRadius: 2,
+    }],
+  };
+  if (healthChart) { healthChart.destroy(); healthChart = null; }
+  if (!points.length) return;
+  healthChart = new Chart(ctx, {
+    type: "line", data,
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } },
+  });
+}
+
+document.getElementById("health-metric-type").addEventListener("change", loadHealthMetrics);
+
+document.getElementById("health-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const dateVal = document.getElementById("health-date").value;
+  const value = parseFloat(document.getElementById("health-value").value);
+  if (!dateVal || isNaN(value)) return;
+  await api("/health-metrics", {
+    method: "POST",
+    body: JSON.stringify({ metric_type: document.getElementById("health-metric-type").value, date: dateVal, value }),
+  });
+  document.getElementById("health-form").reset();
+  loadHealthMetrics();
+});
 
 function lifeAreaIsOverdue(a) {
   if (!a.check_interval_days) return false;
@@ -8193,6 +8391,9 @@ const CMDK_ACTIONS = [
   { label: "Neues Projekt", icon: "plus", run: () => { goToTab("projects"); setTimeout(() => document.getElementById("project-new-btn")?.click(), 150); } },
   { label: "Neuer Lebensbereich", icon: "plus", run: () => { goToTab("life"); setTimeout(() => document.getElementById("life-area-new-btn")?.click(), 150); } },
   { label: "Neuer Wunsch", icon: "plus", run: () => { goToTab("wishlist"); setTimeout(() => document.getElementById("wishlist-new-btn")?.click(), 150); } },
+  { label: "Neuer Kontakt", icon: "plus", run: () => { goToTab("life"); setTimeout(() => document.getElementById("contact-name")?.focus(), 150); } },
+  { label: "Neuer Leseliste-Eintrag", icon: "plus", run: () => { goToTab("life"); setTimeout(() => document.getElementById("media-title")?.focus(), 150); } },
+  { label: "Gesundheitswert eintragen", icon: "plus", run: () => { goToTab("life"); setTimeout(() => document.getElementById("health-value")?.focus(), 150); } },
   { label: "KI-Assistent öffnen", icon: "sparkles", run: () => document.getElementById("global-ai-fab")?.click() },
   { label: "Jahresrückblick öffnen", icon: "sparkles", run: () => { goToTab("hub"); setTimeout(openYearReview, 150); } },
   { label: "Theme: Dunkel", icon: "palette", run: () => applyTheme("dark") },

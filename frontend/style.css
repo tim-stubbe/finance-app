@@ -1184,6 +1184,7 @@ button:active { transform: scale(0.97); }
 }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-warn { color: var(--neg); border-color: var(--neg); }
 
 /* ---------- Forms ---------- */
 .form-grid {

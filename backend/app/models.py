@@ -1156,6 +1156,102 @@ class LifeCheckIn(Base):
     area = relationship("LifeArea")
 
 
+class TimeEntry(Base):
+    """Ein Zeit-Eintrag für ein Nebenprojekt (siehe BusinessProject) - bewusst
+    sehr schlank: Start/Stop ODER direkte manuelle Eingabe von Minuten, keine
+    Unterprojekte/Tags/Abrechnung. `stopped_at=None` heißt "läuft gerade" -
+    es kann höchstens einen laufenden Eintrag pro Projekt geben (siehe
+    main.start_time_entry), sonst würde die Summe pro Projekt doppelt zählen."""
+
+    __tablename__ = "time_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("business_projects.id"), nullable=False)
+    note = Column(String, nullable=True)
+    started_at = Column(DateTime, nullable=False)
+    stopped_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("BusinessProject")
+
+
+class Contact(Base):
+    """Leichtes Adressbuch ("People/CRM-Light") - ein Kontakt mit optionaler
+    Notiz und dem Datum der letzten Interaktion, bewusst ohne Firmen/Deals/
+    Pipelines o.ä. wie ein echtes CRM. `last_interaction_at` wird ausschließlich
+    manuell gesetzt (siehe main.touch_contact) - anders als bei BusinessProject/
+    LifeArea gibt es hier keine automatische Erinnerung, das wäre für ein
+    reines Adressbuch zu aufdringlich."""
+
+    __tablename__ = "contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+    last_interaction_at = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MediaStatus(str, enum.Enum):
+    offen = "offen"
+    laeuft = "läuft"
+    fertig = "fertig"
+    abgebrochen = "abgebrochen"
+
+
+class MediaItem(Base):
+    """Leseliste/Medien-Tracking - Bücher, Artikel, Videos etc. mit einem
+    einfachen Status statt eines vollen Bewertungs-/Rezensions-Systems.
+    Optional an ein Ziel oder Projekt gehängt (lose, ohne Foreign-Key-Zwang -
+    dieselbe entity_type/entity_id-Idee wie bei Note, hier aber nur EIN
+    optionales Ziel statt vieler, deshalb kein eigenes generisches System)."""
+
+    __tablename__ = "media_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    media_type = Column(String, nullable=False, default="buch")
+    status = Column(Enum(MediaStatus), nullable=False, default=MediaStatus.offen)
+    url = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    linked_goal_id = Column(Integer, ForeignKey("goals.id"), nullable=True)
+    linked_project_id = Column(Integer, ForeignKey("business_projects.id"), nullable=True)
+    finished_at = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    linked_goal = relationship("Goal")
+    linked_project = relationship("BusinessProject")
+
+
+class HealthMetricType(str, enum.Enum):
+    gewicht = "gewicht"
+    schlaf = "schlaf"
+
+
+class HealthMetric(Base):
+    """Sehr minimaler Gesundheits-Verlauf (Gewicht in kg, Schlaf in Stunden) -
+    bewusst nur ein Zahlenwert pro Eintrag und Tag, kein Ernährungstagebuch,
+    keine Trainingspläne. Fügt sich als weitere Kennzahl neben LifeCheckIn in
+    die bestehenden Lebensbereiche ein, ohne eine eigene Health-App nachzubauen.
+    Ein Eintrag pro (Typ, Tag) - ein zweiter Eintrag am selben Tag überschreibt
+    (siehe main.create_health_metric), damit die Verlaufskurve nicht durch
+    mehrfache Tageseinträge verzerrt wird."""
+
+    __tablename__ = "health_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    metric_type = Column(Enum(HealthMetricType), nullable=False)
+    date = Column(Date, nullable=False)
+    value = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("metric_type", "date", name="uq_health_metric_type_date"),
+    )
+
+
 class WishlistItem(Base):
     """Ein Wunsch (Flug, Produkt, ...), den der Nutzer kaufen will, sobald er
     günstig ist - "jeder hat dieselben 24 Stunden", das manuelle Nachschauen

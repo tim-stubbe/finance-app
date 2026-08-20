@@ -1835,6 +1835,68 @@
       </header>
 
       <div id="life-areas-list" class="goal-grid"></div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Kontakte</h3>
+        <p class="page-sub">Leichtes Adressbuch – Name, optionale Notiz, Datum der letzten Interaktion.</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Notiz</th><th>Letzter Kontakt</th><th></th></tr></thead>
+            <tbody id="contacts-list"></tbody>
+          </table>
+        </div>
+        <form id="contact-form" class="form-grid" style="margin-top:14px">
+          <label>Name <input type="text" id="contact-name" required placeholder="z.B. Max Mustermann"></label>
+          <label class="wide">Notiz <input type="text" id="contact-notes" placeholder="optional"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Hinzufügen</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Leseliste</h3>
+        <p class="page-sub">Bücher, Artikel, Videos – mit einfachem Status statt Bewertungssystem.</p>
+        <div class="filter-row" id="media-filter-tabs">
+          <button type="button" class="range-tab active" data-media-filter="alle">Alle</button>
+          <button type="button" class="range-tab" data-media-filter="offen">Offen</button>
+          <button type="button" class="range-tab" data-media-filter="läuft">Läuft</button>
+          <button type="button" class="range-tab" data-media-filter="fertig">Fertig</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Titel</th><th>Art</th><th>Status</th><th></th></tr></thead>
+            <tbody id="media-list"></tbody>
+          </table>
+        </div>
+        <form id="media-form" class="form-grid" style="margin-top:14px">
+          <label class="wide">Titel <input type="text" id="media-title" required placeholder="z.B. Atomic Habits"></label>
+          <label>Art <input type="text" id="media-type" placeholder="Buch/Artikel/Video" value="Buch"></label>
+          <label class="wide">Link (optional) <input type="url" id="media-url" placeholder="https://…"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Hinzufügen</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Gesundheits-Grunddaten</h3>
+        <p class="page-sub">Sehr minimal: Gewicht und Schlaf als einfacher Verlauf, ein Wert pro Tag.</p>
+        <div class="filter-row">
+          <label>Anzeige <select id="health-metric-type">
+            <option value="gewicht">Gewicht (kg)</option>
+            <option value="schlaf">Schlaf (Std.)</option>
+          </select></label>
+        </div>
+        <div class="chart-box"><canvas id="chart-health"></canvas></div>
+        <form id="health-form" class="form-grid" style="margin-top:14px">
+          <label>Datum <input type="date" id="health-date" required></label>
+          <label>Wert <input type="number" step="0.1" id="health-value" required></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Eintragen</button>
+          </div>
+        </form>
+      </div>
     </section>
 
     <div id="life-area-modal" class="modal-overlay hidden">

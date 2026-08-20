@@ -682,6 +682,125 @@ def search_notes(q: str, db: Session = Depends(get_db)):
     return results
 
 
+# ---------------- Zeiterfassung ----------------
+@api_router.get("/projects/{project_id}/time-entries", response_model=List[schemas.TimeEntryOut])
+def list_time_entries(project_id: int, db: Session = Depends(get_db)):
+    return [crud._time_entry_out(e) for e in crud.get_time_entries(db, project_id)]
+
+
+@api_router.post("/projects/{project_id}/time-entries/start", response_model=schemas.TimeEntryOut)
+def start_time_entry(project_id: int, note: Optional[str] = None, db: Session = Depends(get_db)):
+    if crud.get_running_time_entry(db, project_id):
+        raise HTTPException(400, "Für dieses Projekt läuft schon eine Zeiterfassung")
+    entry = crud.start_time_entry(db, project_id, note)
+    return crud._time_entry_out(entry)
+
+
+@api_router.post("/time-entries/{entry_id}/stop", response_model=schemas.TimeEntryOut)
+def stop_time_entry(entry_id: int, db: Session = Depends(get_db)):
+    entry = db.query(models.TimeEntry).filter(models.TimeEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    if entry.stopped_at:
+        raise HTTPException(400, "Eintrag läuft nicht mehr")
+    return crud._time_entry_out(crud.stop_time_entry(db, entry))
+
+
+@api_router.post("/time-entries", response_model=schemas.TimeEntryOut)
+def create_time_entry(data: schemas.TimeEntryCreate, db: Session = Depends(get_db)):
+    return crud._time_entry_out(crud.create_manual_time_entry(db, data))
+
+
+@api_router.delete("/time-entries/{entry_id}")
+def remove_time_entry(entry_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_time_entry(db, entry_id):
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return {"ok": True}
+
+
+@api_router.get("/time-entries/summary", response_model=List[schemas.ProjectTimeSummary])
+def get_time_summary(db: Session = Depends(get_db)):
+    return crud.project_time_summaries(db)
+
+
+# ---------------- People / CRM-Light ----------------
+@api_router.get("/contacts", response_model=List[schemas.ContactOut])
+def list_contacts(db: Session = Depends(get_db)):
+    return crud.get_contacts(db)
+
+
+@api_router.post("/contacts", response_model=schemas.ContactOut)
+def create_contact(data: schemas.ContactCreate, db: Session = Depends(get_db)):
+    return crud.create_contact(db, data)
+
+
+@api_router.patch("/contacts/{contact_id}", response_model=schemas.ContactOut)
+def update_contact(contact_id: int, data: schemas.ContactUpdate, db: Session = Depends(get_db)):
+    contact = db.query(models.Contact).filter(models.Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(404, "Kontakt nicht gefunden")
+    return crud.update_contact(db, contact, data)
+
+
+@api_router.post("/contacts/{contact_id}/touch", response_model=schemas.ContactOut)
+def touch_contact(contact_id: int, db: Session = Depends(get_db)):
+    contact = db.query(models.Contact).filter(models.Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(404, "Kontakt nicht gefunden")
+    return crud.touch_contact(db, contact)
+
+
+@api_router.delete("/contacts/{contact_id}")
+def remove_contact(contact_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_contact(db, contact_id):
+        raise HTTPException(404, "Kontakt nicht gefunden")
+    return {"ok": True}
+
+
+# ---------------- Leseliste / Medien-Tracking ----------------
+@api_router.get("/media", response_model=List[schemas.MediaItemOut])
+def list_media_items(db: Session = Depends(get_db)):
+    return crud.get_media_items(db)
+
+
+@api_router.post("/media", response_model=schemas.MediaItemOut)
+def create_media_item(data: schemas.MediaItemCreate, db: Session = Depends(get_db)):
+    return crud.create_media_item(db, data)
+
+
+@api_router.patch("/media/{item_id}", response_model=schemas.MediaItemOut)
+def update_media_item(item_id: int, data: schemas.MediaItemUpdate, db: Session = Depends(get_db)):
+    item = db.query(models.MediaItem).filter(models.MediaItem.id == item_id).first()
+    if not item:
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return crud.update_media_item(db, item, data)
+
+
+@api_router.delete("/media/{item_id}")
+def remove_media_item(item_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_media_item(db, item_id):
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return {"ok": True}
+
+
+# ---------------- Gesundheits-Grunddaten ----------------
+@api_router.get("/health-metrics", response_model=List[schemas.HealthMetricOut])
+def list_health_metrics(metric_type: models.HealthMetricType, days: int = 90, db: Session = Depends(get_db)):
+    return crud.get_health_metrics(db, metric_type, days)
+
+
+@api_router.post("/health-metrics", response_model=schemas.HealthMetricOut)
+def create_health_metric(data: schemas.HealthMetricCreate, db: Session = Depends(get_db)):
+    return crud.create_health_metric(db, data)
+
+
+@api_router.delete("/health-metrics/{metric_id}")
+def remove_health_metric(metric_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_health_metric(db, metric_id):
+        raise HTTPException(404, "Eintrag nicht gefunden")
+    return {"ok": True}
+
+
 # ---------------- Wunschliste (Deal-Wecker) ----------------
 @api_router.get("/wishlist", response_model=List[schemas.WishlistItemOut])
 def list_wishlist_items(include_inactive: bool = False, db: Session = Depends(get_db)):

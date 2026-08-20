@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 from .models import (
     AccountType, CategoryType, AssetType, LotType,
     GoalType, GoalStatus, GoalMetricType, GoalComparison,
-    DebtKind, DebtStatus, AlertRuleType,
+    DebtKind, DebtStatus, AlertRuleType, MediaStatus, HealthMetricType,
 )
 
 
@@ -1970,3 +1970,103 @@ class NoteOut(BaseModel):
 
 class NoteSearchResult(NoteOut):
     entity_label: Optional[str] = None
+
+
+# ---------- Zeiterfassung ----------
+class TimeEntryCreate(BaseModel):
+    project_id: int
+    note: Optional[str] = None
+    started_at: Optional[datetime] = None  # None = jetzt (Start-Button)
+    stopped_at: Optional[datetime] = None  # gesetzt = manueller, bereits abgeschlossener Eintrag
+
+
+class TimeEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    note: Optional[str] = None
+    started_at: datetime
+    stopped_at: Optional[datetime] = None
+    minutes: Optional[float] = None
+
+
+class ProjectTimeSummary(BaseModel):
+    project_id: int
+    project_name: str
+    total_minutes: float
+    running_entry_id: Optional[int] = None
+
+
+# ---------- People / CRM-Light ----------
+class ContactCreate(BaseModel):
+    name: str
+    notes: Optional[str] = None
+    last_interaction_at: Optional[date] = None
+
+
+class ContactUpdate(BaseModel):
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    last_interaction_at: Optional[date] = None
+
+
+class ContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    notes: Optional[str] = None
+    last_interaction_at: Optional[date] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------- Leseliste / Medien-Tracking ----------
+class MediaItemCreate(BaseModel):
+    title: str
+    media_type: str = "buch"
+    status: MediaStatus = MediaStatus.offen
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    linked_goal_id: Optional[int] = None
+    linked_project_id: Optional[int] = None
+
+
+class MediaItemUpdate(BaseModel):
+    title: Optional[str] = None
+    media_type: Optional[str] = None
+    status: Optional[MediaStatus] = None
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    linked_goal_id: Optional[int] = None
+    linked_project_id: Optional[int] = None
+
+
+class MediaItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    media_type: str
+    status: MediaStatus
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    linked_goal_id: Optional[int] = None
+    linked_goal_title: Optional[str] = None
+    linked_project_id: Optional[int] = None
+    linked_project_name: Optional[str] = None
+    finished_at: Optional[date] = None
+    created_at: datetime
+
+
+# ---------- Gesundheits-Grunddaten ----------
+class HealthMetricCreate(BaseModel):
+    metric_type: HealthMetricType
+    date: date
+    value: float
+
+
+class HealthMetricOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    metric_type: HealthMetricType
+    date: date
+    value: float
