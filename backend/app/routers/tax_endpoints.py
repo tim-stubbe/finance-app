@@ -1,0 +1,77 @@
+"""Steuer-Endpunkte (Basiszins-Sätze, Sparerpauschbetrag, Vorabpauschale,
+realisierte Gewinne, Zusammenfassung) - näherungsweise Berechnung zur
+Orientierung, keine Steuerberatung (siehe backend/app/tax.py, die
+eigentliche Berechnungslogik, unverändert dort belassen).
+
+Zweiter Schritt der Code-Modularisierung (siehe ROADMAP.md), nach
+routers/investments.py. Datei bewusst NICHT `tax.py` genannt, um nicht mit
+dem bestehenden `app/tax.py` (Berechnungslogik, kein Router) zu kollidieren -
+unterschiedliche Modulpfade wären technisch kein Problem, aber verwirrend
+für zwei gleichnamige Dateien mit unterschiedlicher Bedeutung im selben
+Projekt."""
+
+from datetime import date
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from .. import models, schemas, auth, tax
+from ..database import get_db
+
+tax_router = APIRouter(prefix="/api")
+
+
+@tax_router.get("/tax/basiszins", response_model=List[schemas.BasiszinsRateOut])
+def list_basiszins(db: Session = Depends(get_db)):
+    return db.query(models.BasiszinsRate).order_by(models.BasiszinsRate.year).all()
+
+
+@tax_router.put("/tax/basiszins", response_model=schemas.BasiszinsRateOut)
+def upsert_basiszins(data: schemas.BasiszinsRateUpdate, db: Session = Depends(get_db)):
+    row = db.query(models.BasiszinsRate).filter(models.BasiszinsRate.year == data.year).first()
+    if row:
+        row.rate_percent = data.rate_percent
+    else:
+        row = models.BasiszinsRate(year=data.year, rate_percent=data.rate_percent)
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@tax_router.get("/tax/sparerpauschbetrag")
+def get_sparerpauschbetrag(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return {"amount": s.sparerpauschbetrag}
+
+
+@tax_router.put("/tax/sparerpauschbetrag")
+def update_sparerpauschbetrag(data: schemas.SparerpauschbetragUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.sparerpauschbetrag = data.amount
+    db.commit()
+    return {"amount": s.sparerpauschbetrag}
+
+
+@tax_router.get("/tax/vorabpauschale", response_model=schemas.PortfolioVorabpauschaleOut)
+def get_vorabpauschale(year: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return tax.portfolio_vorabpauschale(db, space_id, year or date.today().year)
+
+
+@tax_router.get("/tax/realized-gains", response_model=schemas.RealizedGainsOut)
+def get_realized_gains(year: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return tax.compute_realized_gains(db, space_id, year or date.today().year)
+
+
+@tax_router.get("/tax/summary", response_model=schemas.TaxSummaryOut)
+def get_tax_summary(year: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    y = year or date.today().year
+    vp = tax.portfolio_vorabpauschale(db, space_id, y)
+    rg = tax.compute_realized_gains(db, space_id, y)
+    settings = auth.get_or_create_settings(db)
+    taxable = max(0.0, vp.total_steuerpflichtig + max(rg.total_gain, 0.0) - settings.sparerpauschbetrag)
+    return schemas.TaxSummaryOut(
+        year=y, vorabpauschale_total=vp.total_steuerpflichtig, realized_gain_total=rg.total_gain,
+        sparerpauschbetrag=settings.sparerpauschbetrag, taxable_after_allowance=round(taxable, 2),
+    )

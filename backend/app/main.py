@@ -26,10 +26,11 @@ from sqlalchemy.exc import IntegrityError
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, tax, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time, weather, tax_export
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, document_extract, goals, debts, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, mail_sync, travel_time, weather, tax_export
 from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
 from .sync import sync_router
 from .routers.investments import investments_router
+from .routers.tax_endpoints import tax_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -1459,64 +1460,6 @@ def goal_progress(goal_id: int, db: Session = Depends(get_db), space_id: int = D
     if not crud.get_goal(db, goal_id, space_id):
         raise HTTPException(404, "Ziel nicht gefunden")
     return crud.get_goal_progress_points(db, goal_id)
-
-
-# ---------------- Holding-Lots (einzelne Käufe/Verkäufe) ----------------
-# ---------------- Steuer (Vorabpauschale / realisierte Gewinne) ----------------
-# Näherungsweise Berechnung zur Orientierung, keine Steuerberatung - siehe tax.py.
-@api_router.get("/tax/basiszins", response_model=List[schemas.BasiszinsRateOut])
-def list_basiszins(db: Session = Depends(get_db)):
-    return db.query(models.BasiszinsRate).order_by(models.BasiszinsRate.year).all()
-
-
-@api_router.put("/tax/basiszins", response_model=schemas.BasiszinsRateOut)
-def upsert_basiszins(data: schemas.BasiszinsRateUpdate, db: Session = Depends(get_db)):
-    row = db.query(models.BasiszinsRate).filter(models.BasiszinsRate.year == data.year).first()
-    if row:
-        row.rate_percent = data.rate_percent
-    else:
-        row = models.BasiszinsRate(year=data.year, rate_percent=data.rate_percent)
-        db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
-
-
-@api_router.get("/tax/sparerpauschbetrag")
-def get_sparerpauschbetrag(db: Session = Depends(get_db)):
-    s = auth.get_or_create_settings(db)
-    return {"amount": s.sparerpauschbetrag}
-
-
-@api_router.put("/tax/sparerpauschbetrag")
-def update_sparerpauschbetrag(data: schemas.SparerpauschbetragUpdate, db: Session = Depends(get_db)):
-    s = auth.get_or_create_settings(db)
-    s.sparerpauschbetrag = data.amount
-    db.commit()
-    return {"amount": s.sparerpauschbetrag}
-
-
-@api_router.get("/tax/vorabpauschale", response_model=schemas.PortfolioVorabpauschaleOut)
-def get_vorabpauschale(year: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return tax.portfolio_vorabpauschale(db, space_id, year or date.today().year)
-
-
-@api_router.get("/tax/realized-gains", response_model=schemas.RealizedGainsOut)
-def get_realized_gains(year: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return tax.compute_realized_gains(db, space_id, year or date.today().year)
-
-
-@api_router.get("/tax/summary", response_model=schemas.TaxSummaryOut)
-def get_tax_summary(year: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    y = year or date.today().year
-    vp = tax.portfolio_vorabpauschale(db, space_id, y)
-    rg = tax.compute_realized_gains(db, space_id, y)
-    settings = auth.get_or_create_settings(db)
-    taxable = max(0.0, vp.total_steuerpflichtig + max(rg.total_gain, 0.0) - settings.sparerpauschbetrag)
-    return schemas.TaxSummaryOut(
-        year=y, vorabpauschale_total=vp.total_steuerpflichtig, realized_gain_total=rg.total_gain,
-        sparerpauschbetrag=settings.sparerpauschbetrag, taxable_after_allowance=round(taxable, 2),
-    )
 
 
 # ---------------- KI-Assistent (Ollama) ----------------
@@ -4974,6 +4917,7 @@ def restore(file: UploadFile = File(...)):
 
 app.include_router(api_router)
 app.include_router(investments_router)
+app.include_router(tax_router)
 app.include_router(sync_router)
 
 
