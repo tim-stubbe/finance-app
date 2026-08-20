@@ -32,6 +32,7 @@ from .sync import sync_router
 from .routers.investments import investments_router
 from .routers.tax_endpoints import tax_router
 from .routers.debts import debts_router
+from .routers.goals import goals_router, goal_out
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -1225,98 +1226,6 @@ def get_benchmark(db: Session = Depends(get_db), space_id: int = Depends(auth.ge
         out.percentile_exact = exact
         out.verdict = benchmark.verdict(total, own)
     return out
-
-
-# ---------------- Ziele ----------------
-def _goal_out(db: Session, goal: models.Goal, evaluate: bool = True) -> schemas.GoalOut:
-    """Baut die Ausgabe eines Ziels und rechnet bei auto_financial den Stand live
-    (analog net_worth/budget_progress) - so ist der Fortschritt sofort aktuell und
-    nicht erst nach dem nächtlichen Job."""
-    out = schemas.GoalOut.model_validate(goal)
-    out.predecessor_title = goal.predecessor.title if goal.predecessor else None
-    if goal.goal_type != models.GoalType.auto_financial or not goal.trigger:
-        return out
-
-    result = goals.evaluate_goal(db, goal) if evaluate else goals.evaluate_metric(db, goal)
-    out.status = goal.status
-    out.completed_at = goal.completed_at
-    out.completion_seen = goal.completion_seen
-    out.metric_label = result.label
-    out.value_unit = result.unit
-    out.target_value = result.threshold
-    out.evaluation_error = result.error
-    if result.value is not None:
-        out.current_value = result.value
-        out.progress_percent = goals.progress_percent(result.value, result.threshold, result.comparison)
-    return out
-
-
-@api_router.get("/goals", response_model=List[schemas.GoalOut])
-def list_goals(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    result = [_goal_out(db, g) for g in crud.get_goals(db, space_id)]
-    db.commit()  # evtl. automatisch erreichte Ziele festschreiben
-    return result
-
-
-@api_router.post("/goals", response_model=schemas.GoalOut)
-def create_goal(data: schemas.GoalCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    if data.goal_type == models.GoalType.auto_financial and data.trigger is None:
-        raise HTTPException(400, "Für ein automatisch messbares Ziel wird eine Auswertungsregel benötigt")
-    if data.predecessor_goal_id and not crud.get_goal(db, data.predecessor_goal_id, space_id):
-        raise HTTPException(400, "Das gewählte Vorgänger-Ziel existiert nicht")
-    goal = crud.create_goal(db, data, space_id)
-    out = _goal_out(db, goal)
-    db.commit()
-    return out
-
-
-@api_router.put("/goals/{goal_id}", response_model=schemas.GoalOut)
-def update_goal(goal_id: int, data: schemas.GoalUpdate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    if data.predecessor_goal_id:
-        if data.predecessor_goal_id == goal_id:
-            raise HTTPException(400, "Ein Ziel kann nicht sein eigener Vorgänger sein")
-        if not crud.get_goal(db, data.predecessor_goal_id, space_id):
-            raise HTTPException(400, "Das gewählte Vorgänger-Ziel existiert nicht")
-    goal = crud.update_goal(db, goal_id, space_id, data)
-    if not goal:
-        raise HTTPException(404, "Ziel nicht gefunden")
-    out = _goal_out(db, goal)
-    db.commit()
-    return out
-
-
-@api_router.delete("/goals/{goal_id}")
-def delete_goal(goal_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    if not crud.delete_goal(db, goal_id, space_id):
-        raise HTTPException(404, "Ziel nicht gefunden")
-    return {"ok": True}
-
-
-@api_router.post("/goals/{goal_id}/complete", response_model=schemas.GoalCompleteResult)
-def complete_goal(goal_id: int, completed: bool = True, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    goal = crud.get_goal(db, goal_id, space_id)
-    if not goal:
-        raise HTTPException(404, "Ziel nicht gefunden")
-    if goal.goal_type == models.GoalType.auto_financial:
-        raise HTTPException(400, "Automatisch messbare Ziele werden nicht von Hand abgehakt")
-    crud.set_goal_completed(db, goal, completed)
-    return schemas.GoalCompleteResult(
-        ok=True,
-        goal=_goal_out(db, goal, evaluate=False),
-        message="Ziel abgehakt." if completed else "Ziel wieder geöffnet.",
-    )
-
-
-@api_router.post("/goals/mark-seen")
-def mark_goals_seen(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return {"ok": True, "marked": crud.mark_goals_seen(db, space_id)}
-
-
-@api_router.get("/goals/{goal_id}/progress", response_model=List[schemas.GoalProgressPoint])
-def goal_progress(goal_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    if not crud.get_goal(db, goal_id, space_id):
-        raise HTTPException(404, "Ziel nicht gefunden")
-    return crud.get_goal_progress_points(db, goal_id)
 
 
 # ---------------- KI-Assistent (Ollama) ----------------
@@ -4343,7 +4252,7 @@ def today_overview(db: Session = Depends(get_db), space_id: int = Depends(auth.g
     # --- Ziele mit nahem Zieldatum bzw. kurz vor dem Ziel ---
     goals: list[schemas.TodayGoal] = []
     for g in crud.get_goals(db, space_id):
-        out = _goal_out(db, g, evaluate=True)
+        out = goal_out(db, g, evaluate=True)
         if out.status != schemas.GoalStatus.open:
             continue
         days_left = (out.target_date - today).days if out.target_date else None
@@ -4776,6 +4685,7 @@ app.include_router(api_router)
 app.include_router(investments_router)
 app.include_router(tax_router)
 app.include_router(debts_router)
+app.include_router(goals_router)
 app.include_router(sync_router)
 
 
