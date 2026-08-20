@@ -67,6 +67,22 @@ public struct Todo: Codable, FetchableRecord, PersistableRecord, Identifiable {
     public var pending_client_id: String?
 }
 
+/// Termin, pull-only (siehe AppDatabase-Migration v2_calendarEvents) - für
+/// die "Heute"-Ansicht der iOS-App. Kein pending_client_id, weil diese erste
+/// Scheibe keine Termine lokal anlegt.
+public struct CalendarEvent: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "calendar_events"
+    public var id: Int64
+    public var uid: String?
+    public var title: String
+    public var start: String
+    public var end: String?
+    public var location: String?
+    public var all_day: Bool
+    public var created_at: String?
+    public var updated_at: String?
+}
+
 /// Lokal-only: Sync-Cursor (Singleton-Zeile, id fest auf 1).
 public struct SyncState: Codable, FetchableRecord, PersistableRecord {
     public static let databaseTableName = "sync_state"

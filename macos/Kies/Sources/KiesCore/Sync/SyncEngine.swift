@@ -19,7 +19,7 @@ public final class SyncEngine: ObservableObject {
 
     // Nur diese Entitäten hat die erste vertikale Scheibe lokal - alle
     // anderen Server-Entitäten aus der Pull-Antwort werden ignoriert.
-    private nonisolated static let localEntityTypes: Set<String> = ["Account", "Category", "Transaction", "Todo", "Space"]
+    private nonisolated static let localEntityTypes: Set<String> = ["Account", "Category", "Transaction", "Todo", "Space", "CalendarEvent"]
 
     public func run() async {
         guard PairingStore.shared.isPaired, !isSyncing else { return }
@@ -93,6 +93,13 @@ public final class SyncEngine: ObservableObject {
                 created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue,
                 pending_client_id: nil
             ).save(db)
+        case "CalendarEvent":
+            try CalendarEvent(
+                id: id, uid: row["uid"]?.stringValue, title: row["title"]?.stringValue ?? "",
+                start: row["start"]?.stringValue ?? "", end: row["end"]?.stringValue,
+                location: row["location"]?.stringValue, all_day: row["all_day"]?.boolValue ?? false,
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
         default:
             break
         }
@@ -105,6 +112,7 @@ public final class SyncEngine: ObservableObject {
         case "Category": try Category.deleteOne(db, key: tombstone.entity_id)
         case "Transaction": try TransactionRecord.deleteOne(db, key: tombstone.entity_id)
         case "Todo": try Todo.deleteOne(db, key: tombstone.entity_id)
+        case "CalendarEvent": try CalendarEvent.deleteOne(db, key: tombstone.entity_id)
         default: break
         }
     }

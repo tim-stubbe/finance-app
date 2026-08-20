@@ -93,6 +93,27 @@ public enum AppDatabase {
             }
         }
 
+        // Neu für die iOS-"Heute"-Ansicht: heutige/nächste Termine. Pull-only
+        // lokal (kein Anlegen/Bearbeiten von Terminen in dieser ersten iOS-
+        // Scheibe) - server-seitig ist CalendarEvent längst voll sync-fähig
+        // (siehe sync_registry.py), hier fehlte bisher nur die lokale Tabelle.
+        // Bewusst nur die für die Anzeige nötigen Spalten, nicht 1:1 alle
+        // Server-Spalten (z.B. href/etag/lat/lon fehlen) - applyRow liest
+        // aus der Pull-Antwort ohnehin nur, was hier definiert ist.
+        migrator.registerMigration("v2_calendarEvents") { db in
+            try db.create(table: "calendar_events") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("uid", .text)
+                t.column("title", .text).notNull()
+                t.column("start", .text).notNull()
+                t.column("end", .text)
+                t.column("location", .text)
+                t.column("all_day", .boolean).notNull().defaults(to: false)
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+        }
+
         return migrator
     }
 }
