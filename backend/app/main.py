@@ -36,6 +36,7 @@ from .routers.goals import goals_router, goal_out
 from .routers.trips import trips_router
 from .routers.wishlist import wishlist_router
 from .routers.personal import personal_router
+from .routers.business_life import business_life_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -518,88 +519,6 @@ def remove_budget(category_id: int, db: Session = Depends(get_db), space_id: int
     if not b:
         raise HTTPException(404, "Budget nicht gefunden")
     return {"ok": True}
-
-
-# ---------------- Business-Projekte (Nebenprojekte) ----------------
-@api_router.get("/business-projects", response_model=List[schemas.BusinessProjectOut])
-def list_business_projects(include_inactive: bool = False, db: Session = Depends(get_db)):
-    return crud.get_business_projects(db, include_inactive)
-
-
-@api_router.post("/business-projects", response_model=schemas.BusinessProjectOut)
-def create_business_project(data: schemas.BusinessProjectCreate, db: Session = Depends(get_db)):
-    return crud.create_business_project(db, data)
-
-
-@api_router.patch("/business-projects/{project_id}", response_model=schemas.BusinessProjectOut)
-def update_business_project(project_id: int, data: schemas.BusinessProjectUpdate, db: Session = Depends(get_db)):
-    project = crud.get_business_project(db, project_id)
-    if not project:
-        raise HTTPException(404, "Projekt nicht gefunden")
-    return crud.update_business_project(db, project, data)
-
-
-@api_router.post("/business-projects/{project_id}/checked", response_model=schemas.BusinessProjectOut)
-def mark_business_project_checked(project_id: int, db: Session = Depends(get_db)):
-    project = crud.get_business_project(db, project_id)
-    if not project:
-        raise HTTPException(404, "Projekt nicht gefunden")
-    return crud.mark_business_project_checked(db, project)
-
-
-@api_router.get("/business-issues", response_model=List[schemas.BusinessIssueOut])
-def list_business_issues(project_id: Optional[int] = None, include_resolved: bool = False, db: Session = Depends(get_db)):
-    return crud.get_business_issues(db, project_id, include_resolved)
-
-
-@api_router.post("/business-issues", response_model=schemas.BusinessIssueOut)
-def create_business_issue(data: schemas.BusinessIssueCreate, db: Session = Depends(get_db)):
-    project = crud.get_business_project(db, data.project_id)
-    if not project:
-        raise HTTPException(404, "Projekt nicht gefunden")
-    project.last_checked_at = datetime.utcnow()
-    db.commit()
-    return crud.create_business_issue(db, data.project_id, data.title, data.notes)
-
-
-@api_router.post("/business-issues/{issue_id}/resolve", response_model=schemas.BusinessIssueOut)
-def resolve_business_issue(issue_id: int, db: Session = Depends(get_db)):
-    issue = db.query(models.BusinessIssue).filter(models.BusinessIssue.id == issue_id).first()
-    if not issue:
-        raise HTTPException(404, "Eintrag nicht gefunden")
-    return crud.resolve_business_issue(db, issue)
-
-
-# ---------------- Leben (persönliche Lebensbereiche) ----------------
-@api_router.get("/life-areas", response_model=List[schemas.LifeAreaOut])
-def list_life_areas(include_inactive: bool = False, db: Session = Depends(get_db)):
-    return crud.get_life_areas(db, include_inactive)
-
-
-@api_router.post("/life-areas", response_model=schemas.LifeAreaOut)
-def create_life_area(data: schemas.LifeAreaCreate, db: Session = Depends(get_db)):
-    return crud.create_life_area(db, data)
-
-
-@api_router.patch("/life-areas/{area_id}", response_model=schemas.LifeAreaOut)
-def update_life_area(area_id: int, data: schemas.LifeAreaUpdate, db: Session = Depends(get_db)):
-    area = crud.get_life_area(db, area_id)
-    if not area:
-        raise HTTPException(404, "Lebensbereich nicht gefunden")
-    return crud.update_life_area(db, area, data)
-
-
-@api_router.get("/life-checkins", response_model=List[schemas.LifeCheckInOut])
-def list_life_checkins(area_id: Optional[int] = None, db: Session = Depends(get_db)):
-    return crud.get_life_checkins(db, area_id)
-
-
-@api_router.post("/life-checkins", response_model=schemas.LifeCheckInOut)
-def create_life_checkin(data: schemas.LifeCheckInCreate, db: Session = Depends(get_db)):
-    area = crud.get_life_area(db, data.area_id)
-    if not area:
-        raise HTTPException(404, "Lebensbereich nicht gefunden")
-    return crud.create_life_checkin(db, data.area_id, data.note, data.progress_percent)
 
 
 # ---------------- Eigene Regeln (Sofort-Alarme) ----------------
@@ -4452,6 +4371,7 @@ app.include_router(goals_router)
 app.include_router(trips_router)
 app.include_router(wishlist_router)
 app.include_router(personal_router)
+app.include_router(business_life_router)
 app.include_router(sync_router)
 
 
