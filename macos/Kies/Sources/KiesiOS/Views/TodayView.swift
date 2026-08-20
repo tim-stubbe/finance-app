@@ -89,7 +89,7 @@ struct TodayView: View {
                 .limit(5)
                 .fetchAll(db)
         }) ?? []
-        let balance = (try? db.read { db in try Queries.todayBalance(db) }) ?? (0, 0)
+        let balance = (try? db.read { db in try Queries.todayBalance(db) }) ?? (income: 0, expense: 0)
         income.value = balance.income
         expense.value = balance.expense
     }
