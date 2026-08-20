@@ -2,8 +2,10 @@
 
 Läuft stündlich über den Scheduler (main.py), zusätzlich manuell auslösbar.
 Bewusst konservativ: nur Buchungen, bei denen die KI eine Sicherheit über
-CONFIDENCE_THRESHOLD angibt, werden wirklich zugeordnet - alles andere bleibt
-unkategorisiert liegen, statt geraten zu werden (Nutzerentscheidung)."""
+CONFIDENCE_THRESHOLD angibt, werden direkt zugeordnet. Vorschläge mit
+mittlerer Konfidenz (siehe QUEUE_MIN_CONFIDENCE) landen stattdessen in einer
+Review-Warteschlange (models.CategorySuggestion) zum manuellen Bestätigen/
+Ablehnen - nur wirklich geratene Vorschläge werden ganz verworfen."""
 
 import json
 import re
@@ -52,9 +54,17 @@ def _apply_deterministic_rules(pending: list[models.Transaction], cat_by_name: d
     return remaining, matched
 
 
+# Unterhalb dieser Konfidenz wird ein Vorschlag nicht mal in die Review-
+# Warteschlange gelegt - reines Rauschen (die KI hat wirklich geraten, siehe
+# _prompt: "0 = geraten"), damit die Queue nicht mit wertlosen Vorschlägen
+# vollläuft, die niemand je bestätigen würde.
+QUEUE_MIN_CONFIDENCE = 0.35
+
+
 class CategorizeResult(NamedTuple):
     categorized: int
     skipped: int
+    queued: int
     error: str | None
 
 
@@ -97,11 +107,11 @@ def _prompt(categories: list[models.Category], batch: list[models.Transaction]) 
 def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> CategorizeResult:
     model = settings.ollama_model or settings.beleg_chat_model
     if not settings.ollama_url or not model:
-        return CategorizeResult(0, 0, "Ollama-Server-URL/Modell nicht konfiguriert")
+        return CategorizeResult(0, 0, 0, "Ollama-Server-URL/Modell nicht konfiguriert")
 
     categories = crud.get_categories(db)
     if not categories:
-        return CategorizeResult(0, 0, None)
+        return CategorizeResult(0, 0, 0, None)
     cat_by_name = {c.name.strip().lower(): c for c in categories}
 
     pending = (
@@ -117,16 +127,26 @@ def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> Ca
         .all()
     )
     if not pending:
-        return CategorizeResult(0, 0, None)
+        return CategorizeResult(0, 0, 0, None)
 
     categorized = 0
     skipped = 0
+    queued = 0
     pending, deterministic_hits = _apply_deterministic_rules(pending, cat_by_name)
     categorized += deterministic_hits
     if deterministic_hits:
         db.commit()
     if not pending:
-        return CategorizeResult(categorized, skipped, None)
+        return CategorizeResult(categorized, skipped, queued, None)
+
+    # Bereits vorhandene Vorschläge (jeder Status) vorab laden statt pro Zeile
+    # einzeln nachzufragen - verhindert UNIQUE-Konflikte beim Anlegen (siehe
+    # models.CategorySuggestion-Docstring: ein einmal entschiedener Vorschlag
+    # für dieselbe Buchung+Kategorie soll nicht erneut auftauchen).
+    existing_suggestions = {
+        (s.transaction_id, s.suggested_category_id)
+        for s in db.query(models.CategorySuggestion.transaction_id, models.CategorySuggestion.suggested_category_id)
+    }
 
     for i in range(0, len(pending), BATCH_SIZE):
         batch = pending[i:i + BATCH_SIZE]
@@ -147,16 +167,25 @@ def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> Ca
             matched_ids.add(tx.id)
             confidence = row.get("confidence")
             cat = cat_by_name.get(str(row.get("category", "")).strip().lower())
-            if cat is None or not isinstance(confidence, (int, float)) or confidence < CONFIDENCE_THRESHOLD:
+            if cat is None or not isinstance(confidence, (int, float)):
                 skipped += 1
                 continue
-            tx.category_id = cat.id
-            tx.categorized_at = datetime.utcnow()
-            categorized += 1
+            if confidence >= CONFIDENCE_THRESHOLD:
+                tx.category_id = cat.id
+                tx.categorized_at = datetime.utcnow()
+                categorized += 1
+            elif confidence >= QUEUE_MIN_CONFIDENCE and (tx.id, cat.id) not in existing_suggestions:
+                db.add(models.CategorySuggestion(
+                    transaction_id=tx.id, suggested_category_id=cat.id, confidence=confidence,
+                ))
+                existing_suggestions.add((tx.id, cat.id))
+                queued += 1
+            else:
+                skipped += 1
         # Buchungen, zu denen die KI gar keine Zeile geliefert hat, zählen ebenfalls
         # als übersprungen statt stillschweigend zu verschwinden.
         skipped += len(batch) - len(matched_ids)
 
-    if categorized:
+    if categorized or queued:
         db.commit()
-    return CategorizeResult(categorized, skipped, None)
+    return CategorizeResult(categorized, skipped, queued, None)

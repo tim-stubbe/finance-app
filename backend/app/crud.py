@@ -3937,3 +3937,55 @@ def delete_health_metric(db: Session, metric_id: int) -> bool:
     db.delete(metric)
     db.commit()
     return True
+
+
+# ---------- KI-Review-Queue (Kategorisierungsvorschläge) ----------
+def _category_suggestion_out(s: models.CategorySuggestion) -> schemas.CategorySuggestionOut:
+    return schemas.CategorySuggestionOut(
+        id=s.id, transaction_id=s.transaction_id,
+        transaction_description=s.transaction.description, transaction_amount=s.transaction.amount,
+        transaction_date=s.transaction.date,
+        suggested_category_id=s.suggested_category_id, suggested_category_name=s.suggested_category.name,
+        confidence=s.confidence, created_at=s.created_at,
+    )
+
+
+def get_pending_category_suggestions(db: Session, space_id: int, limit: int = 100) -> list[schemas.CategorySuggestionOut]:
+    rows = (
+        db.query(models.CategorySuggestion)
+        .join(models.Transaction, models.CategorySuggestion.transaction_id == models.Transaction.id)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .filter(
+            models.CategorySuggestion.status == models.CategorySuggestionStatus.pending,
+            models.Account.space_id == space_id,
+            # Zwischenzeitlich anderweitig kategorisiert (z.B. manuell) -
+            # dann ist der Vorschlag hinfällig, taucht aber nicht mehr in
+            # dieser Abfrage auf statt aktiv aufgeräumt zu werden (kein
+            # Korrektheitsproblem, nur Karteileichen in der Tabelle).
+            models.Transaction.category_id.is_(None),
+        )
+        .order_by(models.CategorySuggestion.confidence.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_category_suggestion_out(s) for s in rows]
+
+
+def decide_category_suggestion(db: Session, suggestion_id: int, space_id: int, accept: bool) -> schemas.CategorySuggestionOut | None:
+    suggestion = (
+        db.query(models.CategorySuggestion)
+        .join(models.Transaction, models.CategorySuggestion.transaction_id == models.Transaction.id)
+        .join(models.Account, models.Transaction.account_id == models.Account.id)
+        .filter(models.CategorySuggestion.id == suggestion_id, models.Account.space_id == space_id)
+        .first()
+    )
+    if not suggestion:
+        return None
+    out = _category_suggestion_out(suggestion)
+    if accept and suggestion.transaction.category_id is None:
+        suggestion.transaction.category_id = suggestion.suggested_category_id
+        suggestion.transaction.categorized_at = datetime.utcnow()
+    suggestion.status = models.CategorySuggestionStatus.accepted if accept else models.CategorySuggestionStatus.rejected
+    suggestion.decided_at = datetime.utcnow()
+    db.commit()
+    return out

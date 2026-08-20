@@ -227,6 +227,12 @@
         </div>
       </div>
 
+      <div class="panel hidden" id="hub-ai-suggestions-panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L13.8 8.2L19 10L13.8 11.8L12 17L10.2 11.8L5 10L10.2 8.2L12 3Z"/></svg> KI-Vorschläge</h3>
+        <p class="page-sub">Kategorisierungen, bei denen sich die KI nicht sicher genug für eine automatische Zuordnung war.</p>
+        <div id="hub-ai-suggestions-body"></div>
+      </div>
+
       <div class="panel hidden" id="hub-attention-panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 16.5h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg> Braucht deine Aufmerksamkeit</h3>
         <p class="page-sub">Projekte, Lebensbereiche und Wunschliste, die länger nicht bestätigt wurden.</p>
@@ -1579,6 +1585,21 @@
           <p class="page-sub">Lokale Auswertung über deinen eigenen Ollama-Server – nichts verlässt dein Netzwerk. Server-URL &amp; Modell stellst du unter Einstellungen ein.</p>
         </div>
       </header>
+
+      <div class="panel" id="ai-suggestions-panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L13.8 8.2L19 10L13.8 11.8L12 17L10.2 11.8L5 10L10.2 8.2L12 3Z"/></svg> Kategorisierungsvorschläge</h3>
+        <p class="page-sub">
+          Die stündliche Auto-Kategorisierung ordnet Buchungen nur direkt zu, wenn sie sich sehr sicher ist. Bei
+          mittlerer Sicherheit landet der Vorschlag hier zur manuellen Bestätigung statt automatisch angewendet
+          oder stillschweigend verworfen zu werden.
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th>Beschreibung</th><th>Betrag</th><th>Vorschlag</th><th>Sicherheit</th><th></th></tr></thead>
+            <tbody id="ai-suggestions-list"></tbody>
+          </table>
+        </div>
+      </div>
 
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 3.2 6.4L4 20l1.2-3.4A7.96 7.96 0 0 1 4 12z"/></svg> Beleg-Chat</h3>

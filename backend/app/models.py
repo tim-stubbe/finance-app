@@ -1285,6 +1285,46 @@ class WishlistItem(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class CategorySuggestionStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+
+
+class CategorySuggestion(Base):
+    """Wartende KI-Kategorisierungsvorschläge - ai_auto.auto_categorize wendet
+    einen Vorschlag nur automatisch an, wenn die KI-Konfidenz über
+    CONFIDENCE_THRESHOLD liegt (siehe dortigen Docstring); alles darunter
+    landete bisher als "skipped" im Nichts, ohne dass der Nutzer die
+    Einschätzung der KI je zu sehen bekam, selbst wenn sie oft richtig lag.
+    Diese Tabelle macht daraus eine echte Warteschlange zum manuellen
+    Bestätigen/Ablehnen statt eines stillen Verwerfens.
+
+    Kein Update bestehender Zeilen bei einem erneuten Lauf mit derselben
+    (Transaction, Kategorie)-Kombination - ein zweiter Vorschlag mit
+    UNIQUE-Konflikt wird beim Anlegen übersprungen (siehe
+    ai_auto._apply_confidence_suggestions), damit ein einmal abgelehnter
+    Vorschlag nicht beim nächsten stündlichen Lauf kommentarlos wieder
+    auftaucht. Ein GEÄNDERTER Vorschlag (andere Kategorie) ist dagegen eine
+    neue Zeile, kein Update - bewusst kein Verlust der Ablehnungshistorie."""
+
+    __tablename__ = "category_suggestions"
+    __table_args__ = (
+        UniqueConstraint("transaction_id", "suggested_category_id", name="uq_category_suggestion_tx_cat"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False)
+    suggested_category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    confidence = Column(Float, nullable=False)
+    status = Column(Enum(CategorySuggestionStatus), nullable=False, default=CategorySuggestionStatus.pending)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    decided_at = Column(DateTime, nullable=True)
+
+    transaction = relationship("Transaction")
+    suggested_category = relationship("Category")
+
+
 class Note(Base):
     """Freie, durchsuchbare Notiz, die an ein beliebiges anderes Objekt gehängt
     ist (Ziel, To-Do, Business-Projekt, den Schweiz-Tab, ...) - bewusst EINE

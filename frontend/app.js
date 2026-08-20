@@ -1638,7 +1638,68 @@ document.getElementById("ai-receipts-btn").addEventListener("click", async () =>
 
 async function loadAiTab() {
   await loadBelegChatModelSelect();
+  await loadCategorySuggestions();
 }
+
+// ================= KI-REVIEW-QUEUE (Kategorisierungsvorschläge) =================
+let categorySuggestionsCache = [];
+
+// Von Hub UND KI-Assistent-Tab genutzt - beide zeigen dieselben Daten, nur
+// der Hub nur die obersten paar als Kurzüberblick mit direktem Übernehmen-
+// Button, der KI-Tab die volle Liste mit Übernehmen/Ablehnen.
+async function loadCategorySuggestions() {
+  categorySuggestionsCache = await api("/category-suggestions").catch(() => []);
+  renderHubAiSuggestions();
+  renderAiSuggestionsList();
+}
+
+function renderHubAiSuggestions() {
+  const panel = document.getElementById("hub-ai-suggestions-panel");
+  const body = document.getElementById("hub-ai-suggestions-body");
+  if (!panel || !body) return;
+  panel.classList.toggle("hidden", categorySuggestionsCache.length === 0);
+  if (!categorySuggestionsCache.length) return;
+  body.innerHTML = categorySuggestionsCache.slice(0, 5).map(s => `
+    <button type="button" class="hub-list-row" data-suggestion-jump="${s.id}">
+      <span>${esc(s.transaction_description || "–")} <span class="page-sub" style="display:inline">→ ${esc(s.suggested_category_name)} (${Math.round(s.confidence * 100)}%)</span></span>
+      <span class="${s.transaction_amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(s.transaction_amount)}</span>
+    </button>`).join("");
+}
+
+function renderAiSuggestionsList() {
+  const tbody = document.getElementById("ai-suggestions-list");
+  if (!tbody) return;
+  if (!categorySuggestionsCache.length) {
+    tbody.innerHTML = emptyRow(6, "sparkles", "Keine wartenden Vorschläge.");
+    return;
+  }
+  tbody.innerHTML = categorySuggestionsCache.map(s => `
+    <tr>
+      <td>${fmtDate(s.transaction_date)}</td>
+      <td>${esc(s.transaction_description || "–")}</td>
+      <td class="${s.transaction_amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(s.transaction_amount)}</td>
+      <td>${esc(s.suggested_category_name)}</td>
+      <td>${Math.round(s.confidence * 100)}%</td>
+      <td>
+        <button type="button" class="btn-ghost btn-sm" data-suggestion-accept="${s.id}">✓ Übernehmen</button>
+        <button type="button" class="link-btn" data-suggestion-reject="${s.id}">Ablehnen</button>
+      </td>
+    </tr>`).join("");
+}
+
+async function decideCategorySuggestion(id, accept) {
+  await api(`/category-suggestions/${id}/${accept ? "accept" : "reject"}`, { method: "POST" });
+  await loadCategorySuggestions();
+}
+
+document.addEventListener("click", e => {
+  const acceptId = e.target.closest("[data-suggestion-accept]")?.dataset.suggestionAccept;
+  if (acceptId) { decideCategorySuggestion(parseInt(acceptId, 10), true); return; }
+  const rejectId = e.target.closest("[data-suggestion-reject]")?.dataset.suggestionReject;
+  if (rejectId) { decideCategorySuggestion(parseInt(rejectId, 10), false); return; }
+  const jumpId = e.target.closest("[data-suggestion-jump]")?.dataset.suggestionJump;
+  if (jumpId) { goToTab("ai"); }
+});
 
 // ================= BELEG-CHAT =================
 let belegChatHistory = [];
@@ -5337,11 +5398,13 @@ document.getElementById("auto-categorize-run-now").addEventListener("click", asy
   btn.disabled = true;
   try {
     const r = await api("/ai/auto-categorize/run-now", { method: "POST" });
-    let msg = `${r.transfers_marked} Buchung(en) als Umbuchung markiert, ${r.categorized} kategorisiert, ${r.skipped} übersprungen.`;
+    let msg = `${r.transfers_marked} Buchung(en) als Umbuchung markiert, ${r.categorized} kategorisiert, `
+      + `${r.queued} zur Bestätigung vorgeschlagen, ${r.skipped} übersprungen.`;
     if (r.error) msg += ` Hinweis: ${r.error}`;
     statusEl.textContent = msg;
     await loadTransactions();
     await loadGlobalTopbar();
+    await loadCategorySuggestions();
   } catch (e) {
     // api() zeigt den Fehler bereits per alert() an
   }
@@ -6602,6 +6665,7 @@ async function loadHubTab() {
   document.getElementById("hub-date-kicker").textContent = new Date()
     .toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   loadTodayPanel();
+  loadCategorySuggestions();
   const cardsEl = document.getElementById("hub-finance-cards");
   cardsEl.innerHTML = skelBento();
   document.getElementById("hub-todos-body").innerHTML = skelRows(3);
@@ -8805,3 +8869,4 @@ async function openNotesSearchModal() {
   });
 }
 CMDK_ACTIONS.push({ label: "Notizen durchsuchen", icon: "file-text", run: openNotesSearchModal });
+CMDK_ACTIONS.push({ label: "KI-Vorschläge prüfen", icon: "sparkles", run: () => goToTab("ai") });

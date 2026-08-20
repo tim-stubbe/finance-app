@@ -1148,6 +1148,7 @@ class AutoCategorizeRunResult(BaseModel):
     transfers_marked: int
     categorized: int
     skipped: int
+    queued: int = 0
     error: Optional[str] = None
 
 
@@ -2070,3 +2071,17 @@ class HealthMetricOut(BaseModel):
     metric_type: HealthMetricType
     date: date
     value: float
+
+
+# ---------- KI-Review-Queue (Kategorisierungsvorschläge) ----------
+class CategorySuggestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    transaction_id: int
+    transaction_description: Optional[str] = None
+    transaction_amount: float
+    transaction_date: date
+    suggested_category_id: int
+    suggested_category_name: str
+    confidence: float
+    created_at: datetime
