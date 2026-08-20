@@ -2253,18 +2253,48 @@
       <div class="panel" data-integration-key="brave">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg> Web-Suche für KI-Chat</h3>
         <p class="page-sub">
-          Erlaubt dem schwebenden KI-Chat, bei Bedarf im Internet zu suchen (aktuelle Steuersätze, Rechtslage,
-          Zinssätze, Nachrichten) – Ollama selbst kennt nur seinen Trainingsstand. Braucht einen kostenlosen
-          <a href="https://brave.com/search/api/" target="_blank" rel="noopener">Brave-Search-API-Key</a>
-          (2.000 Anfragen/Monat gratis). Im Chat wird immer angezeigt, wenn gerade gesucht wird.
+          Erlaubt dem schwebenden KI-Chat und dem Wunschlisten-Deal-Check, bei Bedarf im Internet zu suchen
+          (aktuelle Steuersätze, Rechtslage, Zinssätze, Nachrichten, Preise) – Ollama selbst kennt nur seinen
+          Trainingsstand. Im Chat wird immer angezeigt, wenn gerade gesucht wird.
         </p>
-        <form id="websearch-settings-form" class="form-grid">
-          <label class="wide">API-Key <input type="password" id="websearch-api-key" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Speichern</button>
-            <button type="button" id="websearch-remove" class="btn-ghost hidden">Entfernen</button>
-          </div>
-        </form>
+        <div class="filter-row">
+          <label>Anbieter
+            <select id="websearch-provider">
+              <option value="brave">Brave Search (API-Key, zuverlässiger)</option>
+              <option value="searxng">SearXNG (selbst gehostet, kostenlos)</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="websearch-brave-panel">
+          <p class="page-sub">
+            Braucht einen kostenlosen <a href="https://brave.com/search/api/" target="_blank" rel="noopener">Brave-Search-API-Key</a>
+            (2.000 Anfragen/Monat gratis).
+          </p>
+          <form id="websearch-settings-form" class="form-grid">
+            <label class="wide">API-Key <input type="password" id="websearch-api-key" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Speichern</button>
+              <button type="button" id="websearch-remove" class="btn-ghost hidden">Entfernen</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="websearch-searxng-panel" class="hidden">
+          <p class="page-sub">
+            Adresse deiner selbst gehosteten <a href="https://docs.searxng.org/" target="_blank" rel="noopener">SearXNG</a>-Instanz
+            (z.B. <code>http://192.168.1.50:8888</code>). Kein Key nötig, dafür etwas wackeligere Trefferqualität als
+            bei Brave, da SearXNG Ergebnisse von anderen Suchmaschinen scrapt. In der <code>settings.yml</code> der
+            Instanz muss unter <code>search.formats</code> auch <code>json</code> eingetragen sein, sonst schlägt die
+            Suche fehl.
+          </p>
+          <form id="searxng-settings-form" class="form-grid">
+            <label class="wide">SearXNG-URL <input type="url" id="searxng-url" placeholder="http://192.168.1.50:8888"></label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Speichern</button>
+            </div>
+          </form>
+        </div>
         <p id="websearch-status" class="page-sub"></p>
       </div>
 

@@ -197,6 +197,12 @@ class Settings(Base):
     sparerpauschbetrag = Column(Float, nullable=False, default=1000.0)
     auto_categorize_enabled = Column(Boolean, nullable=False, default=True)
     brave_search_api_key_encrypted = Column(String, nullable=True)
+    # "brave" (bezahlte API, braucht Key) oder "searxng" (selbst gehostete
+    # Instanz, kostenlos, kein Key noetig) - siehe websearch.py. Default
+    # bleibt "brave", damit bestehende Installationen mit hinterlegtem Key
+    # unveraendert weiterlaufen.
+    websearch_provider = Column(String, nullable=False, default="brave")
+    searxng_url = Column(String, nullable=True)
     # Reine Anzeige-Einstellung: gespeichert wird immer in EUR, hier steht nur,
     # in welcher Währung das Frontend umrechnet/anzeigt.
     display_currency = Column(String, nullable=False, default="EUR")

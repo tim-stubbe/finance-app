@@ -110,6 +110,8 @@ ensure_columns("accounts", {
 })
 ensure_columns("settings", {
     "brave_search_api_key_encrypted": "VARCHAR",
+    "websearch_provider": "VARCHAR DEFAULT 'brave'",
+    "searxng_url": "VARCHAR",
 })
 ensure_columns("settings", {
     "display_currency": "VARCHAR DEFAULT 'EUR'",
@@ -2162,6 +2164,22 @@ def _resolve_debt_proposal(db: Session, space_id: int, p: dict) -> None:
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
 
 
+def _websearch_configured(settings: models.Settings) -> bool:
+    if settings.websearch_provider == "searxng":
+        return bool(settings.searxng_url)
+    return bool(settings.brave_search_api_key_encrypted)
+
+
+def _websearch_run(settings: models.Settings, query: str) -> list[dict]:
+    """Dispatcht auf den in Settings.websearch_provider gewählten Anbieter -
+    einziger Aufrufpunkt fuer alle drei Stellen, die bisher Brave fest
+    eincodiert hatten (Assistant-Chat, Wunschlisten-Deal-Check)."""
+    if settings.websearch_provider == "searxng":
+        return websearch.search_searxng(settings.searxng_url, query)
+    api_key = bank_sync.decrypt_secret(settings.secret_key, settings.brave_search_api_key_encrypted)
+    return websearch.search_brave(api_key, query)
+
+
 @api_router.post("/ai/assistant-chat", response_model=schemas.AssistantChatResult)
 def assistant_chat(
     message: str = Form(...),
@@ -2197,15 +2215,14 @@ def assistant_chat(
     search_match = _SEARCH_BLOCK_RE.search(reply_raw)
     if search_match:
         query = search_match.group(1).strip()
-        if not settings.brave_search_api_key_encrypted:
+        if not _websearch_configured(settings):
             return schemas.AssistantChatResult(
-                reply=f"Ich würde dafür gern im Internet suchen („{query}“), habe aber noch keinen "
-                      "Brave-Search-API-Key hinterlegt. Trag ihn in den Einstellungen unter "
-                      "„Web-Suche für KI-Chat“ ein, dann kann ich das."
+                reply=f"Ich würde dafür gern im Internet suchen („{query}“), habe aber noch keine "
+                      "Web-Suche eingerichtet. Trag in den Einstellungen unter „Web-Suche für KI-Chat“ "
+                      "einen Brave-Search-API-Key oder eine SearXNG-Instanz ein, dann kann ich das."
             )
         try:
-            api_key = bank_sync.decrypt_secret(settings.secret_key, settings.brave_search_api_key_encrypted)
-            results = websearch.search(api_key, query)
+            results = _websearch_run(settings, query)
         except Exception as e:
             return schemas.AssistantChatResult(reply="", error=f"Web-Suche fehlgeschlagen: {e}")
         web_searches.append(query)
@@ -2416,18 +2433,26 @@ def run_auto_categorize_now(db: Session = Depends(get_db), space_id: int = Depen
     return _run_ai_maintenance_for_space(db, space_id, settings)
 
 
+def _websearch_settings_out(settings: models.Settings) -> schemas.WebSearchSettingsOut:
+    return schemas.WebSearchSettingsOut(
+        provider=settings.websearch_provider,
+        api_key_set=bool(settings.brave_search_api_key_encrypted),
+        searxng_url=settings.searxng_url,
+    )
+
+
 @api_router.get("/settings/websearch", response_model=schemas.WebSearchSettingsOut)
 def get_websearch_settings(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.WebSearchSettingsOut(api_key_set=bool(settings.brave_search_api_key_encrypted))
+    return _websearch_settings_out(auth.get_or_create_settings(db))
 
 
 @api_router.put("/settings/websearch", response_model=schemas.WebSearchSettingsOut)
 def update_websearch_settings(data: schemas.WebSearchSettingsUpdate, db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
-    settings.brave_search_api_key_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.api_key)
+    if data.api_key:
+        settings.brave_search_api_key_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.api_key)
     db.commit()
-    return schemas.WebSearchSettingsOut(api_key_set=True)
+    return _websearch_settings_out(settings)
 
 
 @api_router.delete("/settings/websearch", response_model=schemas.WebSearchSettingsOut)
@@ -2435,7 +2460,19 @@ def remove_websearch_settings(db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
     settings.brave_search_api_key_encrypted = None
     db.commit()
-    return schemas.WebSearchSettingsOut(api_key_set=False)
+    return _websearch_settings_out(settings)
+
+
+@api_router.put("/settings/websearch/provider", response_model=schemas.WebSearchSettingsOut)
+def update_websearch_provider(data: schemas.WebSearchProviderUpdate, db: Session = Depends(get_db)):
+    if data.provider not in ("brave", "searxng"):
+        raise HTTPException(400, "Unbekannter Anbieter (brave/searxng)")
+    settings = auth.get_or_create_settings(db)
+    settings.websearch_provider = data.provider
+    if data.provider == "searxng":
+        settings.searxng_url = (data.searxng_url or "").strip() or None
+    db.commit()
+    return _websearch_settings_out(settings)
 
 
 # ---------------- Anzeige-Währung (rein Frontend-Umrechnung, gespeichert bleibt EUR) ----------------
@@ -3755,9 +3792,9 @@ def integrations_status(db: Session = Depends(get_db)):
     ))
 
     items.append(entry(
-        "brave", "Brave Search",
+        "brave", "Web-Suche (Brave/SearXNG)",
         "Websuche im KI-Chat",
-        [] if s.brave_search_api_key_encrypted else ["API-Schlüssel"],
+        [] if _websearch_configured(s) else (["SearXNG-URL"] if s.websearch_provider == "searxng" else ["API-Schlüssel"]),
     ))
 
     missing = []
@@ -5589,12 +5626,11 @@ def _scheduled_wishlist_auto_check():
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
-        if not settings.notifications_enabled or not settings.brave_search_api_key_encrypted:
+        if not settings.notifications_enabled or not _websearch_configured(settings):
             return
         chat_model = settings.ollama_model or settings.beleg_chat_model
         if not settings.ollama_url or not chat_model:
             return
-        api_key = bank_sync.decrypt_secret(settings.secret_key, settings.brave_search_api_key_encrypted)
 
         cutoff = datetime.utcnow() - timedelta(hours=WISHLIST_AUTO_CHECK_MIN_HOURS)
         items = (
@@ -5620,7 +5656,7 @@ def _scheduled_wishlist_auto_check():
                 query = f"{item.name} günstig Angebot Preis"
                 if item.target_price:
                     query += f" unter {item.target_price:.0f} Euro"
-                results = websearch.search(api_key, query)
+                results = _websearch_run(settings, query)
                 if not results:
                     continue
                 prompt = (

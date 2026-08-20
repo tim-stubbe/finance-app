@@ -5152,10 +5152,25 @@ document.getElementById("auto-categorize-run-now").addEventListener("click", asy
 
 async function loadWebSearchSettings() {
   const s = await api("/settings/websearch");
+  document.getElementById("websearch-provider").value = s.provider;
+  document.getElementById("websearch-brave-panel").classList.toggle("hidden", s.provider !== "brave");
+  document.getElementById("websearch-searxng-panel").classList.toggle("hidden", s.provider !== "searxng");
   document.getElementById("websearch-remove").classList.toggle("hidden", !s.api_key_set);
   document.getElementById("websearch-api-key").placeholder = s.api_key_set
     ? "gespeichert – zum Ändern neuen Key eingeben" : "wird verschlüsselt gespeichert";
+  document.getElementById("searxng-url").value = s.searxng_url || "";
 }
+
+document.getElementById("websearch-provider").addEventListener("change", async e => {
+  const provider = e.target.value;
+  document.getElementById("websearch-brave-panel").classList.toggle("hidden", provider !== "brave");
+  document.getElementById("websearch-searxng-panel").classList.toggle("hidden", provider !== "searxng");
+  await api("/settings/websearch/provider", {
+    method: "PUT",
+    body: JSON.stringify({ provider, searxng_url: document.getElementById("searxng-url").value.trim() || null }),
+  });
+  toast(provider === "searxng" ? "SearXNG als Web-Suche aktiv." : "Brave Search als Web-Suche aktiv.");
+});
 
 document.getElementById("websearch-settings-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -5172,6 +5187,16 @@ document.getElementById("websearch-remove").addEventListener("click", async () =
   await api("/settings/websearch", { method: "DELETE" });
   toast("Web-Suche entfernt.");
   loadWebSearchSettings();
+});
+
+document.getElementById("searxng-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const url = document.getElementById("searxng-url").value.trim();
+  if (!url) return;
+  await api("/settings/websearch/provider", {
+    method: "PUT", body: JSON.stringify({ provider: "searxng", searxng_url: url }),
+  });
+  toast("SearXNG-Adresse gespeichert.");
 });
 
 async function loadNotificationSettings() {

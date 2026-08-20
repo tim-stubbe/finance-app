@@ -1161,11 +1161,18 @@ class AssistantChatResult(BaseModel):
 
 
 class WebSearchSettingsOut(BaseModel):
+    provider: str = "brave"
     api_key_set: bool = False
+    searxng_url: Optional[str] = None
 
 
 class WebSearchSettingsUpdate(BaseModel):
-    api_key: str
+    api_key: Optional[str] = None
+
+
+class WebSearchProviderUpdate(BaseModel):
+    provider: str
+    searxng_url: Optional[str] = None
 
 
 # ---------- Anzeige-Währung ----------
