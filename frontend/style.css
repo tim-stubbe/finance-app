@@ -3397,7 +3397,16 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     padding: 0;
     border-top: none;
   }
-  :root[data-theme="alpen-desktop"] .version-watermark { display: none; }
+  /* Bleibt sichtbar statt zu verschwinden - zeigt weiterhin, ob ein Update
+     tatsaechlich angekommen ist. Rutscht ans Ende der Top-Nav statt unten in
+     der (jetzt nicht mehr existierenden) Seitenleiste zu stehen. */
+  :root[data-theme="alpen-desktop"] .version-watermark {
+    margin-top: 0;
+    margin-left: 10px;
+    padding: 0;
+    flex-shrink: 0;
+    order: 99;
+  }
 
   :root[data-theme="alpen-desktop"] main {
     max-width: 1440px;
