@@ -2085,3 +2085,12 @@ class CategorySuggestionOut(BaseModel):
     suggested_category_name: str
     confidence: float
     created_at: datetime
+
+
+# ---------- Globale Suche ----------
+class GlobalSearchResult(BaseModel):
+    entity_type: str
+    id: int
+    label: str
+    sublabel: Optional[str] = None
+    tab: str

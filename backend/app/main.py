@@ -682,6 +682,13 @@ def search_notes(q: str, db: Session = Depends(get_db)):
     return results
 
 
+@api_router.get("/search", response_model=List[schemas.GlobalSearchResult])
+def global_search(q: str, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    if len(q.strip()) < 2:
+        return []
+    return crud.global_search(db, space_id, q.strip())
+
+
 # ---------------- Zeiterfassung ----------------
 @api_router.get("/projects/{project_id}/time-entries", response_model=List[schemas.TimeEntryOut])
 def list_time_entries(project_id: int, db: Session = Depends(get_db)):

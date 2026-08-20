@@ -3989,3 +3989,86 @@ def decide_category_suggestion(db: Session, suggestion_id: int, space_id: int, a
     suggestion.decided_at = datetime.utcnow()
     db.commit()
     return out
+
+
+# ---------- Globale Suche ----------
+# Bündelt die bestehenden Teil-Suchen (Belege, Notizen) und ergänzt sie um
+# weitere durchsuchbare Entitäten - bewusst EIN Endpunkt statt eines eigenen
+# Suchindex (SQLite FTS5 wäre für die hier übliche Datenmenge eines
+# Einzelnutzers unnötiger Overhead, siehe search_receipts-Docstring). Jede
+# Kategorie liefert nur wenige Treffer (limit_per_type), damit die
+# Befehlspalette nicht von einer einzelnen Entität überflutet wird.
+def global_search(db: Session, space_id: int, q: str, limit_per_type: int = 6) -> list[schemas.GlobalSearchResult]:
+    like = f"%{q.strip()}%"
+    results: list[schemas.GlobalSearchResult] = []
+
+    txs = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(
+            models.Account.space_id == space_id,
+            (models.Transaction.description.ilike(like)) | (models.Transaction.notes.ilike(like)),
+        )
+        .order_by(models.Transaction.date.desc())
+        .limit(limit_per_type)
+        .all()
+    )
+    for t in txs:
+        results.append(schemas.GlobalSearchResult(
+            entity_type="transaction", id=t.id, label=t.description or "Buchung",
+            sublabel=f"{t.date.isoformat()} · {t.amount:.2f} €", tab="transactions",
+        ))
+
+    goals = (
+        db.query(models.Goal)
+        .filter(models.Goal.title.ilike(like), (models.Goal.space_id == space_id) | (models.Goal.space_id.is_(None)))
+        .limit(limit_per_type)
+        .all()
+    )
+    for g in goals:
+        results.append(schemas.GlobalSearchResult(
+            entity_type="goal", id=g.id, label=g.title,
+            sublabel=g.category, tab="schweiz" if (g.category or "").lower().startswith("schweiz") else "goals",
+        ))
+
+    projects = db.query(models.BusinessProject).filter(models.BusinessProject.name.ilike(like)).limit(limit_per_type).all()
+    for p in projects:
+        results.append(schemas.GlobalSearchResult(entity_type="business_project", id=p.id, label=p.name, tab="projects"))
+
+    contacts = (
+        db.query(models.Contact)
+        .filter((models.Contact.name.ilike(like)) | (models.Contact.notes.ilike(like)))
+        .limit(limit_per_type)
+        .all()
+    )
+    for c in contacts:
+        results.append(schemas.GlobalSearchResult(entity_type="contact", id=c.id, label=c.name, sublabel=c.notes, tab="life"))
+
+    media = db.query(models.MediaItem).filter(models.MediaItem.title.ilike(like)).limit(limit_per_type).all()
+    for m in media:
+        results.append(schemas.GlobalSearchResult(
+            entity_type="media", id=m.id, label=m.title, sublabel=m.media_type, tab="life",
+        ))
+
+    notes = search_notes(db, q, limit=limit_per_type)
+    for n in notes:
+        results.append(schemas.GlobalSearchResult(
+            entity_type="note", id=n.id, label=n.text[:80], sublabel="Notiz",
+            tab=NOTE_ENTITY_JUMP_TAB.get(n.entity_type, "hub"),
+        ))
+
+    receipts = search_receipts(db, space_id, q, limit=limit_per_type)
+    for r in receipts:
+        results.append(schemas.GlobalSearchResult(
+            entity_type="receipt", id=r.id, label=r.description or "Beleg",
+            sublabel=f"Beleg · {r.date.isoformat()}", tab="transactions",
+        ))
+
+    return results
+
+
+# Muss zur Frontend-Konstante NOTE_ENTITY_JUMP in app.js passen - dort steht
+# dieselbe Zuordnung fürs manuelle Notizen-Modal, hier für die Suchergebnisse.
+NOTE_ENTITY_JUMP_TAB = {
+    "goal": "goals", "todo": "goals", "business_project": "projects", "life_area": "life", "schweiz": "schweiz",
+}

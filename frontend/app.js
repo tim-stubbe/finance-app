@@ -8506,6 +8506,8 @@ function cmdkOpen() {
   document.getElementById("cmdk-overlay").classList.remove("hidden");
   const input = document.getElementById("cmdk-input");
   input.value = "";
+  clearTimeout(cmdkSearchTimer);
+  cmdkSearchGeneration++;
   cmdkCurrentItems = cmdkFilteredItems("");
   cmdkActiveIndex = 0;
   cmdkRender();
@@ -8514,6 +8516,8 @@ function cmdkOpen() {
 
 function cmdkClose() {
   document.getElementById("cmdk-overlay").classList.add("hidden");
+  clearTimeout(cmdkSearchTimer);
+  cmdkSearchGeneration++;
 }
 
 function cmdkRunActive() {
@@ -8527,10 +8531,56 @@ document.getElementById("cmdk-trigger").addEventListener("click", cmdkOpen);
 document.getElementById("cmdk-overlay").addEventListener("click", e => {
   if (e.target.id === "cmdk-overlay") cmdkClose();
 });
+// Globale Suche (Buchungen/Ziele/Projekte/Kontakte/Leseliste/Notizen/Belege,
+// siehe crud.global_search) - läuft asynchron NEBEN der sofortigen lokalen
+// Seiten-/Aktions-Filterung, statt sie zu ersetzen: Navigation soll nicht auf
+// eine Serverantwort warten. Ergebnisse werden als weitere Gruppe angehängt,
+// sobald sie da sind. cmdkSearchGeneration verhindert, dass eine spät
+// eintreffende Antwort zu einer inzwischen geänderten Eingabe gerendert wird.
+const CMDK_SEARCH_ICONS = {
+  transaction: "receipt", goal: "target", business_project: "briefcase",
+  contact: "user", media: "file-text", note: "file-text", receipt: "file-text",
+};
+let cmdkSearchGeneration = 0;
+let cmdkSearchTimer = null;
+
+function cmdkRunSearchResult(result) {
+  return () => goToTab(result.tab);
+}
+
+async function cmdkRunSearch(query) {
+  const generation = ++cmdkSearchGeneration;
+  if (query.trim().length < 2) return;
+  let hits;
+  try {
+    hits = await api(`/search?q=${encodeURIComponent(query.trim())}`);
+  } catch (e) {
+    return;
+  }
+  // Eingabefeld hat sich seitdem geändert, oder die Palette wurde geschlossen -
+  // diese Antwort ist überholt.
+  if (generation !== cmdkSearchGeneration) return;
+  if (document.getElementById("cmdk-input").value !== query) return;
+  if (!hits.length) return;
+  cmdkCurrentItems = [
+    ...cmdkCurrentItems,
+    ...hits.map(h => ({
+      label: h.sublabel ? `${h.label} — ${h.sublabel}` : h.label,
+      icon: CMDK_SEARCH_ICONS[h.entity_type] || "file-text",
+      group: "Suchergebnisse",
+      run: cmdkRunSearchResult(h),
+    })),
+  ];
+  cmdkRender();
+}
+
 document.getElementById("cmdk-input").addEventListener("input", e => {
-  cmdkCurrentItems = cmdkFilteredItems(e.target.value);
+  const query = e.target.value;
+  cmdkCurrentItems = cmdkFilteredItems(query);
   cmdkActiveIndex = 0;
   cmdkRender();
+  clearTimeout(cmdkSearchTimer);
+  cmdkSearchTimer = setTimeout(() => cmdkRunSearch(query), 250);
 });
 document.getElementById("cmdk-results").addEventListener("click", e => {
   const idx = e.target.closest("[data-cmdk-index]")?.dataset.cmdkIndex;
