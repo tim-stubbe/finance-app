@@ -33,6 +33,8 @@ from .routers.investments import investments_router
 from .routers.tax_endpoints import tax_router
 from .routers.debts import debts_router
 from .routers.goals import goals_router, goal_out
+from .routers.trips import trips_router
+from .routers.wishlist import wishlist_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -478,35 +480,6 @@ def delete_category(category_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-# ---------------- Trips (Urlaube) ----------------
-@api_router.get("/trips", response_model=List[schemas.TripOut])
-def list_trips(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    trips = crud.get_trips(db, space_id)
-    return [crud.trip_summary(db, t) for t in trips]
-
-
-@api_router.post("/trips", response_model=schemas.TripOut)
-def create_trip(data: schemas.TripCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    trip = crud.create_trip(db, data, space_id)
-    return crud.trip_summary(db, trip)
-
-
-@api_router.put("/trips/{trip_id}", response_model=schemas.TripOut)
-def update_trip(trip_id: int, data: schemas.TripUpdate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    trip = crud.update_trip(db, trip_id, space_id, data)
-    if not trip:
-        raise HTTPException(404, "Trip nicht gefunden")
-    return crud.trip_summary(db, trip)
-
-
-@api_router.delete("/trips/{trip_id}")
-def delete_trip(trip_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    trip = crud.delete_trip(db, trip_id, space_id)
-    if not trip:
-        raise HTTPException(404, "Trip nicht gefunden")
-    return {"ok": True}
-
-
 # ---------------- Budgets ----------------
 @api_router.get("/budgets", response_model=List[schemas.BudgetOut])
 def list_budgets(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
@@ -810,33 +783,6 @@ def remove_health_metric(metric_id: int, db: Session = Depends(get_db)):
     if not crud.delete_health_metric(db, metric_id):
         raise HTTPException(404, "Eintrag nicht gefunden")
     return {"ok": True}
-
-
-# ---------------- Wunschliste (Deal-Wecker) ----------------
-@api_router.get("/wishlist", response_model=List[schemas.WishlistItemOut])
-def list_wishlist_items(include_inactive: bool = False, db: Session = Depends(get_db)):
-    return crud.get_wishlist_items(db, include_inactive)
-
-
-@api_router.post("/wishlist", response_model=schemas.WishlistItemOut)
-def create_wishlist_item(data: schemas.WishlistItemCreate, db: Session = Depends(get_db)):
-    return crud.create_wishlist_item(db, data)
-
-
-@api_router.patch("/wishlist/{item_id}", response_model=schemas.WishlistItemOut)
-def update_wishlist_item(item_id: int, data: schemas.WishlistItemUpdate, db: Session = Depends(get_db)):
-    item = crud.get_wishlist_item(db, item_id)
-    if not item:
-        raise HTTPException(404, "Eintrag nicht gefunden")
-    return crud.update_wishlist_item(db, item, data)
-
-
-@api_router.post("/wishlist/{item_id}/checked", response_model=schemas.WishlistItemOut)
-def mark_wishlist_item_checked(item_id: int, db: Session = Depends(get_db)):
-    item = crud.get_wishlist_item(db, item_id)
-    if not item:
-        raise HTTPException(404, "Eintrag nicht gefunden")
-    return crud.mark_wishlist_item_checked(db, item)
 
 
 # ---------------- Eigene Regeln (Sofort-Alarme) ----------------
@@ -4686,6 +4632,8 @@ app.include_router(investments_router)
 app.include_router(tax_router)
 app.include_router(debts_router)
 app.include_router(goals_router)
+app.include_router(trips_router)
+app.include_router(wishlist_router)
 app.include_router(sync_router)
 
 
