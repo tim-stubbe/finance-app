@@ -1034,18 +1034,46 @@ def list_holdings(db: Session = Depends(get_db), space_id: int = Depends(auth.ge
 
 @api_router.post("/holdings", response_model=schemas.HoldingOut)
 def create_holding(data: schemas.HoldingCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    # Gleiches Symbol schon vorhanden (z.B. ein zweiter Kauf/Sparplan-Vorgang
+    # derselben Aktie) -> als weiteren Vorgang an die bestehende Position
+    # haengen statt eine zweite, doppelte Zeile anzulegen (dieselbe Regel wie
+    # beim Beleg-Chat- und CSV-Import, siehe crud.find_holding_by_symbol).
+    existing = crud.find_holding_by_symbol(db, space_id, data.asset_type, data.symbol)
+    if existing:
+        crud.create_lot(db, existing.id, space_id, schemas.HoldingLotCreate(
+            date=data.purchase_date or date.today(), type=models.LotType.kauf,
+            quantity=data.quantity, price_per_unit=data.purchase_price,
+        ))
+        out = crud.holding_out(existing)
+        out.price_warning = f"Als weiterer Vorgang zu bestehender Position „{existing.name}“ ({existing.symbol}) hinzugefügt statt einer neuen Zeile."
+        return out
+
     h = crud.create_holding(db, data, space_id)
+    price_warning = None
     if h.asset_type in (models.AssetType.aktie, models.AssetType.etf):
         try:
             profile = prices.fetch_profile(h.symbol)
             h.sector = h.sector or profile["sector"]
             h.country = profile["country"]
             h.currency = profile["currency"]
-            db.commit()
-            db.refresh(h)
         except Exception:
             pass
-    return crud.holding_out(h)
+    if h.asset_type in (models.AssetType.aktie, models.AssetType.etf, models.AssetType.krypto):
+        try:
+            h.current_price = prices.fetch_price_eur(h.asset_type.value, h.symbol)
+            h.price_updated_at = datetime.utcnow()
+        except Exception as e:
+            # Kein Abbruch - die Position wird trotzdem angelegt (das Symbol
+            # koennte spaeter korrigiert werden), aber der Nutzer bekommt
+            # sofort einen Hinweis statt still einen dauerhaft kurslosen
+            # Eintrag zu erzeugen (genau das Problem, das zur Nvidia-Dublette
+            # mit Symbol="Nvidia" statt "NVDA" gefuehrt hat).
+            price_warning = f"Kein Kurs gefunden für Symbol „{h.symbol}“ - bitte prüfen (z.B. den echten Ticker wie „NVDA“ statt des Firmennamens verwenden). Fehler: {e}"
+    db.commit()
+    db.refresh(h)
+    out = crud.holding_out(h)
+    out.price_warning = price_warning
+    return out
 
 
 @api_router.put("/holdings/{holding_id}", response_model=schemas.HoldingOut)

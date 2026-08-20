@@ -1650,6 +1650,21 @@ def get_holding(db: Session, holding_id: int, space_id: int):
     )
 
 
+def find_holding_by_symbol(db: Session, space_id: int, asset_type, symbol: str) -> models.Holding | None:
+    """Sucht eine bestehende Position mit demselben Symbol (gross-/klein-
+    schreibungsunabhaengig) - dieselbe Logik, die main.py schon beim Beleg-
+    Chat-Import und beim CSV-Import nutzt, hier als gemeinsamer Helfer auch
+    fuer die manuelle "Neue Position"-Eingabe (siehe main.create_holding),
+    damit ein zweiter Kauf derselben Aktie dort als weiterer Vorgang an die
+    bestehende Position gehaengt wird statt eine zweite, doppelte Zeile
+    anzulegen."""
+    symbol_lower = symbol.strip().lower()
+    return next(
+        (h for h in get_holdings(db, space_id) if h.asset_type == asset_type and h.symbol.lower() == symbol_lower),
+        None,
+    )
+
+
 def create_holding(db: Session, data: schemas.HoldingCreate, space_id: int):
     holding = models.Holding(**data.model_dump(), space_id=space_id)
     db.add(holding)

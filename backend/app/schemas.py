@@ -273,6 +273,10 @@ class HoldingOut(BaseModel):
     gain_abs: float
     gain_pct: float
     lot_count: int = 0
+    # Nur direkt nach dem Anlegen gefuellt (siehe main.create_holding) - kein
+    # gespeichertes Feld, sondern eine einmalige Rueckmeldung an den Nutzer
+    # ("mit bestehender Position zusammengefuehrt" / "Symbol nicht gefunden").
+    price_warning: Optional[str] = None
 
 
 class NetWorthOut(BaseModel):

@@ -831,10 +831,11 @@ document.getElementById("holding-form").addEventListener("submit", async e => {
     purchase_price: parseFloat(document.getElementById("holding-purchase-price").value),
     purchase_date: document.getElementById("holding-purchase-date").value || null,
   };
-  await api("/holdings", { method: "POST", body: JSON.stringify(payload) });
+  const result = await api("/holdings", { method: "POST", body: JSON.stringify(payload) });
   document.getElementById("holding-form").reset();
   closeHoldingModal();
   loadInvestmentsTab();
+  if (result.price_warning) toast(result.price_warning);
 });
 
 function openHoldingModal() {
