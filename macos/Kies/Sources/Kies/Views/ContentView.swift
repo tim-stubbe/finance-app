@@ -15,6 +15,8 @@ struct ContentView: View {
                     Label("Konten", systemImage: "banknote").tag("accounts" as String?)
                     Label("Buchungen", systemImage: "list.bullet.rectangle").tag("transactions" as String?)
                     Label("Todos", systemImage: "checklist").tag("todos" as String?)
+                    Label("Ziele", systemImage: "target").tag("goals" as String?)
+                    Label("Leben", systemImage: "heart.text.square").tag("life" as String?)
                 }
                 .navigationTitle("Kies")
                 .safeAreaInset(edge: .bottom) {
@@ -34,6 +36,8 @@ struct ContentView: View {
                 case "accounts": AccountsListView()
                 case "transactions": TransactionsListView()
                 case "todos": TodosListView()
+                case "goals": GoalsListView()
+                case "life": LifeAreasListView()
                 default: Text("Wähle einen Bereich")
                 }
             }
