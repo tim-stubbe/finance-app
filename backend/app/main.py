@@ -42,6 +42,7 @@ from .routers.analytics import analytics_router
 from .routers.settings_misc import settings_misc_router
 from .routers.notify_settings import notify_settings_router
 from .routers.dashboard import dashboard_router
+from .routers.profile_ollama import profile_ollama_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -332,21 +333,6 @@ app.add_middleware(
 api_router = APIRouter(prefix="/api")
 
 
-# ---------------- Profil ----------------
-@api_router.get("/auth/profile", response_model=schemas.ProfileOut)
-def get_profile(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.ProfileOut(display_name=settings.display_name)
-
-
-@api_router.put("/auth/profile", response_model=schemas.ProfileOut)
-def update_profile(data: schemas.ProfileUpdate, db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    settings.display_name = data.display_name
-    db.commit()
-    return schemas.ProfileOut(display_name=settings.display_name)
-
-
 # ---------------- Transactions ----------------
 @api_router.get("/transactions", response_model=List[schemas.TransactionOut])
 def list_transactions(
@@ -482,51 +468,6 @@ def update_birth_year(data: schemas.BirthYearUpdate, db: Session = Depends(get_d
     s.birth_year = data.birth_year
     db.commit()
     return schemas.BirthYearUpdate(birth_year=s.birth_year)
-
-
-# ---------------- KI-Assistent (Ollama) ----------------
-@api_router.get("/settings/ollama", response_model=schemas.OllamaSettingsOut)
-def get_ollama_settings(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.OllamaSettingsOut(url=settings.ollama_url, model=settings.ollama_model, beleg_chat_model=settings.beleg_chat_model)
-
-
-@api_router.put("/settings/ollama", response_model=schemas.OllamaSettingsOut)
-def update_ollama_settings(data: schemas.OllamaSettingsUpdate, db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    settings.ollama_url = data.url
-    settings.ollama_model = data.model
-    settings.beleg_chat_model = data.beleg_chat_model
-    db.commit()
-    return schemas.OllamaSettingsOut(url=settings.ollama_url, model=settings.ollama_model, beleg_chat_model=settings.beleg_chat_model)
-
-
-@api_router.get("/ollama/models", response_model=schemas.OllamaModelsOut)
-def get_ollama_models(url: Optional[str] = None, db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    target = url or settings.ollama_url
-    if not target:
-        raise HTTPException(400, "Bitte zuerst eine Ollama-Server-URL angeben")
-    try:
-        return schemas.OllamaModelsOut(models=ollama_client.list_models(target))
-    except Exception as e:
-        raise HTTPException(400, f"Ollama nicht erreichbar: {e}")
-
-
-@api_router.post("/ollama/pull", response_model=schemas.OllamaPullResult)
-def pull_ollama_model(data: schemas.OllamaPullRequest, db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    target = data.url or settings.ollama_url
-    if not target:
-        raise HTTPException(400, "Bitte zuerst eine Ollama-Server-URL angeben")
-    model = data.model.strip()
-    if not model:
-        raise HTTPException(400, "Bitte einen Modellnamen angeben (z.B. llama3.2:1b)")
-    try:
-        status = ollama_client.pull_model(target, model)
-        return schemas.OllamaPullResult(ok=True, status=status)
-    except Exception as e:
-        raise HTTPException(400, f"Herunterladen fehlgeschlagen: {e}")
 
 
 def _build_portfolio_insight_prompt(db: Session, space_id: int) -> str:
@@ -1557,6 +1498,7 @@ app.include_router(analytics_router)
 app.include_router(settings_misc_router)
 app.include_router(notify_settings_router)
 app.include_router(dashboard_router)
+app.include_router(profile_ollama_router)
 app.include_router(sync_router)
 
 
