@@ -112,23 +112,32 @@ def run_backup_now(db: Session = Depends(get_db)):
     return write_backup_to_disk(settings.backup_retention)
 
 
-@backup_router.get("/backups/{filename}")
-def download_backup(filename: str):
+def _resolve_backup_path(filename: str) -> str:
+    """Backup-Dateiname -> validierter, auf BACKUP_DIR eingeschraenkter Pfad.
+
+    Regex-Fullmatch auf den Basename schliesst Traversal schon aus, aber
+    CodeQL (py/path-injection) erkennt das nicht als Sanitizer - deshalb
+    zusaetzlich explizite Containment-Pruefung gegen BACKUP_DIR."""
     safe_name = os.path.basename(filename)
     if not BACKUP_FILENAME_RE.fullmatch(safe_name):
         raise HTTPException(404, "Backup nicht gefunden")
-    full = os.path.join(BACKUP_DIR, safe_name)
+    full = os.path.realpath(os.path.join(BACKUP_DIR, safe_name))
+    if os.path.dirname(full) != os.path.realpath(BACKUP_DIR):
+        raise HTTPException(404, "Backup nicht gefunden")
+    return full
+
+
+@backup_router.get("/backups/{filename}")
+def download_backup(filename: str):
+    full = _resolve_backup_path(filename)
     if not os.path.exists(full):
         raise HTTPException(404, "Backup nicht gefunden")
-    return FileResponse(full, media_type="application/zip", filename=safe_name)
+    return FileResponse(full, media_type="application/zip", filename=os.path.basename(full))
 
 
 @backup_router.delete("/backups/{filename}")
 def delete_backup(filename: str):
-    safe_name = os.path.basename(filename)
-    if not BACKUP_FILENAME_RE.fullmatch(safe_name):
-        raise HTTPException(404, "Backup nicht gefunden")
-    full = os.path.join(BACKUP_DIR, safe_name)
+    full = _resolve_backup_path(filename)
     if os.path.exists(full):
         os.remove(full)
     return {"ok": True}
