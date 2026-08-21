@@ -12,13 +12,17 @@ backup_restore/export_import/analytics. Mehrere kleine, in main.py
 zwischen Sync-Zeitplan/Auto-Kategorisierung-Trigger/AI-Endpunkten
 verstreute Settings-Blöcke, hier gebündelt statt einzeln.
 
+Nachtraeglich (nach Schritt 26, der ai_assistant.py mit websearch_configured
+exportierte) noch hinzugefuegt: /ai/auto-categorize/run-now +
+run_ai_maintenance_for_space (vorher _run_ai_maintenance_for_space, ohne
+fuehrenden Unterstrich exportiert, da main._scheduled_ai_maintenance ihn
+weiterhin braucht) sowie /integrations/status - beide waren vorher noch in
+main.py, weil ihre jeweilige main.py-only-Abhaengigkeit noch nicht aufgeloest
+war. Jetzt sind es reine Paket-Imports, keine main.py-Abhaengigkeit mehr.
+
 Bewusst NICHT mit hierher gezogen:
 - /settings/sync-schedule (PUT) - braucht main.scheduler (zirkulär,
-  scheduler wird erst nach den Router-Importen definiert)
-- /ai/auto-categorize/run-now - braucht main._run_ai_maintenance_for_space
-  (dieselbe Zirkularitaet)
-- /integrations/status - braucht main._websearch_configured (Teil des
-  /ai-Abschnitts, der komplett in main.py bleibt)"""
+  scheduler wird erst nach den Router-Importen definiert)"""
 
 import os
 import secrets
@@ -29,8 +33,9 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, crud, auth, bank_sync, notifications, prices
+from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto
 from ..database import get_db
+from .ai_assistant import websearch_configured
 
 settings_misc_router = APIRouter(prefix="/api")
 
@@ -326,4 +331,204 @@ def get_version():
         git_sha=sha,
         git_sha_short=sha[:7],
         build_date=os.environ.get("BUILD_DATE") or None,
+    )
+
+
+def run_ai_maintenance_for_space(db: Session, space_id: int, settings: models.Settings) -> schemas.AutoCategorizeRunResult:
+    """Umbuchungen erkennen + (falls eingeschaltet) unkategorisierte Buchungen per
+    KI zuordnen. Gemeinsam genutzt vom stündlichen Job und vom manuellen 'Jetzt
+    ausführen'-Button, damit beide garantiert dasselbe tun."""
+    transfers_marked = crud.detect_and_mark_transfers(db, space_id)
+    if transfers_marked:
+        settings.transfers_marked_since_digest = (settings.transfers_marked_since_digest or 0) + transfers_marked
+        db.commit()
+    if not settings.auto_categorize_enabled:
+        return schemas.AutoCategorizeRunResult(transfers_marked=transfers_marked, categorized=0, skipped=0)
+    result = ai_auto.auto_categorize(db, space_id, settings)
+    return schemas.AutoCategorizeRunResult(
+        transfers_marked=transfers_marked, categorized=result.categorized,
+        skipped=result.skipped, queued=result.queued, error=result.error,
+    )
+
+
+@settings_misc_router.post("/ai/auto-categorize/run-now", response_model=schemas.AutoCategorizeRunResult)
+def run_auto_categorize_now(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    settings = auth.get_or_create_settings(db)
+    return run_ai_maintenance_for_space(db, space_id, settings)
+
+
+# ---------------- Einrichtungsstatus der Anbindungen ----------------
+@settings_misc_router.get("/integrations/status", response_model=schemas.IntegrationStatusOut)
+def integrations_status(db: Session = Depends(get_db)):
+    """Zeigt, welche Anbindungen einsatzbereit sind und welche noch Zugangsdaten
+    brauchen. Bewusst nur eine Prüfung der hinterlegten Einstellungen, kein
+    Verbindungstest: die Übersicht wird bei jedem Seitenaufruf geladen und darf
+    nicht auf externen Servern hängen bleiben."""
+    s = auth.get_or_create_settings(db)
+
+    # Anzahl der Pflichtfelder je Anbindung. Fehlen alle, ist die Anbindung gar
+    # nicht eingerichtet ("missing"); fehlen nur einzelne, wurde sie angefangen
+    # ("partial") - das ist der Fall, den man beim Einrichten leicht übersieht.
+    FIELD_COUNT = {
+        "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
+        "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
+        "immich": 2, "mail": 3, "ebay": 3, "radicale": 2,
+    }
+
+    def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
+        if missing:
+            status = "missing" if len(missing) >= FIELD_COUNT[key] else "partial"
+        elif not enabled:
+            status = "off"
+        else:
+            status = "ok"
+        detail = {
+            "ok": detail_ok or "Einsatzbereit.",
+            "off": "Vollständig eingerichtet, aber abgeschaltet.",
+            "partial": "Angefangen, aber noch nicht nutzbar.",
+            "missing": "Noch nicht eingerichtet.",
+        }[status]
+        return schemas.IntegrationStatusItem(
+            key=key, name=name, purpose=purpose, status=status,
+            detail=detail, missing=missing, optional=optional,
+        )
+
+    items = []
+
+    missing = []
+    if not s.ollama_url:
+        missing.append("Server-Adresse")
+    if not s.ollama_model:
+        missing.append("Modell")
+    items.append(entry(
+        "ollama", "Ollama (KI)",
+        "KI-Chat, automatische Kategorisierung, Beleg-Auswertung, Antworten des Telegram-Bots",
+        missing, optional=False,
+    ))
+
+    missing = []
+    if not s.telegram_bot_token_encrypted:
+        missing.append("Bot-Token")
+    if not s.telegram_chat_id:
+        missing.append("Chat-ID")
+    items.append(entry(
+        "telegram", "Telegram",
+        "Benachrichtigungen zu Zielen, Cashflow und Budgets; Fragen per Chat",
+        missing, enabled=s.notifications_enabled,
+    ))
+
+    missing = [label for label, value in (
+        ("Account SID", s.twilio_account_sid),
+        ("Auth-Token", s.twilio_auth_token_encrypted),
+        ("Absendernummer", s.twilio_from_number),
+        ("Zielnummer", s.twilio_to_number),
+    ) if not value]
+    items.append(entry(
+        "twilio", "Twilio (Anrufe)",
+        "Echte Anrufe bei zeitkritischen Lagen – kostenpflichtig",
+        missing, enabled=s.calls_enabled,
+    ))
+
+    items.append(entry(
+        "brave", "Web-Suche (Brave/SearXNG)",
+        "Websuche im KI-Chat",
+        [] if websearch_configured(s) else (["SearXNG-URL"] if s.websearch_provider == "searxng" else ["API-Schlüssel"]),
+    ))
+
+    missing = []
+    if not s.fints_product_id:
+        missing.append("Produkt-ID")
+    if db.query(models.BankConnection).count() == 0:
+        missing.append("mindestens eine Bank-Verbindung")
+    items.append(entry(
+        "fints", "Bank (FinTS)",
+        "Umsätze deutscher Banken automatisch abholen",
+        missing,
+    ))
+
+    missing = []
+    if not s.enablebanking_app_id:
+        missing.append("Anwendungs-ID")
+    if not s.enablebanking_private_key_encrypted:
+        missing.append("Privater Schlüssel")
+    if db.query(models.EnableBankingConnection).count() == 0:
+        missing.append("mindestens eine Verbindung")
+    items.append(entry(
+        "enablebanking", "Enable Banking (PSD2)",
+        "Banken ohne FinTS anbinden",
+        missing,
+    ))
+
+    n_bitvavo = db.query(models.BitvavoConnection).count()
+    items.append(entry(
+        "bitvavo", "Bitvavo",
+        "Krypto-Bestände automatisch abgleichen",
+        [] if n_bitvavo else ["mindestens eine Verbindung"],
+        detail_ok=f"{n_bitvavo} Verbindung{'en' if n_bitvavo != 1 else ''} eingerichtet.",
+    ))
+
+    n_paypal = db.query(models.PayPalConnection).count()
+    items.append(entry(
+        "paypal", "PayPal",
+        "PayPal-Umsätze automatisch abholen",
+        [] if n_paypal else ["mindestens eine Verbindung"],
+        detail_ok=f"{n_paypal} Verbindung{'en' if n_paypal != 1 else ''} eingerichtet.",
+    ))
+
+    missing = []
+    if not s.ebay_app_id:
+        missing.append("App-ID")
+    if not s.ebay_cert_id_encrypted:
+        missing.append("Cert-ID")
+    if not s.ebay_ru_name:
+        missing.append("RuName")
+    n_ebay = db.query(models.EbayConnection).filter(models.EbayConnection.status == "connected").count()
+    if not missing and n_ebay == 0:
+        missing.append("mindestens eine Verbindung")
+    items.append(entry(
+        "ebay", "eBay",
+        "Verkäufe wie ein Konto einbinden",
+        missing,
+        detail_ok=f"{n_ebay} Verbindung{'en' if n_ebay != 1 else ''} verbunden." if n_ebay else None,
+    ))
+
+    missing = []
+    if not s.radicale_url:
+        missing.append("Server-Adresse")
+    if not s.radicale_password_encrypted:
+        missing.append("Zugangsdaten")
+    n_todos = db.query(models.Todo).count()
+    items.append(entry(
+        "radicale", "To-Dos (Radicale)",
+        "To-Dos zweiseitig mit dem Handy synchronisieren",
+        missing,
+        detail_ok=f"{n_todos} To-Do{'s' if n_todos != 1 else ''} synchronisiert." if n_todos else None,
+    ))
+
+    missing = []
+    if not s.immich_url:
+        missing.append("Server-Adresse")
+    if not s.immich_api_key_encrypted:
+        missing.append("API-Schlüssel")
+    items.append(entry(
+        "immich", "Immich (Fotos)",
+        "Doppelte Fotos finden und nach Bestätigung aufräumen",
+        missing,
+    ))
+
+    missing = [label for label, value in (
+        ("IMAP-Server", s.imap_host),
+        ("Benutzername", s.imap_user),
+        ("Passwort", s.imap_password_encrypted),
+    ) if not value]
+    items.append(entry(
+        "mail", "E-Mail-Postfach",
+        "Belege aus Anhängen holen und Buchungen zuordnen",
+        missing, enabled=s.mail_enabled,
+    ))
+
+    return schemas.IntegrationStatusOut(
+        items=items,
+        ready=sum(1 for i in items if i.status == "ok"),
+        incomplete=sum(1 for i in items if i.status in ("missing", "partial")),
     )
