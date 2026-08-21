@@ -322,6 +322,21 @@ public final class SyncEngine: ObservableObject {
         }
     }
 
+    /// Benennt eine Kategorie um - analog zu setWishlistPurchasedOffline, nur
+    /// der Name (kein Anlegen/Löschen/Typ-Ändern in dieser Scheibe, dafür
+    /// bleibt die Web-App der Ort).
+    public func renameCategoryOffline(id: Int64, name: String) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var category = try Category.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = category.updated_at
+            category.name = name
+            try category.save(db)
+            let data: [String: Any] = ["name": name]
+            try Self.enqueueOutbox(db, entityType: "Category", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
     /// Legt einen Check-in lokal an (Platzhalter-ID) und reiht ihn in die
     /// Outbox ein - analog zu createTodoOffline, LifeCheckIn ist serverseitig
     /// ebenfalls nur "create" (siehe sync_registry.py).

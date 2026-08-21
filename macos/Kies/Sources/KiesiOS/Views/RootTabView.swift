@@ -26,6 +26,8 @@ struct RootTabView: View {
                     .tabItem { Label("Leben", systemImage: "heart.text.square") }
                 NavigationStack { WishlistView() }
                     .tabItem { Label("Wünsche", systemImage: "heart") }
+                NavigationStack { CategoriesView() }
+                    .tabItem { Label("Kategorien", systemImage: "tag") }
             }
 
             Button {

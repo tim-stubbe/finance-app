@@ -17,6 +17,7 @@ struct ContentView: View {
                     Label("Todos", systemImage: "checklist").tag("todos" as String?)
                     Label("Ziele", systemImage: "target").tag("goals" as String?)
                     Label("Leben", systemImage: "heart.text.square").tag("life" as String?)
+                    Label("Kategorien", systemImage: "tag").tag("categories" as String?)
                 }
                 .navigationTitle("Kies")
                 .safeAreaInset(edge: .bottom) {
@@ -38,6 +39,7 @@ struct ContentView: View {
                 case "todos": TodosListView()
                 case "goals": GoalsListView()
                 case "life": LifeAreasListView()
+                case "categories": CategoriesListView()
                 default: Text("Wähle einen Bereich")
                 }
             }
