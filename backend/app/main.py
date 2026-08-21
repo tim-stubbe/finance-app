@@ -1,7 +1,5 @@
 import base64
 import requests
-import csv
-import io
 import json
 import os
 import re
@@ -15,13 +13,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, FastAPI, Depends, Form, Header, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, document_extract, goals, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, travel_time, weather, tax_export
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, document_extract, goals, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, travel_time, weather
 from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
 from .sync import sync_router
 from .routers.investments import investments_router
@@ -42,6 +40,7 @@ from .routers.enablebanking_ebay import enablebanking_ebay_router
 from .routers.mail_routes import mail_router, find_receipt_matches, run_mail_sync
 from .routers.spaces_accounts import spaces_accounts_router
 from .routers.backup_restore import backup_router, write_backup_to_disk
+from .routers.export_import import export_import_router, HOLDING_ASSET_TYPE_ALIASES
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -1363,27 +1362,6 @@ def run_auto_categorize_now(db: Session = Depends(get_db), space_id: int = Depen
     return _run_ai_maintenance_for_space(db, space_id, settings)
 
 
-@api_router.get("/category-suggestions", response_model=List[schemas.CategorySuggestionOut])
-def list_category_suggestions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.get_pending_category_suggestions(db, space_id)
-
-
-@api_router.post("/category-suggestions/{suggestion_id}/accept", response_model=schemas.CategorySuggestionOut)
-def accept_category_suggestion(suggestion_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    result = crud.decide_category_suggestion(db, suggestion_id, space_id, accept=True)
-    if not result:
-        raise HTTPException(404, "Vorschlag nicht gefunden")
-    return result
-
-
-@api_router.post("/category-suggestions/{suggestion_id}/reject", response_model=schemas.CategorySuggestionOut)
-def reject_category_suggestion(suggestion_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    result = crud.decide_category_suggestion(db, suggestion_id, space_id, accept=False)
-    if not result:
-        raise HTTPException(404, "Vorschlag nicht gefunden")
-    return result
-
-
 def _websearch_settings_out(settings: models.Settings) -> schemas.WebSearchSettingsOut:
     return schemas.WebSearchSettingsOut(
         provider=settings.websearch_provider,
@@ -2166,215 +2144,6 @@ def business_summary(year: int = date.today().year, month: Optional[int] = None,
     return crud.dashboard_summary(db, space_id, year, month, business_only=True)
 
 
-# ---------------- Export / Import ----------------
-@api_router.get("/export/transactions.csv")
-def export_transactions_csv(
-    account_id: Optional[int] = None,
-    category_id: Optional[int] = None,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
-    search: Optional[str] = None,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    transactions = crud.get_transactions(db, space_id, account_id, category_id, year, month, search)
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";")
-    writer.writerow(["Datum", "Betrag", "Konto", "Kategorie", "Beschreibung", "Notiz"])
-    for t in transactions:
-        writer.writerow([
-            t.date.isoformat(),
-            f"{t.amount:.2f}".replace(".", ","),
-            t.account.name if t.account else "",
-            t.category.name if t.category else "",
-            t.description or "",
-            t.notes or "",
-        ])
-    filename = f"buchungen_{date.today().isoformat()}.csv"
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-def _tax_export_subtitle(date_from: Optional[date], date_to: Optional[date], is_business: Optional[bool]) -> str:
-    parts = []
-    if date_from or date_to:
-        von = date_from.strftime("%d.%m.%Y") if date_from else "…"
-        bis = date_to.strftime("%d.%m.%Y") if date_to else "…"
-        parts.append(f"{von} – {bis}")
-    if is_business is not None:
-        parts.append("Geschäftlich" if is_business else "Privat")
-    return " · ".join(parts)
-
-
-@api_router.get("/export/tax.csv")
-def export_tax_csv(
-    date_from: Optional[date] = None, date_to: Optional[date] = None,
-    account_id: Optional[int] = None, category_id: Optional[int] = None,
-    is_business: Optional[bool] = None,
-    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
-):
-    transactions = crud.get_transactions_for_export(db, space_id, date_from, date_to, account_id, category_id, is_business)
-    csv_text = tax_export.build_csv(transactions)
-    filename = f"steuer-export_{date.today().isoformat()}.csv"
-    return StreamingResponse(
-        iter([csv_text]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@api_router.get("/export/tax.pdf")
-def export_tax_pdf(
-    date_from: Optional[date] = None, date_to: Optional[date] = None,
-    account_id: Optional[int] = None, category_id: Optional[int] = None,
-    is_business: Optional[bool] = None,
-    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
-):
-    transactions = crud.get_transactions_for_export(db, space_id, date_from, date_to, account_id, category_id, is_business)
-    pdf_bytes = tax_export.build_pdf(
-        transactions, title="Kies – Buchungsexport",
-        subtitle=_tax_export_subtitle(date_from, date_to, is_business),
-    )
-    filename = f"steuer-export_{date.today().isoformat()}.pdf"
-    return Response(
-        content=pdf_bytes, media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@api_router.post("/import/transactions")
-def import_transactions_csv(file: UploadFile = File(...), db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    raw = file.file.read().decode("utf-8-sig")
-    delimiter = ";" if raw.split("\n", 1)[0].count(";") >= raw.split("\n", 1)[0].count(",") else ","
-    reader = list(csv.reader(io.StringIO(raw), delimiter=delimiter))
-    if not reader:
-        raise HTTPException(400, "Leere Datei")
-
-    header = [h.strip().lower() for h in reader[0]]
-    accounts_by_name = {a.name.lower(): a for a in crud.get_accounts(db, space_id)}
-    categories_by_name = {c.name.lower(): c for c in crud.get_categories(db)}
-
-    imported, skipped, errors = 0, 0, []
-    for i, row in enumerate(reader[1:], start=2):
-        if not row or not any(cell.strip() for cell in row):
-            continue
-        data = dict(zip(header, row))
-        try:
-            acc = accounts_by_name.get((data.get("konto") or "").strip().lower())
-            if not acc:
-                raise ValueError(f"Konto '{data.get('konto', '')}' nicht gefunden")
-            cat = categories_by_name.get((data.get("kategorie") or "").strip().lower())
-            amount = float((data.get("betrag") or "0").replace(",", "."))
-            tx_date = date.fromisoformat(data["datum"].strip())
-            crud.create_transaction(db, schemas.TransactionCreate(
-                date=tx_date, amount=amount, account_id=acc.id,
-                category_id=cat.id if cat else None,
-                description=(data.get("beschreibung") or None),
-                notes=(data.get("notiz") or None),
-            ))
-            imported += 1
-        except Exception as e:
-            # Nur Fehlertyp + Nachricht statt roher Exception-Repraesentation
-            # (koennte interne Details enthalten - CodeQL: py/stack-trace-exposure).
-            # Bleibt fuer den Import des eigenen CSVs nuetzlich.
-            errors.append(f"Zeile {i}: {type(e).__name__}: {e}")
-            skipped += 1
-
-    return {"imported": imported, "skipped": skipped, "errors": errors}
-
-
-# ---------------- Export / Import: Investments ----------------
-HOLDING_ASSET_TYPE_ALIASES = {
-    "aktie": models.AssetType.aktie,
-    "etf": models.AssetType.etf,
-    "anleihe": models.AssetType.anleihe,
-    "krypto": models.AssetType.krypto,
-    "sonstiges": models.AssetType.sonstiges,
-}
-
-
-@api_router.get("/export/holdings.csv")
-def export_holdings_csv(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    holdings = crud.get_holdings(db, space_id)
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";")
-    writer.writerow(["Anlageklasse", "Name", "Symbol", "Sektor", "Stückzahl", "Kaufpreis", "Kaufdatum"])
-    for h in holdings:
-        writer.writerow([
-            h.asset_type.value,
-            h.name,
-            h.symbol,
-            h.sector or "",
-            f"{h.quantity}".replace(".", ","),
-            f"{h.purchase_price:.4f}".replace(".", ","),
-            h.purchase_date.isoformat() if h.purchase_date else "",
-        ])
-    filename = f"positionen_{date.today().isoformat()}.csv"
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@api_router.post("/import/holdings")
-def import_holdings_csv(file: UploadFile = File(...), db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    raw = file.file.read().decode("utf-8-sig")
-    delimiter = ";" if raw.split("\n", 1)[0].count(";") >= raw.split("\n", 1)[0].count(",") else ","
-    reader = list(csv.reader(io.StringIO(raw), delimiter=delimiter))
-    if not reader:
-        raise HTTPException(400, "Leere Datei")
-
-    header = [h.strip().lower() for h in reader[0]]
-    existing = {(h.asset_type, h.symbol.lower()): h for h in crud.get_holdings(db, space_id)}
-
-    created, added_lots, skipped, errors = 0, 0, 0, []
-    for i, row in enumerate(reader[1:], start=2):
-        if not row or not any(cell.strip() for cell in row):
-            continue
-        data = dict(zip(header, row))
-        try:
-            asset_type = HOLDING_ASSET_TYPE_ALIASES.get((data.get("anlageklasse") or "").strip().lower())
-            if not asset_type:
-                raise ValueError(f"Unbekannte Anlageklasse '{data.get('anlageklasse', '')}' (aktie/etf/anleihe/krypto/sonstiges)")
-            name = (data.get("name") or "").strip()
-            symbol = (data.get("symbol") or "").strip()
-            if not name or not symbol:
-                raise ValueError("Name und Symbol erforderlich")
-            quantity = float((data.get("stückzahl") or "0").replace(",", "."))
-            purchase_price = float((data.get("kaufpreis") or "0").replace(",", "."))
-            purchase_date_raw = (data.get("kaufdatum") or "").strip()
-            purchase_date = date.fromisoformat(purchase_date_raw) if purchase_date_raw else None
-            sector = (data.get("sektor") or "").strip() or None
-
-            key = (asset_type, symbol.lower())
-            if key in existing:
-                h = existing[key]
-                crud.create_lot(db, h.id, space_id, schemas.HoldingLotCreate(
-                    date=purchase_date or date.today(), type=models.LotType.kauf,
-                    quantity=quantity, price_per_unit=purchase_price,
-                ))
-                added_lots += 1
-            else:
-                h = crud.create_holding(db, schemas.HoldingCreate(
-                    asset_type=asset_type, name=name, symbol=symbol, sector=sector,
-                    quantity=quantity, purchase_price=purchase_price, purchase_date=purchase_date,
-                ), space_id)
-                existing[key] = h
-                created += 1
-        except Exception as e:
-            # Nur Fehlertyp + Nachricht statt roher Exception-Repraesentation
-            # (koennte interne Details enthalten - CodeQL: py/stack-trace-exposure).
-            # Bleibt fuer den Import des eigenen CSVs nuetzlich.
-            errors.append(f"Zeile {i}: {type(e).__name__}: {e}")
-            skipped += 1
-
-    return {"created": created, "added_lots": added_lots, "skipped": skipped, "errors": errors}
-
-
 def _scheduled_auto_backup():
     db = SessionLocal()
     try:
@@ -2426,6 +2195,7 @@ app.include_router(enablebanking_ebay_router)
 app.include_router(mail_router)
 app.include_router(spaces_accounts_router)
 app.include_router(backup_router)
+app.include_router(export_import_router)
 app.include_router(sync_router)
 
 

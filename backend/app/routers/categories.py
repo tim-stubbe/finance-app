@@ -62,3 +62,27 @@ def get_category_trend(months: int = 6, db: Session = Depends(get_db), space_id:
         months=data["months"],
         series=[schemas.CategoryTrendSeries(**s) for s in data["series"]],
     )
+
+
+# ---------------- KI-Review-Queue (Kategorisierungsvorschläge) ----------------
+# Hier mit hereingezogen (Neunzehnter Schritt) statt einer eigenen Ein-
+# Datei-Domäne - inhaltlich Kategorien-nah (Vorschläge für Transaction.category_id).
+@categories_router.get("/category-suggestions", response_model=List[schemas.CategorySuggestionOut])
+def list_category_suggestions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    return crud.get_pending_category_suggestions(db, space_id)
+
+
+@categories_router.post("/category-suggestions/{suggestion_id}/accept", response_model=schemas.CategorySuggestionOut)
+def accept_category_suggestion(suggestion_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    result = crud.decide_category_suggestion(db, suggestion_id, space_id, accept=True)
+    if not result:
+        raise HTTPException(404, "Vorschlag nicht gefunden")
+    return result
+
+
+@categories_router.post("/category-suggestions/{suggestion_id}/reject", response_model=schemas.CategorySuggestionOut)
+def reject_category_suggestion(suggestion_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    result = crud.decide_category_suggestion(db, suggestion_id, space_id, accept=False)
+    if not result:
+        raise HTTPException(404, "Vorschlag nicht gefunden")
+    return result
