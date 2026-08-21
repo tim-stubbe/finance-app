@@ -41,6 +41,7 @@ from .routers.export_import import export_import_router, HOLDING_ASSET_TYPE_ALIA
 from .routers.analytics import analytics_router
 from .routers.settings_misc import settings_misc_router
 from .routers.notify_settings import notify_settings_router
+from .routers.dashboard import dashboard_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -1500,45 +1501,6 @@ def today_overview(db: Session = Depends(get_db), space_id: int = Depends(auth.g
     )
 
 
-# ---------------- Dashboard ----------------
-@api_router.get("/dashboard", response_model=schemas.DashboardSummary)
-def dashboard(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.dashboard_summary(db, space_id, year, month)
-
-
-@api_router.get("/dashboard/top-recipients", response_model=List[schemas.TopExpenseRecipientOut])
-def dashboard_top_recipients(
-    year: int = date.today().year, month: Optional[int] = None, limit: int = 10,
-    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
-):
-    limit = max(1, min(limit, 50))
-    return crud.top_expense_recipients(db, space_id, year, month, limit)
-
-
-@api_router.get("/dashboard/trend", response_model=schemas.DashboardTrendOut)
-def dashboard_trend(months: int = 6, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    """Kleine monatliche Einnahmen/Ausgaben-Reihe fuer die Sparklines auf dem
-    Hub - bewusst ein eigener, leichtgewichtiger Endpunkt statt N Aufrufe von
-    /dashboard je Monat vom Frontend aus."""
-    months = max(2, min(months, 24))
-    return schemas.DashboardTrendOut(points=[
-        schemas.DashboardTrendPoint(**p) for p in crud.monthly_flow_trend(db, space_id, months)
-    ])
-
-
-@api_router.get("/year-review", response_model=schemas.YearReviewOut)
-def year_review(year: int = date.today().year, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    """Jahresrueckblick - reine Auswertung, keine neue Datenerfassung."""
-    data = crud.year_review(db, space_id, year)
-    return schemas.YearReviewOut(**data)
-
-
-# ---------------- Geschäftlich (Filter auf is_business-Konten, kein eigener Bereich) ----------------
-@api_router.get("/business/summary", response_model=schemas.DashboardSummary)
-def business_summary(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.dashboard_summary(db, space_id, year, month, business_only=True)
-
-
 def _scheduled_auto_backup():
     db = SessionLocal()
     try:
@@ -1594,6 +1556,7 @@ app.include_router(export_import_router)
 app.include_router(analytics_router)
 app.include_router(settings_misc_router)
 app.include_router(notify_settings_router)
+app.include_router(dashboard_router)
 app.include_router(sync_router)
 
 
