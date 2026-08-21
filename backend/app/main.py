@@ -22,7 +22,6 @@ from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse,
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
 import threading
 
@@ -38,6 +37,7 @@ from .routers.wishlist import wishlist_router
 from .routers.personal import personal_router
 from .routers.business_life import business_life_router
 from .routers.budgets_alerts import budgets_alerts_router
+from .routers.deadlines import deadlines_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -547,93 +547,6 @@ def get_overlapping_contracts(db: Session = Depends(get_db), space_id: int = Dep
 @api_router.get("/transactions/duplicates", response_model=List[schemas.DuplicateTransactionGroup])
 def get_duplicate_transactions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.find_duplicate_transactions(db, space_id)
-
-
-@api_router.get("/contract-reminders", response_model=List[schemas.ContractReminderOut])
-def list_contract_reminders(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.get_contract_reminders(db, space_id)
-
-
-@api_router.post("/contract-reminders", response_model=schemas.ContractReminderOut)
-def add_contract_reminder(
-    data: schemas.ContractReminderCreate,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    try:
-        return crud.create_contract_reminder(db, space_id, data)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(400, "Für dieses Abo ist schon eine Kündigungsfrist hinterlegt.")
-
-
-@api_router.put("/contract-reminders/{reminder_id}", response_model=schemas.ContractReminderOut)
-def edit_contract_reminder(
-    reminder_id: int,
-    data: schemas.ContractReminderUpdate,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    result = crud.update_contract_reminder(db, reminder_id, space_id, data)
-    if not result:
-        raise HTTPException(404, "Erinnerung nicht gefunden.")
-    return result
-
-
-@api_router.delete("/contract-reminders/{reminder_id}")
-def remove_contract_reminder(
-    reminder_id: int,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    if not crud.delete_contract_reminder(db, reminder_id, space_id):
-        raise HTTPException(404, "Erinnerung nicht gefunden.")
-    return {"ok": True}
-
-
-@api_router.get("/return-deadlines", response_model=List[schemas.ReturnDeadlineOut])
-def list_return_deadlines(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.get_return_deadlines(db, space_id)
-
-
-@api_router.post("/return-deadlines", response_model=schemas.ReturnDeadlineOut)
-def add_return_deadline(
-    data: schemas.ReturnDeadlineCreate,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    try:
-        result = crud.create_return_deadline(db, space_id, data)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(400, "Für diese Buchung ist schon eine Rückgabefrist hinterlegt.")
-    if not result:
-        raise HTTPException(404, "Buchung nicht gefunden.")
-    return result
-
-
-@api_router.put("/return-deadlines/{deadline_id}", response_model=schemas.ReturnDeadlineOut)
-def edit_return_deadline(
-    deadline_id: int,
-    data: schemas.ReturnDeadlineUpdate,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    result = crud.update_return_deadline(db, deadline_id, space_id, data)
-    if not result:
-        raise HTTPException(404, "Rückgabefrist nicht gefunden.")
-    return result
-
-
-@api_router.delete("/return-deadlines/{deadline_id}")
-def remove_return_deadline(
-    deadline_id: int,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    if not crud.delete_return_deadline(db, deadline_id, space_id):
-        raise HTTPException(404, "Rückgabefrist nicht gefunden.")
-    return {"ok": True}
 
 
 @api_router.get("/forecast/cashflow", response_model=schemas.CashflowForecastOut)
@@ -4291,6 +4204,7 @@ app.include_router(wishlist_router)
 app.include_router(personal_router)
 app.include_router(business_life_router)
 app.include_router(budgets_alerts_router)
+app.include_router(deadlines_router)
 app.include_router(sync_router)
 
 
