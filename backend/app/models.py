@@ -942,6 +942,11 @@ class CalendarEvent(Base):
     # diesem Termin per Telegram zum Losfahren aufgefordert hat - verhindert
     # eine Dauerschleife von Erinnerungen fuer denselben Termin.
     travel_reminder_sent = Column(Boolean, nullable=False, default=False)
+    # Rohe RRULE-Zeile (RFC5545) des Master-Termins, falls von Radicale
+    # geliefert - None fuer Einzeltermine. Wird nur gelesen/expandiert
+    # (siehe radicale_sync.expand_rrule), nicht in Kies selbst erzeugt -
+    # das Anlegen wiederkehrender Serien bleibt Aufgabe des Telefon-Clients.
+    rrule = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -1134,6 +1139,10 @@ class LifeArea(Base):
     check_interval_days = Column(Integer, nullable=True)
     last_checked_at = Column(DateTime, nullable=True)
     last_reminded_date = Column(Date, nullable=True)
+    # Optionales Wochenraster-Ziel (z.B. "3x/Woche") fuer ein festes Habit-
+    # Tracking-Muster statt nur des lockeren Tagebuchs - None heisst weiterhin
+    # freies Tagebuch ohne festes Ziel (rein additiv, kein Zwang).
+    target_days_per_week = Column(Integer, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

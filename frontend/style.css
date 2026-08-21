@@ -1779,6 +1779,15 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .life-heatmap { display: flex; gap: 3px; flex-wrap: wrap; margin: 4px 0 8px; }
 .life-heatmap-day { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-3, rgba(120,120,120,0.18)); }
 .life-heatmap-day.filled { background: var(--accent); }
+.life-week-grid-wrap { margin: 4px 0 8px; }
+.life-week-count { margin: 0 0 4px; font-weight: 600; }
+.life-week-count.met { color: var(--accent-strong); }
+.life-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.life-week-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border-radius: 6px; background: var(--surface-3, rgba(120,120,120,0.12)); }
+.life-week-cell.filled { background: var(--accent); }
+.life-week-daylabel { font-size: 10px; color: var(--text-secondary); }
+.life-week-cell.filled .life-week-daylabel { color: var(--text-on-accent, #fff); }
+.life-week-check { font-size: 12px; font-weight: 700; line-height: 1; min-height: 12px; }
 
 /* ---------- Diversifikation & Risiko ---------- */
 .diversification-grid {

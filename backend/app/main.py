@@ -193,6 +193,12 @@ ensure_columns("calendar_events", {
     "pending_delete": "BOOLEAN DEFAULT 0",
     "travel_reminder_sent": "BOOLEAN DEFAULT 0",
 })
+ensure_columns("calendar_events", {
+    "rrule": "VARCHAR",
+})
+ensure_columns("life_areas", {
+    "target_days_per_week": "INTEGER",
+})
 ensure_columns("todos", {
     "completed_at": "DATETIME",
 })

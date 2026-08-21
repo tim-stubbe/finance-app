@@ -3,10 +3,12 @@ synchronisieren.
 
 Bewusst keine CalDAV-Bibliothek (z.B. `caldav`/`icalendar`) - die hier
 gebrauchten VTODO-/VEVENT-Teilmengen (UID/SUMMARY/STATUS/DUE/DTSTART/DTEND/
-LOCATION/LAST-MODIFIED) sind klein genug, um sie direkt per HTTP zu lesen und
-zu schreiben, passend zum Rest der App (Immich/PayPal/eBay laufen ebenfalls
-ohne SDK direkt gegen die HTTP-APIs). Keine RRULE-Unterstützung - wiederkehrende
-Termine werden nur als einzelne Instanz behandelt, nicht als Serie.
+LOCATION/LAST-MODIFIED/RRULE) sind klein genug, um sie direkt per HTTP zu
+lesen und zu schreiben, passend zum Rest der App (Immich/PayPal/eBay laufen
+ebenfalls ohne SDK direkt gegen die HTTP-APIs). RRULE wird nur roh
+mitgenommen und für Anzeige/Konfliktprüfung expandiert (siehe expand_rrule)
+- eine Serie selbst anlegen/bearbeiten bleibt Aufgabe des Telefon-Clients,
+gespeichert wird weiterhin nur der eine Master-VEVENT.
 
 CalDAV-Grundlagen, die hier genutzt werden:
 - PROPFIND (Depth: 1) auf die Liste -> alle Ressourcen + ETag.
@@ -170,7 +172,8 @@ def build_vtodo(uid: str, title: str, done: bool, due_date: date | None) -> str:
 
 
 def build_vevent(
-    uid: str, title: str, start: datetime, end: datetime | None, location: str | None, all_day: bool
+    uid: str, title: str, start: datetime, end: datetime | None, location: str | None, all_day: bool,
+    rrule: str | None = None,
 ) -> str:
     if all_day:
         dtstart = f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}"
@@ -196,6 +199,12 @@ def build_vevent(
     lines.append(f"SUMMARY:{_escape_text(title)}")
     if location:
         lines.append(f"LOCATION:{_escape_text(location)}")
+    if rrule:
+        # Nur uebernehmen, was der Server (Telefon-Client) bereits gesetzt hat -
+        # Kies selbst erzeugt keine RRULE. Ohne das wuerde ein Push nach einer
+        # anderen lokalen Aenderung (z.B. Titel) die Wiederholung am Server
+        # stillschweigend loeschen.
+        lines.append(f"RRULE:{rrule}")
     lines += ["END:VEVENT", "END:VCALENDAR"]
     return "\r\n".join(lines) + "\r\n"
 
@@ -256,7 +265,107 @@ def parse_vevent(ics: str) -> dict | None:
         "end": end,
         "location": fields.get("LOCATION", "").strip() or None,
         "all_day": all_day,
+        "rrule": fields.get("RRULE", "").strip() or None,
     }
+
+
+_WEEKDAY_CODES = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+RRULE_EXPAND_LIMIT = 500  # Sicherheitsnetz gegen z.B. "FREQ=DAILY" ohne COUNT/UNTIL.
+
+
+def expand_rrule(dtstart: datetime, rrule: str, range_start: datetime, range_end: datetime) -> list[datetime]:
+    """Erzeugt die Start-Zeitpunkte aller Vorkommen einer RRULE im Bereich
+    [range_start, range_end). Deckt bewusst nur den gaengigen Teil von
+    RFC5545 ab (FREQ=DAILY/WEEKLY/MONTHLY/YEARLY, INTERVAL, COUNT, UNTIL,
+    BYDAY nur bei WEEKLY) statt einer vollstaendigen Implementierung -
+    reicht fuer "Heute"-Ansicht und Konfliktpruefung, echte Serien-
+    Bearbeitung passiert ohnehin am Telefon. Bricht bei nicht erkannten
+    Teilen einfach auf ein Einzelereignis (nur dtstart) zurueck, statt
+    einen Fehler zu werfen - besser ein zu simples Ergebnis als ein
+    kaputter Sync."""
+    parts = {}
+    for chunk in rrule.split(";"):
+        if "=" in chunk:
+            k, _, v = chunk.partition("=")
+            parts[k.strip().upper()] = v.strip()
+
+    freq = parts.get("FREQ", "").upper()
+    if freq not in ("DAILY", "WEEKLY", "MONTHLY", "YEARLY"):
+        return [dtstart] if range_start <= dtstart < range_end else []
+
+    interval = 1
+    try:
+        interval = max(1, int(parts.get("INTERVAL", "1")))
+    except ValueError:
+        pass
+
+    count = None
+    if "COUNT" in parts:
+        try:
+            count = int(parts["COUNT"])
+        except ValueError:
+            count = None
+
+    until = None
+    if "UNTIL" in parts:
+        try:
+            until, _ = _parse_ical_datetime(parts["UNTIL"])
+        except ValueError:
+            until = None
+
+    byday = None
+    if freq == "WEEKLY" and "BYDAY" in parts:
+        byday = sorted(_WEEKDAY_CODES[d] for d in parts["BYDAY"].split(",") if d in _WEEKDAY_CODES)
+
+    occurrences: list[datetime] = []
+    n = 0
+    cursor = dtstart
+    while cursor < range_end:
+        if until and cursor > until:
+            break
+        if count is not None and n >= count:
+            break
+        if len(occurrences) >= RRULE_EXPAND_LIMIT:
+            break
+
+        if freq == "WEEKLY" and byday:
+            week_start = cursor - timedelta(days=cursor.weekday())
+            for wd in byday:
+                occ = week_start + timedelta(days=wd)
+                if occ < dtstart:
+                    continue
+                n += 1
+                if count is not None and n > count:
+                    break
+                if until and occ > until:
+                    continue
+                if range_start <= occ < range_end:
+                    occurrences.append(occ)
+            cursor = week_start + timedelta(weeks=interval)
+            continue
+
+        n += 1
+        if range_start <= cursor < range_end:
+            occurrences.append(cursor)
+
+        if freq == "DAILY":
+            cursor = cursor + timedelta(days=interval)
+        elif freq == "WEEKLY":
+            cursor = cursor + timedelta(weeks=interval)
+        elif freq == "MONTHLY":
+            month = cursor.month - 1 + interval
+            year = cursor.year + month // 12
+            month = month % 12 + 1
+            day = min(cursor.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                                    31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+            cursor = cursor.replace(year=year, month=month, day=day)
+        else:  # YEARLY
+            try:
+                cursor = cursor.replace(year=cursor.year + interval)
+            except ValueError:
+                cursor = cursor.replace(year=cursor.year + interval, day=28)
+
+    return occurrences
 
 
 def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
@@ -266,8 +375,9 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
     Kalender-Collections gleichzeitig ein (main.py ruft sync_calendar
     entsprechend mehrfach auf), alle landen in derselben calendar_events-
     Tabelle. Ohne diese Eingrenzung wuerde jeder Aufruf faelschlich Termine
-    der JEWEILS ANDEREN Kalender pushen/loeschen. Keine RRULE-Unterstuetzung -
-    wiederkehrende Termine werden nur als einzelne Instanz behandelt."""
+    der JEWEILS ANDEREN Kalender pushen/loeschen. RRULE des Master-Termins
+    wird roh mitgenommen (siehe expand_rrule) - gespeichert wird weiterhin
+    nur der eine Master-VEVENT, keine einzelnen Instanzen."""
     pushed, pulled, errors = 0, 0, []
     calendar_path = urlparse(url).path
 
@@ -302,7 +412,7 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
     )
     for event in to_push:
         try:
-            ics = build_vevent(event.uid, event.title, event.start, event.end, event.location, event.all_day)
+            ics = build_vevent(event.uid, event.title, event.start, event.end, event.location, event.all_day, event.rrule)
             if event.href:
                 new_etag = put_ics(urljoin(url, event.href), username, password, ics, event.etag)
             else:
@@ -362,6 +472,7 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
             existing.end = parsed["end"]
             existing.location = parsed["location"]
             existing.all_day = parsed["all_day"]
+            existing.rrule = parsed["rrule"]
             existing.calendar_url = url
             existing.href = item["href"]
             existing.etag = item["etag"]
@@ -369,7 +480,7 @@ def sync_calendar(db: Session, url: str, username: str, password: str) -> dict:
         else:
             db.add(models.CalendarEvent(
                 uid=parsed["uid"], title=parsed["title"], start=parsed["start"], end=parsed["end"],
-                location=parsed["location"], all_day=parsed["all_day"], calendar_url=url,
+                location=parsed["location"], all_day=parsed["all_day"], rrule=parsed["rrule"], calendar_url=url,
                 href=item["href"], etag=item["etag"], last_synced_at=datetime.utcnow(),
             ))
         pulled += 1

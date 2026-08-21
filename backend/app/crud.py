@@ -2684,6 +2684,56 @@ def cleanup_old_done_todos(db: Session, days: int = 2) -> int:
     return len(old)
 
 
+class _CalendarOccurrence:
+    """Eine einzelne, aus einer RRULE errechnete Vorkommen-Instanz eines
+    wiederkehrenden Termins - kein eigener DB-Eintrag (siehe radicale_sync.
+    expand_rrule-Docstring: Kies speichert weiterhin nur den Master-VEVENT).
+    Traegt dieselben Attribute wie models.CalendarEvent, damit schemas.
+    CalendarEventOut (from_attributes) beide gleich serialisieren kann.
+    `id`/`recurring_master_id` zeigen auf den Master - Bearbeiten/Loeschen
+    einzelner Instanzen ist bewusst nicht vorgesehen (Serie bleibt Aufgabe
+    des Telefon-Clients), das Frontend blendet dafuer bei is_recurring=True
+    die entsprechenden Aktionen aus."""
+
+    def __init__(self, master: "models.CalendarEvent", occ_start: datetime, occ_end):
+        self.id = master.id
+        self.title = master.title
+        self.start = occ_start
+        self.end = occ_end
+        self.location = master.location
+        self.lat = master.lat
+        self.lon = master.lon
+        self.all_day = master.all_day
+        self.calendar_url = master.calendar_url
+        self.travel_minutes = None
+        self.is_recurring = True
+        self.recurring_master_id = master.id
+
+
+def _expand_calendar_window(events: list, start: datetime, end: datetime) -> list:
+    """Ersetzt jeden Termin mit gesetzter RRULE durch seine Vorkommen im
+    Fenster [start, end) (siehe radicale_sync.expand_rrule), laesst
+    Einzeltermine unveraendert - beide Faelle bekommen is_recurring/
+    recurring_master_id fuer eine einheitliche Serialisierung."""
+    result = []
+    for ev in events:
+        if not ev.rrule:
+            ev.is_recurring = False
+            ev.recurring_master_id = None
+            result.append(ev)
+            continue
+        duration = (ev.end - ev.start) if ev.end else None
+        try:
+            occ_starts = radicale_sync.expand_rrule(ev.start, ev.rrule, start, end)
+        except Exception:
+            occ_starts = [ev.start] if start <= ev.start < end else []
+        for occ_start in occ_starts:
+            occ_end = occ_start + duration if duration else None
+            result.append(_CalendarOccurrence(ev, occ_start, occ_end))
+    result.sort(key=lambda e: e.start)
+    return result
+
+
 def get_upcoming_calendar_events(db: Session, days: int = 7, limit: int = 20) -> list[models.CalendarEvent]:
     now = datetime.utcnow()
     cutoff = now + timedelta(days=days)
@@ -2705,17 +2755,8 @@ def detect_calendar_conflicts(db: Session, days: int = 14) -> list[dict]:
     für diese Prüfung, nicht gespeichert."""
     now = datetime.utcnow()
     cutoff = now + timedelta(days=days)
-    events = (
-        db.query(models.CalendarEvent)
-        .filter(
-            models.CalendarEvent.pending_delete.is_(False),
-            models.CalendarEvent.all_day.is_(False),
-            models.CalendarEvent.start >= now,
-            models.CalendarEvent.start <= cutoff,
-        )
-        .order_by(models.CalendarEvent.start)
-        .all()
-    )
+    events = [ev for ev in get_calendar_events(db, now, cutoff) if not ev.all_day]
+    events.sort(key=lambda e: e.start)
 
     def effective_end(ev):
         return ev.end or (ev.start + timedelta(minutes=30))
@@ -2743,17 +2784,31 @@ def delete_todo(db: Session, todo: models.Todo):
     db.commit()
 
 
-def get_calendar_events(db: Session, start: datetime, end: datetime) -> list[models.CalendarEvent]:
-    return (
+def get_calendar_events(db: Session, start: datetime, end: datetime) -> list:
+    """Termine im Fenster [start, end] - inklusive der Vorkommen wieder-
+    kehrender Serien (siehe _expand_calendar_window), deren Master-Termin
+    auch deutlich vor `start` liegen kann. Rueckgabetyp bewusst nicht mehr
+    rein models.CalendarEvent, sondern gemischt mit _CalendarOccurrence."""
+    single = (
         db.query(models.CalendarEvent)
         .filter(
             models.CalendarEvent.pending_delete.is_(False),
+            models.CalendarEvent.rrule.is_(None),
             models.CalendarEvent.start >= start,
             models.CalendarEvent.start <= end,
         )
-        .order_by(models.CalendarEvent.start)
         .all()
     )
+    recurring = (
+        db.query(models.CalendarEvent)
+        .filter(
+            models.CalendarEvent.pending_delete.is_(False),
+            models.CalendarEvent.rrule.isnot(None),
+            models.CalendarEvent.start <= end,
+        )
+        .all()
+    )
+    return _expand_calendar_window(single + recurring, start, end)
 
 
 def get_calendar_event(db: Session, event_id: int):
@@ -3530,6 +3585,15 @@ def _life_area_streak_and_history(db: Session, area_id: int, days: int = LIFE_AR
     return sorted(checkin_days), streak
 
 
+def _life_area_week_days(checkin_days_30: list[str]) -> list[bool]:
+    """Mo-So der laufenden Woche als Bool-Liste, aus checkin_days_30
+    abgeleitet (deckt die letzten 30 Tage ab, die laufende Woche liegt immer
+    darin) - keine zusaetzliche Abfrage noetig."""
+    checkin_set = set(checkin_days_30)
+    monday = date.today() - timedelta(days=date.today().weekday())
+    return [(monday + timedelta(days=i)).isoformat() in checkin_set for i in range(7)]
+
+
 def get_life_areas(db: Session, include_inactive: bool = False) -> list[models.LifeArea]:
     query = db.query(models.LifeArea)
     if not include_inactive:
@@ -3537,6 +3601,7 @@ def get_life_areas(db: Session, include_inactive: bool = False) -> list[models.L
     areas = query.order_by(models.LifeArea.name).all()
     for a in areas:
         a.checkin_days_30, a.streak_days = _life_area_streak_and_history(db, a.id)
+        a.week_days = _life_area_week_days(a.checkin_days_30)
     return areas
 
 
@@ -3544,6 +3609,7 @@ def get_life_area(db: Session, area_id: int) -> models.LifeArea | None:
     area = db.query(models.LifeArea).filter(models.LifeArea.id == area_id).first()
     if area:
         area.checkin_days_30, area.streak_days = _life_area_streak_and_history(db, area.id)
+        area.week_days = _life_area_week_days(area.checkin_days_30)
     return area
 
 
@@ -3555,11 +3621,13 @@ def create_life_area(db: Session, data: schemas.LifeAreaCreate) -> models.LifeAr
     area = models.LifeArea(
         name=data.name, description=data.description, target_date=data.target_date,
         progress_percent=progress, check_interval_days=data.check_interval_days,
+        target_days_per_week=data.target_days_per_week,
     )
     db.add(area)
     db.commit()
     db.refresh(area)
     area.checkin_days_30, area.streak_days = _life_area_streak_and_history(db, area.id)
+    area.week_days = _life_area_week_days(area.checkin_days_30)
     return area
 
 
@@ -3574,6 +3642,7 @@ def update_life_area(db: Session, area: models.LifeArea, data: schemas.LifeAreaU
     db.commit()
     db.refresh(area)
     area.checkin_days_30, area.streak_days = _life_area_streak_and_history(db, area.id)
+    area.week_days = _life_area_week_days(area.checkin_days_30)
     return area
 
 

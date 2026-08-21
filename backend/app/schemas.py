@@ -1588,6 +1588,8 @@ class CalendarEventOut(BaseModel):
     all_day: bool = False
     calendar_url: Optional[str] = None
     travel_minutes: Optional[int] = None
+    is_recurring: bool = False
+    recurring_master_id: Optional[int] = None
 
 
 class CalendarEventCreate(BaseModel):
@@ -1810,6 +1812,7 @@ class LifeAreaCreate(BaseModel):
     target_date: Optional[date] = None
     progress_percent: Optional[int] = None
     check_interval_days: Optional[int] = None
+    target_days_per_week: Optional[int] = None
 
 
 class LifeAreaUpdate(BaseModel):
@@ -1818,6 +1821,7 @@ class LifeAreaUpdate(BaseModel):
     target_date: Optional[date] = None
     progress_percent: Optional[int] = None
     check_interval_days: Optional[int] = None
+    target_days_per_week: Optional[int] = None
     active: Optional[bool] = None
 
 
@@ -1829,11 +1833,16 @@ class LifeAreaOut(BaseModel):
     target_date: Optional[date] = None
     progress_percent: Optional[int] = None
     check_interval_days: Optional[int] = None
+    target_days_per_week: Optional[int] = None
     last_checked_at: Optional[datetime] = None
     created_at: datetime
     active: bool
     streak_days: int = 0
     checkin_days_30: List[str] = []
+    # Mo-So der laufenden Woche, True = an dem Tag mind. ein Check-in - nur
+    # gefuellt/relevant, wenn target_days_per_week gesetzt ist (festes
+    # Wochenraster statt des freien 30-Tage-Streifens oben).
+    week_days: List[bool] = []
 
 
 class LifeCheckInCreate(BaseModel):

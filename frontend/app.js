@@ -2515,6 +2515,27 @@ function renderLifeAreaHeatmap(a) {
   return `<div class="life-heatmap">${cells.join("")}</div>`;
 }
 
+const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function renderLifeAreaWeekGrid(a) {
+  if (!a.target_days_per_week) return "";
+  const weekDays = a.week_days || [];
+  const done = weekDays.filter(Boolean).length;
+  const met = done >= a.target_days_per_week;
+  const cells = WEEKDAY_LABELS.map((label, i) => `
+    <div class="life-week-cell${weekDays[i] ? " filled" : ""}">
+      <span class="life-week-daylabel">${label}</span>
+      <span class="life-week-check">${weekDays[i] ? "✓" : ""}</span>
+    </div>
+  `).join("");
+  return `
+    <div class="life-week-grid-wrap">
+      <p class="page-sub life-week-count${met ? " met" : ""}">${done}/${a.target_days_per_week}x diese Woche${met ? " ✓" : ""}</p>
+      <div class="life-week-grid">${cells}</div>
+    </div>
+  `;
+}
+
 function renderLifeAreaCard(a, recentCheckins) {
   const card = document.createElement("div");
   card.className = "goal-card";
@@ -2538,6 +2559,7 @@ function renderLifeAreaCard(a, recentCheckins) {
       ${overdue ? "⚠️ " : ""}Letzter Check-in: ${lastChecked}${a.check_interval_days ? ` · Intervall ${a.check_interval_days} Tage` : ""}
     </p>
     <div class="life-streak${streak > 0 ? " active" : ""}">${streak > 0 ? `🔥 ${streak} Tag${streak === 1 ? "" : "e"} Streak` : "Noch keine Streak"}</div>
+    ${renderLifeAreaWeekGrid(a)}
     ${renderLifeAreaHeatmap(a)}
     <div class="todo-row-list">
       ${recentCheckins.map(c => `
@@ -2596,6 +2618,7 @@ function openLifeAreaModal(area) {
   document.getElementById("life-area-target-date").value = area?.target_date || "";
   document.getElementById("life-area-progress").value = area?.progress_percent ?? "";
   document.getElementById("life-area-interval").value = area?.check_interval_days || "";
+  document.getElementById("life-area-week-target").value = area?.target_days_per_week || "";
   document.getElementById("life-area-archive").classList.toggle("hidden", !area);
   document.getElementById("life-area-modal").classList.remove("hidden");
 }
@@ -2618,6 +2641,8 @@ document.getElementById("life-area-form").addEventListener("submit", async e => 
     progress_percent: progressVal !== "" ? parseInt(progressVal) : null,
     check_interval_days: document.getElementById("life-area-interval").value
       ? parseInt(document.getElementById("life-area-interval").value) : null,
+    target_days_per_week: document.getElementById("life-area-week-target").value
+      ? parseInt(document.getElementById("life-area-week-target").value) : null,
   };
   if (id) {
     await api(`/life-areas/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -6304,9 +6329,9 @@ function renderCalendarEvents() {
     <div class="calendar-day-group">
       <h4 class="calendar-day-label">${esc(day)}</h4>
       ${events.map(ev => `
-        <div class="todo-row" data-calendar-edit="${ev.id}" style="cursor:pointer">
+        <div class="todo-row" ${ev.is_recurring ? "" : `data-calendar-edit="${ev.id}" style="cursor:pointer"`}>
           <span class="todo-title">
-            ${esc(ev.title)}
+            ${ev.is_recurring ? '<span title="Wiederkehrender Termin - Serie am Handy/Radicale bearbeiten">🔁</span> ' : ""}${esc(ev.title)}
             ${new Date(ev.start) < now ? '<span class="page-sub" style="display:inline">· vergangen</span>' : ""}
           </span>
           <span class="todo-due">${ev.all_day ? "ganztägig" : new Date(ev.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${ev.location ? " · " + esc(ev.location) : ""}${ev.travel_minutes != null ? ` · 🚗 ~${ev.travel_minutes} Min` : ""}</span>
