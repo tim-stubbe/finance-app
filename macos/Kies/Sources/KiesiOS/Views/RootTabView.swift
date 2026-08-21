@@ -24,6 +24,8 @@ struct RootTabView: View {
                     .tabItem { Label("Ziele", systemImage: "target") }
                 NavigationStack { LifeAreasView() }
                     .tabItem { Label("Leben", systemImage: "heart.text.square") }
+                NavigationStack { WishlistView() }
+                    .tabItem { Label("Wünsche", systemImage: "heart") }
             }
 
             Button {

@@ -22,6 +22,7 @@ public final class SyncEngine: ObservableObject {
     private nonisolated static let localEntityTypes: Set<String> = [
         "Account", "Category", "Transaction", "Todo", "Space", "CalendarEvent",
         "Goal", "LifeArea", "LifeCheckIn",
+        "WishlistItem", "ContractReminder", "ReturnDeadline",
     ]
 
     public func run() async {
@@ -126,6 +127,27 @@ public final class SyncEngine: ObservableObject {
                 created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue,
                 pending_client_id: nil
             ).save(db)
+        case "WishlistItem":
+            try WishlistItem(
+                id: id, name: row["name"]?.stringValue ?? "", category: row["category"]?.stringValue,
+                target_price: row["target_price"]?.doubleValue, url: row["url"]?.stringValue,
+                purchased: row["purchased"]?.boolValue ?? false, active: row["active"]?.boolValue ?? true,
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
+        case "ContractReminder":
+            try ContractReminder(
+                id: id, space_id: row["space_id"]?.int64Value, account_id: row["account_id"]?.int64Value,
+                label: row["label"]?.stringValue ?? "", notice_period_days: row["notice_period_days"]?.int64Value ?? 0,
+                renewal_date: row["renewal_date"]?.stringValue ?? "",
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
+        case "ReturnDeadline":
+            try ReturnDeadline(
+                id: id, transaction_id: row["transaction_id"]?.int64Value,
+                start_date: row["start_date"]?.stringValue ?? "", deadline_days: row["deadline_days"]?.int64Value ?? 0,
+                returned: row["returned"]?.boolValue ?? false,
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
         default:
             break
         }
@@ -142,6 +164,9 @@ public final class SyncEngine: ObservableObject {
         case "Goal": try Goal.deleteOne(db, key: tombstone.entity_id)
         case "LifeArea": try LifeArea.deleteOne(db, key: tombstone.entity_id)
         case "LifeCheckIn": try LifeCheckIn.deleteOne(db, key: tombstone.entity_id)
+        case "WishlistItem": try WishlistItem.deleteOne(db, key: tombstone.entity_id)
+        case "ContractReminder": try ContractReminder.deleteOne(db, key: tombstone.entity_id)
+        case "ReturnDeadline": try ReturnDeadline.deleteOne(db, key: tombstone.entity_id)
         default: break
         }
     }
@@ -264,6 +289,20 @@ public final class SyncEngine: ObservableObject {
             try todo.save(db)
             let data: [String: Any] = ["done": done]
             try Self.enqueueOutbox(db, entityType: "Todo", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
+    /// Markiert einen Wunsch als (nicht mehr) gekauft - analog zu
+    /// setTodoDoneOffline, nur fuer bereits synchronisierte Einträge (positive id).
+    public func setWishlistPurchasedOffline(id: Int64, purchased: Bool) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var item = try WishlistItem.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = item.updated_at
+            item.purchased = purchased
+            try item.save(db)
+            let data: [String: Any] = ["purchased": purchased]
+            try Self.enqueueOutbox(db, entityType: "WishlistItem", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
         }
     }
 

@@ -161,6 +161,46 @@ public enum AppDatabase {
             }
         }
 
+        // Naechste Ausbaustufe (siehe iOS-Ausbau-Zusammenfassung): Wunschliste
+        // (lesend + "gekauft" markieren, deshalb WishlistItem push-faehig wie
+        // Todo) sowie Fristen (Kuendigung/Ruecksendung) fuer die "Heute"-
+        // Ansicht - beide serverseitig laengst in sync_registry.py registriert,
+        // hier nur die lokalen Tabellen nachgezogen. ContractReminder/
+        // ReturnDeadline bleiben bewusst pull-only (kein Anlegen/Bearbeiten
+        // in dieser iOS-Scheibe, dafuer bleibt die Web-App der Ort).
+        migrator.registerMigration("v4_wishlistAndDeadlines") { db in
+            try db.create(table: "wishlist_items") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("category", .text)
+                t.column("target_price", .double)
+                t.column("url", .text)
+                t.column("purchased", .boolean).notNull().defaults(to: false)
+                t.column("active", .boolean).notNull().defaults(to: true)
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+            try db.create(table: "contract_reminders") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("space_id", .integer)
+                t.column("account_id", .integer)
+                t.column("label", .text).notNull()
+                t.column("notice_period_days", .integer).notNull()
+                t.column("renewal_date", .text).notNull()
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+            try db.create(table: "return_deadlines") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("transaction_id", .integer)
+                t.column("start_date", .text).notNull()
+                t.column("deadline_days", .integer).notNull()
+                t.column("returned", .boolean).notNull().defaults(to: false)
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+        }
+
         return migrator
     }
 }

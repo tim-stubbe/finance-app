@@ -52,6 +52,34 @@ public enum Queries {
             .fetchAll(db)
     }
 
+    /// Kündigungsfristen, deren Kündigungsstichtag (renewal_date -
+    /// notice_period_days) innerhalb der nächsten `withinDays` Tage liegt.
+    public static func contractRemindersDueSoon(_ db: Database, withinDays: Int = 30) throws -> [ContractReminder] {
+        try ContractReminder.fetchAll(db, sql: """
+            SELECT * FROM contract_reminders
+            WHERE date(renewal_date, '-' || notice_period_days || ' days') <= date('now', ? )
+            ORDER BY renewal_date
+            """, arguments: ["+\(withinDays) days"])
+    }
+
+    /// Noch nicht zurückgegebene Rückgabefristen (start_date + deadline_days),
+    /// die innerhalb der nächsten `withinDays` Tage ablaufen.
+    public static func returnDeadlinesDueSoon(_ db: Database, withinDays: Int = 14) throws -> [ReturnDeadline] {
+        try ReturnDeadline.fetchAll(db, sql: """
+            SELECT * FROM return_deadlines
+            WHERE returned = 0 AND date(start_date, '+' || deadline_days || ' days') <= date('now', ? )
+            ORDER BY start_date
+            """, arguments: ["+\(withinDays) days"])
+    }
+
+    /// Aktive, noch nicht gekaufte Wünsche.
+    public static func openWishlistItems(_ db: Database) throws -> [WishlistItem] {
+        try WishlistItem
+            .filter(Column("active") == true && Column("purchased") == false)
+            .order(Column("name"))
+            .fetchAll(db)
+    }
+
     /// Aktive Lebensbereiche, zu denen heute noch kein Check-in vorliegt.
     public static func lifeAreasWithoutCheckinToday(_ db: Database) throws -> [LifeArea] {
         let today = DateFormatter.isoDate.string(from: Date())

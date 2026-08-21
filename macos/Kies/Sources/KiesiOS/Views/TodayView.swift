@@ -14,6 +14,7 @@ struct TodayView: View {
     @ObservedObject private var expense = Box(0.0)
     @ObservedObject private var nearGoals = Box<[Goal]>([])
     @ObservedObject private var uncheckedAreas = Box<[LifeArea]>([])
+    @ObservedObject private var deadlines = Box<[String]>([])
 
     var body: some View {
         List {
@@ -70,6 +71,14 @@ struct TodayView: View {
                                 Text(targetDate).font(.caption).foregroundStyle(.secondary)
                             }
                         }
+                    }
+                }
+            }
+
+            if !deadlines.value.isEmpty {
+                Section("Fristen") {
+                    ForEach(deadlines.value, id: \.self) { text in
+                        Text(text)
                     }
                 }
             }
@@ -136,5 +145,17 @@ struct TodayView: View {
             .prefix(3)
             .map { $0 }
         uncheckedAreas.value = (try? db.read { db in try Queries.lifeAreasWithoutCheckinToday(db) }) ?? []
+
+        let contracts = (try? db.read { db in try Queries.contractRemindersDueSoon(db) }) ?? []
+        let returns = (try? db.read { db in try Queries.returnDeadlinesDueSoon(db) }) ?? []
+        var texts = contracts.map { "Kündigung: \($0.label) – bis \($0.renewal_date)" }
+        for r in returns {
+            let txDescription = (try? db.read { db -> String? in
+                guard let txID = r.transaction_id else { return nil }
+                return try TransactionRecord.fetchOne(db, key: txID)?.description
+            }) ?? nil
+            texts.append("Rückgabe: \(txDescription ?? "Buchung") – \(r.deadline_days) Tage ab \(r.start_date)")
+        }
+        deadlines.value = texts
     }
 }

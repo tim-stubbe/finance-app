@@ -129,6 +129,49 @@ public struct LifeCheckIn: Codable, FetchableRecord, PersistableRecord, Identifi
     public var pending_client_id: String?
 }
 
+/// Wunsch - lesend + "gekauft" markieren (setWishlistPurchasedOffline,
+/// analog zu setTodoDoneOffline), sonst keine Bearbeitung in der iOS-App.
+public struct WishlistItem: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "wishlist_items"
+    public var id: Int64
+    public var name: String
+    public var category: String?
+    public var target_price: Double?
+    public var url: String?
+    public var purchased: Bool
+    public var active: Bool
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+/// Kündigungsfrist-Erinnerung, pull-only - für "Fristen" in der Heute-
+/// Ansicht. Kein description_key/auto_advance_frequency/notes lokal, die
+/// braucht nur die Web-App zum Bearbeiten (siehe AppDatabase-Migration).
+public struct ContractReminder: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "contract_reminders"
+    public var id: Int64
+    public var space_id: Int64?
+    public var account_id: Int64?
+    public var label: String
+    public var notice_period_days: Int64
+    public var renewal_date: String
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+/// Rückgabefrist zu einer Buchung, pull-only - für "Fristen" in der Heute-
+/// Ansicht.
+public struct ReturnDeadline: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "return_deadlines"
+    public var id: Int64
+    public var transaction_id: Int64?
+    public var start_date: String
+    public var deadline_days: Int64
+    public var returned: Bool
+    public var created_at: String?
+    public var updated_at: String?
+}
+
 /// Lokal-only: Sync-Cursor (Singleton-Zeile, id fest auf 1).
 public struct SyncState: Codable, FetchableRecord, PersistableRecord {
     public static let databaseTableName = "sync_state"
