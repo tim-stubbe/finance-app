@@ -275,6 +275,22 @@ public final class SyncEngine: ObservableObject {
         }
     }
 
+    /// Bearbeitet Betrag/Beschreibung einer bereits synchronisierten Buchung
+    /// grob - analog zu setTodoDoneOffline (nur id > 0, kein Update auf eine
+    /// noch ausstehende Outbox-Create-Operation).
+    public func updateTransactionOffline(id: Int64, amount: Double, description: String?) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var tx = try TransactionRecord.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = tx.updated_at
+            tx.amount = amount
+            tx.description = description
+            try tx.save(db)
+            let data: [String: Any] = ["amount": amount, "description": description as Any]
+            try Self.enqueueOutbox(db, entityType: "Transaction", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
     /// Hakt ein bereits synchronisiertes Todo ab/wieder auf - nur für Todos
     /// mit echter Server-ID (positive id), noch nicht synchronisierte (Pending)
     /// Todos werden bewusst nicht editierbar angeboten (siehe UI), das würde

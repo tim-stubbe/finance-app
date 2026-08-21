@@ -12,6 +12,7 @@ struct TransactionsView: View {
     @ObservedObject private var accountFilter = Box<Int64?>(nil)
     @ObservedObject private var onlyLast30Days = Box(false)
     @ObservedObject private var showNewSheet = Box(false)
+    @State private var editingTransaction: TransactionRecord?
 
     var body: some View {
         List {
@@ -43,6 +44,15 @@ struct TransactionsView: View {
                         Text(tx.amount, format: .currency(code: "EUR"))
                             .foregroundStyle(tx.amount < 0 ? Color.primary : Color.green)
                     }
+                    .swipeActions(edge: .trailing) {
+                        Button {
+                            editingTransaction = tx
+                        } label: {
+                            Label("Bearbeiten", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                        .disabled(tx.id < 0)
+                    }
                 }
             }
         }
@@ -60,6 +70,12 @@ struct TransactionsView: View {
             NewTransactionSheet(accounts: Array(accountsByID.value.values).sorted { $0.name < $1.name }) {
                 reload()
                 showNewSheet.value = false
+            }
+        }
+        .sheet(item: $editingTransaction) { tx in
+            EditTransactionSheet(transaction: tx) {
+                reload()
+                editingTransaction = nil
             }
         }
     }
@@ -135,5 +151,58 @@ struct NewTransactionSheet: View {
         )
         onSaved()
         dismiss()
+    }
+}
+
+/// Betrag/Beschreibung einer bestehenden Buchung grob bearbeiten (Konto/
+/// Datum/Kategorie bleiben unangetastet - dafür bleibt die Web-App der Ort,
+/// siehe SyncEngine.updateTransactionOffline-Kommentar).
+struct EditTransactionSheet: View {
+    let transaction: TransactionRecord
+    let onSaved: () -> Void
+
+    @State private var amountText: String
+    @State private var description: String
+    @Environment(\.dismiss) private var dismiss
+
+    init(transaction: TransactionRecord, onSaved: @escaping () -> Void) {
+        self.transaction = transaction
+        self.onSaved = onSaved
+        _amountText = State(initialValue: String(transaction.amount).replacingOccurrences(of: ".", with: ","))
+        _description = State(initialValue: transaction.description ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Betrag (negativ = Ausgabe)", text: $amountText)
+                    .keyboardType(.numbersAndPunctuation)
+                TextField("Beschreibung", text: $description)
+            }
+            .navigationTitle("Buchung bearbeiten")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Speichern") { save() }
+                        .disabled(parsedAmount == nil)
+                }
+            }
+        }
+    }
+
+    private var parsedAmount: Double? {
+        Double(amountText.replacingOccurrences(of: ",", with: "."))
+    }
+
+    private func save() {
+        guard let amount = parsedAmount else { return }
+        try? SyncEngine.shared.updateTransactionOffline(
+            id: transaction.id, amount: amount, description: description.isEmpty ? nil : description
+        )
+        onSaved()
+        dismiss()
+        Task { await SyncEngine.shared.run() }
     }
 }
