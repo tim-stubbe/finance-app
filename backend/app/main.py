@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, document_extract, goals, ai_auto, websearch, notifications, telegram_bot, calls, immich, travel_time, weather
+from . import models, schemas, crud, auth, bank_sync, radicale_sync, ollama_client, document_extract, goals, ai_auto, websearch, notifications, telegram_bot, calls, immich, travel_time, weather
 from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
 from .sync import sync_router
 from .routers.investments import investments_router
@@ -43,6 +43,7 @@ from .routers.settings_misc import settings_misc_router
 from .routers.notify_settings import notify_settings_router
 from .routers.dashboard import dashboard_router
 from .routers.profile_ollama import profile_ollama_router
+from .routers.sync_all import sync_all_router, sync_all_connections
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -1499,100 +1500,15 @@ app.include_router(settings_misc_router)
 app.include_router(notify_settings_router)
 app.include_router(dashboard_router)
 app.include_router(profile_ollama_router)
+app.include_router(sync_all_router)
 app.include_router(sync_router)
-
-
-# ---------------- Automatischer Sync (Bank, Bitvavo, PayPal, Enable Banking) ----------------
-def _sync_all_connections(db, settings):
-    """Synct alle Bank-/Broker-/Marktplatz-Verbindungen (FinTS, Bitvavo,
-    PayPal, Enable Banking, eBay) - bewusst OHNE Kurs-Refresh der Investments
-    (das ist ein separater, nutzer-getriggerter Schritt, siehe POST
-    /holdings/refresh-prices). Gemeinsam genutzt vom taeglichen
-    _scheduled_bank_sync UND vom Digest (siehe _scheduled_digest), der vor
-    jeder Meldung frische Zahlen braucht statt auf den naechsten taeglichen
-    Sync zu warten. Jede Verbindung isoliert in try/except, damit eine
-    fehlschlagende Verbindung die anderen nicht blockiert."""
-    if settings.fints_product_id:
-        for conn in crud.get_all_bank_connections(db):
-            try:
-                pin = bank_sync.decrypt_pin(settings.secret_key, conn.pin_encrypted)
-                since = conn.last_sync_at.date() if conn.last_sync_at else date.today() - timedelta(days=90)
-                bank_sync.start_sync(db, conn, pin, settings.fints_product_id, since)
-            except Exception as e:
-                conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                db.commit()
-
-    for bv_conn in crud.get_all_bitvavo_connections(db):
-        try:
-            api_key = bank_sync.decrypt_secret(settings.secret_key, bv_conn.api_key_encrypted)
-            api_secret = bank_sync.decrypt_secret(settings.secret_key, bv_conn.api_secret_encrypted)
-            exchange_sync.sync(db, bv_conn, api_key, api_secret, bv_conn.space_id)
-        except Exception as e:
-            bv_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-            db.commit()
-
-    for pp_conn in crud.get_all_paypal_connections(db):
-        try:
-            client_id = bank_sync.decrypt_secret(settings.secret_key, pp_conn.client_id_encrypted)
-            client_secret = bank_sync.decrypt_secret(settings.secret_key, pp_conn.client_secret_encrypted)
-            paypal_sync.sync(db, pp_conn, client_id, client_secret)
-        except Exception as e:
-            pp_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-            db.commit()
-
-    if settings.enablebanking_app_id and settings.enablebanking_private_key_encrypted:
-        private_key = bank_sync.decrypt_secret(settings.secret_key, settings.enablebanking_private_key_encrypted)
-        for eb_conn in crud.get_all_enablebanking_connections(db):
-            if eb_conn.status != "linked":
-                continue
-            try:
-                enablebanking_sync.sync(db, eb_conn, settings.enablebanking_app_id, private_key)
-            except Exception as e:
-                eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                db.commit()
-
-    if settings.ebay_app_id and settings.ebay_cert_id_encrypted:
-        cert_id = bank_sync.decrypt_secret(settings.secret_key, settings.ebay_cert_id_encrypted)
-        for eb_conn in crud.get_all_ebay_connections(db):
-            if eb_conn.status != "connected":
-                continue
-            try:
-                ebay_sync.sync(db, eb_conn, settings.ebay_app_id, cert_id)
-            except Exception as e:
-                eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
-                db.commit()
-
-
-@api_router.post("/sync-all", response_model=schemas.SyncAllResult)
-def sync_all_connections_now(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    """Stößt denselben Sync an, den sonst nur der tägliche Job und der Digest
-    vor jeder Meldung auslösen (siehe _sync_all_connections) - manuell per
-    Knopfdruck statt zu warten. Das Ergebnis wird aus last_sync_status/-at je
-    Verbindung gelesen, die _sync_all_connections für jede Verbindung ohnehin
-    schon setzt (Erfolg wie Fehlschlag), statt die leicht unterschiedlichen
-    Rückgabewerte der einzelnen sync()-Funktionen selbst zu vereinheitlichen."""
-    settings = auth.get_or_create_settings(db)
-    _sync_all_connections(db, settings)
-
-    results = []
-    for conn in crud.get_all_bank_connections(db):
-        results.append(schemas.SyncAllConnectionResult(name=conn.name, kind="Bank (FinTS)", status=conn.last_sync_status))
-    for conn in crud.get_all_bitvavo_connections(db):
-        results.append(schemas.SyncAllConnectionResult(name=conn.name, kind="Bitvavo", status=conn.last_sync_status))
-    for conn in crud.get_all_paypal_connections(db):
-        results.append(schemas.SyncAllConnectionResult(name=conn.name, kind="PayPal", status=conn.last_sync_status))
-    for conn in crud.get_all_enablebanking_connections(db):
-        results.append(schemas.SyncAllConnectionResult(name=conn.aspsp_name, kind="Enable Banking", status=conn.last_sync_status))
-    for conn in crud.get_all_ebay_connections(db):
-        results.append(schemas.SyncAllConnectionResult(name=conn.ebay_username or "eBay", kind="eBay", status=conn.last_sync_status))
-    return schemas.SyncAllResult(connections=results)
 
 
 def _scheduled_bank_sync():
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
-        _sync_all_connections(db, settings)
+        sync_all_connections(db, settings)
     finally:
         db.close()
 
@@ -2227,13 +2143,13 @@ def _scheduled_digest():
     Warnungen in _check_daily_alerts - beides laeuft unabhaengig nebeneinander.
 
     Synct vor jeder Meldung erst alle Bank-/Broker-Verbindungen (siehe
-    _sync_all_connections), damit das gemeldete Nettovermögen nicht auf dem
+    sync_all_connections), damit das gemeldete Nettovermögen nicht auf dem
     Stand vom letzten taeglichen Sync-Lauf haengt, sondern frisch ist -
-    bewusst OHNE Investment-Kurse (siehe _sync_all_connections-Docstring)."""
+    bewusst OHNE Investment-Kurse (siehe sync_all_connections-Docstring)."""
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
-        _sync_all_connections(db, settings)
+        sync_all_connections(db, settings)
 
         home_coords = (settings.home_lat, settings.home_lon) if settings.home_lat and settings.home_lon else None
         ors_api_key = (
