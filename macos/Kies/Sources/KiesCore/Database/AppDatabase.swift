@@ -114,6 +114,53 @@ public enum AppDatabase {
             }
         }
 
+        // Neu fuer die ausgebaute iOS-"Heute"-Ansicht + neue Tabs (Ziele/Leben):
+        // Goal/LifeArea/LifeCheckIn sind serverseitig laengst in sync_registry.py
+        // voll sync-faehig, hier fehlten bisher nur die lokalen Tabellen. Wie bei
+        // CalendarEvent bewusst nur die fuer Anzeige/Check-in noetigen Spalten,
+        // nicht 1:1 alle Server-Spalten - `progress_percent`/`streak_days`/
+        // `checkin_days_30` bei LifeArea sind serverseitig vom Pydantic-Schema
+        // bolted-on berechnete Werte, KEINE echten DB-Spalten (sync.py serialisiert
+        // nur rohe Tabellenspalten), deshalb hier absichtlich nicht nachgebildet -
+        // "ohne Check-in heute" wird stattdessen lokal aus life_checkins berechnet
+        // (siehe Queries.lifeAreasWithoutCheckinToday).
+        migrator.registerMigration("v3_goalsAndLife") { db in
+            try db.create(table: "goals") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("space_id", .integer)
+                t.column("title", .text).notNull()
+                t.column("description", .text)
+                t.column("category", .text)
+                t.column("goal_type", .text).notNull()
+                t.column("target_date", .text)
+                t.column("status", .text).notNull()
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+            try db.create(table: "life_areas") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("description", .text)
+                t.column("target_date", .text)
+                t.column("check_interval_days", .integer)
+                t.column("target_days_per_week", .integer)
+                t.column("active", .boolean).notNull().defaults(to: true)
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+            // LifeCheckIn ist serverseitig create-only (kein update/delete_fn,
+            // reines Tagebuch, siehe sync_registry.py) - pending_client_id analog
+            // zu Todo/Transaction fuer den Offline-Anlege-Fall.
+            try db.create(table: "life_checkins") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("area_id", .integer).notNull()
+                t.column("note", .text).notNull()
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+                t.column("pending_client_id", .text)
+            }
+        }
+
         return migrator
     }
 }

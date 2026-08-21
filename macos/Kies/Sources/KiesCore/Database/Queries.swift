@@ -39,6 +39,28 @@ public enum Queries {
         ) ?? 0
         return (income, expense)
     }
+
+    /// Offene Ziele mit nahem Zieldatum (oder ganz ohne Datum, ans Ende
+    /// sortiert) - fuer die "Heute"-Ansicht. Kein numerischer Fortschritt
+    /// verfuegbar (progress_percent/GoalProgress sind serverseitig berechnet,
+    /// nicht Teil der hier synchronisierten Rohspalten, siehe Models.swift).
+    public static func goalsNearTarget(_ db: Database, limit: Int = 5) throws -> [Goal] {
+        try Goal
+            .filter(Column("status") == "open")
+            .order(sql: "target_date IS NULL, target_date ASC")
+            .limit(limit)
+            .fetchAll(db)
+    }
+
+    /// Aktive Lebensbereiche, zu denen heute noch kein Check-in vorliegt.
+    public static func lifeAreasWithoutCheckinToday(_ db: Database) throws -> [LifeArea] {
+        let today = DateFormatter.isoDate.string(from: Date())
+        let checkedInAreaIDs = try Int64.fetchSet(db, sql: """
+            SELECT DISTINCT area_id FROM life_checkins WHERE substr(created_at, 1, 10) = ?
+            """, arguments: [today])
+        let areas = try LifeArea.filter(Column("active") == true).order(Column("name")).fetchAll(db)
+        return areas.filter { !checkedInAreaIDs.contains($0.id) }
+    }
 }
 
 extension DateFormatter {

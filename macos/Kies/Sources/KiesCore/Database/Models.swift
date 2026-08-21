@@ -83,6 +83,52 @@ public struct CalendarEvent: Codable, FetchableRecord, PersistableRecord, Identi
     public var updated_at: String?
 }
 
+/// Ziel, pull-only in dieser Scheibe (keine Anlage/Bearbeitung in der iOS-App -
+/// server-seitig deutlich reichhaltiger, siehe AppDatabase-Migration
+/// v3_goalsAndLife-Kommentar zur bewussten Spaltenauswahl).
+public struct Goal: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "goals"
+    public var id: Int64
+    public var space_id: Int64?
+    public var title: String
+    public var description: String?
+    public var category: String?
+    public var goal_type: String
+    public var target_date: String?
+    public var status: String
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+/// Lebensbereich, pull-only (kein Anlegen/Bearbeiten in der iOS-App, nur
+/// Check-ins darauf, siehe LifeCheckIn) - progress_percent/streak/Heatmap sind
+/// serverseitig berechnete Werte, keine echten Spalten (siehe Migration).
+public struct LifeArea: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "life_areas"
+    public var id: Int64
+    public var name: String
+    public var description: String?
+    public var target_date: String?
+    public var check_interval_days: Int64?
+    public var target_days_per_week: Int64?
+    public var active: Bool
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+/// Check-in-Eintrag zu einem LifeArea - create-only (server hat kein
+/// update/delete_fn dafuer, siehe sync_registry.py), pending_client_id analog
+/// zu Todo/Transaction fuer den Offline-Anlege-Fall.
+public struct LifeCheckIn: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "life_checkins"
+    public var id: Int64
+    public var area_id: Int64
+    public var note: String
+    public var created_at: String?
+    public var updated_at: String?
+    public var pending_client_id: String?
+}
+
 /// Lokal-only: Sync-Cursor (Singleton-Zeile, id fest auf 1).
 public struct SyncState: Codable, FetchableRecord, PersistableRecord {
     public static let databaseTableName = "sync_state"

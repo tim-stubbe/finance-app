@@ -12,6 +12,8 @@ struct TodayView: View {
     @ObservedObject private var upcomingEvents = Box<[CalendarEvent]>([])
     @ObservedObject private var income = Box(0.0)
     @ObservedObject private var expense = Box(0.0)
+    @ObservedObject private var nearGoals = Box<[Goal]>([])
+    @ObservedObject private var uncheckedAreas = Box<[LifeArea]>([])
 
     var body: some View {
         List {
@@ -50,9 +52,32 @@ struct TodayView: View {
                             Text(todo.title)
                             Spacer()
                             if let due = todo.due_date {
-                                Text(due).font(.caption).foregroundStyle(.secondary)
+                                let overdue = due < DateFormatter.isoDate.string(from: Date())
+                                Text(due).font(.caption).foregroundStyle(overdue ? .red : .secondary)
                             }
                         }
+                    }
+                }
+            }
+
+            if !nearGoals.value.isEmpty {
+                Section("Ziele in Reichweite") {
+                    ForEach(nearGoals.value) { goal in
+                        HStack {
+                            Text(goal.title)
+                            Spacer()
+                            if let targetDate = goal.target_date {
+                                Text(targetDate).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !uncheckedAreas.value.isEmpty {
+                Section("Ohne Check-in heute") {
+                    ForEach(uncheckedAreas.value) { area in
+                        Text(area.name)
                     }
                 }
             }
@@ -62,7 +87,16 @@ struct TodayView: View {
             }
         }
         .navigationTitle("Heute")
-        .toolbar { SyncStatusToolbarItem() }
+        .toolbar {
+            SyncStatusToolbarItem()
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+            }
+        }
         .task { reload() }
         .onChange(of: engine.lastSyncedAt) { _, _ in reload() }
         .refreshable { await engine.run() }
@@ -92,5 +126,15 @@ struct TodayView: View {
         let balance = (try? db.read { db in try Queries.todayBalance(db) }) ?? (income: 0, expense: 0)
         income.value = balance.income
         expense.value = balance.expense
+
+        // "In Reichweite" heißt hier: nahes Zieldatum (kein numerischer
+        // Fortschritt lokal verfügbar, siehe Models.swift-Kommentar zu Goal) -
+        // nur die nächsten 60 Tage, damit die Heute-Ansicht ein Digest bleibt.
+        let cutoff = DateFormatter.isoDate.string(from: Date().addingTimeInterval(60 * 24 * 60 * 60))
+        nearGoals.value = ((try? db.read { db in try Queries.goalsNearTarget(db, limit: 20) }) ?? [])
+            .filter { ($0.target_date ?? "") <= cutoff && $0.target_date != nil }
+            .prefix(3)
+            .map { $0 }
+        uncheckedAreas.value = (try? db.read { db in try Queries.lifeAreasWithoutCheckinToday(db) }) ?? []
     }
 }

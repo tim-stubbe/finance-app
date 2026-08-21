@@ -25,6 +25,9 @@ struct TransactionsView: View {
                 Toggle("Nur letzte 30 Tage", isOn: onlyLast30Days.binding)
             }
 
+            if filteredTransactions.isEmpty {
+                ContentUnavailableView("Keine Buchungen", systemImage: "list.bullet.rectangle", description: Text("Noch keine Buchungen synchronisiert oder Filter zu eng."))
+            }
             Section {
                 ForEach(filteredTransactions) { tx in
                     HStack {

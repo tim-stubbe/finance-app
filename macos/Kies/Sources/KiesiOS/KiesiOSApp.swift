@@ -13,9 +13,19 @@ import KiesCore
 /// Simulator (oder ein eigenes Gerät) als Ziel wählen, Cmd+R.
 @main
 struct KiesiOSApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var lock = AppLockStore.shared
+
     var body: some Scene {
         WindowGroup {
             RootView()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background: lock.handleBackground()
+            case .active: lock.handleForeground()
+            default: break
+            }
         }
     }
 }
@@ -23,18 +33,26 @@ struct KiesiOSApp: App {
 struct RootView: View {
     @ObservedObject var pairing = PairingStore.shared
     @ObservedObject var engine = SyncEngine.shared
+    @ObservedObject var lock = AppLockStore.shared
 
     var body: some View {
-        Group {
-            if !pairing.isPaired {
-                PairingView()
-            } else {
-                RootTabView()
+        ZStack {
+            Group {
+                if !pairing.isPaired {
+                    PairingView()
+                } else {
+                    RootTabView()
+                }
             }
-        }
-        .task {
-            guard pairing.isPaired else { return }
-            await engine.run()
+            .task {
+                guard pairing.isPaired else { return }
+                await engine.run()
+            }
+            .onAppear { lock.lockIfEnabled() }
+
+            if lock.isLocked {
+                AppLockView()
+            }
         }
     }
 }

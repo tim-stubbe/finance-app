@@ -19,7 +19,10 @@ public final class SyncEngine: ObservableObject {
 
     // Nur diese Entitäten hat die erste vertikale Scheibe lokal - alle
     // anderen Server-Entitäten aus der Pull-Antwort werden ignoriert.
-    private nonisolated static let localEntityTypes: Set<String> = ["Account", "Category", "Transaction", "Todo", "Space", "CalendarEvent"]
+    private nonisolated static let localEntityTypes: Set<String> = [
+        "Account", "Category", "Transaction", "Todo", "Space", "CalendarEvent",
+        "Goal", "LifeArea", "LifeCheckIn",
+    ]
 
     public func run() async {
         guard PairingStore.shared.isPaired, !isSyncing else { return }
@@ -100,6 +103,29 @@ public final class SyncEngine: ObservableObject {
                 location: row["location"]?.stringValue, all_day: row["all_day"]?.boolValue ?? false,
                 created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
             ).save(db)
+        case "Goal":
+            try Goal(
+                id: id, space_id: row["space_id"]?.int64Value, title: row["title"]?.stringValue ?? "",
+                description: row["description"]?.stringValue, category: row["category"]?.stringValue,
+                goal_type: row["goal_type"]?.stringValue ?? "", target_date: row["target_date"]?.stringValue,
+                status: row["status"]?.stringValue ?? "",
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
+        case "LifeArea":
+            try LifeArea(
+                id: id, name: row["name"]?.stringValue ?? "", description: row["description"]?.stringValue,
+                target_date: row["target_date"]?.stringValue,
+                check_interval_days: row["check_interval_days"]?.int64Value,
+                target_days_per_week: row["target_days_per_week"]?.int64Value,
+                active: row["active"]?.boolValue ?? true,
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
+        case "LifeCheckIn":
+            try LifeCheckIn(
+                id: id, area_id: row["area_id"]?.int64Value ?? 0, note: row["note"]?.stringValue ?? "",
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue,
+                pending_client_id: nil
+            ).save(db)
         default:
             break
         }
@@ -113,6 +139,9 @@ public final class SyncEngine: ObservableObject {
         case "Transaction": try TransactionRecord.deleteOne(db, key: tombstone.entity_id)
         case "Todo": try Todo.deleteOne(db, key: tombstone.entity_id)
         case "CalendarEvent": try CalendarEvent.deleteOne(db, key: tombstone.entity_id)
+        case "Goal": try Goal.deleteOne(db, key: tombstone.entity_id)
+        case "LifeArea": try LifeArea.deleteOne(db, key: tombstone.entity_id)
+        case "LifeCheckIn": try LifeCheckIn.deleteOne(db, key: tombstone.entity_id)
         default: break
         }
     }
@@ -169,6 +198,12 @@ public final class SyncEngine: ObservableObject {
             todo.id = serverID
             todo.pending_client_id = nil
             try todo.insert(db)
+        }
+        if var checkin = try LifeCheckIn.filter(Column("pending_client_id") == clientID).fetchOne(db) {
+            try LifeCheckIn.deleteOne(db, key: checkin.id)
+            checkin.id = serverID
+            checkin.pending_client_id = nil
+            try checkin.insert(db)
         }
     }
 
@@ -230,6 +265,30 @@ public final class SyncEngine: ObservableObject {
             let data: [String: Any] = ["done": done]
             try Self.enqueueOutbox(db, entityType: "Todo", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
         }
+    }
+
+    /// Legt einen Check-in lokal an (Platzhalter-ID) und reiht ihn in die
+    /// Outbox ein - analog zu createTodoOffline, LifeCheckIn ist serverseitig
+    /// ebenfalls nur "create" (siehe sync_registry.py).
+    public func createLifeCheckInOffline(areaID: Int64, note: String) throws {
+        try db.write { db in
+            let clientID = UUID().uuidString
+            let placeholderID = -Int64(Date().timeIntervalSince1970 * 1000)
+            let checkin = LifeCheckIn(
+                id: placeholderID, area_id: areaID, note: note,
+                created_at: ISO8601DateFormatter().string(from: Date()), updated_at: nil,
+                pending_client_id: clientID
+            )
+            try checkin.insert(db)
+            let data: [String: Any] = ["area_id": areaID, "note": note]
+            try Self.enqueueOutbox(db, entityType: "LifeCheckIn", op: "create", clientID: clientID, serverID: nil, baseUpdatedAt: nil, data: data)
+        }
+    }
+
+    /// Anzahl noch nicht übertragener Outbox-Einträge - für "X Änderungen
+    /// warten auf Upload" in der Sync-Status-Anzeige.
+    public func pendingOutboxCount() async -> Int {
+        (try? await db.read { db in try SyncOutboxEntry.fetchCount(db) }) ?? 0
     }
 
     private nonisolated static func enqueueOutbox(

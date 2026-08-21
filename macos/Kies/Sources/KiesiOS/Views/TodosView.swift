@@ -14,6 +14,9 @@ struct TodosView: View {
 
     var body: some View {
         List {
+            if todos.value.isEmpty {
+                ContentUnavailableView("Nichts offen", systemImage: "checklist", description: Text("Noch keine Todos synchronisiert oder alles erledigt."))
+            }
             Section {
                 ForEach(todos.value) { todo in
                     HStack {
@@ -39,6 +42,15 @@ struct TodosView: View {
                             }
                         }
                         Spacer()
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button {
+                            toggle(todo)
+                        } label: {
+                            Label("Erledigt", systemImage: "checkmark")
+                        }
+                        .tint(.green)
+                        .disabled(todo.id < 0)
                     }
                 }
             }
