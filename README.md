@@ -22,7 +22,9 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 - ✅ Automatische Datei-Sortierung eines Eingangsordners (Kategorien, Kontoauszug-Import)
 - ✅ Immich-Anbindung: doppelte Fotos, alte Bildschirmfotos, unscharfe/leere Fotos
   aufräumen (inkl. Tinder-artigem Swipe-Modus), Personen durchsuchen
-- ✅ To-Dos zweiseitig mit dem Handy synchronisiert (Radicale/CalDAV)
+- ✅ To-Dos und Kalender-Termine zweiseitig mit dem Handy synchronisiert
+  (Radicale/CalDAV), inkl. wiederkehrender Termine (RRULE)
+- ✅ Lebensbereiche/Habit-Tracking mit Streak und optionalem Wochenraster-Ziel
 - ✅ Kündigungsfristen für Abos (inkl. Jahresersparnis bei Kündigung), Rückgabefristen für einzelne Käufe
 - ✅ „Heute“-Fokus-Ansicht im Hub: Termine, fällige To-Dos, Fristen, Ziele in Reichweite, Tagesbilanz
 - ✅ Frei definierbare Alarm-Regeln (Ausgaben-Schwelle, Kontostand, Kategorie-Ausreißer, Ziel-Fortschritt)
@@ -55,7 +57,8 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 - Kursdaten für Wertpapiere
 - IMAP-Postfach für Belege aus E-Mail-Anhängen (rein lesend)
 - Immich für die eigene Fotobibliothek
-- Radicale/CalDAV für zweiseitigen To-Do-Abgleich mit dem Handy
+- Radicale/CalDAV für zweiseitigen Abgleich von To-Dos und Kalender-Terminen
+  mit dem Handy, wiederkehrende Termine (RRULE) werden als Serie erkannt
 
 **Investitionen**
 - Positionen mit Einstandskursen und Lots, Gewinn/Verlust, Dividenden
@@ -82,6 +85,8 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 - Ziele (automatisch aus den App-Daten gemessen oder als manuelle Meilensteine,
   optional in Ketten voneinander abhängig), wahlweise als Kachelraster oder
   grafischer Zeitstrahl
+- Lebensbereiche als Habit-Tracking: freies Tagebuch mit Fortschritt, Streak
+  und 30-Tage-Verlauf, optional mit festem Wochenraster-Ziel (z. B. 3x/Woche)
 - Kontextbezogene, durchsuchbare Notizen an Zielen, To-Dos, Projekten,
   Lebensbereichen und dem Schweiz-Tab
 - Schweiz-Tab für den geplanten Umzug: eigener Zeitstrahl, Lebenshaltungskosten-
@@ -144,7 +149,7 @@ nach ausdrücklicher Bestätigung.
 
 | Bereich   | Umsetzung                                                   |
 |-----------|-------------------------------------------------------------|
-| Backend   | FastAPI, SQLAlchemy, SQLite (265 Endpunkte)                  |
+| Backend   | FastAPI, SQLAlchemy, SQLite (289 Endpunkte, modular in `routers/`) |
 | Frontend  | HTML/CSS/JavaScript ohne Build-Schritt, Chart.js über CDN   |
 | Jobs      | APScheduler für Sync, Kursabruf, Kategorisierung, Backups   |
 | Betrieb   | Docker, Python 3.14                                          |
