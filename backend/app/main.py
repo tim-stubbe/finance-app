@@ -18,7 +18,6 @@ from fastapi import APIRouter, FastAPI, Depends, Form, Header, HTTPException, Up
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, Response
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.requests import Request
 from sqlalchemy.orm import Session
 
 import threading
@@ -42,6 +41,7 @@ from .routers.immich_routes import immich_router, immich_credentials
 from .routers.bank_connections import bank_connections_router
 from .routers.enablebanking_ebay import enablebanking_ebay_router
 from .routers.mail_routes import mail_router, find_receipt_matches, run_mail_sync
+from .routers.spaces_accounts import spaces_accounts_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -345,109 +345,6 @@ def update_profile(data: schemas.ProfileUpdate, db: Session = Depends(get_db)):
     settings.display_name = data.display_name
     db.commit()
     return schemas.ProfileOut(display_name=settings.display_name)
-
-
-# ---------------- Spaces (Bereiche) ----------------
-@api_router.get("/spaces", response_model=List[schemas.SpaceOut])
-def list_spaces(db: Session = Depends(get_db)):
-    return crud.get_spaces(db)
-
-
-@api_router.post("/spaces", response_model=schemas.SpaceOut)
-def create_space(data: schemas.SpaceCreate, db: Session = Depends(get_db)):
-    return crud.create_space(db, data)
-
-
-@api_router.delete("/spaces/{space_id}")
-def remove_space(space_id: int, request: Request, db: Session = Depends(get_db)):
-    space = crud.delete_space(db, space_id)
-    if not space:
-        raise HTTPException(404, "Bereich nicht gefunden")
-    if request.session.get("space_id") == space_id:
-        request.session.pop("space_id", None)
-    return {"ok": True}
-
-
-@api_router.post("/spaces/{space_id}/select", response_model=schemas.SpaceOut)
-def select_space(space_id: int, request: Request, db: Session = Depends(get_db)):
-    space = crud.get_space(db, space_id)
-    if not space:
-        raise HTTPException(404, "Bereich nicht gefunden")
-    request.session["space_id"] = space_id
-    return space
-
-
-@api_router.get("/spaces/current")
-def current_space(request: Request, db: Session = Depends(get_db)):
-    space_id = request.session.get("space_id")
-    if not space_id:
-        # Gibt es nur einen Bereich, automatisch übernehmen - siehe
-        # auth.get_active_space_id für die Begründung. Ohne das würde die
-        # Bereichsauswahl beim ersten Laden trotzdem kurz aufblitzen.
-        spaces = crud.get_spaces(db)
-        if len(spaces) == 1:
-            space_id = spaces[0].id
-            request.session["space_id"] = space_id
-        else:
-            return None
-    space = crud.get_space(db, space_id)
-    if not space:
-        request.session.pop("space_id", None)
-        return None
-    return schemas.SpaceOut.model_validate(space)
-
-
-# ---------------- Accounts ----------------
-@api_router.get("/accounts", response_model=List[schemas.AccountOut])
-def list_accounts(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    accounts = crud.get_accounts(db, space_id)
-    result = []
-    for acc in accounts:
-        bal = crud.account_balance(db, acc)
-        result.append(
-            schemas.AccountOut(
-                id=acc.id, name=acc.name, type=acc.type,
-                initial_balance=acc.initial_balance, is_business=acc.is_business,
-                created_at=acc.created_at, current_balance=bal,
-            )
-        )
-    return result
-
-
-@api_router.post("/accounts", response_model=schemas.AccountOut)
-def create_account(account: schemas.AccountCreate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    acc = crud.create_account(db, account, space_id)
-    return schemas.AccountOut(
-        id=acc.id, name=acc.name, type=acc.type,
-        initial_balance=acc.initial_balance, is_business=acc.is_business,
-        created_at=acc.created_at, current_balance=acc.initial_balance,
-    )
-
-
-@api_router.put("/accounts/{account_id}", response_model=schemas.AccountOut)
-def update_account(account_id: int, data: schemas.AccountUpdate, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    acc = crud.update_account(db, account_id, space_id, data)
-    if not acc:
-        raise HTTPException(404, "Konto nicht gefunden")
-    bal = crud.account_balance(db, acc)
-    return schemas.AccountOut(
-        id=acc.id, name=acc.name, type=acc.type,
-        initial_balance=acc.initial_balance, is_business=acc.is_business,
-        created_at=acc.created_at, current_balance=bal,
-    )
-
-
-@api_router.delete("/accounts/{account_id}")
-def delete_account(account_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    acc = crud.delete_account(db, account_id, space_id)
-    if not acc:
-        raise HTTPException(404, "Konto nicht gefunden")
-    return {"ok": True}
-
-
-@api_router.get("/accounts/balance-log", response_model=List[schemas.AccountBalanceLogOut])
-def get_balance_log(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.recent_balance_changes(db, space_id)
 
 
 # ---------------- Transactions ----------------
@@ -2646,6 +2543,7 @@ app.include_router(immich_router)
 app.include_router(bank_connections_router)
 app.include_router(enablebanking_ebay_router)
 app.include_router(mail_router)
+app.include_router(spaces_accounts_router)
 app.include_router(sync_router)
 
 
