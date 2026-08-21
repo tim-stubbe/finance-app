@@ -13,13 +13,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, FastAPI, Depends, Form, Header, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, document_extract, goals, ai_auto, websearch, notifications, telegram_bot, calls, benchmark, immich, travel_time, weather
+from . import models, schemas, crud, auth, prices, bank_sync, exchange_sync, enablebanking_sync, paypal_sync, ebay_sync, radicale_sync, ollama_client, document_extract, goals, ai_auto, websearch, notifications, telegram_bot, calls, immich, travel_time, weather
 from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
 from .sync import sync_router
 from .routers.investments import investments_router
@@ -41,6 +40,7 @@ from .routers.mail_routes import mail_router, find_receipt_matches, run_mail_syn
 from .routers.spaces_accounts import spaces_accounts_router
 from .routers.backup_restore import backup_router, write_backup_to_disk
 from .routers.export_import import export_import_router, HOLDING_ASSET_TYPE_ALIASES
+from .routers.analytics import analytics_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -367,31 +367,6 @@ def get_recurring_transactions(db: Session = Depends(get_db), space_id: int = De
     return crud.detect_recurring_transactions(db, space_id)
 
 
-@api_router.get("/recurring-ignores", response_model=List[schemas.IgnoredRecurringPaymentOut])
-def list_ignored_recurring_payments(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.get_ignored_recurring_payments(db, space_id)
-
-
-@api_router.post("/recurring-ignores", response_model=schemas.IgnoredRecurringPaymentOut)
-def add_ignored_recurring_payment(
-    data: schemas.IgnoredRecurringPaymentCreate,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    return crud.create_ignored_recurring_payment(db, space_id, data)
-
-
-@api_router.delete("/recurring-ignores/{ignore_id}")
-def remove_ignored_recurring_payment(
-    ignore_id: int,
-    db: Session = Depends(get_db),
-    space_id: int = Depends(auth.get_active_space_id),
-):
-    if not crud.delete_ignored_recurring_payment(db, ignore_id, space_id):
-        raise HTTPException(404, "Eintrag nicht gefunden.")
-    return {"ok": True}
-
-
 @api_router.get("/transactions/price-increases", response_model=List[schemas.PriceIncreaseOut])
 def get_price_increases(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.detect_price_increases(db, space_id)
@@ -410,23 +385,6 @@ def get_overlapping_contracts(db: Session = Depends(get_db), space_id: int = Dep
 @api_router.get("/transactions/duplicates", response_model=List[schemas.DuplicateTransactionGroup])
 def get_duplicate_transactions(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.find_duplicate_transactions(db, space_id)
-
-
-@api_router.get("/forecast/cashflow", response_model=schemas.CashflowForecastOut)
-def get_cashflow_forecast(days: int = 90, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    days = max(7, min(days, 365))
-    return crud.cashflow_forecast(db, space_id, days)
-
-
-@api_router.post("/forecast/cashflow/scenario", response_model=schemas.CashflowScenarioOut)
-def get_cashflow_scenario(data: schemas.CashflowScenarioRequest, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    days = max(7, min(data.horizon_days, 365))
-    return crud.cashflow_scenario(
-        db, space_id, days,
-        cancel_description_key=data.cancel_description_key,
-        extra_monthly_saving=data.extra_monthly_saving,
-        extra_monthly_expense=data.extra_monthly_expense,
-    )
 
 
 @api_router.post("/transactions", response_model=schemas.TransactionOut)
@@ -498,29 +456,6 @@ def upload_receipt(transaction_id: int, file: UploadFile = File(...), db: Sessio
     return crud.set_receipt(db, transaction_id, space_id, safe_name)
 
 
-@api_router.get("/receipts/{filename}")
-def get_receipt(filename: str):
-    # os.path.basename() entfernt jeden Verzeichnisanteil (z.B. "../../etc/x")
-    # - ohne das ließe sich über den Pfad aus UPLOAD_DIR herauslesen
-    # (GitHub-Code-Scanning: py/path-injection). Zusätzlich wird der
-    # aufgelöste Pfad auf Zugehörigkeit zu UPLOAD_DIR geprüft, als zweite,
-    # von der ersten unabhängige Absicherung.
-    safe_name = os.path.basename(filename)
-    path = os.path.realpath(os.path.join(UPLOAD_DIR, safe_name))
-    if not path.startswith(os.path.realpath(UPLOAD_DIR) + os.sep):
-        raise HTTPException(404, "Beleg nicht gefunden")
-    if not os.path.exists(path):
-        raise HTTPException(404, "Beleg nicht gefunden")
-    return FileResponse(path)
-
-
-@api_router.get("/receipts/search/query", response_model=List[schemas.TransactionOut])
-def search_receipts(q: str, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    if len(q.strip()) < 2:
-        return []
-    return crud.search_receipts(db, space_id, q)
-
-
 @api_router.delete("/transactions/{transaction_id}/receipt")
 def delete_receipt(transaction_id: int, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     tx = crud.get_transaction(db, transaction_id, space_id)
@@ -532,26 +467,6 @@ def delete_receipt(transaction_id: int, db: Session = Depends(get_db), space_id:
             os.remove(path)
         crud.set_receipt(db, transaction_id, space_id, None)
     return {"ok": True}
-
-
-@api_router.get("/net-worth", response_model=schemas.NetWorthOut)
-def get_net_worth(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.net_worth(db, space_id)
-
-
-@api_router.get("/net-worth/history", response_model=schemas.NetWorthHistoryOut)
-def get_net_worth_history(days: int = 365, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    """Echte Vermoegens-Historie aus taeglichen Snapshots (siehe
-    _scheduled_net_worth_snapshot) - waechst erst ab dem Tag, an dem dieser
-    Job zum ersten Mal lief, keine rueckwirkende Rekonstruktion."""
-    days = max(1, min(days, 1825))
-    snapshots = crud.net_worth_history(db, space_id, days)
-    return schemas.NetWorthHistoryOut(points=[
-        schemas.NetWorthHistoryPoint(
-            date=s.date, accounts_total=s.accounts_total, investments_total=s.investments_total,
-            debts_total=s.debts_total, total=s.total,
-        ) for s in snapshots
-    ])
 
 
 @api_router.put("/settings/birth-year", response_model=schemas.BirthYearUpdate)
@@ -566,42 +481,6 @@ def update_birth_year(data: schemas.BirthYearUpdate, db: Session = Depends(get_d
     s.birth_year = data.birth_year
     db.commit()
     return schemas.BirthYearUpdate(birth_year=s.birth_year)
-
-
-@api_router.get("/benchmark", response_model=schemas.BenchmarkOut)
-def get_benchmark(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    """Ordnet das eigene Nettovermögen in die eigene Altersgruppe ein."""
-    s = auth.get_or_create_settings(db)
-    nw = crud.net_worth(db, space_id)
-    total = nw["total"] if isinstance(nw, dict) else nw.total
-
-    own = benchmark.bracket_for_age(
-        benchmark.age_from_birth_year(s.birth_year)) if s.birth_year else None
-
-    def to_schema(b, is_own):
-        return schemas.BenchmarkBracket(
-            key=b.key, label=b.label, p10=b.p10, p50=b.p50, p90=b.p90, is_own=is_own,
-        )
-
-    out = schemas.BenchmarkOut(
-        configured=bool(s.birth_year),
-        birth_year=s.birth_year,
-        net_worth=total,
-        brackets=[to_schema(b, own is not None and b.key == own.key)
-                  for b in benchmark.BRACKETS],
-        overall=to_schema(benchmark.GESAMT, False),
-        source=benchmark.QUELLE,
-        source_url=benchmark.QUELLE_URL,
-        data_year=benchmark.DATENJAHR,
-    )
-    if own:
-        pct, exact = benchmark.estimate_percentile(total, own)
-        out.age = benchmark.age_from_birth_year(s.birth_year)
-        out.own_bracket = own.key
-        out.percentile = round(pct, 1)
-        out.percentile_exact = exact
-        out.verdict = benchmark.verdict(total, own)
-    return out
 
 
 # ---------------- KI-Assistent (Ollama) ----------------
@@ -2196,6 +2075,7 @@ app.include_router(mail_router)
 app.include_router(spaces_accounts_router)
 app.include_router(backup_router)
 app.include_router(export_import_router)
+app.include_router(analytics_router)
 app.include_router(sync_router)
 
 
