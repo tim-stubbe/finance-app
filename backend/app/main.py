@@ -8,7 +8,6 @@ import re
 import secrets
 import shutil
 import uuid
-import zipfile
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 
@@ -42,6 +41,7 @@ from .routers.bank_connections import bank_connections_router
 from .routers.enablebanking_ebay import enablebanking_ebay_router
 from .routers.mail_routes import mail_router, find_receipt_matches, run_mail_sync
 from .routers.spaces_accounts import spaces_accounts_router
+from .routers.backup_restore import backup_router, write_backup_to_disk
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -2375,64 +2375,13 @@ def import_holdings_csv(file: UploadFile = File(...), db: Session = Depends(get_
     return {"created": created, "added_lots": added_lots, "skipped": skipped, "errors": errors}
 
 
-# ---------------- Backup / Restore (bereichsübergreifend) ----------------
-def _build_backup_zip_bytes() -> bytes:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        db_path = os.path.join(DATA_DIR, "finance.db")
-        if os.path.exists(db_path):
-            zf.write(db_path, "finance.db")
-        if os.path.isdir(UPLOAD_DIR):
-            for root, _, files in os.walk(UPLOAD_DIR):
-                for fname in files:
-                    full = os.path.join(root, fname)
-                    rel = os.path.join("uploads", os.path.relpath(full, UPLOAD_DIR))
-                    zf.write(full, rel)
-    return buf.getvalue()
-
-
-@api_router.get("/backup")
-def backup():
-    data = _build_backup_zip_bytes()
-    filename = f"finanztool_backup_{date.today().isoformat()}.zip"
-    return StreamingResponse(
-        io.BytesIO(data),
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-BACKUP_DIR = os.path.join(DATA_DIR, "backups")
-os.makedirs(BACKUP_DIR, exist_ok=True)
-BACKUP_FILENAME_RE = re.compile(r"^auto_backup_\d{8}_\d{6}\.zip$")
-
-
-def _write_backup_to_disk(retention: int) -> schemas.BackupFileOut:
-    data = _build_backup_zip_bytes()
-    filename = f"auto_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
-    full_path = os.path.join(BACKUP_DIR, filename)
-    with open(full_path, "wb") as f:
-        f.write(data)
-
-    existing = sorted(f for f in os.listdir(BACKUP_DIR) if BACKUP_FILENAME_RE.fullmatch(f))
-    excess = len(existing) - retention
-    for old in existing[:max(excess, 0)]:
-        os.remove(os.path.join(BACKUP_DIR, old))
-
-    stat = os.stat(full_path)
-    return schemas.BackupFileOut(
-        filename=filename, size_bytes=stat.st_size,
-        created_at=datetime.utcfromtimestamp(stat.st_mtime),
-    )
-
-
 def _scheduled_auto_backup():
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
         if not settings.auto_backup_enabled:
             return
-        _write_backup_to_disk(settings.backup_retention)
+        write_backup_to_disk(settings.backup_retention)
     finally:
         db.close()
 
@@ -2458,74 +2407,6 @@ def update_backup_settings(data: schemas.BackupSettingsUpdate, db: Session = Dep
     return schemas.BackupSettingsOut(enabled=s.auto_backup_enabled, hour=s.backup_hour, retention=s.backup_retention)
 
 
-@api_router.get("/backups", response_model=List[schemas.BackupFileOut])
-def list_backups():
-    items = []
-    for fname in os.listdir(BACKUP_DIR):
-        if not BACKUP_FILENAME_RE.fullmatch(fname):
-            continue
-        stat = os.stat(os.path.join(BACKUP_DIR, fname))
-        items.append(schemas.BackupFileOut(
-            filename=fname, size_bytes=stat.st_size,
-            created_at=datetime.utcfromtimestamp(stat.st_mtime),
-        ))
-    items.sort(key=lambda b: b.created_at, reverse=True)
-    return items
-
-
-@api_router.post("/backups/run", response_model=schemas.BackupFileOut)
-def run_backup_now(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return _write_backup_to_disk(settings.backup_retention)
-
-
-@api_router.get("/backups/{filename}")
-def download_backup(filename: str):
-    safe_name = os.path.basename(filename)
-    if not BACKUP_FILENAME_RE.fullmatch(safe_name):
-        raise HTTPException(404, "Backup nicht gefunden")
-    full = os.path.join(BACKUP_DIR, safe_name)
-    if not os.path.exists(full):
-        raise HTTPException(404, "Backup nicht gefunden")
-    return FileResponse(full, media_type="application/zip", filename=safe_name)
-
-
-@api_router.delete("/backups/{filename}")
-def delete_backup(filename: str):
-    safe_name = os.path.basename(filename)
-    if not BACKUP_FILENAME_RE.fullmatch(safe_name):
-        raise HTTPException(404, "Backup nicht gefunden")
-    full = os.path.join(BACKUP_DIR, safe_name)
-    if os.path.exists(full):
-        os.remove(full)
-    return {"ok": True}
-
-
-@api_router.post("/restore")
-def restore(file: UploadFile = File(...)):
-    content = file.file.read()
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(content))
-    except zipfile.BadZipFile:
-        raise HTTPException(400, "Ungültige Backup-Datei")
-    if "finance.db" not in zf.namelist():
-        raise HTTPException(400, "Backup enthält keine finance.db")
-
-    db_path = os.path.join(DATA_DIR, "finance.db")
-    if os.path.exists(db_path):
-        shutil.copy2(db_path, db_path + ".bak")
-
-    zf.extract("finance.db", DATA_DIR)
-    for name in zf.namelist():
-        if name.startswith("uploads/") and not name.endswith("/"):
-            zf.extract(name, DATA_DIR)
-
-    return {
-        "ok": True,
-        "message": "Wiederhergestellt. Bitte den Container neu starten (docker compose restart), damit die Daten geladen werden.",
-    }
-
-
 app.include_router(api_router)
 app.include_router(investments_router)
 app.include_router(tax_router)
@@ -2544,6 +2425,7 @@ app.include_router(bank_connections_router)
 app.include_router(enablebanking_ebay_router)
 app.include_router(mail_router)
 app.include_router(spaces_accounts_router)
+app.include_router(backup_router)
 app.include_router(sync_router)
 
 
