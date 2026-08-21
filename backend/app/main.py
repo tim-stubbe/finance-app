@@ -39,6 +39,7 @@ from .routers.business_life import business_life_router
 from .routers.budgets_alerts import budgets_alerts_router
 from .routers.deadlines import deadlines_router
 from .routers.calendar_todos import calendar_todos_router
+from .routers.categories import categories_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -445,43 +446,6 @@ def delete_account(account_id: int, db: Session = Depends(get_db), space_id: int
 @api_router.get("/accounts/balance-log", response_model=List[schemas.AccountBalanceLogOut])
 def get_balance_log(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.recent_balance_changes(db, space_id)
-
-
-# ---------------- Categories (global) ----------------
-@api_router.get("/categories", response_model=List[schemas.CategoryOut])
-def list_categories(db: Session = Depends(get_db)):
-    return crud.get_categories(db)
-
-
-@api_router.get("/categories/totals")
-def get_category_totals(year: int = date.today().year, month: Optional[int] = None, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.category_totals(db, space_id, year, month)
-
-
-@api_router.get("/categories/sign-mismatches", response_model=List[schemas.CategorySignMismatch])
-def get_category_sign_mismatches(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    return crud.category_sign_mismatches(db, space_id)
-
-
-@api_router.post("/categories", response_model=schemas.CategoryOut)
-def create_category(category: schemas.CategoryCreate, db: Session = Depends(get_db)):
-    return crud.create_category(db, category)
-
-
-@api_router.put("/categories/{category_id}", response_model=schemas.CategoryOut)
-def update_category(category_id: int, data: schemas.CategoryUpdate, db: Session = Depends(get_db)):
-    cat = crud.update_category(db, category_id, data)
-    if not cat:
-        raise HTTPException(404, "Kategorie nicht gefunden")
-    return cat
-
-
-@api_router.delete("/categories/{category_id}")
-def delete_category(category_id: int, db: Session = Depends(get_db)):
-    cat = crud.delete_category(db, category_id)
-    if not cat:
-        raise HTTPException(404, "Kategorie nicht gefunden")
-    return {"ok": True}
 
 
 # ---------------- Transactions ----------------
@@ -3629,16 +3593,6 @@ def dashboard_trend(months: int = 6, db: Session = Depends(get_db), space_id: in
     ])
 
 
-@api_router.get("/categories/trend", response_model=schemas.CategoryTrendOut)
-def get_category_trend(months: int = 6, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
-    months = max(2, min(months, 24))
-    data = crud.category_spending_trend(db, space_id, months)
-    return schemas.CategoryTrendOut(
-        months=data["months"],
-        series=[schemas.CategoryTrendSeries(**s) for s in data["series"]],
-    )
-
-
 @api_router.get("/year-review", response_model=schemas.YearReviewOut)
 def year_review(year: int = date.today().year, db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     """Jahresrueckblick - reine Auswertung, keine neue Datenerfassung."""
@@ -4024,6 +3978,7 @@ app.include_router(business_life_router)
 app.include_router(budgets_alerts_router)
 app.include_router(deadlines_router)
 app.include_router(calendar_todos_router)
+app.include_router(categories_router)
 app.include_router(sync_router)
 
 
