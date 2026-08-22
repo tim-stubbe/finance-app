@@ -201,6 +201,39 @@ public enum AppDatabase {
             }
         }
 
+        // Investments, pull-only (kein Anlegen/Bearbeiten von Positionen/Lots
+        // in dieser Scheibe - Kauf/Verkauf-Buchführung bleibt der Web-App
+        // vorbehalten, hier nur Anzeige). asset_type/type sind serverseitig
+        // str-Enums (siehe models.AssetType/LotType), hier bewusst als reiner
+        // Text gespeichert statt eines Swift-Enums - vermeidet Absturz/Verlust
+        // bei einem künftigen neuen Server-Wert, den der Client noch nicht kennt.
+        migrator.registerMigration("v5_investments") { db in
+            try db.create(table: "holdings") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("space_id", .integer)
+                t.column("asset_type", .text).notNull()
+                t.column("name", .text).notNull()
+                t.column("symbol", .text).notNull()
+                t.column("sector", .text)
+                t.column("currency", .text)
+                t.column("quantity", .double).notNull().defaults(to: 0)
+                t.column("purchase_price", .double).notNull().defaults(to: 0)
+                t.column("current_price", .double)
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+            try db.create(table: "holding_lots") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("holding_id", .integer).notNull()
+                t.column("date", .text).notNull()
+                t.column("type", .text).notNull()
+                t.column("quantity", .double).notNull()
+                t.column("price_per_unit", .double).notNull()
+                t.column("created_at", .text)
+                t.column("updated_at", .text)
+            }
+        }
+
         return migrator
     }
 }

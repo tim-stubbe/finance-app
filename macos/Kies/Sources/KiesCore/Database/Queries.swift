@@ -72,6 +72,11 @@ public enum Queries {
             """, arguments: ["+\(withinDays) days"])
     }
 
+    /// Alle Positionen, nach Namen sortiert.
+    public static func allHoldings(_ db: Database) throws -> [Holding] {
+        try Holding.order(Column("name")).fetchAll(db)
+    }
+
     /// Aktive, noch nicht gekaufte Wünsche.
     public static func openWishlistItems(_ db: Database) throws -> [WishlistItem] {
         try WishlistItem

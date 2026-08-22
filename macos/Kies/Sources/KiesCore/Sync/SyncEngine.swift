@@ -23,6 +23,7 @@ public final class SyncEngine: ObservableObject {
         "Account", "Category", "Transaction", "Todo", "Space", "CalendarEvent",
         "Goal", "LifeArea", "LifeCheckIn",
         "WishlistItem", "ContractReminder", "ReturnDeadline",
+        "Holding", "HoldingLot",
     ]
 
     public func run() async {
@@ -148,6 +149,22 @@ public final class SyncEngine: ObservableObject {
                 returned: row["returned"]?.boolValue ?? false,
                 created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
             ).save(db)
+        case "Holding":
+            try Holding(
+                id: id, space_id: row["space_id"]?.int64Value, asset_type: row["asset_type"]?.stringValue ?? "",
+                name: row["name"]?.stringValue ?? "", symbol: row["symbol"]?.stringValue ?? "",
+                sector: row["sector"]?.stringValue, currency: row["currency"]?.stringValue,
+                quantity: row["quantity"]?.doubleValue ?? 0, purchase_price: row["purchase_price"]?.doubleValue ?? 0,
+                current_price: row["current_price"]?.doubleValue,
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
+        case "HoldingLot":
+            try HoldingLot(
+                id: id, holding_id: row["holding_id"]?.int64Value ?? 0, date: row["date"]?.stringValue ?? "",
+                type: row["type"]?.stringValue ?? "", quantity: row["quantity"]?.doubleValue ?? 0,
+                price_per_unit: row["price_per_unit"]?.doubleValue ?? 0,
+                created_at: row["created_at"]?.stringValue, updated_at: row["updated_at"]?.stringValue
+            ).save(db)
         default:
             break
         }
@@ -167,6 +184,8 @@ public final class SyncEngine: ObservableObject {
         case "WishlistItem": try WishlistItem.deleteOne(db, key: tombstone.entity_id)
         case "ContractReminder": try ContractReminder.deleteOne(db, key: tombstone.entity_id)
         case "ReturnDeadline": try ReturnDeadline.deleteOne(db, key: tombstone.entity_id)
+        case "Holding": try Holding.deleteOne(db, key: tombstone.entity_id)
+        case "HoldingLot": try HoldingLot.deleteOne(db, key: tombstone.entity_id)
         default: break
         }
     }

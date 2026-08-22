@@ -18,6 +18,7 @@ struct ContentView: View {
                     Label("Ziele", systemImage: "target").tag("goals" as String?)
                     Label("Leben", systemImage: "heart.text.square").tag("life" as String?)
                     Label("Kategorien", systemImage: "tag").tag("categories" as String?)
+                    Label("Investments", systemImage: "chart.line.uptrend.xyaxis").tag("investments" as String?)
                 }
                 .navigationTitle("Kies")
                 .safeAreaInset(edge: .bottom) {
@@ -40,6 +41,7 @@ struct ContentView: View {
                 case "goals": GoalsListView()
                 case "life": LifeAreasListView()
                 case "categories": CategoriesListView()
+                case "investments": InvestmentsListView()
                 default: Text("Wähle einen Bereich")
                 }
             }

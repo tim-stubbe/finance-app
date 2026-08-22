@@ -28,6 +28,8 @@ struct RootTabView: View {
                     .tabItem { Label("Wünsche", systemImage: "heart") }
                 NavigationStack { CategoriesView() }
                     .tabItem { Label("Kategorien", systemImage: "tag") }
+                NavigationStack { InvestmentsView() }
+                    .tabItem { Label("Investments", systemImage: "chart.line.uptrend.xyaxis") }
             }
 
             Button {

@@ -172,6 +172,38 @@ public struct ReturnDeadline: Codable, FetchableRecord, PersistableRecord, Ident
     public var updated_at: String?
 }
 
+/// Investment-Position, pull-only (siehe AppDatabase-Migration
+/// v5_investments) - Anlegen/Bearbeiten bleibt der Web-App vorbehalten.
+public struct Holding: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "holdings"
+    public var id: Int64
+    public var space_id: Int64?
+    public var asset_type: String
+    public var name: String
+    public var symbol: String
+    public var sector: String?
+    public var currency: String?
+    public var quantity: Double
+    public var purchase_price: Double
+    public var current_price: Double?
+    public var created_at: String?
+    public var updated_at: String?
+}
+
+/// Einzelner Kauf/Verkauf/Staking/Dividenden-Vorgang zu einem Holding,
+/// pull-only.
+public struct HoldingLot: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "holding_lots"
+    public var id: Int64
+    public var holding_id: Int64
+    public var date: String
+    public var type: String
+    public var quantity: Double
+    public var price_per_unit: Double
+    public var created_at: String?
+    public var updated_at: String?
+}
+
 /// Lokal-only: Sync-Cursor (Singleton-Zeile, id fest auf 1).
 public struct SyncState: Codable, FetchableRecord, PersistableRecord {
     public static let databaseTableName = "sync_state"
