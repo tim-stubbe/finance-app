@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Der Kies-Server läuft mit einem selbstsignierten TLS-Zertifikat (siehe
+	backend/README bzw. docker-compose) und ist ausschließlich über
+	Tailscale erreichbar, nie offen aus dem Internet - dieselbe Vertrauens-
+	grenze wie bei der Web-App (siehe README.md "Zugriffsschutz"). Ohne
+	diese Ausnahme blockiert App Transport Security die Verbindung schon
+	vor dem eigenen URLSessionDelegate (SyncClient.swift), der das
+	Zertifikat eigentlich bewusst akzeptiert - NSURLErrorDomain -1200
+	"A TLS error caused the secure connection to fail".
+	-->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
