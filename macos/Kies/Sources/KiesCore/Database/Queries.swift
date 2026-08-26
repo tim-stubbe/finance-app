@@ -94,6 +94,106 @@ public enum Queries {
         let areas = try LifeArea.filter(Column("active") == true).order(Column("name")).fetchAll(db)
         return areas.filter { !checkedInAreaIDs.contains($0.id) }
     }
+
+    /// Nächster anstehender Termin (start in der Zukunft), fürs Widget - siehe
+    /// TodayView.reload() für dieselbe Grundabfrage inkl. Formatierung.
+    public static func nextUpcomingEvent(_ db: Database) throws -> CalendarEvent? {
+        let now = ISO8601DateFormatter().string(from: Date())
+        return try CalendarEvent
+            .filter(Column("start") >= now)
+            .order(Column("start"))
+            .fetchOne(db)
+    }
+
+    /// Nächstes fälliges (oder terminloses) offenes Todo, fürs Widget - grobe
+    /// Sortierung wie in TodosView (kein due_date landet zuletzt).
+    public static func nextOpenTodo(_ db: Database) throws -> Todo? {
+        try Todo
+            .filter(Column("done") == false)
+            .order(sql: "due_date IS NULL, due_date ASC")
+            .fetchOne(db)
+    }
+
+    /// Ein einzelnes Suchergebnis über alle lokal vorhandenen Entitäten hinweg
+    /// - für SearchView (native iOS-Suche, siehe dort). `tabKey` ist bewusst
+    /// ein roher String statt eines Enums: KiesCore ist plattformneutral (auch
+    /// macOS/KiesCLI), das iOS-spezifische Tab-Konzept (siehe TabRouter/AppTab
+    /// in KiesiOS) gehört nicht hierher - SearchView mappt den String per
+    /// `AppTab(rawValue:)` zurück. Die Werte entsprechen absichtlich AppTabs
+    /// rawValues. Die App hat aktuell keine Detail-Screens für einzelne
+    /// Zeilen, "richtigen Tab öffnen" ist der bestehende Detailgrad überall
+    /// sonst in der App.
+    public struct SearchResult: Identifiable {
+        public var id: String { "\(kind)-\(entityID)" }
+        public let kind: String       // deutsches Label fürs Gruppieren, z.B. "Buchung"
+        public let icon: String       // SF-Symbol-Name
+        public let title: String
+        public let subtitle: String?
+        public let tabKey: String
+        public let entityID: Int64
+    }
+
+    /// Durchsucht alle lokal gespeicherten, textsuchbaren Entitäten per
+    /// LIKE-Vergleich (case-insensitive über COLLATE NOCASE, wie SQLite es für
+    /// ASCII ohnehin automatisch macht) - kein FTS5-Index nötig bei der hier
+    /// üblichen Datenmenge eines Einzelnutzers, analog zur Begründung in
+    /// backend/app/main.py für die Web-Suche. `limitPerKind` hält die Liste
+    /// übersichtlich, ähnlich limit_per_type bei GET /search der Web-App.
+    public static func globalSearch(_ db: Database, query: String, limitPerKind: Int = 8) throws -> [SearchResult] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { return [] }
+        let like = "%\(q)%"
+        var results: [SearchResult] = []
+
+        let accounts = try Account.filter(Column("name").like(like)).limit(limitPerKind).fetchAll(db)
+        results += accounts.map { SearchResult(kind: "Konto", icon: "banknote", title: $0.name, subtitle: $0.type, tabKey: "accounts", entityID: $0.id) }
+
+        let transactions = try TransactionRecord
+            .filter(Column("description").like(like) || Column("notes").like(like))
+            .order(Column("date").desc)
+            .limit(limitPerKind)
+            .fetchAll(db)
+        results += transactions.map {
+            SearchResult(kind: "Buchung", icon: "list.bullet.rectangle", title: $0.description ?? "Ohne Beschreibung",
+                         subtitle: "\($0.date) · \(String(format: "%.2f", $0.amount))", tabKey: "transactions", entityID: $0.id)
+        }
+
+        let todos = try Todo.filter(Column("title").like(like)).limit(limitPerKind).fetchAll(db)
+        results += todos.map { SearchResult(kind: "Todo", icon: "checklist", title: $0.title, subtitle: $0.due_date, tabKey: "todos", entityID: $0.id) }
+
+        let goals = try Goal
+            .filter(Column("title").like(like) || Column("description").like(like))
+            .limit(limitPerKind)
+            .fetchAll(db)
+        results += goals.map { SearchResult(kind: "Ziel", icon: "target", title: $0.title, subtitle: $0.category, tabKey: "goals", entityID: $0.id) }
+
+        let events = try CalendarEvent
+            .filter(Column("title").like(like) || Column("location").like(like))
+            .order(Column("start"))
+            .limit(limitPerKind)
+            .fetchAll(db)
+        results += events.map { SearchResult(kind: "Termin", icon: "calendar", title: $0.title, subtitle: $0.location, tabKey: "today", entityID: $0.id) }
+
+        let wishes = try WishlistItem.filter(Column("name").like(like)).limit(limitPerKind).fetchAll(db)
+        results += wishes.map { SearchResult(kind: "Wunsch", icon: "heart", title: $0.name, subtitle: $0.category, tabKey: "wishlist", entityID: $0.id) }
+
+        let lifeAreas = try LifeArea
+            .filter(Column("name").like(like) || Column("description").like(like))
+            .limit(limitPerKind)
+            .fetchAll(db)
+        results += lifeAreas.map { SearchResult(kind: "Lebensbereich", icon: "heart.text.square", title: $0.name, subtitle: $0.description, tabKey: "life", entityID: $0.id) }
+
+        let categories = try Category.filter(Column("name").like(like)).limit(limitPerKind).fetchAll(db)
+        results += categories.map { SearchResult(kind: "Kategorie", icon: "tag", title: $0.name, subtitle: $0.type, tabKey: "categories", entityID: $0.id) }
+
+        let holdings = try Holding
+            .filter(Column("name").like(like) || Column("symbol").like(like))
+            .limit(limitPerKind)
+            .fetchAll(db)
+        results += holdings.map { SearchResult(kind: "Investment", icon: "chart.line.uptrend.xyaxis", title: $0.name, subtitle: $0.symbol, tabKey: "investments", entityID: $0.id) }
+
+        return results
+    }
 }
 
 extension DateFormatter {

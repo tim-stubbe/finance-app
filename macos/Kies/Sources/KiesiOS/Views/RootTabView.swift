@@ -8,28 +8,41 @@ import KiesCore
 /// Web-App, siehe die jeweiligen View-Kommentare für das, was fehlt.
 struct RootTabView: View {
     @State private var showQuickCapture = false
+    @ObservedObject private var router = TabRouter.shared
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            TabView {
+            TabView(selection: $router.selection) {
                 NavigationStack { TodayView() }
                     .tabItem { Label("Heute", systemImage: "sun.max") }
+                    .tag(AppTab.today)
                 NavigationStack { AccountsView() }
                     .tabItem { Label("Konten", systemImage: "banknote") }
+                    .tag(AppTab.accounts)
                 NavigationStack { TransactionsView() }
                     .tabItem { Label("Buchungen", systemImage: "list.bullet.rectangle") }
+                    .tag(AppTab.transactions)
                 NavigationStack { TodosView() }
                     .tabItem { Label("Todos", systemImage: "checklist") }
+                    .tag(AppTab.todos)
                 NavigationStack { GoalsView() }
                     .tabItem { Label("Ziele", systemImage: "target") }
+                    .tag(AppTab.goals)
                 NavigationStack { LifeAreasView() }
                     .tabItem { Label("Leben", systemImage: "heart.text.square") }
+                    .tag(AppTab.life)
                 NavigationStack { WishlistView() }
                     .tabItem { Label("Wünsche", systemImage: "heart") }
+                    .tag(AppTab.wishlist)
                 NavigationStack { CategoriesView() }
                     .tabItem { Label("Kategorien", systemImage: "tag") }
+                    .tag(AppTab.categories)
                 NavigationStack { InvestmentsView() }
                     .tabItem { Label("Investments", systemImage: "chart.line.uptrend.xyaxis") }
+                    .tag(AppTab.investments)
+                NavigationStack { SearchView() }
+                    .tabItem { Label("Suche", systemImage: "magnifyingglass") }
+                    .tag(AppTab.search)
             }
 
             Button {

@@ -1,3 +1,9 @@
 .build/
 .swiftpm/
 *.xcodeproj
+# Kies.xcodeproj IST gewollt eingecheckt (siehe project.yml-Kopfkommentar) -
+# von xcodegen deterministisch erzeugt, aber committed, damit man das
+# Repo klont und direkt "open Kies.xcodeproj" machen kann, ohne zuerst
+# xcodegen zu installieren. Nach jeder project.yml-Änderung erneut
+# `xcodegen generate` laufen lassen und den Diff mit committen.
+!Kies.xcodeproj/

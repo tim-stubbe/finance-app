@@ -6,16 +6,74 @@ import GRDB
 /// Version fügt nur Spalten/Tabellen hinzu, nie ein Reset) genau dem
 /// `ensure_columns`-Stil des Backends entspricht (siehe backend/app/database.py).
 public enum AppDatabase {
+    /// App-Group-ID für den gemeinsamen Container von KiesiOS, der Widget-
+    /// Extension (KiesWidget) und der Share-Extension (KiesShare) - siehe
+    /// project.yml (xcodegen) für die Entitlements. Ohne gemeinsamen
+    /// Container sähe das Widget nie die Daten der App (jede App-Extension
+    /// läuft in ihrem eigenen Sandbox-Prozess mit eigenem Application-
+    /// Support-Verzeichnis).
+    public static let appGroupID = "group.app.kies"
+
     public static let shared = try! makeShared()
 
-    static func makeShared() throws -> DatabaseQueue {
-        let appSupport = try FileManager.default.url(
+    /// Ermittelt den DB-Pfad und migriert bei Bedarf einmalig von der alten
+    /// (Vor-Widget-Ära) Application-Support-Lage in den App-Group-Container -
+    /// reines Kopieren, nicht Verschieben, damit ein Fehlschlag beim ersten
+    /// Start nach einem Update nie zu Datenverlust führt. Ist die App-Group
+    /// nicht verfügbar (z.B. Kies/KiesCLI auf macOS ohne dieses Entitlement,
+    /// oder ein Build ohne Code-Signing-Kontext), bleibt es wie bisher bei
+    /// Application Support - funktional identisch, nur ohne Widget-Zugriff.
+    static func resolveDatabaseURL() throws -> URL {
+        let fm = FileManager.default
+        let legacyDir = try fm.url(
             for: .applicationSupportDirectory, in: .userDomainMask,
             appropriateFor: nil, create: true
-        )
-        let dir = appSupport.appendingPathComponent("Kies", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let dbURL = dir.appendingPathComponent("kies.sqlite")
+        ).appendingPathComponent("Kies", isDirectory: true)
+        try fm.createDirectory(at: legacyDir, withIntermediateDirectories: true)
+        let legacyURL = legacyDir.appendingPathComponent("kies.sqlite")
+
+        // WICHTIG (live verifiziert, siehe Kommentar oben): containerURL(...)
+        // liefert auch OHNE das Entitlement einen Pfad zurück statt nil (macOS
+        // löst ihn rein syntaktisch auf) - erst der eigentliche Dateizugriff
+        // scheitert dann mit "Operation not permitted". Ein simples
+        // `guard let` reicht deshalb NICHT als Test, ob die App-Group wirklich
+        // nutzbar ist; stattdessen den Verzeichnis-Zugriff selbst probieren
+        // und bei jedem Fehler (nicht nur nil) auf den alten Pfad zurückfallen -
+        // sonst stürzt z.B. KiesCLI/die macOS-App (kein App-Group-Entitlement)
+        // beim Start hart ab.
+        guard let groupContainer = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else {
+            return legacyURL
+        }
+        let groupDir = groupContainer.appendingPathComponent("Database", isDirectory: true)
+        do {
+            try fm.createDirectory(at: groupDir, withIntermediateDirectories: true)
+        } catch {
+            return legacyURL
+        }
+        let groupURL = groupDir.appendingPathComponent("kies.sqlite")
+
+        if !fm.fileExists(atPath: groupURL.path), fm.fileExists(atPath: legacyURL.path) {
+            do {
+                try fm.copyItem(at: legacyURL, to: groupURL)
+            } catch {
+                return legacyURL
+            }
+            // SQLite-WAL/SHM-Begleitdateien gehören zur selben Datenbank -
+            // fehlen sie beim Kopieren (z.B. sauber geschlossene DB ohne
+            // offenes WAL), ist das kein Fehler, nur nichts zu kopieren.
+            for suffix in ["-wal", "-shm"] {
+                let src = URL(fileURLWithPath: legacyURL.path + suffix)
+                let dst = URL(fileURLWithPath: groupURL.path + suffix)
+                if fm.fileExists(atPath: src.path) {
+                    try? fm.copyItem(at: src, to: dst)
+                }
+            }
+        }
+        return groupURL
+    }
+
+    static func makeShared() throws -> DatabaseQueue {
+        let dbURL = try resolveDatabaseURL()
         let dbQueue = try DatabaseQueue(path: dbURL.path)
         try migrator.migrate(dbQueue)
         return dbQueue

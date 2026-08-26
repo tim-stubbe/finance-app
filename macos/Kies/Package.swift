@@ -9,6 +9,18 @@ let package = Package(
     // bleiben bewusst macOS-only (AppKit- bzw. Terminal-Werkzeug); KiesiOS
     // ist das neue, iOS-only App-Target.
     platforms: [.macOS(.v14), .iOS(.v17)],
+    // KiesCore als Library-Produkt exportiert - ab jetzt gebraucht vom
+    // xcodegen-erzeugten Kies.xcodeproj (siehe project.yml): die Widget-
+    // Extension (KiesWidget) und die Share-Extension (KiesShare) sind ECHTE
+    // Xcode-App-Extension-Targets (SPM allein kann keine App-Extension-
+    // Bundles erzeugen, siehe project.yml-Kopfkommentar), binden KiesCore
+    // deshalb nicht als SPM-Sibling-Target, sondern als Swift-Package-
+    // Abhängigkeit ein - das braucht einen benannten Produkt-Eintrag.
+    // Innerhalb dieses Manifests ändert sich für Kies/KiesCLI/KiesiOS
+    // nichts, die referenzieren "KiesCore" weiterhin direkt als Zieltarget.
+    products: [
+        .library(name: "KiesCore", targets: ["KiesCore"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
     ],
@@ -43,8 +55,16 @@ let package = Package(
         // weil die Oberfläche bewusst eigenständig für iOS gebaut ist
         // (TabView/NavigationStack statt NavigationSplitView, siehe
         // Sources/KiesiOS/README im Kopfkommentar von KiesiOSApp.swift).
-        // In Xcode: Package.swift öffnen, Schema "KiesiOS" + einen iOS-
-        // Simulator als Ziel wählen, Run.
+        //
+        // Zwei Wege, dieselben Sources/KiesiOS-Quellen zu bauen:
+        // 1. Schnell/ohne Widget: Package.swift öffnen, Schema "KiesiOS" +
+        //    einen iOS-Simulator als Ziel wählen, Run - baut GENAU dieses
+        //    SPM-Target hier, unverändert seit den ersten iOS-Scheiben.
+        // 2. Mit Widget/Share-Extension: Kies.xcodeproj öffnen (siehe
+        //    project.yml, per `xcodegen generate` erzeugt) - dort ist
+        //    KiesiOS ein echtes Xcode-App-Target (Voraussetzung fürs
+        //    Einbetten von App-Extensions), das dieselben Sources/KiesiOS-
+        //    Dateien kompiliert und KiesCore als Package-Produkt einbindet.
         .executableTarget(
             name: "KiesiOS",
             dependencies: ["KiesCore"],
