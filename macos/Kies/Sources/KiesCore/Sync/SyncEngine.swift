@@ -437,6 +437,24 @@ public final class SyncEngine: ObservableObject {
         }
     }
 
+    /// Markiert ein Ziel als erledigt (oder wieder offen) - analog zu
+    /// setWishlistPurchasedOffline. Nur der Status wird gesetzt, keine
+    /// weiteren Felder - passt zu schemas.GoalUpdate (alle Felder optional,
+    /// siehe backend/app/sync_registry.py:_update_goal) und zur bewussten
+    /// Beschränkung dieser Scheibe (kein volles Ziel-Bearbeiten auf iOS/
+    /// macOS, das bleibt der Web-App vorbehalten - nur das grobe Abhaken).
+    public func setGoalStatusOffline(id: Int64, status: String) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var goal = try Goal.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = goal.updated_at
+            goal.status = status
+            try goal.save(db)
+            let data: [String: Any] = ["status": status]
+            try Self.enqueueOutbox(db, entityType: "Goal", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
     /// Benennt eine Kategorie um - analog zu setWishlistPurchasedOffline, nur
     /// der Name (kein Anlegen/Löschen/Typ-Ändern in dieser Scheibe, dafür
     /// bleibt die Web-App der Ort).
