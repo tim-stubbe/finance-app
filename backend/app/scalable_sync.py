@@ -102,10 +102,14 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
             holding.current_price = current_price
             holding.price_updated_at = datetime.utcnow()
 
-    # Nur echte Wertpapier-Käufe/-Verkäufe für Lots - Sparplan-Ausführungen
-    # laufen ebenfalls über BUY (siehe security_transaction_type=SAVINGS_PLAN
-    # in der Testantwort), zählen hier also mit dazu, das ist gewollt (auch
-    # ein Sparplan-Kauf ist ein echter Lot).
+    # Alle Vorgangs-Typen, die den Bestand tatsaechlich veraendern - BUY/SELL
+    # deckt NUR manuelle Einzelkaeufe/-verkaeufe ab, Sparplan-Ausfuehrungen
+    # laufen als eigener Typ SAVINGS_PLAN (live geprueft: ein per --type-
+    # filter BUY/SELL gefiltertes erstes Sync hatte alle Sparplan-ETFs mit
+    # quantity=0 stehen gelassen, obwohl das Konto erst seit Mai besteht -
+    # keine Zeitfenster-Frage, sondern ein fehlender Typ). SWAP_IN/OUT und
+    # REINVESTMENT ebenfalls dazu, da auch die die Stueckzahl aendern.
+    TX_TYPES_AFFECTING_QUANTITY = ["BUY", "SELL", "SAVINGS_PLAN", "SWAP_IN", "SWAP_OUT", "REINVESTMENT"]
     from_time = (
         (settings.scalable_last_sync_at - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
         if settings.scalable_last_sync_at else
@@ -114,10 +118,9 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
     lots_added = 0
     cursor = None
     for _page in range(20):  # Sicherheitsnetz gegen eine Endlosschleife bei kaputter Pagination
-        args = [
-            "broker", "transactions", "--page-size", "100",
-            "--type-filter", "BUY", "--type-filter", "SELL", "--from-time", from_time,
-        ]
+        args = ["broker", "transactions", "--page-size", "100", "--from-time", from_time]
+        for t in TX_TYPES_AFFECTING_QUANTITY:
+            args += ["--type-filter", t]
         if cursor:
             args += ["--cursor", cursor]
         page = _run_sc(*args)
