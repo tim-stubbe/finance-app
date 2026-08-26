@@ -44,6 +44,7 @@ public final class SyncEngine: ObservableObject {
             lastError = "\(error)"
         }
         await loadConflicts()
+        await NotificationManager.shared.checkAndNotify(db: db, lastError: lastError)
     }
 
     /// Lädt die aktuell offenen Konflikte neu - separat von run() aufrufbar
