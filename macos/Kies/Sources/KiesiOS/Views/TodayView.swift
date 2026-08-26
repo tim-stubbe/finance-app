@@ -112,7 +112,19 @@ struct TodayView: View {
     }
 
     private func eventSubtitle(_ event: CalendarEvent) -> String {
-        var parts: [String] = [event.all_day ? "ganztägig" : event.start]
+        // event.start kommt roh als Server-ISO-String an ("2026-08-27T14:00:00")
+        // - unformatiert anzuzeigen sah wie ein Bug aus. Lässt sich das Datum
+        // ausnahmsweise nicht parsen (unerwartetes Format), notfalls den rohen
+        // String zeigen statt gar nichts anzuzeigen.
+        let startDisplay: String
+        if event.all_day {
+            startDisplay = "ganztägig"
+        } else if let date = DateFormatter.parseServerDateTime(event.start) {
+            startDisplay = DateFormatter.eventDisplay.string(from: date)
+        } else {
+            startDisplay = event.start
+        }
+        var parts: [String] = [startDisplay]
         if let location = event.location, !location.isEmpty { parts.append(location) }
         return parts.joined(separator: " · ")
     }

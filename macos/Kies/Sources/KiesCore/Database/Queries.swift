@@ -106,4 +106,35 @@ extension DateFormatter {
         f.locale = Locale(identifier: "en_US_POSIX")
         return f
     }()
+
+    /// Parst CalendarEvent.start/end - kommt vom Server als naives
+    /// `datetime.isoformat()` (siehe backend/app/sync.py: `_serialize_row`),
+    /// also ohne Zeitzone und mit Mikrosekunden nur, wenn sie ungleich null
+    /// sind ("2026-08-27T14:00:00" bzw. "2026-08-27T14:00:00.123456").
+    /// Zwei Formatter statt einem, weil DateFormatter keine optionalen
+    /// Sekundenbruchteile kann - erst ohne versuchen, dann mit.
+    private static let isoDateTimeNoFraction: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+    private static let isoDateTimeWithFraction: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+    public static func parseServerDateTime(_ value: String) -> Date? {
+        isoDateTimeNoFraction.date(from: value) ?? isoDateTimeWithFraction.date(from: value)
+    }
+
+    /// Anzeige für Termine in der "Heute"-Übersicht - Wochentag+Datum+Zeit
+    /// statt des rohen ISO-Strings (siehe TodayView.eventSubtitle).
+    public static let eventDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, d.M. HH:mm"
+        f.locale = Locale(identifier: "de_DE")
+        return f
+    }()
 }

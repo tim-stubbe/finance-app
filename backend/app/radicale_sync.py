@@ -145,7 +145,7 @@ def parse_vtodo(ics: str) -> dict | None:
             due = None
     return {
         "uid": fields["UID"],
-        "title": fields.get("SUMMARY", "").strip() or "Ohne Titel",
+        "title": _unescape_text(fields.get("SUMMARY", "").strip()) or "Ohne Titel",
         "done": fields.get("STATUS", "").upper() == "COMPLETED",
         "due_date": due,
     }
@@ -213,6 +213,26 @@ def _escape_text(value: str) -> str:
     return re.sub(r"([,;\\])", r"\\\1", value).replace("\n", "\\n")
 
 
+def _unescape_text(value: str) -> str:
+    """Kehrt _escape_text um - fürs Parsen von SUMMARY/LOCATION-Werten aus
+    einem VEVENT/VTODO. Der Telefon-Client (bzw. Radicale selbst) eskapiert
+    Text nach demselben RFC5545-Schema wie _escape_text hier - ohne das
+    Gegenstück blieben rohe "\\," "\\;" "\\n" im geparsten Wert stehen, z.B.
+    "Zürich\\, Bahnhofstrasse" statt "Zürich, Bahnhofstrasse" in der Anzeige."""
+    result: list[str] = []
+    i = 0
+    while i < len(value):
+        ch = value[i]
+        if ch == "\\" and i + 1 < len(value):
+            nxt = value[i + 1]
+            result.append("\n" if nxt in ("n", "N") else nxt)
+            i += 2
+        else:
+            result.append(ch)
+            i += 1
+    return "".join(result)
+
+
 def new_uid() -> str:
     return f"{uuid.uuid4()}@finance-app"
 
@@ -258,12 +278,13 @@ def parse_vevent(ics: str) -> dict | None:
             end, _ = _parse_ical_datetime(fields["DTEND"])
         except ValueError:
             end = None
+    location = fields.get("LOCATION", "").strip()
     return {
         "uid": fields["UID"],
-        "title": fields.get("SUMMARY", "").strip() or "Ohne Titel",
+        "title": _unescape_text(fields.get("SUMMARY", "").strip()) or "Ohne Titel",
         "start": start,
         "end": end,
-        "location": fields.get("LOCATION", "").strip() or None,
+        "location": _unescape_text(location) if location else None,
         "all_day": all_day,
         "rrule": fields.get("RRULE", "").strip() or None,
     }
