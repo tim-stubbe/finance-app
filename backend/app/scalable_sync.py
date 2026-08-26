@@ -19,6 +19,7 @@ verhindert doppelte Lots bei wiederholten Syncs, macht inkrementelle Syncs
 über --from-time robust."""
 
 import json
+import re
 import subprocess
 from datetime import datetime, timedelta
 
@@ -27,6 +28,16 @@ from sqlalchemy.orm import Session
 from . import models, crud, schemas
 
 SC_BINARY = "sc"
+
+
+def _normalize_name(name: str) -> str:
+    """Fürs Dubletten-Matching per Name (siehe sync()) - Scalable liefert nur
+    die ISIN, keinen Ticker, kann also nie direkt mit einer manuell per
+    Ticker angelegten Position übereinstimmen. Kleinschreibung + nur
+    alphanumerische Zeichen fängt Groß-/Kleinschreibung, Leerzeichen und
+    Zusätze wie "(Acc)"/"(Dist)" ab, ohne diese extra pflegen zu müssen."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
 
 SECURITY_TYPE_TO_ASSET_TYPE = {
     "STOCK": models.AssetType.aktie,
@@ -72,28 +83,73 @@ def is_logged_in() -> bool:
         return False
 
 
+def _find_by_name(candidates: list, item_name: str) -> models.Holding | None:
+    """Sucht eine bereits vorhandene, manuell angelegte Position mit
+    ähnlichem Namen (siehe sync()). Nicht auf exakte Gleichheit geprüft -
+    live beobachtet, dass Scalable und eine von Hand eingetragene Bezeichnung
+    fürs selbe Wertpapier unterschiedlich abgekürzt/großgeschrieben sein
+    können (z.B. "Scottish Mortgage Invest" vs. "Scottish Mortgage
+    Investment Trust", "SUPERQ QUANTUM COMPUTING INC." vs. "SuperQ Quantum
+    Computing") - ein Teilstring-Vergleich in beide Richtungen fängt das ab,
+    exakte Gleichheit hätte diese Fälle sonst übersehen."""
+    norm_item = _normalize_name(item_name)
+    for h in candidates:
+        norm_h = _normalize_name(h.name)
+        if norm_h and (norm_h in norm_item or norm_item in norm_h):
+            return h
+    return None
+
+
 def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
     holdings_data = _run_sc("broker", "holdings")
-    holdings_by_isin = {h.symbol: h for h in crud.get_holdings(db, space_id) if h.symbol}
+    all_holdings = crud.get_holdings(db, space_id)
+    holdings_by_isin = {h.symbol: h for h in all_holdings if h.symbol}
+    # Fürs einmalige "Adoptieren" einer schon vorhandenen, manuell per Ticker
+    # angelegten Position (siehe unten) - bewusst nur unter rein manuell
+    # angelegten Positionen suchen (import_source is None), nicht unter
+    # Bitvavo-verwalteten: eine andere Anbindung/Anlageklasse soll nie per
+    # Namensähnlichkeit von Scalable "gekapert" werden können. Wird bei jeder
+    # Adoption sofort entfernt (siehe unten), damit zwei unterschiedliche
+    # Scalable-Positionen nie um dieselbe manuelle Position konkurrieren.
+    unmatched_manual = [h for h in all_holdings if h.import_source is None]
 
-    created, updated = 0, 0
+    created, updated, adopted = 0, 0, 0
     for item in holdings_data.get("items", []):
         isin = item.get("isin")
         if not isin:
             continue
         asset_type = SECURITY_TYPE_TO_ASSET_TYPE.get(item.get("security_type"), models.AssetType.sonstiges)
         current_price = item.get("quote_mid_price")
+        item_name = item.get("name") or isin
 
         existing = holdings_by_isin.get(isin)
+        name_match = _find_by_name(unmatched_manual, item_name) if not existing else None
         if existing:
             holding = existing
             updated += 1
+        elif name_match:
+            # Dieselbe reale Position wurde vor der Scalable-Anbindung schon
+            # manuell angelegt (per Ticker statt ISIN, daher kein ISIN-Match) -
+            # sonst entsteht bei jedem neuen Symbol eine Dublette derselben
+            # Position (live beobachtet: 11 doppelte Positionen nach dem
+            # ersten Sync, siehe Commit-Nachricht "Investments: Scalable-
+            # Dubletten..."). Alte, von Hand ungenau erfasste Lots durch die
+            # unten importierte, präzise Scalable-Transaktionshistorie
+            # ersetzen statt beide Sätze zu addieren (sonst doppelt gezählt).
+            holding = name_match
+            unmatched_manual.remove(name_match)
+            for lot in list(holding.lots):
+                db.delete(lot)
+            db.flush()
+            holding.symbol = isin
+            holdings_by_isin[isin] = holding
+            adopted += 1
         else:
             # quantity=0 wie bei Bitvavo (siehe exchange_sync.py) - der
             # tatsächliche Bestand ergibt sich ausschließlich aus den unten
             # importierten Lots, nicht aus einem direkt gesetzten Wert.
             holding = crud.create_holding(db, schemas.HoldingCreate(
-                asset_type=asset_type, name=item.get("name") or isin, symbol=isin,
+                asset_type=asset_type, name=item_name, symbol=isin,
                 quantity=0, purchase_price=0.0,
             ), space_id)
             holdings_by_isin[isin] = holding
@@ -113,9 +169,15 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
     # keine Zeitfenster-Frage, sondern ein fehlender Typ). SWAP_IN/OUT und
     # REINVESTMENT ebenfalls dazu, da auch die die Stueckzahl aendern.
     TX_TYPES_AFFECTING_QUANTITY = ["BUY", "SELL", "SAVINGS_PLAN", "SWAP_IN", "SWAP_OUT", "REINVESTMENT"]
+    # Bei einer eben "adoptierten" Position (siehe oben) wurden die alten,
+    # ungenauen manuellen Lots bereits geloescht - ein rein inkrementelles
+    # Zeitfenster (seit dem letzten Sync) wuerde die Historie dieser Position
+    # nicht neu auffuellen, sie bliebe bis zur naechsten echten Transaktion
+    # bei quantity=0 haengen. Bei jeder Adoption deshalb die volle Historie
+    # abfragen statt nur seit dem letzten Sync.
     from_time = (
         (settings.scalable_last_sync_at - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        if settings.scalable_last_sync_at else
+        if settings.scalable_last_sync_at and not adopted else
         (datetime.utcnow() - timedelta(days=730)).strftime("%Y-%m-%dT%H:%M:%SZ")
     )
     lots_added = 0
@@ -158,6 +220,10 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
             break
 
     settings.scalable_last_sync_at = datetime.utcnow()
-    settings.scalable_last_sync_status = f"OK: {created} neu, {updated} aktualisiert, {lots_added} Lot(s) importiert"
+    settings.scalable_last_sync_status = (
+        f"OK: {created} neu, {updated} aktualisiert"
+        + (f", {adopted} mit bestehender Position zusammengeführt" if adopted else "")
+        + f", {lots_added} Lot(s) importiert"
+    )
     db.commit()
     return {"created": created, "updated": updated, "lots_added": lots_added, "error": None}
