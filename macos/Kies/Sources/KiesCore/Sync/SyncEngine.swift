@@ -13,6 +13,11 @@ public final class SyncEngine: ObservableObject {
     @Published public var isSyncing = false
     @Published public var lastError: String?
     @Published public var lastSyncedAt: Date?
+    /// Offen stehende Sync-Konflikte (siehe pushOutbox/resolveConflict*) -
+    /// nach jedem Sync neu geladen, damit beide nativen Clients (iOS/macOS)
+    /// ein Banner/eine Liste zeigen können, statt Konflikte stillschweigend
+    /// endlos zu wiederholen.
+    @Published public var conflicts: [SyncConflict] = []
 
     private let client = SyncClient()
     private let db = AppDatabase.shared
@@ -38,6 +43,16 @@ public final class SyncEngine: ObservableObject {
         } catch {
             lastError = "\(error)"
         }
+        await loadConflicts()
+    }
+
+    /// Lädt die aktuell offenen Konflikte neu - separat von run() aufrufbar
+    /// (z.B. beim Öffnen einer Konflikte-Ansicht), damit sie nicht erst
+    /// einen vollen Sync-Zyklus abwarten muss.
+    public func loadConflicts() async {
+        conflicts = (try? await db.read { db in
+            try SyncConflict.order(Column("detected_at").desc).fetchAll(db)
+        }) ?? []
     }
 
     // MARK: - Pull
@@ -217,8 +232,11 @@ public final class SyncEngine: ObservableObject {
                 try Self.migrateTempID(db, clientID: clientID, serverID: serverID)
             }
             // Erfolgreich übertragene Outbox-Einträge entfernen. Konflikte
-            // bleiben in der Outbox stehen (werden dem Nutzer nicht in
-            // dieser ersten Scheibe angezeigt - bekannte Lücke, siehe Plan).
+            // bleiben in der Outbox stehen (werden beim nächsten Sync erneut
+            // versucht, es sei denn der Nutzer löst sie über
+            // resolveConflictKeepServer/-RetryMine auf) - zusätzlich als
+            // SyncConflict-Zeile sichtbar gemacht statt sie nur stillschweigend
+            // zu wiederholen (siehe Models.swift-Kommentar).
             let appliedIDs = Set(entries.compactMap { $0.id })
             let conflictedEntityIDs = Set(response.conflicts.compactMap { $0.server_id })
             for entry in entries {
@@ -227,7 +245,84 @@ public final class SyncEngine: ObservableObject {
                     try SyncOutboxEntry.deleteOne(db, key: id)
                 }
             }
+            try Self.recordConflicts(db, conflicts: response.conflicts)
         }
+    }
+
+    /// Ersetzt den bisherigen SyncConflict-Eintrag für dieselbe (entity_type,
+    /// server_id) durch den neuesten Stand statt Duplikate anzuhäufen - ein
+    /// Konflikt, der bei jedem Sync erneut auftritt (Outbox-Eintrag noch
+    /// nicht aufgelöst), soll nur einmal in der Liste stehen, mit dem
+    /// aktuellsten `reason`/`server_data`.
+    private nonisolated static func recordConflicts(_ db: Database, conflicts: [SyncPushResponse.ConflictEntry]) throws {
+        guard !conflicts.isEmpty else { return }
+        let now = ISO8601DateFormatter().string(from: Date())
+        for c in conflicts {
+            if let serverID = c.server_id {
+                try SyncConflict
+                    .filter(Column("entity_type") == c.entity_type && Column("server_id") == serverID)
+                    .deleteAll(db)
+            }
+            var serverDataJSON: String?
+            if let serverData = c.server_data, let encoded = try? JSONEncoder().encode(serverData) {
+                serverDataJSON = String(data: encoded, encoding: .utf8)
+            }
+            var row = SyncConflict(
+                id: nil, entity_type: c.entity_type, server_id: c.server_id, reason: c.reason,
+                server_data_json: serverDataJSON, detected_at: now
+            )
+            try row.insert(db)
+        }
+    }
+
+    // MARK: - Konflikte auflösen
+
+    /// "Server behalten": übernimmt die vom Server mitgeschickte Version
+    /// direkt in die lokale Tabelle (per applyRow, derselbe Weg wie ein
+    /// normaler Pull) und verwirft die eigene(n) noch ausstehende(n)
+    /// Outbox-Änderung(en) für diese Zeile - ist kein `server_data_json`
+    /// vorhanden (z.B. bei einem reinen Validierungsfehler ohne
+    /// "server_newer"), wird nur die Outbox-Änderung verworfen, ohne lokal
+    /// etwas zu überschreiben (es gäbe nichts Neues zu übernehmen).
+    public func resolveConflictKeepServer(_ conflict: SyncConflict) async throws {
+        try await db.write { db in
+            if let serverID = conflict.server_id {
+                try SyncOutboxEntry
+                    .filter(Column("entity_type") == conflict.entity_type && Column("server_id") == serverID)
+                    .deleteAll(db)
+            }
+            if let json = conflict.server_data_json, let data = json.data(using: .utf8),
+               let row = try? JSONDecoder().decode([String: AnyCodable].self, from: data) {
+                try Self.applyRow(db, entityType: conflict.entity_type, row: row)
+            }
+            if let id = conflict.id {
+                try SyncConflict.deleteOne(db, key: id)
+            }
+        }
+        await loadConflicts()
+    }
+
+    /// "Meine Version erneut versuchen": löscht `base_updated_at` auf der/den
+    /// betroffenen Outbox-Eintrag/-Einträgen, sodass der nächste Push die
+    /// Server-Prüfung überspringt (siehe backend/app/sync.py: `if op.
+    /// base_updated_at:`) und die eigene Version unbedingt durchsetzt - kein
+    /// stiller Automatismus, sondern eine bewusste Nutzer-Entscheidung.
+    public func resolveConflictRetryMine(_ conflict: SyncConflict) async throws {
+        try await db.write { db in
+            if let serverID = conflict.server_id {
+                let entries = try SyncOutboxEntry
+                    .filter(Column("entity_type") == conflict.entity_type && Column("server_id") == serverID)
+                    .fetchAll(db)
+                for var entry in entries {
+                    entry.base_updated_at = nil
+                    try entry.update(db)
+                }
+            }
+            if let id = conflict.id {
+                try SyncConflict.deleteOne(db, key: id)
+            }
+        }
+        await loadConflicts()
     }
 
     private nonisolated static func migrateTempID(_ db: Database, clientID: String, serverID: Int64) throws {

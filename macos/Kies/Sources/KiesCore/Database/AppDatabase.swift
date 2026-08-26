@@ -292,6 +292,27 @@ public enum AppDatabase {
             }
         }
 
+        // Lokal-only: sichtbares Sync-Konflikt-Feedback (siehe SyncEngine.
+        // pushOutbox) - vorher blieb ein Konflikt (Server hat denselben
+        // Datensatz zwischenzeitlich auch geändert) stillschweigend in der
+        // Outbox stehen und wurde bei jedem Sync erneut versucht, ohne dass
+        // der Nutzer je davon erfuhr. Bewusst kein Merge/CRDT: pro Konflikt
+        // wird hier nur festgehalten, was passiert ist (`reason`) und - falls
+        // vom Server mitgeschickt (siehe backend/app/sync.py: "server_data"
+        // bei reason=="server_newer") - roh dessen aktuelle Version, damit
+        // der Nutzer bewusst "Server behalten" oder "meine Version erneut
+        // versuchen" wählen kann (siehe SyncEngine.resolveConflict*).
+        migrator.registerMigration("v6_syncConflicts") { db in
+            try db.create(table: "sync_conflicts") { t in
+                t.column("id", .integer).primaryKey(autoincrement: true)
+                t.column("entity_type", .text).notNull()
+                t.column("server_id", .integer)
+                t.column("reason", .text).notNull()
+                t.column("server_data_json", .text)
+                t.column("detected_at", .text).notNull()
+            }
+        }
+
         return migrator
     }
 }

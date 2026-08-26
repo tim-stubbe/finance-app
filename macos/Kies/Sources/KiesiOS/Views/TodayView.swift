@@ -18,6 +18,20 @@ struct TodayView: View {
 
     var body: some View {
         List {
+            if !engine.conflicts.isEmpty {
+                Section {
+                    NavigationLink {
+                        ConflictsView()
+                    } label: {
+                        Label(
+                            engine.conflicts.count == 1 ? "1 Sync-Konflikt" : "\(engine.conflicts.count) Sync-Konflikte",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(.orange)
+                    }
+                }
+            }
+
             Section("Tagesbilanz") {
                 HStack {
                     Label("Einnahmen", systemImage: "arrow.down.circle")

@@ -211,6 +211,22 @@ public struct SyncState: Codable, FetchableRecord, PersistableRecord {
     public var cursor: String?
 }
 
+/// Lokal-only: sichtbares Sync-Konflikt-Feedback - siehe AppDatabase-
+/// Migration v6_syncConflicts und SyncEngine.pushOutbox/resolveConflict*.
+public struct SyncConflict: Codable, FetchableRecord, PersistableRecord, Identifiable {
+    public static let databaseTableName = "sync_conflicts"
+    public var id: Int64?
+    public var entity_type: String
+    public var server_id: Int64?
+    public var reason: String
+    public var server_data_json: String?
+    public var detected_at: String
+
+    public mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}
+
 /// Lokal-only: ausstehende Schreibvorgänge, die per Push an den Server gehen,
 /// sobald wieder eine Verbindung besteht.
 public struct SyncOutboxEntry: Codable, FetchableRecord, PersistableRecord, Identifiable {

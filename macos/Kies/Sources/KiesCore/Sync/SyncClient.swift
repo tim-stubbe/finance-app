@@ -22,6 +22,11 @@ struct SyncPushResponse: Decodable {
         var entity_type: String
         var server_id: Int64?
         var reason: String
+        // Nur bei reason=="server_newer" gesetzt (siehe backend/app/sync.py:
+        // push()) - die aktuelle Server-Version der Zeile, fürs "Server
+        // behalten" in SyncEngine.resolveConflictKeepServer (per applyRow
+        // direkt in die lokale Tabelle übernommen, kein erneuter Pull nötig).
+        var server_data: [String: AnyCodable]?
     }
 }
 
