@@ -2880,6 +2880,46 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<!-- app.js wurde 2026-08-26 in ~37 Dateien unter js/ aufgeteilt (Modularisierung,
+     siehe ROADMAP.md) - reine Verschiebung ohne Code-Änderung, alle Dateien
+     teilen sich weiterhin denselben globalen Scope (klassische <script>-Tags,
+     kein type="module"), Ladereihenfolge = ursprüngliche Reihenfolge in app.js. -->
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/categories.js"></script>
+<script src="js/investments.js"></script>
+<script src="js/ki-assistent.js"></script>
+<script src="js/ki-review-queue.js"></script>
+<script src="js/beleg-chat.js"></script>
+<script src="js/trips.js"></script>
+<script src="js/projekte.js"></script>
+<script src="js/leben.js"></script>
+<script src="js/wunschliste.js"></script>
+<script src="js/transactions.js"></script>
+<script src="js/abos.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/fotos.js"></script>
+<script src="js/belege-emails.js"></script>
+<script src="js/webhook-n8n.js"></script>
+<script src="js/vermoegensvergleich.js"></script>
+<script src="js/settings-budgets.js"></script>
+<script src="js/settings-export-backup.js"></script>
+<script src="js/settings-auto-backups.js"></script>
+<script src="js/settings-auto-sync.js"></script>
+<script src="js/eigene-regeln.js"></script>
+<script src="js/settings-fints.js"></script>
+<script src="js/settings-bitvavo.js"></script>
+<script src="js/settings-paypal.js"></script>
+<script src="js/settings-enablebanking.js"></script>
+<script src="js/kalender.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/geschaeftlich.js"></script>
+<script src="js/schulden.js"></script>
+<script src="js/schwebender-ki-assistent.js"></script>
+<script src="js/ziele.js"></script>
+<script src="js/init.js"></script>
+<script src="js/command-palette.js"></script>
+<script src="js/jahresrueckblick.js"></script>
+<script src="js/notizen.js"></script>
 </body>
 </html>

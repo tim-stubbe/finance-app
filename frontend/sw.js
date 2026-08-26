@@ -2,8 +2,26 @@
 // Oberfläche (nicht die Daten!) auch bei wackliger Tailscale-Verbindung sofort
 // lädt. Cacht bewusst NUR die statische App-Hülle - /api/-Antworten werden nie
 // abgefangen, Finanzdaten müssen immer live vom Server kommen, nie aus dem Cache.
-const CACHE_NAME = "finanztool-shell-v21";
-const SHELL_ASSETS = ["/", "/index.html", "/style.css", "/app.js", "/manifest.json", "/alpen-bg.svg"];
+// v22: app.js (2026-08-26 in ~37 Dateien unter frontend/js/ aufgeteilt,
+// siehe ROADMAP.md) durch die einzelnen Modul-Skripte ersetzt - Bump der
+// CACHE_NAME-Version erzwingt bei bestehenden Installationen den Wechsel
+// weg vom alten, jetzt nicht mehr existierenden /app.js-Precache-Eintrag.
+const CACHE_NAME = "finanztool-shell-v22";
+const SHELL_ASSETS = [
+  "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
+  "/js/core.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
+  "/js/ki-assistent.js", "/js/ki-review-queue.js", "/js/beleg-chat.js",
+  "/js/trips.js", "/js/projekte.js", "/js/leben.js", "/js/wunschliste.js",
+  "/js/transactions.js", "/js/abos.js", "/js/profile.js", "/js/fotos.js",
+  "/js/belege-emails.js", "/js/webhook-n8n.js", "/js/vermoegensvergleich.js",
+  "/js/settings-budgets.js", "/js/settings-export-backup.js",
+  "/js/settings-auto-backups.js", "/js/settings-auto-sync.js",
+  "/js/eigene-regeln.js", "/js/settings-fints.js", "/js/settings-bitvavo.js",
+  "/js/settings-paypal.js", "/js/settings-enablebanking.js", "/js/kalender.js",
+  "/js/dashboard.js", "/js/geschaeftlich.js", "/js/schulden.js",
+  "/js/schwebender-ki-assistent.js", "/js/ziele.js", "/js/init.js",
+  "/js/command-palette.js", "/js/jahresrueckblick.js", "/js/notizen.js",
+];
 
 self.addEventListener("install", event => {
   event.waitUntil(

@@ -2337,8 +2337,9 @@ def global_search(db: Session, space_id: int, q: str, limit_per_type: int = 6) -
     return results
 
 
-# Muss zur Frontend-Konstante NOTE_ENTITY_JUMP in app.js passen - dort steht
-# dieselbe Zuordnung fürs manuelle Notizen-Modal, hier für die Suchergebnisse.
+# Muss zur Frontend-Konstante NOTE_ENTITY_JUMP in frontend/js/notizen.js
+# passen - dort steht dieselbe Zuordnung fürs manuelle Notizen-Modal, hier
+# für die Suchergebnisse.
 NOTE_ENTITY_JUMP_TAB = {
     "goal": "goals", "todo": "goals", "business_project": "projects", "life_area": "life", "schweiz": "schweiz",
 }

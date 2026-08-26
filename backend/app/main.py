@@ -331,7 +331,13 @@ async def no_cache_static_shell(request, call_next):
     # gegen eine alte, gecachte Seite ohne die dort erwarteten Elemente
     # (fehlende IDs -> addEventListener auf null -> Abbruch mitten im Skript)
     # sah dann wie "alle Daten weg" aus, obwohl der Server alles hatte.
-    if request.url.path in ("/", "/index.html", "/style.css", "/app.js", "/sw.js"):
+    # /js/*.js: app.js wurde 2026-08-26 in ~37 Dateien unter frontend/js/
+    # aufgeteilt (Modularisierung, siehe ROADMAP.md), /app.js gibt es seitdem
+    # nicht mehr - dieselbe Absicherung muss fuer jede einzelne Datei gelten,
+    # sonst genau derselbe Stale-Cache-Bug wie oben beschrieben, nur pro
+    # Tab-Modul statt fuer die ganze App.
+    if request.url.path in ("/", "/index.html", "/style.css", "/sw.js") \
+            or request.url.path.startswith("/js/"):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
