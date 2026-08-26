@@ -1,11 +1,20 @@
 import Foundation
 import LocalAuthentication
 
-/// Optionale App-Sperre (Face ID/Touch ID, Fallback Geräte-Code) - rein lokal
-/// auf dem Gerät, kein serverseitiges Passwort. Die "aktiviert"-Einstellung
-/// ist kein Geheimnis (nur ein Schalter), deshalb UserDefaults statt Keychain
-/// - konsistent zu PairingStore.baseURLString, das aus demselben Grund auch
-/// UserDefaults statt Keychain nutzt (siehe dort).
+/// Optionale App-Sperre (Face ID auf iOS, Touch ID/Geräte-Passwort auf
+/// macOS - LocalAuthentication.deviceOwnerAuthentication deckt beides ab),
+/// rein lokal auf dem Gerät, kein serverseitiges Passwort. Die "aktiviert"-
+/// Einstellung ist kein Geheimnis (nur ein Schalter), deshalb UserDefaults
+/// statt Keychain - konsistent zu PairingStore.baseURLString, das aus
+/// demselben Grund auch UserDefaults statt Keychain nutzt (siehe dort).
+///
+/// Ursprünglich iOS-only (Sources/KiesiOS/AppLock/), nach KiesCore
+/// verschoben, damit die macOS-App (Sources/Kies) es mitnutzen kann (siehe
+/// ROADMAP.md "macOS-Client nachziehen") - reine Logik ohne SwiftUI-Import,
+/// passt zur bestehenden KiesCore-Regel (siehe AppDatabase-Kopfkommentar:
+/// "läuft dadurch auch als reines Kommandozeilen-Tool"). Die dazugehörige
+/// AppLockView (SwiftUI) bleibt bewusst pro Plattform eigenständig (analog
+/// zu Box.swift), UI gehört nicht in KiesCore.
 @MainActor
 public final class AppLockStore: ObservableObject {
     public static let shared = AppLockStore()

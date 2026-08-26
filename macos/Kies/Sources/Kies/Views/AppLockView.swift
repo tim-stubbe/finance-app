@@ -1,9 +1,11 @@
 import SwiftUI
 import KiesCore
 
-/// Sperrbildschirm, verdeckt RootTabView solange AppLockStore.isLocked true
-/// ist - AppLockStore selbst lebt jetzt in KiesCore (siehe dort), daher der
-/// zusätzliche Import.
+/// Sperrbildschirm, verdeckt ContentView solange AppLockStore.isLocked true
+/// ist - macOS-Gegenstück zu Sources/KiesiOS/AppLock/AppLockView.swift
+/// (identischer Aufbau, AppLockStore selbst lebt jetzt gemeinsam in
+/// KiesCore). Kein iOS-spezifischer Code hier, deshalb keine echte
+/// Code-Duplikation an Logik, nur an der (trivialen) SwiftUI-Hülle.
 struct AppLockView: View {
     @ObservedObject var lock = AppLockStore.shared
 
@@ -24,7 +26,7 @@ struct AppLockView: View {
             Button {
                 Task { await lock.authenticate() }
             } label: {
-                Label("Entsperren", systemImage: "faceid")
+                Label("Entsperren", systemImage: "touchid")
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)

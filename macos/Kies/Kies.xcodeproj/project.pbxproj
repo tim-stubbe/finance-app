@@ -16,7 +16,6 @@
 		28B336A146960054E6B7890D /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C557578D4B70FD785495CC8 /* CategoriesView.swift */; };
 		326F90F46B74CA76DD560D57 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB383E45F1D2E267830E6E5 /* PairingView.swift */; };
 		3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */; };
-		3F2D9B7765919186B16F017F /* AppLockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20238613856AE2E2CC9E241 /* AppLockStore.swift */; };
 		58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */; };
 		6AE7088E2703106A3753482B /* ConflictsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F087B937238D319A6DEBE69 /* ConflictsView.swift */; };
 		73EEE66A7C60EAC7ABB62CDD /* SyncStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688EF710F5CAC80ACBAD0D85 /* SyncStatusBar.swift */; };
@@ -104,7 +103,6 @@
 		D83EE951DD03CAD6FF1BEA47 /* KiesWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesWidget.entitlements; sourceTree = "<group>"; };
 		E581F3707BA30C9B425A56BB /* KiesiOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesiOS.entitlements; sourceTree = "<group>"; };
 		EFDC5EE202B4C70D2EC672AB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		F20238613856AE2E2CC9E241 /* AppLockStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockStore.swift; sourceTree = "<group>"; };
 		F34C70844AA4048F50145115 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F85F5ED97A93ECD9BC83743D /* TodosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodosView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -159,7 +157,6 @@
 		30438CFC92D36BE4CBFCB041 /* AppLock */ = {
 			isa = PBXGroup;
 			children = (
-				F20238613856AE2E2CC9E241 /* AppLockStore.swift */,
 				75C2FAFA9FA014943AD1D181 /* AppLockView.swift */,
 			);
 			path = AppLock;
@@ -364,7 +361,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BA11003F352EDA97A72E56AB /* AccountsView.swift in Sources */,
-				3F2D9B7765919186B16F017F /* AppLockStore.swift in Sources */,
 				77A8121258C229BD13A889F2 /* AppLockView.swift in Sources */,
 				761FB9FD89FC2A446959E6B7 /* Box.swift in Sources */,
 				28B336A146960054E6B7890D /* CategoriesView.swift in Sources */,
