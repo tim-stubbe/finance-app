@@ -308,6 +308,18 @@ class Settings(Base):
     # Genau eines von beiden ist gesetzt - siehe CreditCardBill.
     creditcard_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     creditcard_debt_id = Column(Integer, ForeignKey("debts.id"), nullable=True)
+    # --- Scalable Capital (Investments, ueber das offizielle CLI-Binary "sc") ---
+    # Kein API-Key/Secret hier - die Anmeldung laeuft per Device-Code-Flow direkt
+    # ueber "sc login" (einmalig, ausserhalb von Kies, siehe scalable_sync.py-
+    # Docstring), die Session liegt als Datei unter $XDG_CONFIG_HOME/scalable-cli/.
+    scalable_enabled = Column(Boolean, nullable=False, default=False)
+    scalable_last_sync_at = Column(DateTime, nullable=True)
+    scalable_last_sync_status = Column(String, nullable=True)
+    # Ziel-Bereich fuer den automatischen Hintergrund-Sync (siehe
+    # sync_all_connections) - dort gibt es keine aktive Session, aus der sich
+    # sonst wie beim manuellen Sync ueber auth.get_active_space_id ein Bereich
+    # ableiten liesse. NULL faellt auf den ersten Bereich zurueck.
+    scalable_space_id = Column(Integer, ForeignKey("spaces.id"), nullable=True)
 
 
 class BasiszinsRate(Base):

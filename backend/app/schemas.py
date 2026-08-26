@@ -1799,6 +1799,23 @@ class WebhookSettingsOut(BaseModel):
     configured: bool = False
 
 
+class ScalableSettingsOut(BaseModel):
+    enabled: bool = False
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+
+
+class ScalableSettingsUpdate(BaseModel):
+    enabled: bool
+
+
+class ScalableSyncResult(BaseModel):
+    created: int
+    updated: int
+    lots_added: int
+    error: Optional[str] = None
+
+
 class WebhookIssueCreate(BaseModel):
     project: str
     title: str

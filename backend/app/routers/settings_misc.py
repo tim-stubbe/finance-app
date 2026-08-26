@@ -33,7 +33,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto
+from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync
 from ..database import get_db
 from .ai_assistant import websearch_configured
 
@@ -372,7 +372,7 @@ def integrations_status(db: Session = Depends(get_db)):
     FIELD_COUNT = {
         "ollama": 2, "telegram": 2, "twilio": 4, "brave": 1,
         "fints": 2, "enablebanking": 3, "bitvavo": 1, "paypal": 1,
-        "immich": 2, "mail": 3, "ebay": 3, "radicale": 2,
+        "immich": 2, "mail": 3, "ebay": 3, "radicale": 2, "scalable": 1,
     }
 
     def entry(key, name, purpose, missing, optional=True, enabled=True, detail_ok=""):
@@ -527,8 +527,55 @@ def integrations_status(db: Session = Depends(get_db)):
         missing, enabled=s.mail_enabled,
     ))
 
+    missing = [] if s.scalable_enabled else ["Aktivieren + einmaliger Login im Container"]
+    items.append(entry(
+        "scalable", "Scalable Capital (Investments)",
+        "Positionen und Käufe/Verkäufe automatisch abgleichen",
+        missing,
+        detail_ok=s.scalable_last_sync_status or "Einsatzbereit.",
+    ))
+
     return schemas.IntegrationStatusOut(
         items=items,
         ready=sum(1 for i in items if i.status == "ok"),
         incomplete=sum(1 for i in items if i.status in ("missing", "partial")),
     )
+
+
+# ---------------- Scalable Capital (Investments) ----------------
+# Login laeuft bewusst NICHT durch diese Route (siehe scalable_sync.py-
+# Docstring: Device-Code-Flow, "human-oriented", einmalig per
+# `docker exec -it ... sc login --local-read-only` im Container). Hier nur
+# an/aus schalten (nachdem der Login extern gemacht wurde) + manueller Sync.
+@settings_misc_router.get("/settings/scalable", response_model=schemas.ScalableSettingsOut)
+def get_scalable_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.ScalableSettingsOut(
+        enabled=s.scalable_enabled, last_sync_at=s.scalable_last_sync_at,
+        last_sync_status=s.scalable_last_sync_status,
+    )
+
+
+@settings_misc_router.put("/settings/scalable", response_model=schemas.ScalableSettingsOut)
+def update_scalable_settings(data: schemas.ScalableSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.scalable_enabled = data.enabled
+    db.commit()
+    return schemas.ScalableSettingsOut(
+        enabled=s.scalable_enabled, last_sync_at=s.scalable_last_sync_at,
+        last_sync_status=s.scalable_last_sync_status,
+    )
+
+
+@settings_misc_router.post("/scalable/sync", response_model=schemas.ScalableSyncResult)
+def sync_scalable_now(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    s = auth.get_or_create_settings(db)
+    if not s.scalable_enabled:
+        raise HTTPException(400, "Scalable Capital ist nicht aktiviert (Einstellungen → Weitere Verbindungen).")
+    try:
+        result = scalable_sync.sync(db, s, space_id)
+    except Exception as e:
+        s.scalable_last_sync_status = f"Fehler: {e}"
+        db.commit()
+        return schemas.ScalableSyncResult(created=0, updated=0, lots_added=0, error=str(e))
+    return schemas.ScalableSyncResult(**result)

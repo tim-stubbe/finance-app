@@ -233,6 +233,12 @@ ensure_columns("business_projects", {
 ensure_columns("settings", {
     "native_sync_secret_encrypted": "VARCHAR",
 })
+ensure_columns("settings", {
+    "scalable_enabled": "BOOLEAN DEFAULT 0",
+    "scalable_last_sync_at": "DATETIME",
+    "scalable_last_sync_status": "VARCHAR",
+    "scalable_space_id": "INTEGER",
+})
 ensure_columns("spaces", {
     "last_digest_net_worth": "FLOAT",
 })

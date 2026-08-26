@@ -1,5 +1,5 @@
 """Sammel-Sync aller Verbindungen (FinTS, Bitvavo, PayPal, Enable Banking,
-eBay) - manueller Trigger per Knopfdruck.
+eBay, Scalable Capital) - manueller Trigger per Knopfdruck.
 
 Fuenfundzwanzigster Schritt der Code-Modularisierung (siehe ROADMAP.md),
 nach investments/tax/debts/goals/trips/wishlist/personal/business_life/
@@ -19,7 +19,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import schemas, crud, auth, bank_sync, exchange_sync, paypal_sync, enablebanking_sync, ebay_sync
+from .. import schemas, crud, auth, bank_sync, exchange_sync, paypal_sync, enablebanking_sync, ebay_sync, scalable_sync
 from ..database import get_db
 
 sync_all_router = APIRouter(prefix="/api")
@@ -28,9 +28,12 @@ sync_all_router = APIRouter(prefix="/api")
 # ---------------- Automatischer Sync (Bank, Bitvavo, PayPal, Enable Banking) ----------------
 def sync_all_connections(db, settings):
     """Synct alle Bank-/Broker-/Marktplatz-Verbindungen (FinTS, Bitvavo,
-    PayPal, Enable Banking, eBay) - bewusst OHNE Kurs-Refresh der Investments
-    (das ist ein separater, nutzer-getriggerter Schritt, siehe POST
-    /holdings/refresh-prices). Gemeinsam genutzt vom taeglichen
+    PayPal, Enable Banking, eBay, Scalable Capital) - bewusst OHNE Kurs-
+    Refresh der UEBRIGEN (manuell gepflegten) Investments (das ist ein
+    separater, nutzer-getriggerter Schritt, siehe POST /holdings/refresh-
+    prices) - Scalable-Positionen bekommen ihren Kurs stattdessen direkt aus
+    der Depot-Antwort mit (siehe scalable_sync.py), wie schon Bitvavo es tut.
+    Gemeinsam genutzt vom taeglichen
     _scheduled_bank_sync UND vom Digest (siehe _scheduled_digest), der vor
     jeder Meldung frische Zahlen braucht statt auf den naechsten taeglichen
     Sync zu warten. Jede Verbindung isoliert in try/except, damit eine
@@ -83,6 +86,15 @@ def sync_all_connections(db, settings):
                 ebay_sync.sync(db, eb_conn, settings.ebay_app_id, cert_id)
             except Exception as e:
                 eb_conn.last_sync_status = f"Fehler beim automatischen Sync: {e}"
+                db.commit()
+
+    if settings.scalable_enabled:
+        space_id = settings.scalable_space_id or (crud.get_spaces(db)[0].id if crud.get_spaces(db) else None)
+        if space_id:
+            try:
+                scalable_sync.sync(db, settings, space_id)
+            except Exception as e:
+                settings.scalable_last_sync_status = f"Fehler: {e}"
                 db.commit()
 
 
