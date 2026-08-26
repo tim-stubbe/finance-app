@@ -121,6 +121,7 @@ def sync(db: Session, conn: models.BitvavoConnection, api_key: str, api_secret: 
             ), space_id)
             holdings_by_symbol[coingecko_id.lower()] = holding
             created += 1
+        holding.import_source = "bitvavo"
 
         # Echte Käufe/Verkäufe aus der Handelshistorie übernehmen (korrekte Daten
         # und Kurse statt "heute" zu unterstellen) - bereits importierte Trades

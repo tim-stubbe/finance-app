@@ -392,6 +392,11 @@ class Holding(Base):
     # (z.B. nach der naechsten tatsaechlichen Zahlung neu berechnet), wird wieder
     # frisch erinnert.
     next_dividend_notified_for = Column(Date, nullable=True)
+    # Woher die Position kommt, falls automatisch synchronisiert (z.B.
+    # "scalable", "bitvavo") - NULL bei manuell angelegten Positionen. Rein
+    # informativ fuers Frontend (Badge "automatisch synchronisiert"), keine
+    # Logik haengt daran.
+    import_source = Column(String, nullable=True)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     space = relationship("Space", back_populates="holdings")

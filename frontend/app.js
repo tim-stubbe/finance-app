@@ -678,6 +678,7 @@ window.deleteCategory = async id => {
 
 // ================= INVESTMENTS =================
 const ASSET_TYPE_LABELS = { aktie: "Aktie", etf: "ETF", anleihe: "Anleihe", krypto: "Krypto", sonstiges: "Sonstiges" };
+const HOLDING_SOURCE_LABELS = { scalable: "Scalable Capital", bitvavo: "Bitvavo" };
 
 // Persistente Kopfzeile über allen Tabs. Läuft bewusst separat von loadNetWorth
 // (das Karten auf der Investments-Seite füllt) - die Kopfzeile muss existieren
@@ -782,7 +783,7 @@ function renderHoldingsTable() {
     const tr = document.createElement("tr");
     const gainClass = h.gain_abs >= 0 ? "row-amount-pos" : "row-amount-neg";
     tr.innerHTML = `
-      <td>${h.name}<br><span class="page-sub">${h.symbol}${h.sector ? " · " + h.sector : ""}</span></td>
+      <td>${h.name}${h.import_source ? ` <span class="page-sub" title="Automatisch synchronisiert über ${HOLDING_SOURCE_LABELS[h.import_source] || h.import_source}">🔄</span>` : ""}<br><span class="page-sub">${h.symbol}${h.sector ? " · " + h.sector : ""}</span></td>
       <td>${ASSET_TYPE_LABELS[h.asset_type] || h.asset_type}</td>
       <td>${h.quantity}</td>
       <td>${eur(h.purchase_price)}</td>

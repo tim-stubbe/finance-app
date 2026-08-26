@@ -268,6 +268,7 @@ class HoldingOut(BaseModel):
     purchase_date: Optional[date] = None
     current_price: Optional[float] = None
     price_updated_at: Optional[datetime] = None
+    import_source: Optional[str] = None
     purchase_value: float
     current_value: float
     gain_abs: float

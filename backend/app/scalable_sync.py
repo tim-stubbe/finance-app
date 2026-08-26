@@ -98,6 +98,9 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
             ), space_id)
             holdings_by_isin[isin] = holding
             created += 1
+        holding.import_source = "scalable"
+        if item.get("quote_currency"):
+            holding.currency = item["quote_currency"]
         if current_price is not None:
             holding.current_price = current_price
             holding.price_updated_at = datetime.utcnow()

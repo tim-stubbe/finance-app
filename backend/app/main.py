@@ -233,6 +233,9 @@ ensure_columns("business_projects", {
 ensure_columns("settings", {
     "native_sync_secret_encrypted": "VARCHAR",
 })
+ensure_columns("holdings", {
+    "import_source": "VARCHAR",
+})
 ensure_columns("settings", {
     "scalable_enabled": "BOOLEAN DEFAULT 0",
     "scalable_last_sync_at": "DATETIME",
