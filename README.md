@@ -16,7 +16,8 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 
 **Fertig:**
 - ✅ Konten, Buchungen, Investments, Ziele, Schulden, Steuerauswertung
-- ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo, eBay)
+- ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo, eBay, Scalable Capital)
+- ✅ Native, offline-fähige Companion-Apps für macOS und iOS (eigener Zwei-Wege-Sync, Face ID/Touch-ID-Sperre)
 - ✅ KI-Assistent (Kategorisierung, Beleg-Auswertung, Chat) über eigenen Ollama-Server
 - ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen, Volltextsuche über alle Belege
 - ✅ Automatische Datei-Sortierung eines Eingangsordners (Kategorien, Kontoauszug-Import)
@@ -54,6 +55,7 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 - Enable Banking (PSD2) für Konten ohne FinTS
 - PayPal
 - Bitvavo für Kryptobestände
+- Scalable Capital für Wertpapiere (Positionen, Käufe/Verkäufe inkl. Sparpläne)
 - Kursdaten für Wertpapiere
 - IMAP-Postfach für Belege aus E-Mail-Anhängen (rein lesend)
 - Immich für die eigene Fotobibliothek
@@ -65,6 +67,8 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 - Ein zweiter Kauf/Sparplan-Vorgang desselben Symbols wird automatisch als
   weiterer Posten an die bestehende Position gehängt statt eine Dublette
   anzulegen – Klick auf eine Position zeigt alle einzelnen Käufe/Verkäufe
+- Automatisch synchronisierte Positionen (Bitvavo, Scalable Capital) sind in
+  der Bestandstabelle gekennzeichnet, inkl. Fremdwährungsanzeige
 - Sortierbare Bestandstabelle, Anzeige des letzten Kursabrufs
 
 **Planung und Auswertung**
@@ -137,6 +141,15 @@ nach ausdrücklicher Bestätigung.
 - Telefonanrufe über Twilio, ausschließlich für wirklich zeitkritische Fälle
   (Ziel erreicht, akuter Liquiditätsengpass innerhalb von ein bis drei Tagen)
 
+**Native Apps** (macOS/iOS, optional zur PWA)
+- Eigener Sync-Client (KiesCore) statt reinem Web-Wrapper: SQLite-Offline-
+  Kopie der wichtigsten Daten, Outbox+Tombstones für Änderungen ohne
+  Verbindung, Pairing per Secret statt Login
+- iOS-App mit Heute-Fokus, Konten/Buchungen, To-Dos/Kalender, Zielen,
+  Lebensbereichen, Wunschliste und Kategorien; Face ID/Touch-ID-Sperre,
+  Quick-Capture-Button für Buchung/To-Do/Check-in in einem Sheet
+- macOS-App mit denselben Kernbereichen, gleiche Sync-Basis
+
 **Sonstiges**
 - Fünf Themes (Dunkel, Hell, Gelb, Alpen, Alpen Desktop mit Top-Navigation für
   breite Bildschirme), umschaltbar zwischen EUR- und CHF-Anzeige
@@ -149,8 +162,8 @@ nach ausdrücklicher Bestätigung.
 
 | Bereich   | Umsetzung                                                   |
 |-----------|-------------------------------------------------------------|
-| Backend   | FastAPI, SQLAlchemy, SQLite (289 Endpunkte, modular in `routers/`) |
-| Frontend  | HTML/CSS/JavaScript ohne Build-Schritt, Chart.js über CDN   |
+| Backend   | FastAPI, SQLAlchemy, SQLite (290 Endpunkte, modular in `routers/`/`crud_*.py`) |
+| Frontend  | HTML/CSS/JavaScript ohne Build-Schritt (modular in `frontend/js/`), Chart.js über CDN |
 | Jobs      | APScheduler für Sync, Kursabruf, Kategorisierung, Backups   |
 | Betrieb   | Docker, Python 3.14                                          |
 
