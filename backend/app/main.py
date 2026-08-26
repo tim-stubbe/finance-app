@@ -614,9 +614,17 @@ def today_overview(db: Session = Depends(get_db), space_id: int = Depends(auth.g
     db.commit()  # evtl. automatisch erreichte Ziele festschreiben (wie in list_goals)
     goals.sort(key=lambda g: (g.days_left if g.days_left is not None else 99999))
 
+    # --- Reise-Modus: läuft heute ein Trip? (siehe ROADMAP.md) ---
+    active_trip = None
+    for t in crud.get_trips(db, space_id):
+        if t.start_date and t.end_date and t.start_date <= today <= t.end_date:
+            active_trip = crud.trip_summary(db, t)
+            break  # zwei gleichzeitig aktive Trips sind ein Datenfehler, nicht vorgesehen
+
     return schemas.TodayOut(
         date=today, events=events, todos=todos, deadlines=deadlines[:TODAY_MAX_DEADLINES],
         goals=goals[:TODAY_MAX_GOALS], balance=crud.day_balance(db, space_id, today),
+        active_trip=active_trip,
     )
 
 
@@ -1183,6 +1191,19 @@ def _scheduled_weekly_review():
         if projects:
             open_issues = db.query(models.BusinessIssue).filter(models.BusinessIssue.resolved.is_(False)).count()
             lines.append(f"📋 {len(projects)} aktive(s) Projekt(e), {open_issues} offene Punkt(e).")
+
+        # Todos sind bereichsübergreifend (kein space_id, siehe models.Todo-
+        # Docstring) - ein Zähler statt je Space wie beim Vermögen oben.
+        # completed_at ist DateTime, week_ago nur ein Date - explizit auf
+        # Tagesbeginn kombiniert statt die beiden Typen direkt zu vergleichen.
+        week_ago_dt = datetime.combine(week_ago, datetime.min.time())
+        done_this_week = (
+            db.query(models.Todo)
+            .filter(models.Todo.done.is_(True), models.Todo.completed_at.isnot(None), models.Todo.completed_at >= week_ago_dt)
+            .count()
+        )
+        if done_this_week:
+            lines.append(f"✅ {done_this_week} Todo(s) diese Woche erledigt.")
 
         areas = db.query(models.LifeArea).filter(models.LifeArea.active.is_(True)).all()
         if areas:

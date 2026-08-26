@@ -1974,6 +1974,11 @@ class TodayOut(BaseModel):
     deadlines: List[TodayDeadline]
     goals: List[TodayGoal]
     balance: TodayBalance
+    # Reise-Modus (siehe ROADMAP.md): läuft heute ein Trip (start_date <=
+    # heute <= end_date), wird er hier mitgeschickt - None, wenn keiner
+    # aktiv ist. Wiederverwendet TripOut (dieselbe Zusammenfassung wie im
+    # Reisen-Tab), keine eigene Teilmenge nötig.
+    active_trip: Optional[TripOut] = None
 
 
 # ---------- Kontextbezogene Notizen ----------

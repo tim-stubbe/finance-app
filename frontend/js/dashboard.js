@@ -49,6 +49,29 @@ async function loadTodayPanel() {
   titleEl.textContent = "Heute · " + new Date(data.date + "T00:00:00")
     .toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 
+  // Reise-Modus (siehe ROADMAP.md): läuft heute ein Trip, kommt er als
+  // active_trip aus /today mit (dieselbe Zusammenfassung wie im Reisen-Tab,
+  // keine eigene Auswertung hier nötig). Budget-Balken per .budget-track/
+  // .budget-fill - dasselbe Muster wie im Reisen-Tab selbst (siehe
+  // trips.js:loadTrips), nur ohne Budget bleibt es bei den Ist-Ausgaben.
+  const tripBanner = data.active_trip ? (() => {
+    const t = data.active_trip;
+    let progress = "";
+    if (t.budget) {
+      const pct = Math.min(100, (t.total_spent / t.budget) * 100);
+      const cls = t.total_spent > t.budget ? "over" : pct >= 80 ? "warn" : "ok";
+      progress = `
+        <div class="budget-track"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>
+        <span class="page-sub">${eur(t.total_spent)} von ${eur(t.budget)} Budget</span>`;
+    } else {
+      progress = `<span class="page-sub">${eur(t.total_spent)} ausgegeben, ${t.transaction_count} Buchung${t.transaction_count !== 1 ? "en" : ""}</span>`;
+    }
+    return `<button type="button" class="hub-list-row" data-hub-jump="trips">
+      <span>✈️ Reise aktiv: <strong>${esc(t.name)}</strong></span>
+      ${progress}
+    </button>`;
+  })() : "";
+
   const b = data.balance;
   const balanceLine = b.transaction_count
     ? `<div class="today-balance">
@@ -113,7 +136,7 @@ async function loadTodayPanel() {
     })));
   }
 
-  body.innerHTML = balanceLine + (sections.length
+  body.innerHTML = tripBanner + balanceLine + (sections.length
     ? sections.join("")
     : `<p class="page-sub">Heute steht nichts an – keine Termine, Fristen oder fälligen To-Dos.</p>`);
 
