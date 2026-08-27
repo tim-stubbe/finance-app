@@ -1529,6 +1529,35 @@ def _scheduled_digest():
         db.close()
 
 
+def _fetch_market_news_brief(settings) -> str | None:
+    """Kurzer Finanzmarkt-Überblick fürs Morgen-Briefing (Nutzerwunsch: "ein
+    paar News zu den Finanzmärkten") - nutzt dieselbe Websuche+Ollama-
+    Zusammenfassung wie der Wunschlisten-Deal-Check (siehe websearch_run/
+    _scheduled_wishlist_auto_check), kein neuer Mechanismus. Gibt None zurück,
+    wenn Websuche oder Ollama nicht eingerichtet sind, oder bei jedem Fehler -
+    das Briefing soll nie an einem optionalen Zusatz-Abschnitt scheitern."""
+    if not websearch_configured(settings) or not settings.ollama_url:
+        return None
+    chat_model = settings.ollama_model or settings.beleg_chat_model
+    if not chat_model:
+        return None
+    try:
+        results = websearch_run(settings, "Börse Nachrichten heute DAX Aktienmarkt")
+        if not results:
+            return None
+        prompt = (
+            "Du bekommst aktuelle Web-Suchergebnisse zu den Finanzmärkten. Fasse die 2-3 wichtigsten "
+            "Punkte in maximal 3 kurzen Stichpunkten auf Deutsch zusammen (z.B. DAX-Stand/-Tendenz, "
+            "wichtige Marktereignisse). Keine Anlageberatung, keine Einleitung/Grußformel, nur die "
+            "Stichpunkte, jeweils mit vorangestelltem '- '.\n\n"
+            + websearch.format_for_prompt("Börsennachrichten heute", results)
+        )
+        antwort = ollama_client.chat(settings.ollama_url, chat_model, [{"role": "user", "content": prompt}], timeout=60)
+        return antwort.strip() or None
+    except Exception:
+        return None
+
+
 def _scheduled_morning_briefing():
     """Einmal täglich morgens (Uhrzeit einstellbar, siehe Settings.
     morning_briefing_hour/-minute) - Spezifikation Abschnitt A. Klar abgegrenzt
@@ -1537,7 +1566,9 @@ def _scheduled_morning_briefing():
     siehe crud.build_morning_briefing-Docstring für die genaue Abgrenzung.
     Standardmäßig STILL, wenn nichts Relevantes ansteht (settings.
     morning_briefing_send_empty, Default False) - "lieber eine gute Meldung
-    als ständiges Ping" (Leitprinzip 1)."""
+    als ständiges Ping" (Leitprinzip 1). Der Finanzmarkt-Kurzüberblick (siehe
+    _fetch_market_news_brief) zählt dabei bewusst als "Inhalt vorhanden" -
+    wenn News da sind, lohnt sich der Ping auch ohne Termine/Todos."""
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
@@ -1548,9 +1579,16 @@ def _scheduled_morning_briefing():
             bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
             if settings.openroute_api_key_encrypted else None
         )
-        for space in crud.get_spaces(db):
+        news = _fetch_market_news_brief(settings)
+        # News sind nicht space-spezifisch - nur an das erste Briefing hängen,
+        # sonst kaeme bei mehreren Spaces derselbe Marktueberblick mehrfach an.
+        spaces = crud.get_spaces(db)
+        for i, space in enumerate(spaces):
             try:
                 text = crud.build_morning_briefing(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key)
+                if news and i == 0:
+                    header = text or f"☀️ Guten Morgen ({date.today().strftime('%d.%m.%Y')}):"
+                    text = f"{header}\n\n📰 Finanzmärkte (KI-Zusammenfassung, keine Anlageberatung):\n{news}"
                 if text:
                     notifications.notify(settings, text)
                 elif settings.morning_briefing_send_empty:
