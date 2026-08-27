@@ -1,8 +1,12 @@
 // ================= EINGEHENDER WEBHOOK (n8n) =================
 async function loadWebhookSettings() {
   const s = await api("/settings/webhook");
-  document.getElementById("webhook-secret").value = s.secret || "";
-  document.getElementById("webhook-secret").placeholder = s.configured ? "" : "Noch kein Secret erzeugt";
+  // s.secret kommt vom GET absichtlich nie mehr im Klartext (siehe Backend) -
+  // nur direkt nach "Neu generieren" unten wird das Feld einmalig befüllt.
+  document.getElementById("webhook-secret").value = "";
+  document.getElementById("webhook-secret").placeholder = s.configured
+    ? "•••••••••••••••••••••••••••••• (zum Anzeigen: neu generieren)"
+    : "Noch kein Secret erzeugt";
   document.getElementById("webhook-remove").classList.toggle("hidden", !s.configured);
 }
 
@@ -65,8 +69,11 @@ document.getElementById("scalable-sync-now").addEventListener("click", async () 
 
 async function loadNativeSyncSettings() {
   const s = await api("/settings/native-sync");
-  document.getElementById("native-sync-secret").value = s.secret || "";
-  document.getElementById("native-sync-secret").placeholder = s.configured ? "" : "Noch kein Secret erzeugt";
+  // Gleiche Begründung wie bei loadWebhookSettings oben.
+  document.getElementById("native-sync-secret").value = "";
+  document.getElementById("native-sync-secret").placeholder = s.configured
+    ? "•••••••••••••••••••••••••••••• (zum Anzeigen: neu generieren)"
+    : "Noch kein Secret erzeugt";
   document.getElementById("native-sync-remove").classList.toggle("hidden", !s.configured);
 }
 

@@ -165,11 +165,13 @@ def get_fx_rate(to: str = "CHF"):
 # ---------------- Eingehender Webhook (z.B. n8n meldet E-Mail-Ereignisse) ----------------
 @settings_misc_router.get("/settings/webhook", response_model=schemas.WebhookSettingsOut)
 def get_webhook_settings(db: Session = Depends(get_db)):
+    # Secret wird bewusst NICHT mehr bei jedem GET im Klartext zurückgegeben
+    # (Sicherheitsprüfung: XSS/Session-Diebstahl hätte sonst durch simples
+    # Abrufen dieser Seite Zugriff aufs Secret) - nur noch direkt nach
+    # "Neu generieren" (siehe regenerate_webhook_secret unten), das ist der
+    # einzige Moment, an dem der Nutzer es wirklich sehen/kopieren muss.
     s = auth.get_or_create_settings(db)
-    if not s.n8n_webhook_secret_encrypted:
-        return schemas.WebhookSettingsOut(secret=None, configured=False)
-    secret = bank_sync.decrypt_secret(s.secret_key, s.n8n_webhook_secret_encrypted)
-    return schemas.WebhookSettingsOut(secret=secret, configured=True)
+    return schemas.WebhookSettingsOut(secret=None, configured=bool(s.n8n_webhook_secret_encrypted))
 
 
 @settings_misc_router.post("/settings/webhook/regenerate", response_model=schemas.WebhookSettingsOut)
@@ -192,11 +194,10 @@ def remove_webhook_secret(db: Session = Depends(get_db)):
 # ---------------- Nativer macOS-Client (Offline-Sync) ----------------
 @settings_misc_router.get("/settings/native-sync", response_model=schemas.WebhookSettingsOut)
 def get_native_sync_settings(db: Session = Depends(get_db)):
+    # Gleiche Begründung wie bei get_webhook_settings oben - Secret nur noch
+    # direkt nach "Neu generieren" im Klartext, nicht bei jedem GET.
     s = auth.get_or_create_settings(db)
-    if not s.native_sync_secret_encrypted:
-        return schemas.WebhookSettingsOut(secret=None, configured=False)
-    secret = bank_sync.decrypt_secret(s.secret_key, s.native_sync_secret_encrypted)
-    return schemas.WebhookSettingsOut(secret=secret, configured=True)
+    return schemas.WebhookSettingsOut(secret=None, configured=bool(s.native_sync_secret_encrypted))
 
 
 @settings_misc_router.post("/settings/native-sync/regenerate", response_model=schemas.WebhookSettingsOut)

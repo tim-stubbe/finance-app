@@ -6,7 +6,8 @@ from typing import Optional, List
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import APIRouter, FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, FastAPI, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
@@ -320,6 +321,23 @@ _bootstrap_db.close()
 app = FastAPI(title="Kies", version="1.0.0")
 
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+
+# Grobe DoS-Bremse: bisher hatte KEIN Upload-Endpunkt (Beleg-Upload, Restore,
+# KI-Assistent-Dateianhang, ...) ein Größenlimit - ein beliebig großer Upload
+# hätte unbegrenzt Speicher/Platte belegen können. 100MB ist großzügig über
+# dem aktuell größten realen Anwendungsfall (Backup-Zip liegt bei ~7,6MB,
+# siehe /backups) - lehnt anhand des Content-Length-Headers früh ab, bevor
+# der jeweilige Endpunkt überhaupt anfängt, den Body zu lesen.
+MAX_REQUEST_BODY_BYTES = 100 * 1024 * 1024
+
+
+@app.middleware("http")
+async def limit_request_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > MAX_REQUEST_BODY_BYTES:
+        return JSONResponse(status_code=413, content={"detail": "Datei zu groß (Limit: 100 MB)."})
+    return await call_next(request)
+
 
 if os.environ.get("DEV_NO_CACHE"):
     @app.middleware("http")
