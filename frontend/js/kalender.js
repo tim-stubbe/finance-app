@@ -160,13 +160,19 @@ document.getElementById("calendar-delete-btn").addEventListener("click", async (
 
 const SETTINGS_VIEWS = ["allgemein", "banken", "ki", "benachrichtigungen", "verbindungen", "daten"];
 
-document.getElementById("settings-subtabs").addEventListener("click", e => {
-  const view = e.target.closest("[data-settings-view]")?.dataset.settingsView;
-  if (!view) return;
+// Aus dem Klick-Handler herausgezogen (Spezifikationspunkt G, 2026-08-28) -
+// wird jetzt auch von der Settings-Suche gebraucht (Unterreiter wechseln,
+// BEVOR das Panel dort gescrollt/hervorgehoben werden kann).
+function settingsSwitchView(view) {
   document.querySelectorAll("#settings-subtabs .range-tab").forEach(b =>
     b.classList.toggle("active", b.dataset.settingsView === view));
   SETTINGS_VIEWS.forEach(v =>
     document.getElementById(`settings-view-${v}`).classList.toggle("hidden", v !== view));
+}
+
+document.getElementById("settings-subtabs").addEventListener("click", e => {
+  const view = e.target.closest("[data-settings-view]")?.dataset.settingsView;
+  if (view) settingsSwitchView(view);
 });
 
 // Zeichen und Klasse je Zustand. Das Ausrufezeichen steht bewusst auch bei

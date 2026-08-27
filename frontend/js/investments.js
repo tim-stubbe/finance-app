@@ -376,25 +376,125 @@ function gainHeatColor(pct) {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
+// Ausbau 2026-08-28 (Spezifikationspunkt A): Ansicht umschaltbar (Position/
+// Sektor/Region/Anlageklasse/Währung, alle Daten schon in holdingsCache -
+// sector/country/currency/asset_type kommen direkt vom Holding-Modell, kein
+// neuer Backend-Endpunkt nötig), Kachelgröße jetzt proportional zum
+// Portfolio-Anteil (vorher alle Kacheln gleich groß) statt nur die Farbe
+// nach Rendite. Gruppierte Ansichten zeigen den wertgewichteten
+// Durchschnitts-Gain der Gruppe.
+let heatmapView = "position";
+const HEATMAP_GROUP_LABELS = {
+  sector: "Ohne Sektor", country: "Ohne Land", currency: "Ohne Währung",
+};
+
+function heatmapGroupsFor(view) {
+  if (view === "position") {
+    return holdingsCache.map(h => ({
+      key: `h${h.id}`, label: h.name, value: h.current_value, gain_pct: h.gain_pct, holdingId: h.id,
+    }));
+  }
+  const groups = new Map();
+  holdingsCache.forEach(h => {
+    let raw = h[view];
+    if (view === "asset_type") raw = ASSET_TYPE_LABELS[h.asset_type] || h.asset_type;
+    const key = raw && String(raw).trim() ? raw : (HEATMAP_GROUP_LABELS[view] || "Unbekannt");
+    if (!groups.has(key)) groups.set(key, { key, label: key, value: 0, weightedGain: 0, holdingIds: [] });
+    const g = groups.get(key);
+    g.value += h.current_value;
+    g.weightedGain += h.current_value * h.gain_pct;
+    g.holdingIds.push(h.id);
+  });
+  return [...groups.values()].map(g => ({
+    key: g.key, label: g.label, value: g.value,
+    gain_pct: g.value ? g.weightedGain / g.value : 0,
+    holdingIds: g.holdingIds,
+  }));
+}
+
+function heatmapFilterChip(view) {
+  if (view === "position" || !heatmapFilterGroup) return "";
+  return `<div class="hub-list-row" style="cursor:default;border:none">
+    <span class="page-sub">Gefiltert: ${esc(heatmapFilterGroup.label)}</span>
+    <button type="button" class="link-btn" id="heatmap-filter-clear">Filter aufheben</button>
+  </div>`;
+}
+
+let heatmapFilterGroup = null;
+
 async function loadHeatmap() {
   if (!holdingsCache.length) await loadHoldings();
   const grid = document.getElementById("heatmap-grid");
+  const chipHost = document.getElementById("heatmap-filter-chip") || (() => {
+    const d = document.createElement("div");
+    d.id = "heatmap-filter-chip";
+    grid.parentNode.insertBefore(d, grid);
+    return d;
+  })();
+  chipHost.innerHTML = heatmapFilterChip(heatmapView);
+  document.getElementById("heatmap-filter-clear")?.addEventListener("click", () => {
+    heatmapFilterGroup = null;
+    loadHeatmap();
+  });
+
   grid.innerHTML = "";
   if (holdingsCache.length === 0) {
     grid.innerHTML = `<div class="empty-state"><span class="empty-icon">${svgIcon("flame")}</span><span>Noch keine Positionen für die Heatmap.</span></div>`;
     return;
   }
-  holdingsCache.forEach(h => {
+  let groups = heatmapGroupsFor(heatmapView);
+  if (heatmapFilterGroup) {
+    groups = heatmapGroupsFor("position").filter(g => heatmapFilterGroup.holdingIds.includes(g.holdingId));
+    if (!groups.length) { heatmapFilterGroup = null; groups = heatmapGroupsFor(heatmapView); }
+  }
+  const totalValue = groups.reduce((s, g) => s + g.value, 0) || 1;
+  // Größte zuerst - macht die Fläche als "Treemap-artige" Anordnung lesbarer,
+  // Chart.js-Treemap wäre ein zusätzliches Plugin nur für diese eine Ansicht
+  // gewesen, reines CSS-Grid mit flex-basis reicht hier völlig.
+  groups.sort((a, b) => b.value - a.value);
+  groups.forEach(g => {
+    const share = g.value / totalValue;
     const tile = document.createElement("div");
     tile.className = "heatmap-tile";
-    tile.style.background = gainHeatColor(h.gain_pct);
+    tile.style.background = gainHeatColor(g.gain_pct);
+    tile.style.flexBasis = `${Math.max(11, Math.round(share * 100))}%`;
+    // Ehrlich behandeln statt so tun als wäre 0% Rendite echt (Spezifikation
+    // A.4): current_price fehlt z.B. bei frisch importierten/manuell
+    // angelegten Positionen, denen noch kein Kursabruf gelungen ist -
+    // holding_out() rechnet dann mit dem Einstandspreis (siehe Backend),
+    // was optisch wie "unverändert" aussieht, aber schlicht unbekannt ist.
+    // g.holdingId != null statt heatmapView === "position" - greift auch
+    // beim gefilterten Drill-down aus einer gruppierten Ansicht (dort ist
+    // heatmapView weiterhin z.B. "sector", obwohl gerade Einzelpositionen
+    // gezeigt werden, siehe heatmapFilterGroup weiter unten).
+    const noPrice = g.holdingId != null && holdingsCache.find(h => h.id === g.holdingId)?.current_price == null;
+    tile.title = noPrice
+      ? `${g.label} — kein aktueller Kurs, Rendite unbekannt`
+      : `${g.label} — ${share >= 0.01 ? (share * 100).toFixed(1) : "<1"}% des Portfolios`;
     tile.innerHTML = `
-      <span class="hm-name">${h.name}</span>
-      <span class="hm-pct">${h.gain_pct >= 0 ? "+" : ""}${h.gain_pct.toFixed(1)}%</span>
-      <span class="hm-value">${eur(h.current_value)}</span>`;
+      <span class="hm-name">${esc(g.label)}</span>
+      <span class="hm-pct">${noPrice ? "? %" : `${g.gain_pct >= 0 ? "+" : ""}${g.gain_pct.toFixed(1)}%`}</span>
+      <span class="hm-value">${eur(g.value)}${noPrice ? " · kein Kurs" : ""}</span>`;
+    tile.addEventListener("click", () => {
+      if (heatmapView === "position" || heatmapFilterGroup) {
+        if (g.holdingId) openHoldingDetail(g.holdingId);
+      } else {
+        heatmapFilterGroup = g;
+        loadHeatmap();
+      }
+    });
     grid.appendChild(tile);
   });
 }
+
+document.getElementById("heatmap-view-tabs").addEventListener("click", e => {
+  const btn = e.target.closest("[data-heatmap-view]");
+  if (!btn) return;
+  document.querySelectorAll("#heatmap-view-tabs .range-tab").forEach(b => b.classList.toggle("active", b === btn));
+  heatmapView = btn.dataset.heatmapView;
+  heatmapFilterGroup = null;
+  loadHeatmap();
+});
 
 // ---------- Investments: Unterreiter (Analyse / Dividenden / Steuer) ----------
 let dividendsLoaded = false;

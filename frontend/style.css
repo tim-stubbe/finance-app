@@ -890,6 +890,12 @@ button.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   cursor: pointer;
 }
 .hub-list-row:last-child { border-bottom: none; }
+.hub-jarvis-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 4px 12px;
+}
 .hub-list-row span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1860,9 +1866,13 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .inv-subtabs .range-tab { font-size: 13.5px; padding: 8px 16px; }
 
 /* ---------- Rendite-Heatmap ---------- */
+/* Ausbau 2026-08-28: von starrem Grid (jede Kachel gleich groß) auf
+   Flexbox mit wrap umgestellt - flex-basis kommt jetzt pro Kachel aus JS
+   (Anteil am Portfolio), min-width hält es auf schmalen Viewports lesbar
+   statt winziger, unlesbarer Kacheln (Spezifikationspunkt A.6/D). */
 .heatmap {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .heatmap-tile {
@@ -1872,6 +1882,9 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex-grow: 1;
+  min-width: 130px;
+  cursor: pointer;
   transition: transform 0.2s var(--ease-spring);
 }
 .heatmap-tile:hover { transform: translateY(-2px) scale(1.02); }
@@ -2442,6 +2455,116 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .toast-host { right: 14px; bottom: 78px; }
 }
 
+/* ---------- Quick-Capture-FAB (Spezifikationspunkt D, 2026-08-28) ---------- */
+/* Zweiter FAB links neben dem KI-Assistenten - gleiche Position/Größe/
+   Safe-Area-Logik, bewusst dieselben Werte statt neu erfunden. */
+.quick-capture-wrap {
+  position: fixed;
+  right: 84px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 150;
+}
+.quick-capture-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-spring);
+}
+.quick-capture-fab svg { width: 22px; height: 22px; }
+.quick-capture-fab:hover { transform: scale(1.08); }
+.quick-capture-fab:active { transform: scale(0.95); }
+.quick-capture-menu {
+  position: absolute;
+  bottom: 64px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  padding: 8px;
+  min-width: 200px;
+  animation: rise-in 0.2s var(--ease-spring);
+}
+.quick-capture-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quick-capture-item svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--accent-strong); }
+.quick-capture-item:hover { background: var(--surface-2); }
+@media (max-width: 720px) {
+  .quick-capture-wrap { right: 78px; bottom: 14px; }
+}
+
+/* ---------- Settings-Suche (Spezifikationspunkt G, 2026-08-28) ---------- */
+.settings-search-wrap { position: relative; margin-bottom: 16px; max-width: 420px; }
+.settings-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.settings-search-input:focus { outline: none; border-color: var(--accent-strong); }
+.settings-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lift);
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.settings-search-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-search-item:hover { background: var(--surface-2); }
+.settings-search-empty { padding: 10px; color: var(--muted); font-size: 13.5px; }
+.settings-search-highlight { animation: settings-search-flash 1.6s ease-out; }
+@keyframes settings-search-flash {
+  0% { box-shadow: 0 0 0 3px var(--accent-strong); }
+  100% { box-shadow: none; }
+}
+
 /* ---------- Toast (kurze Bestätigungen) ---------- */
 .toast-host {
   position: fixed;
@@ -2473,6 +2596,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 
 .toast-out { opacity: 0; transform: translateY(6px); }
+.toast-error { border-left-color: var(--neg); }
 
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(10px); }
@@ -2489,6 +2613,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .loading-pulse { animation: none; }
+  .settings-search-highlight { animation: none; box-shadow: 0 0 0 3px var(--accent-strong); }
 }
 
 /* ---------- Skeleton-Loader (Form nachgebildet statt reinem Pulstext) ---------- */

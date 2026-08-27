@@ -188,6 +188,22 @@ function getCsrfToken() {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+// Spezifikationspunkt J (2026-08-28): fetch() selbst schlägt bei einem
+// echten Netzwerkausfall (offline, DNS-Fehler, Server nicht erreichbar) mit
+// einer geworfenen Exception fehl, VOR jeder res.ok/res.status-Prüfung
+// unten - das lief bisher still durch (viele Aufrufer fangen es lautlos ab,
+// z.B. ".catch(() => [])", siehe dashboard.js), der Nutzer sah nur ein
+// leeres Panel ohne Erklärung. Throttle verhindert eine Toast-Flut, wenn
+// während eines Ausfalls mehrere api()-Aufrufe gleichzeitig/kurz
+// hintereinander fehlschlagen (z.B. beim Laden eines ganzen Tabs).
+let lastOfflineToastAt = 0;
+function notifyOffline() {
+  const now = Date.now();
+  if (now - lastOfflineToastAt < 8000) return;
+  lastOfflineToastAt = now;
+  toast("Keine Verbindung zum Server - bitte Internet/Tailscale prüfen.", "error");
+}
+
 async function api(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const headers = options.body instanceof FormData ? {} : { "Content-Type": "application/json" };
@@ -195,7 +211,13 @@ async function api(path, options = {}) {
     const csrf = getCsrfToken();
     if (csrf) headers["X-CSRF-Token"] = csrf;
   }
-  const res = await fetch(API + path, { headers, ...options });
+  let res;
+  try {
+    res = await fetch(API + path, { headers, ...options });
+  } catch (e) {
+    notifyOffline();
+    throw e;
+  }
   if (res.status === 401) {
     // Sitzung fehlt/abgelaufen - zurück zum Login statt der generischen
     // Fehler-Alert-Box (siehe auth-login.js:handleUnauthorized). Kein

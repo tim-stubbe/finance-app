@@ -108,19 +108,25 @@ def get_due_routines(db: Session, now: datetime) -> list[models.Routine]:
     """Routinen, die jetzt fällig sind und heute noch nicht verschickt wurden.
     main._scheduled_routines läuft alle 15 Minuten (:00/:15/:30/:45) - die
     Settings-UI bietet für die Routine-Uhrzeit bewusst nur dieselben vier
-    Minutenwerte an (wie beim Morgen-Briefing, siehe settings-assistent.js),
-    dadurch reicht ein exakter hour/minute-Treffer statt einer Fenster-Logik.
-    last_sent_date fängt trotzdem einen verpassten/verzögerten Lauf ab - eine
-    Routine wird beim nächsten Prüflauf noch am selben Tag nachgemeldet,
-    solange last_sent_date noch nicht gesetzt ist."""
+    Minutenwerte an (wie beim Morgen-Briefing, siehe settings-assistent.js).
+
+    Bugfix (Selbst-Review, Nacht 27./28.08., durch den echten Server-
+    Ausfall in derselben Nacht entdeckt): ein exakter hour/minute-Treffer
+    (frühere Version) fängt einen verpassten Prüflauf NICHT ab, obwohl das
+    genauso hier stand - ein 15-Minuten-Slot, der verpasst wird (Server
+    kurz down, o.ä.), matcht beim nächsten Lauf mit anderer minute()
+    einfach nie mehr, die Routine bleibt für den Tag stumm. Jetzt echtes
+    Nachholen: fällig ist alles, dessen (hour, minute) <= jetzt liegt und
+    das heute noch nicht verschickt wurde - `last_sent_date` verhindert
+    Mehrfachversand am selben Tag, ein zukünftiger Slot feuert weiterhin
+    nicht vorzeitig."""
     weekday_code = WEEKDAY_CODES[now.weekday()]
     today = now.date()
-    routines = (
-        db.query(models.Routine)
-        .filter(models.Routine.active.is_(True), models.Routine.hour == now.hour, models.Routine.minute == now.minute)
-        .all()
-    )
+    now_minutes = now.hour * 60 + now.minute
+    routines = db.query(models.Routine).filter(models.Routine.active.is_(True)).all()
     return [
         r for r in routines
-        if weekday_code in [w.strip() for w in r.weekdays.split(",")] and r.last_sent_date != today
+        if weekday_code in [w.strip() for w in r.weekdays.split(",")]
+        and r.last_sent_date != today
+        and (r.hour * 60 + r.minute) <= now_minutes
     ]

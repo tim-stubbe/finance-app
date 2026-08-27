@@ -666,6 +666,12 @@ class AssistantSuggestionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AssistantSuggestionDecisionIn(BaseModel):
+    """Web-Pendant zu /ok, /später, /nein im Telegram-Bot (siehe
+    crud.decide_pending_suggestion) - dieselbe decision-Werte-Menge."""
+    decision: str  # "accept" | "snooze" | "reject"
+
+
 # ---------- Routinen (Spezifikation Abschnitt G) ----------
 class RoutineBase(BaseModel):
     name: str

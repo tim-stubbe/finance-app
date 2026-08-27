@@ -261,6 +261,20 @@ async function loadHubTab() {
     goalPanel.classList.add("hidden");
   }
 
+  // Onboarding-Checkliste (Spezifikationspunkt F, 2026-08-28) - wieder-
+  // verwendet komplett /integrations/status (dieselben Daten wie das
+  // Einrichtungsstatus-Panel in den Einstellungen), hier nur als knappe
+  // "Als Nächstes"-Liste im Hub statt der vollen Karten-Ansicht. Kein neuer
+  // Endpunkt nötig.
+  await loadHubOnboarding();
+
+  // Jarvis im Hub (Spezifikation Punkt C, 2026-08-28) - dieselben Daten/
+  // Endpunkte wie Telegram (/ok //später/nein, /haengt, "Was Jarvis getan
+  // hat" in den Einstellungen), hier zusätzlich direkt in der App statt nur
+  // per Telegram entscheidbar. Bewusst EIN Panel mit drei Teilen statt drei
+  // Panels, um den Hub nicht mit noch mehr Kacheln zu überladen.
+  await loadHubJarvisPanel();
+
   // Überfällige Projekte/Lebensbereiche/Wunschliste - dasselbe "seit wie
   // lange nicht bestätigt"-Kriterium wie die jeweiligen Telegram-Erinnerungen
   // (main._scheduled_*_reminder), hier zusätzlich sofort sichtbar statt nur
@@ -407,7 +421,144 @@ async function loadHubTab() {
   }
 }
 
-document.getElementById("tab-hub").addEventListener("click", e => {
+// ---------- Onboarding-Checkliste (Spezifikationspunkt F, 2026-08-28) ----------
+function onboardingDismissed() {
+  try { return JSON.parse(localStorage.getItem("hubOnboardingDismissed") || "{}"); } catch { return {}; }
+}
+function onboardingDismiss(name) {
+  const d = onboardingDismissed();
+  d[name] = Date.now();
+  try { localStorage.setItem("hubOnboardingDismissed", JSON.stringify(d)); } catch { /* Storage evtl. blockiert - egal */ }
+}
+
+async function loadHubOnboarding() {
+  const panel = document.getElementById("hub-onboarding-panel");
+  const body = document.getElementById("hub-onboarding-body");
+  try {
+    const data = await api("/integrations/status");
+    const dismissed = onboardingDismissed();
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    // Erledigte Punkte verschwinden automatisch (status !== "ok" Filter),
+    // "Später" blendet einen Punkt für 7 Tage aus statt für immer - taucht
+    // er dann immer noch nicht eingerichtet auf, ist er wieder sichtbar
+    // (kein Tutorial-Modal-Spam, aber auch kein für immer verlorener Hinweis).
+    const items = data.items.filter(it =>
+      it.status !== "ok" && it.status !== "off" && !it.optional &&
+      !(dismissed[it.key] && Date.now() - dismissed[it.key] < WEEK));
+    if (!items.length) {
+      panel.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+    body.innerHTML = items.map(it => `
+      <div class="hub-list-row" style="cursor:default">
+        <button type="button" class="link-btn" data-onboarding-jump="${esc(it.key)}" style="flex:1;text-align:left">${esc(it.name)} einrichten</button>
+        <button type="button" class="link-btn" data-onboarding-dismiss="${esc(it.key)}">Später</button>
+      </div>`).join("");
+  } catch {
+    panel.classList.add("hidden");
+  }
+}
+
+document.getElementById("hub-onboarding-body").addEventListener("click", e => {
+  const dismissName = e.target.closest("[data-onboarding-dismiss]")?.dataset.onboardingDismiss;
+  if (dismissName) {
+    onboardingDismiss(dismissName);
+    loadHubOnboarding();
+    return;
+  }
+  if (e.target.closest("[data-onboarding-jump]")) goToTab("settings");
+});
+
+// ---------- Jarvis im Hub (Spezifikation Punkt C, 2026-08-28) ----------
+// Wiederverwendet komplett bestehende Endpunkte/Logik: offener Vorschlag +
+// Entscheidung (crud.get_pending_suggestion/decide_pending_suggestion, bisher
+// nur per Telegram /ok //später/nein erreichbar - hier neu auch per Web über
+// die zwei ergänzten Endpunkte /assistant/pending-suggestion[/decide]),
+// "Was hängt" (crud.build_hanging_summary, bisher nur /haengt in Telegram)
+// und "Zuletzt vom Assistenten" (crud.get_recent_suggestions, bisher nur in
+// den Einstellungen sichtbar).
+async function loadHubJarvisPanel() {
+  const panel = document.getElementById("hub-jarvis-panel");
+  const suggEl = document.getElementById("hub-jarvis-suggestion");
+  const hangingEl = document.getElementById("hub-jarvis-hanging");
+  const logEl = document.getElementById("hub-jarvis-log");
+  let anyVisible = false;
+
+  try {
+    const pending = await api("/assistant/pending-suggestion");
+    if (pending) {
+      anyVisible = true;
+      suggEl.classList.remove("hidden");
+      suggEl.innerHTML = `
+        <div class="hub-list-row" style="cursor:default">
+          <span>💡 ${esc(pending.title)}</span>
+        </div>
+        <div class="hub-jarvis-actions">
+          <button type="button" class="btn-ghost btn-sm" data-jarvis-decide="accept">✓ Bestätigen</button>
+          <button type="button" class="link-btn" data-jarvis-decide="snooze">Später</button>
+          <button type="button" class="link-btn" data-jarvis-decide="reject">Verwerfen</button>
+        </div>`;
+    } else {
+      suggEl.classList.add("hidden");
+    }
+  } catch {
+    suggEl.classList.add("hidden");
+  }
+
+  try {
+    const { summary } = await api("/assistant/hanging");
+    // Gleicher Text wie /haengt in Telegram - "Gerade hängt nichts." o.ä.
+    // wird bewusst NICHT angezeigt, das Panel bleibt dann einfach leer statt
+    // eine "alles gut"-Zeile zu zeigen, die niemand lesen muss.
+    // Bugfix (Selbst-Review): der Leer-Text (siehe crud.build_hanging_summary)
+    // beginnt mit dem 🕸-Emoji, ein ^-verankertes Regex auf "nichts hängt"
+    // hätte NIE gematcht - das Panel wäre auch bei "alles im grünen Bereich"
+    // immer sichtbar gewesen (Widerspruch zu "nicht nerven, wenn leer").
+    if (summary && !summary.includes("Nichts hängt gerade")) {
+      anyVisible = true;
+      hangingEl.classList.remove("hidden");
+      hangingEl.innerHTML = `<p class="page-sub" style="white-space:pre-line">${esc(summary)}</p>`;
+    } else {
+      hangingEl.classList.add("hidden");
+    }
+  } catch {
+    hangingEl.classList.add("hidden");
+  }
+
+  try {
+    const recent = (await api("/assistant/suggestions")).slice(0, 4);
+    if (recent.length) {
+      anyVisible = true;
+      const statusLabel = { accepted: "✓ übernommen", rejected: "verworfen", snoozed: "verschoben", pending: "offen" };
+      logEl.classList.remove("hidden");
+      logEl.innerHTML = `
+        <p class="page-sub">Zuletzt vom Assistenten</p>
+        ${recent.map(s => `
+          <div class="hub-list-row" style="cursor:default">
+            <span>${esc(s.title)}</span>
+            <span class="page-sub">${statusLabel[s.status] || s.status}</span>
+          </div>`).join("")}`;
+    } else {
+      logEl.classList.add("hidden");
+    }
+  } catch {
+    logEl.classList.add("hidden");
+  }
+
+  panel.classList.toggle("hidden", !anyVisible);
+}
+
+document.getElementById("tab-hub").addEventListener("click", async e => {
+  const decideBtn = e.target.closest("[data-jarvis-decide]");
+  if (decideBtn) {
+    await api("/assistant/pending-suggestion/decide", {
+      method: "POST",
+      body: JSON.stringify({ decision: decideBtn.dataset.jarvisDecide }),
+    }).catch(() => {});
+    await loadHubJarvisPanel();
+    return;
+  }
   const jump = e.target.closest("[data-hub-jump]")?.dataset.hubJump;
   if (jump) goToTab(jump);
 });

@@ -2151,11 +2151,16 @@ def decide_pending_suggestion(db: Session, decision: str) -> tuple[models.Assist
 
     suggestion.status = models.AssistantSuggestionStatus.rejected
     suggestion.decided_at = datetime.utcnow()
-    if suggestion.kind == "category_rule" and suggestion.ref_id:
-        # Der Regel-Entwurf hat ohne Bestätigung keinen Wert mehr - anders
-        # als bei todo_no_date gibt es hier kein bestehendes Objekt, das
-        # unangetastet bleiben soll, der Entwurf WAR nur für diesen Vorschlag da.
-        db.query(models.CategoryRule).filter(models.CategoryRule.id == suggestion.ref_id, models.CategoryRule.active.is_(False)).delete()
+    # Bugfix (Selbst-Review, Nacht 27./28.08.): den Regel-Entwurf hier NICHT
+    # löschen - er bleibt als inaktiver "schon mal abgelehnt"-Marker stehen.
+    # check_for_learnable_correction_pattern() prüft "already" ohne active-
+    # Filter, findet also genau diesen Entwurf und schlägt das Muster nicht
+    # erneut vor. Würde der Entwurf gelöscht (frühere Version), verlor das
+    # System jede Spur der Ablehnung - beim nächsten Lauf mit weiterhin
+    # erfülltem Schwellwert kam prompt ein NEUER Entwurf mit neuer ref_id
+    # (create_suggestion_if_new dedupliziert nur über (kind, ref_id), eine
+    # frische ref_id kann nie kollidieren) und der Nutzer wurde trotz
+    # "wird nicht nochmal vorgeschlagen" erneut gefragt.
     db.commit()
     return suggestion, "Verworfen - wird nicht nochmal vorgeschlagen."
 

@@ -701,6 +701,28 @@ def get_assistant_suggestions(db: Session = Depends(get_db)):
     return crud.get_recent_suggestions(db)
 
 
+@api_router.get("/assistant/pending-suggestion", response_model=Optional[schemas.AssistantSuggestionOut])
+def get_pending_suggestion_endpoint(db: Session = Depends(get_db)):
+    """Web-Pendant zum Telegram-Vorschlag (siehe crud.get_pending_suggestion)
+    - fürs Jarvis-Panel im Hub, damit ein offener Vorschlag nicht nur per
+    Telegram, sondern auch direkt in der App entschieden werden kann.
+    Wiederverwendung derselben "höchstens ein Vorschlag zur Zeit"-Logik."""
+    return crud.get_pending_suggestion(db)
+
+
+@api_router.post("/assistant/pending-suggestion/decide")
+def decide_pending_suggestion_endpoint(data: schemas.AssistantSuggestionDecisionIn, db: Session = Depends(get_db)):
+    """Web-Pendant zu /ok, /später, /nein im Telegram-Bot - exakt dieselbe
+    Entscheidungslogik (siehe crud.decide_pending_suggestion), nur über die
+    Web-App statt Telegram angestoßen."""
+    if data.decision not in ("accept", "snooze", "reject"):
+        raise HTTPException(400, "Ungültige Entscheidung.")
+    suggestion, message = crud.decide_pending_suggestion(db, data.decision)
+    if not suggestion:
+        raise HTTPException(404, message)
+    return {"ok": True, "message": message}
+
+
 # ---------------- Routinen (Spezifikation Abschnitt G) ----------------
 @api_router.get("/routines", response_model=List[schemas.RoutineOut])
 def list_routines(db: Session = Depends(get_db)):
