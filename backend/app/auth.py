@@ -113,6 +113,27 @@ def reset_failed_login(db: Session, settings: models.Settings) -> None:
         db.commit()
 
 
+# Zeitfenster für den Zwischenzustand "Passwort war richtig, TOTP-Code steht
+# noch aus" (request.session["pending_login"], siehe routers/auth_login.py).
+# Ohne dieses Fenster bliebe pending_login unbegrenzt in der Session stehen -
+# ein gestohlenes/mitgelesenes Session-Cookie aus GENAU diesem Zwischenschritt
+# hätte sonst zeitlich unbegrenzt Zeit, den TOTP-Code zu erraten (die
+# eigentliche Bruteforce-Bremse ist check_not_locked_out, dieses Fenster ist
+# eine zusätzliche, unabhängige Absicherung).
+PENDING_LOGIN_MAX_MINUTES = 5
+
+
+def check_pending_login_fresh(request: Request) -> None:
+    """Wirft 401, wenn pending_login zu alt ist oder gar keinen Zeitstempel
+    hat (z.B. eine Session von vor diesem Feature) - räumt die Session in
+    beiden Fällen auf, damit ein erneuter /login-Versuch sauber startet."""
+    started_raw = request.session.get("pending_login_at")
+    started = datetime.fromisoformat(started_raw) if started_raw else None
+    if not started or datetime.utcnow() - started > timedelta(minutes=PENDING_LOGIN_MAX_MINUTES):
+        request.session.clear()
+        raise HTTPException(401, "Anmeldung abgelaufen - bitte Passwort erneut eingeben.")
+
+
 # ---------- Session-Gate für alle geschützten Routen ----------
 # Statt einer globalen Middleware wird das hier als FastAPI-Dependency pro
 # Router am Einbinde-Ort in main.py angehängt (`app.include_router(x,

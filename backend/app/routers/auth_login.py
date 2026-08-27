@@ -140,6 +140,9 @@ def login(data: schemas.LoginIn, request: Request, response: Response, db: Sessi
     if s.totp_enabled:
         request.session.clear()
         request.session["pending_login"] = True
+        # Zeitstempel für das Zeitfenster in auth.check_pending_login_fresh -
+        # ohne den bliebe pending_login unbegrenzt gültig, siehe dort.
+        request.session["pending_login_at"] = datetime.utcnow().isoformat()
         return schemas.LoginOut(authenticated=False, totp_required=True)
 
     auth.reset_failed_login(db, s)
@@ -151,6 +154,7 @@ def login(data: schemas.LoginIn, request: Request, response: Response, db: Sessi
 def totp_verify(data: schemas.TotpVerifyIn, request: Request, response: Response, db: Session = Depends(get_db)):
     if not request.session.get("pending_login"):
         raise HTTPException(401, "Kein ausstehender Login.")
+    auth.check_pending_login_fresh(request)
     s = auth.get_or_create_settings(db)
     auth.check_not_locked_out(s)
     if not s.totp_enabled or not s.totp_secret_encrypted:
@@ -171,6 +175,7 @@ def recovery_login(data: schemas.RecoveryLoginIn, request: Request, response: Re
     schaltet TOTP danach direkt ab, siehe Docstring-Begruendung unten."""
     if not request.session.get("pending_login"):
         raise HTTPException(401, "Kein ausstehender Login.")
+    auth.check_pending_login_fresh(request)
     s = auth.get_or_create_settings(db)
     auth.check_not_locked_out(s)
     if not s.totp_recovery_code_hash or not auth.verify_recovery_code(data.recovery_code.strip(), s.totp_recovery_code_hash):

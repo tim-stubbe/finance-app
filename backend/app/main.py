@@ -364,6 +364,12 @@ app.add_middleware(
     session_cookie="finance_session",
     same_site="lax",
     max_age=60 * 60 * 24 * 30,
+    # Die App läuft ausschließlich per HTTPS (uvicorn --ssl-keyfile/-certfile,
+    # siehe TrueNAS-App-Compose - kein reiner HTTP-Pfad existiert für diesen
+    # Container) - das Session-Cookie deshalb nur noch über TLS übertragen,
+    # sonst könnte es im Klartext mitgelesen werden (z.B. bei einem
+    # Zwischenknoten im LAN ohne TLS-Terminierung).
+    https_only=True,
 )
 
 api_router = APIRouter(prefix="/api")

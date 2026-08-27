@@ -158,9 +158,24 @@ def restore(file: UploadFile = File(...)):
         shutil.copy2(db_path, db_path + ".bak")
 
     zf.extract("finance.db", DATA_DIR)
+    # Bewusst NICHT zf.extract(name, DATA_DIR) - ein präpariertes Zip mit
+    # z.B. "uploads/../../etc/cron.d/x" würde damit außerhalb von UPLOAD_DIR
+    # landen (Zip-Slip). Uploads liegen ohnehin immer flach ohne Unterordner
+    # (siehe main.upload_receipt) - deshalb hier auf den Basename reduziert
+    # und wie bei _resolve_backup_path() oben zusätzlich per realpath gegen
+    # UPLOAD_DIR abgesichert, bevor der Inhalt selbst geschrieben wird.
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     for name in zf.namelist():
-        if name.startswith("uploads/") and not name.endswith("/"):
-            zf.extract(name, DATA_DIR)
+        if not (name.startswith("uploads/") and not name.endswith("/")):
+            continue
+        safe_name = os.path.basename(name)
+        if not safe_name:
+            continue
+        target = os.path.realpath(os.path.join(UPLOAD_DIR, safe_name))
+        if os.path.dirname(target) != os.path.realpath(UPLOAD_DIR):
+            continue
+        with zf.open(name) as src, open(target, "wb") as dst:
+            shutil.copyfileobj(src, dst)
 
     return {
         "ok": True,
