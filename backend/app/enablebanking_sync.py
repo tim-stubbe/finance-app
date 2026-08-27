@@ -188,6 +188,17 @@ def fetch_account_balance(app_id: str, private_key_pem: str, eb_account_id: str,
 def sync(db: Session, conn: models.EnableBankingConnection, app_id: str, private_key_pem: str) -> dict:
     try:
         transactions = get_transactions(app_id, private_key_pem, conn.eb_account_id)
+        # Kurze Pause vor dem zweiten Aufruf (Saldo) - live beobachtet: bei
+        # mehreren Enable-Banking-Konten hintereinander (sync_all_connections
+        # ruft sync() ohne Pause je Verbindung auf, dieser hier macht selbst
+        # schon zwei Aufrufe) reisst Enable Bankings Kurzzeit-Rate-Limit
+        # ("429 Too Many Requests") - besonders spuerbar bei mehreren Konten
+        # UNTER derselben Verbindung (z.B. C24/Finom mit 2-3 Konten), weil
+        # sync_all_connections() dafuer sync() mehrfach kurz hintereinander
+        # aufruft. 8x taeglich (taeglicher Bank-Sync + 7x Digest, siehe
+        # main.DIGEST_HOURS), eine Sekunde Pause faellt dabei nicht ins
+        # Gewicht.
+        time.sleep(1)
         result = import_transactions(db, conn.account_id, transactions)
 
         # Echten Kontostand von der Bank abgleichen, statt ihn blind aus der Summe

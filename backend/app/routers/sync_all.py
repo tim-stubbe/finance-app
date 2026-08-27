@@ -14,6 +14,7 @@ main._scheduled_digest gebraucht, deshalb exportiert und in main.py
 zurueckimportiert - gleiches Muster wie goal_out/immich_credentials/
 run_mail_sync/write_backup_to_disk/HOLDING_ASSET_TYPE_ALIASES."""
 
+import time
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
@@ -68,9 +69,18 @@ def sync_all_connections(db, settings):
 
     if settings.enablebanking_app_id and settings.enablebanking_private_key_encrypted:
         private_key = bank_sync.decrypt_secret(settings.secret_key, settings.enablebanking_private_key_encrypted)
-        for eb_conn in crud.get_all_enablebanking_connections(db):
-            if eb_conn.status != "linked":
-                continue
+        # Pause zwischen den Verbindungen (zusaetzlich zur Pause INNERHALB
+        # von enablebanking_sync.sync() zwischen dessen zwei eigenen
+        # Aufrufen) - live beobachtet: mehrere Enable-Banking-Konten (C24,
+        # Finom, PayPal, ING) kurz hintereinander ohne Pause synct hat
+        # Enable Bankings Kurzzeit-Rate-Limit gerissen ("429 Too Many
+        # Requests"), lief 8x taeglich unbemerkt schief (taeglicher Bank-
+        # Sync + 7x Digest, siehe main.DIGEST_HOURS). Ein paar Sekunden
+        # mehr Laufzeit im Hintergrund-Job faellt nicht ins Gewicht.
+        eb_connections = [c for c in crud.get_all_enablebanking_connections(db) if c.status == "linked"]
+        for i, eb_conn in enumerate(eb_connections):
+            if i > 0:
+                time.sleep(1.5)
             try:
                 enablebanking_sync.sync(db, eb_conn, settings.enablebanking_app_id, private_key)
             except Exception as e:
