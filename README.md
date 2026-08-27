@@ -161,6 +161,11 @@ nach ausdrücklicher Bestätigung.
 - **Kommunikationsstil** (Einstellungen → KI & Automatisierung): kurz /
   freundlich / streng – gilt für den freien KI-Chat (Web + Telegram), Zahlen
   und feste Meldungen (Digest, Erinnerungen) bleiben in jedem Stil unverändert
+- **Lernen aus Korrekturen**: wird dieselbe Buchungs-Gegenstelle mehrfach
+  manuell auf dieselbe Kategorie umgestellt, schlägt Kies eine feste Regel
+  vor (Bestätigung wie bei den übrigen Vorschlägen) – bei Zustimmung direkt
+  rückwirkend auf noch unkategorisierte Buchungen angewendet. Regeln
+  einsehbar/löschbar unter Einstellungen → Benachrichtigungen → „Assistent"
 - Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die
   Weboberfläche und kann To-Dos/Termine/Projekt-Punkte/Check-ins/Wunschlisten-
   Einträge anlegen bzw. abhaken (per festem Kommando oder KI-erkannter

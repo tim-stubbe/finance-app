@@ -660,6 +660,23 @@ def update_communication_style(data: schemas.CommunicationStyleUpdate, db: Sessi
     return schemas.CommunicationStyleOut(style=s.communication_style)
 
 
+@api_router.get("/assistant/category-rules", response_model=List[schemas.CategoryRuleOut])
+def list_category_rules(db: Session = Depends(get_db)):
+    """Transparente Übersicht der aus Korrekturen gelernten Regeln
+    (Spezifikation Abschnitt K: "transparent, abschaltbar")."""
+    return [
+        schemas.CategoryRuleOut(id=r.id, pattern=r.pattern, category_name=r.category.name, created_at=r.created_at)
+        for r in crud.get_category_rules(db)
+    ]
+
+
+@api_router.delete("/assistant/category-rules/{rule_id}")
+def delete_category_rule_endpoint(rule_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_category_rule(db, rule_id):
+        raise HTTPException(404, "Regel nicht gefunden")
+    return {"ok": True}
+
+
 @api_router.get("/assistant/hanging")
 def get_hanging_summary(db: Session = Depends(get_db)):
     """Textuelle "Was hängt"-Übersicht (Spezifikation Abschnitt E) fürs Hub -
@@ -1732,8 +1749,10 @@ SUGGESTION_TODO_NO_DATE_MIN_DAYS = 14  # deckungsgleich mit crud.HANGING_TODO_NO
 
 def _scheduled_suggestion_check():
     """Einmal täglich: erzeugt Jarvis-Vorschläge zur Bestätigung (Spezifikation
-    Abschnitt B) - aktuell EIN konkreter Vorschlagstyp ("todo_no_date": Todo
-    seit N Tagen ohne Datum), weitere Typen (Abo-Preiserhöhung etc.) laufen
+    Abschnitt B) - zwei Vorschlagstypen: "todo_no_date" (Todo seit N Tagen
+    ohne Datum) und "category_rule" (wiederholt manuell korrigierte
+    Kategorisierung, siehe crud.check_for_learnable_correction_pattern -
+    Spezifikationspunkt K). Weitere Typen (Abo-Preiserhöhung etc.) laufen
     bereits als eigene Sofort-Warnung über _scheduled_anomaly_check und werden
     hier bewusst NICHT verdoppelt (Leitprinzip 5). Erzeugt nie einen zweiten
     offenen Vorschlag, solange einer pending ist (siehe crud.
@@ -1753,6 +1772,7 @@ def _scheduled_suggestion_check():
             .order_by(models.Todo.created_at)
             .all()
         )
+        sent = False
         for t in candidates:
             if not t.created_at or (now - t.created_at).days < SUGGESTION_TODO_NO_DATE_MIN_DAYS:
                 continue
@@ -1767,7 +1787,17 @@ def _scheduled_suggestion_check():
                     f"💡 Vorschlag: {suggestion.title}\nAntworte mit /ok (auf heute terminieren), "
                     f"/später (in 7 Tagen erneut fragen) oder /verwerfen.",
                 )
+                sent = True
             break  # nur der erste Kandidat - Rest folgt an den naechsten Tagen
+
+        if not sent:
+            suggestion = crud.check_for_learnable_correction_pattern(db)
+            if suggestion:
+                notifications.notify(
+                    settings,
+                    f"💡 Vorschlag: {suggestion.title}\nAntworte mit /ok (Regel anlegen und rückwirkend "
+                    f"anwenden), /später oder /verwerfen.",
+                )
     finally:
         db.close()
 

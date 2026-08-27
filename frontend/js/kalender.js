@@ -284,6 +284,7 @@ async function loadSettingsTab() {
   await loadMidweekCheckinSettings();
   await loadCommunicationStyle();
   await loadAssistantActivity();
+  await loadCategoryRules();
   await loadRoutinesSettings();
   await loadAlertRules();
   await loadCallSettings();

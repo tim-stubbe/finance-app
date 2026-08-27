@@ -1528,6 +1528,44 @@ class Routine(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class CategoryRule(Base):
+    """Vom Nutzer selbst gelernte Kategorisierungsregel (Spezifikation
+    Abschnitt K: "Lernen aus Korrekturen") - eigenständig von den fest
+    codierten DETERMINISTIC_RULES in ai_auto.py (die sind Code, keine
+    Nutzer-Daten). Startet als DRAFT (active=False), sobald ein Muster
+    mehrfach manuell korrigiert wurde (siehe crud.check_for_learnable_
+    correction_pattern) - erst nach Bestätigung über die AssistantSuggestion-
+    Warteschlange (kind="category_rule") wird sie aktiv und tatsächlich
+    angewendet (siehe ai_auto._apply_learned_rules). Transparent einsehbar/
+    löschbar in den Einstellungen."""
+
+    __tablename__ = "category_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pattern = Column(String, nullable=False)  # klein geschriebener Teilstring, gegen description gematcht
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    active = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    category = relationship("Category")
+
+
+class CategoryCorrection(Base):
+    """Ein Log-Eintrag pro manueller Umkategorisierung (siehe
+    crud.update_transaction) - Grundlage für die Muster-Erkennung in
+    crud.check_for_learnable_correction_pattern. Nur RE-Kategorisierungen
+    (alte Kategorie war bereits gesetzt), keine Erstzuordnung - eine
+    erstmalige manuelle Zuordnung ist keine "Korrektur" einer KI-
+    Fehleinschätzung."""
+
+    __tablename__ = "category_corrections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    merchant_key = Column(String, nullable=False, index=True)
+    new_category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class RoutineRun(Base):
     """Der heutige Abhak-Stand einer Routine (siehe models.Routine) - eine
     Zeile pro (Routine, Datum), erst bei der ersten Interaktion angelegt

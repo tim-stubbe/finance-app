@@ -641,6 +641,13 @@ class CommunicationStyleUpdate(BaseModel):
     style: str
 
 
+class CategoryRuleOut(BaseModel):
+    id: int
+    pattern: str
+    category_name: str
+    created_at: datetime
+
+
 class AssistantSuggestionOut(BaseModel):
     id: int
     kind: str

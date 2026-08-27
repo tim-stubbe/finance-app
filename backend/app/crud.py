@@ -89,6 +89,21 @@ from .crud_routines import (
 CACHE_TTL = timedelta(hours=24)
 
 
+def _merchant_key(description: str | None) -> str:
+    """Grobe Gegenstellen-Kennung aus einer Buchungsbeschreibung - erste ein
+    bis zwei alphanumerische "Wörter" (Bank-Buchungstexte beginnen fast immer
+    mit dem Händlernamen, z.B. "REWE SAGT DANKE 123456", "PAYPAL *SPOTIFY") -
+    ignoriert reine Zahlen/Referenznummern als eigenes Wort, die würden sonst
+    Buchungen desselben Händlers künstlich auseinanderreißen. Für "Lernen aus
+    Korrekturen" (Spezifikation Abschnitt K) - dieselbe Normalisierung beim
+    Loggen einer Korrektur (siehe update_transaction) und beim späteren
+    Anwenden einer daraus gelernten Regel (siehe ai_auto._apply_learned_rules)."""
+    if not description:
+        return ""
+    words = [w for w in re.findall(r"[a-zA-ZäöüÄÖÜß]+", description) if len(w) >= 3]
+    return " ".join(words[:2]).lower()
+
+
 def _as_date(value) -> date:
     """Normalisiert das Datum einer importierten Buchung auf ein echtes date-Objekt.
 
@@ -1462,6 +1477,13 @@ def update_transaction(db: Session, transaction_id: int, space_id: int, data: sc
             db_transaction.import_hash = hashlib.sha256(new_hash_input.encode()).hexdigest()
     if changes.get("category_id") is not None and changes["category_id"] != db_transaction.category_id:
         db_transaction.categorized_at = datetime.utcnow()
+        # "Lernen aus Korrekturen" (Spezifikation Abschnitt K) - nur echte
+        # Korrekturen zaehlen (vorherige Kategorie war schon gesetzt), keine
+        # Erstzuordnung eines bisher unkategorisierten Postens.
+        if db_transaction.category_id is not None:
+            merchant_key = _merchant_key(db_transaction.description)
+            if merchant_key:
+                db.add(models.CategoryCorrection(merchant_key=merchant_key, new_category_id=changes["category_id"]))
     for key, value in changes.items():
         setattr(db_transaction, key, value)
     db.commit()
@@ -2059,6 +2081,26 @@ def decide_pending_suggestion(db: Session, decision: str) -> tuple[models.Assist
             if todo and not todo.done:
                 todo.due_date = date.today()
                 result = f"✓ „{todo.title}“ auf heute terminiert."
+        elif suggestion.kind == "category_rule" and suggestion.ref_id:
+            rule = db.query(models.CategoryRule).filter(models.CategoryRule.id == suggestion.ref_id).first()
+            if rule:
+                rule.active = True
+                # Rueckwirkend auf bisher UNKATEGORISIERTE Buchungen anwenden -
+                # bereits kategorisierte (auch die urspruenglich falschen, die
+                # zur Korrektur gefuehrt haben) bleiben unangetastet, keine
+                # stille Masse-Aenderung an bestaetigten Buchungen.
+                matches = (
+                    db.query(models.Transaction)
+                    .filter(models.Transaction.category_id.is_(None), models.Transaction.description.isnot(None))
+                    .all()
+                )
+                n = 0
+                for t in matches:
+                    if _merchant_key(t.description) == rule.pattern:
+                        t.category_id = rule.category_id
+                        t.categorized_at = datetime.utcnow()
+                        n += 1
+                result = f"✓ Regel angelegt (Muster „{rule.pattern}“) - {n} bestehende Buchung(en) direkt zugeordnet."
         db.commit()
         return suggestion, result
 
@@ -2071,8 +2113,79 @@ def decide_pending_suggestion(db: Session, decision: str) -> tuple[models.Assist
 
     suggestion.status = models.AssistantSuggestionStatus.rejected
     suggestion.decided_at = datetime.utcnow()
+    if suggestion.kind == "category_rule" and suggestion.ref_id:
+        # Der Regel-Entwurf hat ohne Bestätigung keinen Wert mehr - anders
+        # als bei todo_no_date gibt es hier kein bestehendes Objekt, das
+        # unangetastet bleiben soll, der Entwurf WAR nur für diesen Vorschlag da.
+        db.query(models.CategoryRule).filter(models.CategoryRule.id == suggestion.ref_id, models.CategoryRule.active.is_(False)).delete()
     db.commit()
     return suggestion, "Verworfen - wird nicht nochmal vorgeschlagen."
+
+
+CATEGORY_RULE_LEARN_THRESHOLD = 3
+
+
+def check_for_learnable_correction_pattern(db: Session) -> models.AssistantSuggestion | None:
+    """"Lernen aus Korrekturen" (Spezifikation Abschnitt K) - findet ein
+    (Gegenstelle, Zielkategorie)-Muster, das mindestens CATEGORY_RULE_LEARN_
+    THRESHOLD-mal manuell korrigiert wurde (siehe update_transaction), für
+    das es aber noch KEINE Regel und KEINEN (auch abgelehnten) Vorschlag
+    gibt, legt dafür einen DRAFT models.CategoryRule an (active=False, wird
+    erst bei Bestätigung scharf, siehe decide_pending_suggestion) und stellt
+    ihn als AssistantSuggestion zur Bestätigung - Wiederverwendung derselben
+    Vorschlags-Warteschlange wie Punkt B, kein zweites System.
+
+    Nur EIN Muster pro Aufruf (main._scheduled_suggestion_check ruft das
+    bereits nur auf, wenn kein anderer Vorschlag pending ist, siehe dort -
+    "höchstens ein Vorschlag zur Zeit" gilt für JEDE Vorschlagsart)."""
+    rows = (
+        db.query(
+            models.CategoryCorrection.merchant_key, models.CategoryCorrection.new_category_id,
+            func.count().label("n"),
+        )
+        .group_by(models.CategoryCorrection.merchant_key, models.CategoryCorrection.new_category_id)
+        .having(func.count() >= CATEGORY_RULE_LEARN_THRESHOLD)
+        .all()
+    )
+    for merchant_key, new_category_id, n in rows:
+        already = db.query(models.CategoryRule).filter_by(pattern=merchant_key, category_id=new_category_id).first()
+        if already:
+            continue
+        category = db.query(models.Category).filter(models.Category.id == new_category_id).first()
+        if not category:
+            continue
+        draft = models.CategoryRule(pattern=merchant_key, category_id=new_category_id, active=False)
+        db.add(draft)
+        db.flush()  # id verfuegbar, ohne die Suggestion-Erstellung schon zu committen
+        title = f"Buchungen mit „{merchant_key}“ {n}x manuell auf „{category.name}“ korrigiert - Regel anlegen?"
+        suggestion = create_suggestion_if_new(db, kind="category_rule", ref_id=draft.id, title=title)
+        if suggestion:
+            db.commit()
+            return suggestion
+        db.rollback()  # zu diesem Muster existiert schon ein (ggf. abgelehnter) Vorschlag - Entwurf verwerfen
+    return None
+
+
+def get_category_rules(db: Session) -> list[models.CategoryRule]:
+    """Nur AKTIVE (bestätigte) Regeln - Entwürfe (active=False) sind reine
+    Zwischenzustände während ein Vorschlag noch offen ist, siehe
+    check_for_learnable_correction_pattern. Für die Transparenz-Ansicht in
+    den Einstellungen (Spezifikation Abschnitt K: "transparent, abschaltbar")."""
+    return (
+        db.query(models.CategoryRule)
+        .filter(models.CategoryRule.active.is_(True))
+        .order_by(models.CategoryRule.created_at.desc())
+        .all()
+    )
+
+
+def delete_category_rule(db: Session, rule_id: int) -> bool:
+    rule = db.query(models.CategoryRule).filter(models.CategoryRule.id == rule_id).first()
+    if not rule:
+        return False
+    db.delete(rule)
+    db.commit()
+    return True
 
 
 def get_recent_suggestions(db: Session, limit: int = 20) -> list[models.AssistantSuggestion]:

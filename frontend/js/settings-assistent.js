@@ -156,6 +156,34 @@ async function loadAssistantActivity() {
     </li>`).join("");
 }
 
+// ---------- Gelernte Kategorisierungsregeln (Spezifikationspunkt K) ----------
+async function loadCategoryRules() {
+  const list = document.getElementById("category-rules-list");
+  let rules = [];
+  try {
+    rules = await api("/assistant/category-rules");
+  } catch (e) {
+    return;
+  }
+  if (!rules.length) {
+    list.innerHTML = `<li class="page-sub" style="background:none;padding:0">Noch keine Regeln gelernt.</li>`;
+    return;
+  }
+  list.innerHTML = rules.map(r => `
+    <li>
+      <span>„${esc(r.pattern)}“ → ${esc(r.category_name)}</span>
+      <button type="button" class="btn-ghost btn-sm" data-delete-category-rule="${r.id}">Löschen</button>
+    </li>`).join("");
+}
+
+document.getElementById("category-rules-list").addEventListener("click", async e => {
+  const btn = e.target.closest("[data-delete-category-rule]");
+  if (!btn) return;
+  if (!confirm("Regel wirklich löschen? Bereits automatisch zugeordnete Buchungen bleiben unverändert.")) return;
+  await api(`/assistant/category-rules/${btn.dataset.deleteCategoryRule}`, { method: "DELETE" });
+  loadCategoryRules();
+});
+
 // ---------- Routinen (Einstellungen: anlegen/löschen; Abhaken im Hub, siehe dashboard.js) ----------
 const WEEKDAY_LABELS_DE = { mon: "Mo", tue: "Di", wed: "Mi", thu: "Do", fri: "Fr", sat: "Sa", sun: "So" };
 

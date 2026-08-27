@@ -35,6 +35,31 @@ DETERMINISTIC_RULES = [
 ]
 
 
+def _apply_learned_rules(db: Session, pending: list[models.Transaction]) -> tuple[list[models.Transaction], int]:
+    """Wendet vom Nutzer bestätigte, gelernte Regeln an (Spezifikation
+    Abschnitt K, siehe crud.check_for_learnable_correction_pattern) - gleiches
+    Prinzip wie _apply_deterministic_rules (Code-Konstante), nur aus
+    models.CategoryRule (Nutzer-Daten) statt DETERMINISTIC_RULES."""
+    rules = db.query(models.CategoryRule).filter(models.CategoryRule.active.is_(True)).all()
+    if not rules:
+        return pending, 0
+    remaining = []
+    matched = 0
+    for t in pending:
+        key = crud._merchant_key(t.description)
+        hit = False
+        for rule in rules:
+            if key == rule.pattern:
+                t.category_id = rule.category_id
+                t.categorized_at = datetime.utcnow()
+                matched += 1
+                hit = True
+                break
+        if not hit:
+            remaining.append(t)
+    return remaining, matched
+
+
 def _apply_deterministic_rules(pending: list[models.Transaction], cat_by_name: dict) -> tuple[list[models.Transaction], int]:
     remaining = []
     matched = 0
@@ -134,7 +159,9 @@ def auto_categorize(db: Session, space_id: int, settings: models.Settings) -> Ca
     queued = 0
     pending, deterministic_hits = _apply_deterministic_rules(pending, cat_by_name)
     categorized += deterministic_hits
-    if deterministic_hits:
+    pending, learned_hits = _apply_learned_rules(db, pending)
+    categorized += learned_hits
+    if deterministic_hits or learned_hits:
         db.commit()
     if not pending:
         return CategorizeResult(categorized, skipped, queued, None)
