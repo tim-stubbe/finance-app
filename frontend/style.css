@@ -898,6 +898,18 @@ button.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 }
 .hub-list-row span:last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
+/* Reise-Banner (siehe dashboard.js:loadTodayPanel) - Spalte statt Zeile,
+   weil hier zusätzlich ein .budget-track-Balken reinpasst, der als
+   normales Flex-Zeilen-Kind (kein eigenes width) sonst auf fast null
+   zusammenschrumpfen würde. */
+.hub-trip-banner {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.hub-trip-banner span:first-child { white-space: normal; }
+.hub-trip-banner .budget-track { width: 100%; }
+
 .hub-goal-row {
   display: block;
   width: 100%;

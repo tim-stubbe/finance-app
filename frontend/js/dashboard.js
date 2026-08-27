@@ -54,6 +54,11 @@ async function loadTodayPanel() {
   // keine eigene Auswertung hier nötig). Budget-Balken per .budget-track/
   // .budget-fill - dasselbe Muster wie im Reisen-Tab selbst (siehe
   // trips.js:loadTrips), nur ohne Budget bleibt es bei den Ist-Ausgaben.
+  // Eigene .hub-trip-banner-Klasse statt der normalen .hub-list-row-Zeile:
+  // die ist eine flex-row mit genau zwei Kindern (Label links, Wert rechts)
+  // - .budget-track hat kein eigenes width und bräuchte als drittes Flex-
+  // Kind darin sonst auf fast null zusammen (siehe style.css), deshalb hier
+  // explizit als Spalte statt als Zeile.
   const tripBanner = data.active_trip ? (() => {
     const t = data.active_trip;
     let progress = "";
@@ -66,7 +71,7 @@ async function loadTodayPanel() {
     } else {
       progress = `<span class="page-sub">${eur(t.total_spent)} ausgegeben, ${t.transaction_count} Buchung${t.transaction_count !== 1 ? "en" : ""}</span>`;
     }
-    return `<button type="button" class="hub-list-row" data-hub-jump="trips">
+    return `<button type="button" class="hub-list-row hub-trip-banner" data-hub-jump="trips">
       <span>✈️ Reise aktiv: <strong>${esc(t.name)}</strong></span>
       ${progress}
     </button>`;
