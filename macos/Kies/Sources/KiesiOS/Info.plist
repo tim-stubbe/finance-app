@@ -2,15 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!--
-	GENERATE_INFOPLIST_FILE ist NO (siehe project.yml) - Xcode ergänzt dann
-	NICHT automatisch die sonst üblichen Basis-Schlüssel (CFBundleIdentifier
-	usw.), die müssen hier vollständig selbst stehen. Live verifiziert:
-	ohne CFBundleIdentifier/-Executable/-Name/-PackageType schlägt schon die
-	Installation im Simulator mit "Missing bundle ID" fehl.
-	-->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Kies</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,45 +14,10 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundleDisplayName</key>
-	<string>Kies</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<!-- Kein Storyboard - leerer Systembildschirm reicht für eine reine
-	     SwiftUI-App, ab iOS 14 ohne eigene .storyboard-Datei möglich. -->
-	<key>UILaunchScreen</key>
-	<dict/>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>arm64</string>
-	</array>
-	<!--
-	Der Kies-Server läuft mit einem selbstsignierten TLS-Zertifikat (siehe
-	backend/README bzw. docker-compose) und ist ausschließlich über
-	Tailscale erreichbar, nie offen aus dem Internet - dieselbe Vertrauens-
-	grenze wie bei der Web-App (siehe README.md "Zugriffsschutz"). Ohne
-	diese Ausnahme blockiert App Transport Security die Verbindung schon
-	vor dem eigenen URLSessionDelegate (SyncClient.swift), der das
-	Zertifikat eigentlich bewusst akzeptiert - NSURLErrorDomain -1200
-	"A TLS error caused the secure connection to fail".
-	-->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-	<!--
-	URL-Schema fürs Widget-Deep-Link (KiesWidget: .widgetURL(kies://today)) -
-	siehe KiesiOSApp.onOpenURL für die Auswertung (setzt TabRouter.selection).
-	Kein Universal Link (https://...): würde eine per HTTPS erreichbare
-	apple-app-site-association-Datei auf einer echten Domain brauchen - für
-	eine Single-User-App, die ohnehin nur via Tailscale erreichbar ist,
-	unnötiger Aufwand gegenüber einem simplen Custom-Scheme.
-	-->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -68,6 +28,19 @@
 				<string>kies</string>
 			</array>
 		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
 	</array>
 </dict>
 </plist>

@@ -7,3 +7,8 @@
 # xcodegen zu installieren. Nach jeder project.yml-Änderung erneut
 # `xcodegen generate` laufen lassen und den Diff mit committen.
 !Kies.xcodeproj/
+# ...aber der private UI-Zustand (Fenster-Layout, offene Tabs) pro
+# Xcode-Nutzer ist trotzdem nichts fürs Repo - wird jedes Mal neu erzeugt,
+# sobald jemand das Projekt öffnet.
+Kies.xcodeproj/xcuserdata/
+Kies.xcodeproj/project.xcworkspace/xcuserdata/

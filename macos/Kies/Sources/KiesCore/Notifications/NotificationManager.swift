@@ -51,7 +51,12 @@ public final class NotificationManager: ObservableObject {
     /// gerade erst aufgetretenen Sync-Fehler (nicht bei jedem Retry erneut).
     public func checkAndNotify(db: DatabaseQueue, lastError: String?) async {
         guard enabled else { return }
-        var notifiedIDs = Set(UserDefaults.standard.stringArray(forKey: Self.notifiedIDsKey) ?? [])
+        // Reihenfolge bewusst als Array gehalten (nicht nur als Set) - der
+        // Wachstumsdeckel unten (`suffix(500)`) soll die ZULETZT gemeldeten
+        // IDs behalten, ein Set hat aber keine stabile Reihenfolge, `suffix`
+        // darauf hätte willkürliche statt der neuesten IDs behalten.
+        var notifiedOrder = UserDefaults.standard.stringArray(forKey: Self.notifiedIDsKey) ?? []
+        let notifiedIDs = Set(notifiedOrder)
         var newNotifications: [(id: String, title: String, body: String)] = []
 
         let today = DateFormatter.isoDate.string(from: Date())
@@ -82,16 +87,18 @@ public final class NotificationManager: ObservableObject {
 
         for n in newNotifications {
             await schedule(identifier: n.id, title: n.title, body: n.body)
-            notifiedIDs.insert(n.id)
+            notifiedOrder.append(n.id)
         }
         // Wachstumsdeckel: alte IDs (z.B. längst erledigte Todos, deren
         // due_date nicht mehr auftaucht) würden die Liste sonst unbegrenzt
         // wachsen lassen - auf die zuletzt 500 begrenzen statt eine
-        // aufwendige Bereinigung zu bauen.
-        if notifiedIDs.count > 500 {
-            notifiedIDs = Set(notifiedIDs.suffix(500))
+        // aufwendige Bereinigung zu bauen. `suffix` auf dem geordneten
+        // Array (nicht auf notifiedIDs, das Set hat keine stabile
+        // Reihenfolge) behält wirklich die zuletzt gemeldeten IDs.
+        if notifiedOrder.count > 500 {
+            notifiedOrder = Array(notifiedOrder.suffix(500))
         }
-        UserDefaults.standard.set(Array(notifiedIDs), forKey: Self.notifiedIDsKey)
+        UserDefaults.standard.set(notifiedOrder, forKey: Self.notifiedIDsKey)
 
         let lastNotifiedError = UserDefaults.standard.string(forKey: Self.lastErrorNotifiedKey)
         if let lastError, lastError != lastNotifiedError {

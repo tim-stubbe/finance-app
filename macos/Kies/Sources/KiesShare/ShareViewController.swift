@@ -38,26 +38,34 @@ final class ShareViewController: UIViewController {
     /// Safari teilt i.d.R. eine URL, Mail/Notizen/Banking-Apps oft reinen
     /// Text (z.B. markierter Betrag/Buchungstext). Beides wird versucht,
     /// URL zuerst (spezifischerer Typ).
+    ///
+    /// Titel-Priorität attributedTitle vor attributedContentText: bei einem
+    /// Safari-Seiten-Share ist attributedContentText fast immer leer, der
+    /// eigentliche Seitentitel ("Kaffeemaschine XY – 49,99€ | Amazon.de")
+    /// steckt in attributedTitle - ohne den Vorrang wäre ShareComposeView
+    /// (fällt sonst auf die reine URL-Domain zurück) für den häufigsten
+    /// Fall (aus Safari teilen) deutlich weniger nützlich vorausgefüllt.
     private func extractSharedContent(completion: @escaping (String?, URL?) -> Void) {
         guard let item = extensionContext?.inputItems.first as? NSExtensionItem,
               let attachment = item.attachments?.first else {
             completion(nil, nil)
             return
         }
+        let fallbackText = item.attributedTitle?.string ?? item.attributedContentText?.string
         if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
             attachment.loadItem(forTypeIdentifier: UTType.url.identifier) { data, _ in
                 DispatchQueue.main.async {
-                    completion(item.attributedContentText?.string, data as? URL)
+                    completion(fallbackText, data as? URL)
                 }
             }
         } else if attachment.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
             attachment.loadItem(forTypeIdentifier: UTType.plainText.identifier) { data, _ in
                 DispatchQueue.main.async {
-                    completion(data as? String ?? item.attributedContentText?.string, nil)
+                    completion(data as? String ?? fallbackText, nil)
                 }
             }
         } else {
-            completion(item.attributedContentText?.string, nil)
+            completion(fallbackText, nil)
         }
     }
 }
