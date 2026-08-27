@@ -107,6 +107,7 @@ class TripOut(BaseModel):
     budget: Optional[float] = None
     total_spent: float = 0.0
     transaction_count: int = 0
+    missing_receipts_count: int = 0
 
 
 # ---------- Transaction ----------

@@ -71,9 +71,13 @@ async function loadTodayPanel() {
     } else {
       progress = `<span class="page-sub">${eur(t.total_spent)} ausgegeben, ${t.transaction_count} Buchung${t.transaction_count !== 1 ? "en" : ""}</span>`;
     }
+    const belegHinweis = t.missing_receipts_count
+      ? `<span class="page-sub">📎 ${t.missing_receipts_count} Ausgabe${t.missing_receipts_count !== 1 ? "n" : ""} ohne Beleg</span>`
+      : "";
     return `<button type="button" class="hub-list-row hub-trip-banner" data-hub-jump="trips">
       <span>✈️ Reise aktiv: <strong>${esc(t.name)}</strong></span>
       ${progress}
+      ${belegHinweis}
     </button>`;
   })() : "";
 

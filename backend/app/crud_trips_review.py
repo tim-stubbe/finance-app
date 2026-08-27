@@ -64,6 +64,19 @@ def trip_summary(db: Session, trip: models.Trip):
         .filter(models.Transaction.trip_id == trip.id)
         .scalar()
     )
+    # Reise-Modus schärfen (Spezifikation Abschnitt H: "Beleg?"-Kurzhinweis bei
+    # Ausgaben während der Reise) - reiner Zähler statt einer eigenen
+    # proaktiven Meldung pro fehlendem Beleg (wäre schnell nervig, siehe
+    # Leitprinzip 1), wird stattdessen passiv im Hub-Reise-Banner angezeigt.
+    missing_receipts = (
+        db.query(func.count(models.Transaction.id))
+        .filter(
+            models.Transaction.trip_id == trip.id,
+            models.Transaction.amount < 0,
+            models.Transaction.receipt_filename.is_(None),
+        )
+        .scalar()
+    )
     return schemas.TripOut(
         id=trip.id,
         name=trip.name,
@@ -72,6 +85,7 @@ def trip_summary(db: Session, trip: models.Trip):
         budget=trip.budget,
         total_spent=round(abs(min(0.0, total or 0.0)), 2),
         transaction_count=count or 0,
+        missing_receipts_count=missing_receipts or 0,
     )
 
 

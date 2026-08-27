@@ -1896,6 +1896,28 @@ def build_morning_briefing(
     lines = [f"☀️ Guten Morgen ({today.strftime('%d.%m.%Y')}):"]
     has_content = False
 
+    # Reise-Modus (Spezifikation Abschnitt H) - gleiche Erkennung wie /today
+    # (main.today_overview: active_trip), hier zusätzlich im Briefing erwähnt.
+    for t in get_trips(db, space_id):
+        if t.start_date and t.end_date and t.start_date <= today <= t.end_date:
+            trip = trip_summary(db, t)
+            has_content = True
+            if trip.budget:
+                lines.append(
+                    f"\n✈️ Reise „{trip.name}“ läuft: {trip.total_spent:.2f} von {trip.budget:.2f} EUR Budget "
+                    f"ausgegeben."
+                )
+            else:
+                lines.append(
+                    f"\n✈️ Reise „{trip.name}“ läuft: {trip.total_spent:.2f} EUR bisher ({trip.transaction_count} "
+                    f"Buchung(en))."
+                )
+            if trip.missing_receipts_count:
+                lines.append(
+                    f"📎 {trip.missing_receipts_count} Ausgabe(n) auf der Reise noch ohne Beleg."
+                )
+            break  # zwei gleichzeitig aktive Trips sind ein Datenfehler, nicht vorgesehen (wie in /today)
+
     raw_events = get_calendar_events(db, day_start, day_end)
     if raw_events:
         has_content = True
