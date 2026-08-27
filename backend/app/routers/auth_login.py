@@ -260,10 +260,17 @@ def webauthn_login_verify(
 @auth_protected_router.put("/password")
 def change_password(data: schemas.PasswordChangeIn, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
+    # Gleiches Lockout wie bei login/totp_verify/recovery_login (Sicherheits-
+    # pruefung: hier fehlte es bisher) - eine gestohlene, bereits angemeldete
+    # Session ohne Kenntnis des Passworts koennte sonst current_password
+    # unbegrenzt durchprobieren und danach dauerhaft uebernehmen.
+    auth.check_not_locked_out(s)
     if not s.password_hash or not auth.verify_password(data.current_password, s.password_hash):
+        auth.register_failed_login(db, s)
         raise HTTPException(401, "Aktuelles Passwort ist falsch.")
     if len(data.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(400, f"Neues Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein.")
+    auth.reset_failed_login(db, s)
     s.password_hash = auth.hash_password(data.new_password)
     s.password_set_at = datetime.utcnow()
     db.commit()
