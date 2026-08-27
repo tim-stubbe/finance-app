@@ -215,6 +215,24 @@ def set_debt_balance(db: Session, debt: models.Debt, new_balance: float, source:
     return debt
 
 
+def find_account_by_name(db: Session, space_id: int, name_query: str) -> tuple[models.Account | None, str | None]:
+    """Gleiches (Teil-)Namens-Matching wie set_balance_by_name (accounts-
+    Teil), als eigene Funktion für die schnelle Ausgabe per Telegram (siehe
+    telegram_bot._handle_expense_command, Spezifikationspunkt D "einheitliche
+    Absichten") - bewusst KEIN Rateversuch bei Mehrdeutigkeit, das Konto für
+    eine Geldbuchung ist genauso wenig verhandelbar wie der Betrag selbst."""
+    accounts = get_accounts(db, space_id)
+    q = name_query.strip().lower()
+    matches = [a for a in accounts if q in a.name.lower()]
+    if not matches:
+        namen = ", ".join(a.name for a in accounts)
+        return None, f"Kein Konto mit „{name_query}“ gefunden. Vorhanden: {namen}"
+    if len(matches) > 1:
+        namen = ", ".join(a.name for a in matches)
+        return None, f"„{name_query}“ ist nicht eindeutig, passt auf: {namen}. Bitte genauer benennen."
+    return matches[0], None
+
+
 def set_balance_by_name(db: Session, space_id: int, name_query: str, new_balance: float, source: str = "telegram"):
     """Setzt den aktuellen Saldo (Konto ODER Schuld, z.B. eine Kreditkarte als
     Dispo/Kreditlinie) über einen (Teil-)Namen statt einer ID - fürs Telegram-

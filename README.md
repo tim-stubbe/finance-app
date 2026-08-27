@@ -154,8 +154,10 @@ nach ausdrücklicher Bestätigung.
 - Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die
   Weboberfläche und kann To-Dos/Termine/Projekt-Punkte/Check-ins/Wunschlisten-
   Einträge anlegen bzw. abhaken (per festem Kommando oder KI-erkannter
-  Absicht, mit Bestätigungsmeldung) – Kontostände bleiben davon ausdrücklich
-  ausgenommen (`/saldo` ist die einzige Ausnahme, ohne KI-Interpretation)
+  Absicht, mit Bestätigungsmeldung) – Kontostände und Buchungen bleiben davon
+  ausdrücklich ausgenommen: `/saldo <Konto> <Betrag>` und
+  `/ausgabe <Konto>; <Betrag>; <Text>` sind feste Kommandos ohne
+  KI-Interpretation, bei Geld wird nichts geraten
 - Telefonanrufe über Twilio, ausschließlich für wirklich zeitkritische Fälle
   (Ziel erreicht, akuter Liquiditätsengpass innerhalb von ein bis drei Tagen)
 

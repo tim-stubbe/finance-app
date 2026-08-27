@@ -44,7 +44,7 @@ from datetime import date, datetime, timedelta
 
 import requests
 
-from . import auth, bank_sync, crud, models, ollama_client, radicale_sync, schemas, websearch
+from . import ai_auto, auth, bank_sync, crud, models, ollama_client, radicale_sync, schemas, websearch
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
@@ -103,6 +103,14 @@ _SUGGESTION_LATER_CMD_RE = re.compile(r"^/sp(ä|ae)ter\s*$", re.IGNORECASE)
 _SUGGESTION_DISMISS_CMD_RE = re.compile(r"^/verwerfen\s*$", re.IGNORECASE)
 # Format: /haengt - Zusammenfassung auf Zuruf (siehe crud.get_hanging_items).
 _HANGING_CMD_RE = re.compile(r"^/h(ä|ae)ngt\s*$", re.IGNORECASE)
+# Format: /ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
+# Abschnitt D). Bewusst ein FESTES Kommando statt KI-Freitext-Erkennung wie
+# bei Todo/Termin/Projekt/Leben (siehe _execute_action) - bei Geld soll
+# genau wie bei /saldo nichts geraten werden, das Konto muss explizit
+# genannt werden.
+_EXPENSE_CMD_RE = re.compile(
+    r"^/ausgabe\s+(.+?)\s*;\s*(-?\d+(?:[.,]\d{1,2})?)\s*€?\s*;\s*(.+)$", re.IGNORECASE,
+)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -561,6 +569,51 @@ def _handle_hanging_command(db, settings, token: str, chat_id: str, text: str) -
     return True
 
 
+def _handle_expense_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
+    Abschnitt D). Legt die Buchung sofort an (Betrag als Ausgabe, also negativ,
+    unabhängig vom Vorzeichen in der Nachricht - "/ausgabe Girokonto; 12,50;
+    Rewe" ist eindeutig eine Ausgabe, kein Zwang für den Nutzer, ein Minus zu
+    tippen). Kategorie NUR gesetzt, wenn eine bestehende feste Regel
+    (eigene-regeln, siehe ai_auto._apply_deterministic_rules) sofort und
+    ohne KI-Rateversuch zutrifft - sonst bleibt sie offen und wird wie jede
+    andere unkategorisierte Buchung vom stündlichen Lauf (oder der KI-Review-
+    Warteschlange) übernommen. Kein KI-Aufruf hier: der wäre bei einer
+    Geldbuchung ("Kategorie vorschlagen") ein Ratespiel, keine feste Regel -
+    passt nicht zu Leitprinzip 2."""
+    match = _EXPENSE_CMD_RE.match(text.strip())
+    if not match:
+        return False
+    account_query, amount_raw, description = match.groups()
+    try:
+        amount = -abs(float(amount_raw.replace(",", ".")))
+    except ValueError:
+        _send(token, chat_id, f"„{amount_raw}“ ist kein gültiger Betrag.")
+        return True
+    space = crud.get_spaces(db)[0]
+    account, error = crud.find_account_by_name(db, space.id, account_query)
+    if error:
+        _send(token, chat_id, error)
+        return True
+    tx = crud.create_transaction(db, schemas.TransactionCreate(
+        date=date.today(), amount=amount, description=description.strip(), account_id=account.id,
+    ))
+    kategorie_hinweis = "wird automatisch kategorisiert"
+    categories = crud.get_categories(db)
+    cat_by_name = {c.name.strip().lower(): c for c in categories}
+    _, hits = ai_auto._apply_deterministic_rules([tx], cat_by_name)
+    if hits:
+        db.commit()
+        matched_cat = next((c for c in cat_by_name.values() if c.id == tx.category_id), None)
+        if matched_cat:
+            kategorie_hinweis = f"Kategorie „{matched_cat.name}“ (per Regel erkannt)"
+    _send(
+        token, chat_id,
+        f"✓ {abs(amount):.2f} € „{description.strip()}“ auf „{account.name}“ gebucht - {kategorie_hinweis}.",
+    )
+    return True
+
+
 def _execute_action(db, settings, action: dict) -> str:
     """Führt einen von der KI erkannten Aktions-Block aus und gibt die
     Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
@@ -737,6 +790,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_suggestion_reply(db, settings, token, chat_id, text):
         return
     if _handle_hanging_command(db, settings, token, chat_id, text):
+        return
+    if _handle_expense_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model
