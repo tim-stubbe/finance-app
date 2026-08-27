@@ -67,7 +67,11 @@ document.getElementById("ai-portfolio-btn").addEventListener("click", async () =
   resultEl.classList.add("loading-pulse");
   try {
     const result = await api("/ai/portfolio-insight", { method: "POST" });
-    resultEl.textContent = result.error ? `Fehler: ${result.error}` : result.text;
+    if (result.error) {
+      resultEl.textContent = `Fehler: ${result.error}`;
+    } else {
+      renderAiText(resultEl, result.text);
+    }
   } catch (e) {
     resultEl.textContent = "Analyse fehlgeschlagen.";
   } finally {

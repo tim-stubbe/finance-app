@@ -134,6 +134,31 @@ function emptyRow(colspan, iconName, text) {
   return `<tr class="empty-row"><td colspan="${colspan}"><div class="empty-state"><span class="empty-icon">${svgIcon(iconName)}</span><span>${text}</span></div></td></tr>`;
 }
 
+// Sehr schlankes Markdown-Lite fürs Rendern von Ollama-Fließtext-Antworten
+// (Portfolio-Insight, Beleg-Fehlbetrag-Hinweis, ...) - die kamen bisher als
+// reiner textContent-Block rein, dadurch blieben "* "-Aufzählungen als
+// literale Sternchen statt echter Listen stehen (live als "unübersichtlich"
+// gemeldet). Bewusst kein echter Markdown-Parser (kein Bedarf für Tabellen/
+// Links/verschachtelte Listen bei kurzen KI-Antworten) - nur Absätze,
+// "- "/"* "-Aufzählungen und **fett**, alles über esc() escaped, bevor es
+// als HTML eingesetzt wird.
+function renderAiText(el, text) {
+  if (!text) {
+    el.innerHTML = "";
+    return;
+  }
+  const blocks = text.trim().split(/\n{2,}/).map(block => {
+    const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+    const isList = lines.length > 0 && lines.every(l => /^[-*]\s+/.test(l));
+    const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    if (isList) {
+      return `<ul>${lines.map(l => `<li>${inline(l.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
+    }
+    return `<p>${lines.map(inline).join("<br>")}</p>`;
+  });
+  el.innerHTML = blocks.join("");
+}
+
 const ACCOUNT_TYPE_ICONS = { girokonto: "landmark", bargeld: "banknote", sparkonto: "wallet", tagesgeldkonto: "coins", depot: "trending-up", sonstiges: "folder" };
 const CATEGORY_TYPE_ICONS = { einnahme: "coins", ausgabe: "receipt" };
 // FastAPI liefert bei Validierungsfehlern (422) `detail` als Liste von

@@ -44,29 +44,54 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 ai_assistant_router = APIRouter(prefix="/api")
 
 
-def _build_portfolio_insight_prompt(db: Session, space_id: int) -> str:
-    net_worth = crud.net_worth(db, space_id)
+def _build_portfolio_insight_prompt(db: Session, space_id: int) -> str | None:
+    """Live beobachtet (Nutzer-Feedback): die vorherige Fassung hat dem Modell
+    alle Positionen einzeln aufgelistet und um eine freie Einschätzung
+    gebeten - bei einem kleinen lokalen Modell (z.B. llama3.2:1b) führte das
+    dazu, dass es jede Position mechanisch nacherzählt hat, oft mit demselben
+    Floskel-Satz ("schwierig zu sagen, ob Gewinn oder Verlust") trotz
+    eindeutiger Prozentzahl - unübersichtlich und im Kern falsch/nichtssagend.
+
+    Jetzt bekommt das Modell nur noch fertig BERECHNETE Kennzahlen (größte
+    Position, beste/schlechteste, Anlageklassen-/Sektor-Mix, Gesamtrendite) -
+    es soll das nur noch EINORDNEN, nicht mehr selbst aus 15 Einzelzeilen
+    zusammenrechnen. Das ist für ein kleines Modell deutlich zuverlässiger
+    lösbar als "beschreibe jede Position + fasse dann zusammen"."""
     holdings = [crud.holding_out(h) for h in crud.get_holdings(db, space_id)]
     diversification = crud.portfolio_diversification(db, space_id)
+    if not holdings:
+        return None
+
+    total_value = sum(h.current_value for h in holdings) or 0.0
+    total_invested = sum(h.purchase_value for h in holdings) or 0.0
+    gain_abs = total_value - total_invested
+    gain_pct = (gain_abs / total_invested * 100) if total_invested else 0.0
+
+    top = max(holdings, key=lambda h: h.current_value)
+    top_share = (top.current_value / total_value * 100) if total_value else 0.0
+    best = max(holdings, key=lambda h: h.gain_pct)
+    worst = min(holdings, key=lambda h: h.gain_pct)
+
+    asset_mix = ", ".join(f"{s.label} {s.percent:.0f}%" for s in diversification.by_asset_type)
+    sector_mix = ", ".join(f"{s.label} {s.percent:.0f}%" for s in diversification.by_sector[:4])
 
     lines = [
-        "Du bist ein nüchterner, hilfreicher Finanzassistent für Kies, ein privates Finanztool.",
-        "Gib eine kurze Einschätzung auf Deutsch (max. 180 Wörter, Fließtext oder kurze Stichpunkte).",
-        "Keine Anlageberatung, keine Kauf-/Verkaufsempfehlungen - nur Beobachtungen zu Struktur, Konzentration und Entwicklung.",
+        "Du bist ein nüchterner Finanzassistent für Kies, ein privates Finanztool. Hier stehen bereits fertig "
+        "berechnete Kennzahlen zu einem Portfolio - deine Aufgabe ist es NUR, sie einzuordnen, NICHT sie "
+        "aufzuzählen oder neu zu berechnen.",
+        "Antworte mit GENAU 3 Stichpunkten auf Deutsch, jeder auf einer eigenen Zeile mit '- ' davor: "
+        "(1) Konzentration/Streuung, (2) Gesamtentwicklung, (3) worauf zu achten wäre. Keine Anlageberatung, "
+        "keine Kauf-/Verkaufsempfehlungen.",
+        "Verboten: eine Einleitung/Anmoderation vor den Stichpunkten, jede Position einzeln aufzählen, die "
+        "gegebenen Zahlen nur wiederholen, erfundene/unklare Wörter, Floskeln wie 'schwierig zu sagen' "
+        "(die Zahlen unten sind eindeutig). Antworte NUR mit den 3 Stichpunkten, sonst nichts.",
         "",
-        f"Gesamtvermögen: {net_worth.total:.2f} EUR (Konten: {net_worth.accounts_total:.2f} EUR, Investments: {net_worth.investments_total:.2f} EUR)",
-        "",
-        "Positionen:",
+        f"Gesamtwert Investments: {total_value:.0f} EUR, Gesamtrendite: {gain_pct:+.1f}% ({gain_abs:+.0f} EUR)",
+        f"Größte Einzelposition: {top.name} mit {top_share:.0f}% des Portfolios",
+        f"Beste Position: {best.name} ({best.gain_pct:+.1f}%) - schlechteste: {worst.name} ({worst.gain_pct:+.1f}%)",
+        f"Anlageklassen: {asset_mix}",
+        f"Sektoren (Top 4): {sector_mix}",
     ]
-    for h in holdings:
-        asset_type_label = h.asset_type.value if hasattr(h.asset_type, "value") else h.asset_type
-        lines.append(
-            f"- {h.name} ({asset_type_label}, Sektor: {h.sector or 'unbekannt'}): "
-            f"Wert {h.current_value:.2f} EUR, Gewinn/Verlust {h.gain_pct:.1f}%, Risiko {h.risk_level}"
-        )
-    lines.append("")
-    lines.append("Verteilung nach Anlageklasse: " + ", ".join(f"{s.label} {s.percent:.0f}%" for s in diversification.by_asset_type))
-    lines.append("Verteilung nach Sektor: " + ", ".join(f"{s.label} {s.percent:.0f}%" for s in diversification.by_sector))
     if diversification.risk_flags:
         lines.append("Bereits erkannte Risikohinweise: " + "; ".join(f.message for f in diversification.risk_flags))
     return "\n".join(lines)
@@ -78,6 +103,8 @@ def portfolio_insight(db: Session = Depends(get_db), space_id: int = Depends(aut
     if not settings.ollama_url or not settings.ollama_model:
         raise HTTPException(400, "Bitte zuerst Ollama-Server-URL und Modell in den Einstellungen hinterlegen")
     prompt = _build_portfolio_insight_prompt(db, space_id)
+    if prompt is None:
+        return schemas.AiTextResult(text=None, error="Noch keine Positionen angelegt.")
     try:
         text = ollama_client.generate(settings.ollama_url, settings.ollama_model, prompt)
     except Exception as e:

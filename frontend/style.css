@@ -1731,6 +1731,21 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   margin: 10px 0 0;
 }
 
+/* Für gerendertes KI-Fließtext-Ergebnis (siehe core.js renderAiText) - lesbarer
+   als .import-result (das ist für kurze Status-/Fehlermeldungen gedacht,
+   nicht für mehrsätzige Analysen mit Aufzählungen). */
+.ai-insight-text {
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.ai-insight-text p { margin: 0 0 10px; }
+.ai-insight-text p:last-child { margin-bottom: 0; }
+.ai-insight-text ul { margin: 0 0 10px; padding-left: 20px; }
+.ai-insight-text ul:last-child { margin-bottom: 0; }
+.ai-insight-text li { margin-bottom: 4px; }
+
 .danger-zone {
   margin-top: 18px;
   padding: 14px 16px;
