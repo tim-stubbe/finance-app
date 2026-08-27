@@ -101,6 +101,26 @@ document.getElementById("quiet-until-clear").addEventListener("click", async () 
   toast("Ruhe-Überschreibung aufgehoben.");
 });
 
+// ---------- Kommunikationsstil ----------
+async function loadCommunicationStyle() {
+  let s;
+  try {
+    s = await api("/settings/communication-style");
+  } catch (e) {
+    return;
+  }
+  document.querySelectorAll("#communication-style-switch [data-style]").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.style === s.style));
+}
+
+document.getElementById("communication-style-switch").addEventListener("click", async e => {
+  const btn = e.target.closest("[data-style]");
+  if (!btn) return;
+  await api("/settings/communication-style", { method: "PUT", body: JSON.stringify({ style: btn.dataset.style }) });
+  document.querySelectorAll("#communication-style-switch [data-style]").forEach(b => b.classList.toggle("active", b === btn));
+  toast("Kommunikationsstil gespeichert.");
+});
+
 // ---------- Mid-Week-Zwischenstand ----------
 async function loadMidweekCheckinSettings() {
   const s = await api("/settings/midweek-checkin");

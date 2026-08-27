@@ -633,6 +633,14 @@ class MidweekCheckinSettingsUpdate(BaseModel):
     enabled: bool
 
 
+class CommunicationStyleOut(BaseModel):
+    style: str
+
+
+class CommunicationStyleUpdate(BaseModel):
+    style: str
+
+
 class AssistantSuggestionOut(BaseModel):
     id: int
     kind: str

@@ -196,6 +196,26 @@ Für Steuerfragen (z.B. "Leasing gewerblich oder privat absetzen"): gib eine fun
 wichtigsten Rechenlogik, aber das ist KEINE verbindliche Steuerberatung - weise IMMER kurz darauf hin, dass \
 der Nutzer das bei komplexen/hohen Beträgen mit einem Steuerberater absichern sollte."""
 
+# Kommunikationsstil (Spezifikation Abschnitt I) - gilt bewusst NUR für
+# Telegram-Fließtext-Antworten (dieser Prompt-Zusatz) und KI-Systemprompts
+# (siehe ai_assistant.py-Prompts), NICHT für Zahlen selbst - die bleiben in
+# jedem Stil nüchtern, siehe TELEGRAM_SYSTEM_PROMPT oben ("bei Geld wird
+# nichts geraten"). Feste Vorlagen-Meldungen (Digest, Alerts, Erinnerungen)
+# bleiben bewusst unverändert neutral - Dutzende Textbausteine je Stil
+# umzuschreiben stünde für ein NIEDRIG-priorisiertes Feature außer
+# Verhältnis, hier zählt vor allem der freie KI-Chat.
+COMMUNICATION_STYLE_INSTRUCTIONS = {
+    "kurz": "Antworte extrem knapp - möglichst ein Satz oder Stichpunkte, keine Füllwörter, keine Höflichkeitsfloskeln.",
+    "freundlich": "Antworte freundlich und locker, wie ein hilfsbereiter Kumpel - ruhig auch mal ein Emoji.",
+    "streng": "Antworte direkt und konsequent, wie ein strenger Vater - sag klar, wenn etwas liegen geblieben ist "
+               "oder aus dem Ruder läuft, aber bleib fair, keine Beleidigungen.",
+}
+
+
+def _tone_instruction(style: str | None) -> str:
+    return COMMUNICATION_STYLE_INSTRUCTIONS.get(style or "freundlich", COMMUNICATION_STYLE_INSTRUCTIONS["freundlich"])
+
+
 _history: list[dict] = []
 
 
@@ -803,7 +823,10 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     today = date.today()
     weekday_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"][today.weekday()]
     heute_zeile = f"\n\nHeutiges Datum: {today.isoformat()} ({weekday_de})."
-    system_content = TELEGRAM_SYSTEM_PROMPT + heute_zeile + "\n\n" + _context_facts(db, space.id)
+    system_content = (
+        TELEGRAM_SYSTEM_PROMPT + heute_zeile + "\n\n" + _tone_instruction(settings.communication_style)
+        + "\n\n" + _context_facts(db, space.id)
+    )
     messages = [{"role": "system", "content": system_content}]
     messages.extend(_history[-MAX_HISTORY:])
     messages.append({"role": "user", "content": text})

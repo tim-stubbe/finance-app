@@ -158,6 +158,9 @@ nach ausdrücklicher Bestätigung.
   Mittwochabends, nur bei spürbarer Abweichung (Nettovermögen oder
   gerissener Lebensbereich-Streak) – kein zweiter vollständiger
   Wochenrückblick, bleibt sonst still
+- **Kommunikationsstil** (Einstellungen → KI & Automatisierung): kurz /
+  freundlich / streng – gilt für den freien KI-Chat (Web + Telegram), Zahlen
+  und feste Meldungen (Digest, Erinnerungen) bleiben in jedem Stil unverändert
 - Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die
   Weboberfläche und kann To-Dos/Termine/Projekt-Punkte/Check-ins/Wunschlisten-
   Einträge anlegen bzw. abhaken (per festem Kommando oder KI-erkannter

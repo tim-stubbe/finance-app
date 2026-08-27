@@ -273,6 +273,7 @@ ensure_columns("settings", {
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",
     "quiet_until": "DATETIME",
     "midweek_checkin_enabled": "BOOLEAN DEFAULT 0",
+    "communication_style": "VARCHAR DEFAULT 'freundlich'",
 })
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
@@ -641,6 +642,22 @@ def update_midweek_checkin_settings(data: schemas.MidweekCheckinSettingsUpdate, 
     s.midweek_checkin_enabled = data.enabled
     db.commit()
     return schemas.MidweekCheckinSettingsOut(enabled=s.midweek_checkin_enabled)
+
+
+@api_router.get("/settings/communication-style", response_model=schemas.CommunicationStyleOut)
+def get_communication_style(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.CommunicationStyleOut(style=s.communication_style)
+
+
+@api_router.put("/settings/communication-style", response_model=schemas.CommunicationStyleOut)
+def update_communication_style(data: schemas.CommunicationStyleUpdate, db: Session = Depends(get_db)):
+    if data.style not in ("kurz", "freundlich", "streng"):
+        raise HTTPException(400, "Ungültiger Stil - erlaubt: kurz, freundlich, streng")
+    s = auth.get_or_create_settings(db)
+    s.communication_style = data.style
+    db.commit()
+    return schemas.CommunicationStyleOut(style=s.communication_style)
 
 
 @api_router.get("/assistant/hanging")

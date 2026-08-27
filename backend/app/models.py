@@ -312,6 +312,10 @@ class Settings(Base):
     # AUS, siehe dortigen Docstring (Spezifikation wollte selbst "im Zweifel
     # Default aus").
     midweek_checkin_enabled = Column(Boolean, nullable=False, default=False)
+    # --- Kommunikationsstil (Spezifikation Abschnitt I) - "kurz"/"freundlich"/
+    # "streng", siehe telegram_bot.COMMUNICATION_STYLE_INSTRUCTIONS. Gilt nur
+    # für Fließtext (freier KI-Chat), nicht für Zahlen/feste Vorlagen.
+    communication_style = Column(String, nullable=False, default="freundlich")
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
