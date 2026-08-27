@@ -272,6 +272,7 @@ ensure_columns("settings", {
     "quiet_hours_start_hour": "INTEGER DEFAULT 22",
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",
     "quiet_until": "DATETIME",
+    "midweek_checkin_enabled": "BOOLEAN DEFAULT 0",
 })
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
@@ -626,6 +627,20 @@ def update_quiet_until(data: schemas.QuietUntilUpdate, db: Session = Depends(get
         enabled=s.quiet_hours_enabled, start_hour=s.quiet_hours_start_hour,
         end_hour=s.quiet_hours_end_hour, quiet_until=s.quiet_until,
     )
+
+
+@api_router.get("/settings/midweek-checkin", response_model=schemas.MidweekCheckinSettingsOut)
+def get_midweek_checkin_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.MidweekCheckinSettingsOut(enabled=s.midweek_checkin_enabled)
+
+
+@api_router.put("/settings/midweek-checkin", response_model=schemas.MidweekCheckinSettingsOut)
+def update_midweek_checkin_settings(data: schemas.MidweekCheckinSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.midweek_checkin_enabled = data.enabled
+    db.commit()
+    return schemas.MidweekCheckinSettingsOut(enabled=s.midweek_checkin_enabled)
 
 
 @api_router.get("/assistant/hanging")
@@ -1431,6 +1446,67 @@ def _scheduled_weekly_review():
         db.close()
 
 
+MIDWEEK_CHECKIN_WEEKDAY = "wed"
+MIDWEEK_CHECKIN_HOUR = 18
+# Ab welcher Nettovermögens-Abweichung (EUR) seit Wochenbeginn der Zwischen-
+# stand als "auffällig" gilt und deshalb verschickt wird - reine Schwankung
+# soll nicht jede Woche eine Meldung auslösen (Spezifikation: "nur wenn es
+# Abweichungen/Fortschritt gibt").
+MIDWEEK_NET_WORTH_DEVIATION_EUR = 200.0
+
+
+def _scheduled_midweek_checkin():
+    """Mittwochabends, LEICHTER Zwischenstand unter der Woche (Spezifikation
+    Abschnitt F) - Default AUS (settings.midweek_checkin_enabled), im
+    Zweifel wollte die Spezifikation selbst lieber "Default aus oder nur bei
+    Auffälligkeit". Beides umgesetzt: Setting muss aktiv aktiviert werden
+    UND es wird nur verschickt, wenn seit Wochenbeginn eine spürbare
+    Nettovermögens-Abweichung (siehe MIDWEEK_NET_WORTH_DEVIATION_EUR) oder
+    ein gerissener Lebensbereich-Streak vorliegt - reine Bestätigung "alles
+    normal" bleibt aus (Leitprinzip 1). Bewusst KEIN eigenständiger Aufbau
+    wie beim Sonntag-Wochenrückblick (_scheduled_weekly_review) - nur ein
+    kurzer Auszug derselben Bausteine, kein zweites vollständiges Review."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled or not settings.midweek_checkin_enabled:
+            return
+        week_start = date.today() - timedelta(days=date.today().weekday())  # Montag dieser Woche
+        lines = ["📆 Zwischenstand:"]
+        notable = False
+
+        for space in crud.get_spaces(db):
+            nw = crud.net_worth(db, space.id)
+            snapshot = (
+                db.query(models.NetWorthSnapshot)
+                .filter(models.NetWorthSnapshot.space_id == space.id, models.NetWorthSnapshot.date < week_start)
+                .order_by(models.NetWorthSnapshot.date.desc())
+                .first()
+            )
+            if not snapshot:
+                continue
+            delta = round(nw.total - snapshot.total, 2)
+            if abs(delta) >= MIDWEEK_NET_WORTH_DEVIATION_EUR:
+                notable = True
+                pfeil = "📈" if delta > 0 else "📉"
+                lines.append(f"💰 {space.name}: {pfeil} {delta:+.2f} EUR seit Wochenbeginn")
+
+        # Gerissene Streaks (0 Tage, obwohl vor Wochenbeginn noch ein Streak
+        # lief) - dasselbe streak-Signal wie im Wochenrückblick, hier aber
+        # als AUSLÖSER genutzt statt als reine Info.
+        for a in db.query(models.LifeArea).filter(models.LifeArea.active.is_(True)).all():
+            _, streak = crud._life_area_streak_and_history(db, a.id)
+            if streak == 0 and a.last_checked_at and a.last_checked_at.date() < week_start:
+                notable = True
+                lines.append(f"🔥 Streak bei „{a.name}“ gerissen - seit Wochenbeginn kein Check-in.")
+
+        if not notable:
+            return
+        notifications.notify(settings, "\n".join(lines))
+    finally:
+        db.close()
+
+
 WISHLIST_AUTO_CHECK_BATCH_SIZE = 3
 WISHLIST_AUTO_CHECK_MIN_HOURS = 20  # nicht öfter als ~1x/Tag pro Eintrag, Suchanfragen sind begrenzt
 
@@ -1988,6 +2064,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_weekly_review, CronTrigger(day_of_week=WEEKLY_REVIEW_WEEKDAY, hour=WEEKLY_REVIEW_HOUR, minute=0),
     id="weekly_review", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_midweek_checkin, CronTrigger(day_of_week=MIDWEEK_CHECKIN_WEEKDAY, hour=MIDWEEK_CHECKIN_HOUR, minute=0),
+    id="midweek_checkin", misfire_grace_time=3600,
 )
 scheduler.add_job(
     _scheduled_wishlist_auto_check, CronTrigger(hour=9, minute=0),

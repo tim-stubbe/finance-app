@@ -308,6 +308,10 @@ class Settings(Base):
     quiet_hours_start_hour = Column(Integer, nullable=False, default=22)
     quiet_hours_end_hour = Column(Integer, nullable=False, default=7)
     quiet_until = Column(DateTime, nullable=True)
+    # --- Mid-Week-Zwischenstand (main._scheduled_midweek_checkin) - Default
+    # AUS, siehe dortigen Docstring (Spezifikation wollte selbst "im Zweifel
+    # Default aus").
+    midweek_checkin_enabled = Column(Boolean, nullable=False, default=False)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)

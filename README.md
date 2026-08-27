@@ -154,6 +154,10 @@ nach ausdrücklicher Bestätigung.
 - **Routinen**: frei definierbare wiederkehrende Checklisten (Name,
   Wochentage, Uhrzeit, Punkte) – kommen zur eingestellten Zeit per Telegram,
   abgehakt wird im Hub (Einstellungen → Benachrichtigungen → „Routinen")
+- **Mid-Week-Zwischenstand** (standardmäßig aus): ein leichter Ping
+  Mittwochabends, nur bei spürbarer Abweichung (Nettovermögen oder
+  gerissener Lebensbereich-Streak) – kein zweiter vollständiger
+  Wochenrückblick, bleibt sonst still
 - Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die
   Weboberfläche und kann To-Dos/Termine/Projekt-Punkte/Check-ins/Wunschlisten-
   Einträge anlegen bzw. abhaken (per festem Kommando oder KI-erkannter

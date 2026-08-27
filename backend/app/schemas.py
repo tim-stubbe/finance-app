@@ -625,6 +625,14 @@ class QuietUntilUpdate(BaseModel):
     until: Optional[datetime] = None
 
 
+class MidweekCheckinSettingsOut(BaseModel):
+    enabled: bool
+
+
+class MidweekCheckinSettingsUpdate(BaseModel):
+    enabled: bool
+
+
 class AssistantSuggestionOut(BaseModel):
     id: int
     kind: str

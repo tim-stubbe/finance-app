@@ -6,7 +6,7 @@
 // CACHE_NAME-Version erzwingt bei bestehenden Installationen den Wechsel,
 // damit der Login-Screen nicht aus einem alten, ihn noch nicht kennenden
 // Precache fehlt.
-const CACHE_NAME = "finanztool-shell-v30";
+const CACHE_NAME = "finanztool-shell-v31";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

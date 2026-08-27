@@ -101,6 +101,17 @@ document.getElementById("quiet-until-clear").addEventListener("click", async () 
   toast("Ruhe-Überschreibung aufgehoben.");
 });
 
+// ---------- Mid-Week-Zwischenstand ----------
+async function loadMidweekCheckinSettings() {
+  const s = await api("/settings/midweek-checkin");
+  document.getElementById("midweek-checkin-enabled").checked = s.enabled;
+}
+
+document.getElementById("midweek-checkin-enabled").addEventListener("change", async e => {
+  await api("/settings/midweek-checkin", { method: "PUT", body: JSON.stringify({ enabled: e.target.checked }) });
+  toast(e.target.checked ? "Mid-Week-Zwischenstand aktiviert." : "Mid-Week-Zwischenstand deaktiviert.");
+});
+
 // ---------- "Was Jarvis getan hat" ----------
 const ASSISTANT_SUGGESTION_STATUS_LABELS = {
   pending: "offen", accepted: "bestätigt", rejected: "abgelehnt", snoozed: "verschoben",
