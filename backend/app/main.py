@@ -263,6 +263,17 @@ ensure_columns("settings", {
     "failed_login_locked_until": "DATETIME",
 })
 
+ensure_columns("settings", {
+    "morning_briefing_enabled": "BOOLEAN DEFAULT 1",
+    "morning_briefing_hour": "INTEGER DEFAULT 7",
+    "morning_briefing_minute": "INTEGER DEFAULT 30",
+    "morning_briefing_send_empty": "BOOLEAN DEFAULT 0",
+    "quiet_hours_enabled": "BOOLEAN DEFAULT 0",
+    "quiet_hours_start_hour": "INTEGER DEFAULT 22",
+    "quiet_hours_end_hour": "INTEGER DEFAULT 7",
+    "quiet_until": "DATETIME",
+})
+
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
 # bisher auf fast allen Tabellen ausser todos/calendar_events, ohne die Spalte
 # ist kein Diff-Sync ("was hat sich seit dem letzten Pull geaendert") moeglich.
@@ -292,6 +303,8 @@ _settings = auth.get_or_create_settings(_bootstrap_db)
 SECRET_KEY = _settings.secret_key
 INITIAL_SYNC_HOUR = _settings.sync_hour
 INITIAL_BACKUP_HOUR = _settings.backup_hour
+INITIAL_MORNING_BRIEFING_HOUR = _settings.morning_briefing_hour
+INITIAL_MORNING_BRIEFING_MINUTE = _settings.morning_briefing_minute
 if not _bootstrap_db.query(models.Space).first():
     _bootstrap_db.add(models.Space(name="Privat", icon="🏠"))
     _bootstrap_db.commit()
@@ -546,6 +559,87 @@ def update_sync_schedule(data: schemas.SyncScheduleUpdate, db: Session = Depends
     db.commit()
     scheduler.reschedule_job("bank_sync", trigger=CronTrigger(hour=data.hour, minute=0))
     return schemas.SyncScheduleOut(hour=settings.sync_hour)
+
+
+# ---------------- Morgen-Briefing & Quiet Mode ("Jarvis"-Verhalten) ----------
+@api_router.get("/settings/morning-briefing", response_model=schemas.MorningBriefingSettingsOut)
+def get_morning_briefing_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.MorningBriefingSettingsOut(
+        enabled=s.morning_briefing_enabled, hour=s.morning_briefing_hour,
+        minute=s.morning_briefing_minute, send_empty=s.morning_briefing_send_empty,
+    )
+
+
+@api_router.put("/settings/morning-briefing", response_model=schemas.MorningBriefingSettingsOut)
+def update_morning_briefing_settings(data: schemas.MorningBriefingSettingsUpdate, db: Session = Depends(get_db)):
+    if not 0 <= data.hour <= 23:
+        raise HTTPException(400, "Stunde muss zwischen 0 und 23 liegen")
+    if not 0 <= data.minute <= 59:
+        raise HTTPException(400, "Minute muss zwischen 0 und 59 liegen")
+    s = auth.get_or_create_settings(db)
+    s.morning_briefing_enabled = data.enabled
+    s.morning_briefing_hour = data.hour
+    s.morning_briefing_minute = data.minute
+    s.morning_briefing_send_empty = data.send_empty
+    db.commit()
+    scheduler.reschedule_job("morning_briefing", trigger=CronTrigger(hour=data.hour, minute=data.minute))
+    return schemas.MorningBriefingSettingsOut(
+        enabled=s.morning_briefing_enabled, hour=s.morning_briefing_hour,
+        minute=s.morning_briefing_minute, send_empty=s.morning_briefing_send_empty,
+    )
+
+
+@api_router.get("/settings/quiet-hours", response_model=schemas.QuietHoursSettingsOut)
+def get_quiet_hours_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.QuietHoursSettingsOut(
+        enabled=s.quiet_hours_enabled, start_hour=s.quiet_hours_start_hour,
+        end_hour=s.quiet_hours_end_hour, quiet_until=s.quiet_until,
+    )
+
+
+@api_router.put("/settings/quiet-hours", response_model=schemas.QuietHoursSettingsOut)
+def update_quiet_hours_settings(data: schemas.QuietHoursSettingsUpdate, db: Session = Depends(get_db)):
+    if not 0 <= data.start_hour <= 23 or not 0 <= data.end_hour <= 23:
+        raise HTTPException(400, "Stunde muss zwischen 0 und 23 liegen")
+    s = auth.get_or_create_settings(db)
+    s.quiet_hours_enabled = data.enabled
+    s.quiet_hours_start_hour = data.start_hour
+    s.quiet_hours_end_hour = data.end_hour
+    db.commit()
+    return schemas.QuietHoursSettingsOut(
+        enabled=s.quiet_hours_enabled, start_hour=s.quiet_hours_start_hour,
+        end_hour=s.quiet_hours_end_hour, quiet_until=s.quiet_until,
+    )
+
+
+@api_router.put("/settings/quiet-until", response_model=schemas.QuietHoursSettingsOut)
+def update_quiet_until(data: schemas.QuietUntilUpdate, db: Session = Depends(get_db)):
+    """Manuelle "Ruhe bis"-Überschreibung aus der App (Pendant zum Telegram-
+    Kommando /ruhe HH:MM, siehe telegram_bot._handle_quiet_command) - until=None
+    hebt sie vorzeitig auf ("/ruhe aus"-Äquivalent)."""
+    s = auth.get_or_create_settings(db)
+    s.quiet_until = data.until
+    db.commit()
+    return schemas.QuietHoursSettingsOut(
+        enabled=s.quiet_hours_enabled, start_hour=s.quiet_hours_start_hour,
+        end_hour=s.quiet_hours_end_hour, quiet_until=s.quiet_until,
+    )
+
+
+@api_router.get("/assistant/hanging")
+def get_hanging_summary(db: Session = Depends(get_db)):
+    """Textuelle "Was hängt"-Übersicht (Spezifikation Abschnitt E) fürs Hub -
+    gleiche Quelle wie /haengt in Telegram (siehe crud.build_hanging_summary)."""
+    return {"summary": crud.build_hanging_summary(db)}
+
+
+@api_router.get("/assistant/suggestions", response_model=List[schemas.AssistantSuggestionOut])
+def get_assistant_suggestions(db: Session = Depends(get_db)):
+    """"Was Jarvis getan hat" (Spezifikation Abschnitt J) - letzte Vorschläge
+    samt Status, für Einstellungen → Assistent."""
+    return crud.get_recent_suggestions(db)
 
 
 # ---------------- Heute / Fokus ----------------
@@ -814,11 +908,16 @@ def _check_daily_alerts():
                 if settings.last_cashflow_alert_date != today:
                     forecast = crud.cashflow_forecast(db, space.id, 90)
                     if forecast.goes_negative:
+                        # urgent=True: Finanzrisiko (Spezifikation Abschnitt C
+                        # nennt "Dispo" explizit als Beispiel, das Quiet Mode
+                        # durchbrechen soll - eine drohende Kontoüberziehung
+                        # gehört klar dazu).
                         notifications.notify(
                             settings,
                             f"⚠️ Cashflow-Prognose ({space.name}): Kontostand könnte am "
                             f"{forecast.first_negative_date} ins Minus rutschen (Tiefstand "
                             f"{forecast.lowest_balance:.2f} EUR am {forecast.lowest_date}).",
+                            urgent=True,
                         )
                         # Anrufen nur im wirklich akuten Fenster (1-3 Tage) - bei einer
                         # erst in Wochen drohenden Flaute reicht die Telegram-Meldung.
@@ -889,10 +988,13 @@ def _check_daily_alerts():
                 for acc in crud.get_accounts(db, space.id):
                     balance = crud.account_balance(db, acc)
                     if balance < 0 and not acc.dispo_alert_sent:
+                        # urgent=True: explizit als Beispiel in der Spezifikation
+                        # genannt (Abschnitt C), durchbricht Quiet Mode.
                         notifications.notify(
                             settings,
                             f"🔴 Dispo ({space.name}): „{acc.name}“ ist ins Minus gerutscht "
                             f"({balance:.2f} EUR).",
+                            urgent=True,
                         )
                         acc.dispo_alert_sent = True
                         db.commit()
@@ -1427,6 +1529,84 @@ def _scheduled_digest():
         db.close()
 
 
+def _scheduled_morning_briefing():
+    """Einmal täglich morgens (Uhrzeit einstellbar, siehe Settings.
+    morning_briefing_hour/-minute) - Spezifikation Abschnitt A. Klar abgegrenzt
+    von _scheduled_digest (mehrmals täglich, Finanzfokus) und
+    _scheduled_evening_review (abends, Lebensbereiche/Projekte/Wunschliste) -
+    siehe crud.build_morning_briefing-Docstring für die genaue Abgrenzung.
+    Standardmäßig STILL, wenn nichts Relevantes ansteht (settings.
+    morning_briefing_send_empty, Default False) - "lieber eine gute Meldung
+    als ständiges Ping" (Leitprinzip 1)."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled or not settings.morning_briefing_enabled:
+            return
+        home_coords = (settings.home_lat, settings.home_lon) if settings.home_lat and settings.home_lon else None
+        ors_api_key = (
+            bank_sync.decrypt_secret(settings.secret_key, settings.openroute_api_key_encrypted)
+            if settings.openroute_api_key_encrypted else None
+        )
+        for space in crud.get_spaces(db):
+            try:
+                text = crud.build_morning_briefing(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key)
+                if text:
+                    notifications.notify(settings, text)
+                elif settings.morning_briefing_send_empty:
+                    notifications.notify(settings, f"☀️ Guten Morgen ({date.today().strftime('%d.%m.%Y')}): "
+                                                    f"nichts Besonderes anstehend.")
+            except Exception:
+                db.rollback()
+    finally:
+        db.close()
+
+
+SUGGESTION_TODO_NO_DATE_MIN_DAYS = 14  # deckungsgleich mit crud.HANGING_TODO_NO_DATE_DAYS
+
+
+def _scheduled_suggestion_check():
+    """Einmal täglich: erzeugt Jarvis-Vorschläge zur Bestätigung (Spezifikation
+    Abschnitt B) - aktuell EIN konkreter Vorschlagstyp ("todo_no_date": Todo
+    seit N Tagen ohne Datum), weitere Typen (Abo-Preiserhöhung etc.) laufen
+    bereits als eigene Sofort-Warnung über _scheduled_anomaly_check und werden
+    hier bewusst NICHT verdoppelt (Leitprinzip 5). Erzeugt nie einen zweiten
+    offenen Vorschlag, solange einer pending ist (siehe crud.
+    get_pending_suggestion-Docstring) - verschickt also höchstens einen Vorschlag
+    pro Tag, nicht eine ganze Liste auf einmal (Leitprinzip 1: nicht nervig)."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        if crud.get_pending_suggestion(db):
+            return  # erst entscheiden lassen, bevor ein neuer Vorschlag kommt
+        now = datetime.utcnow()
+        candidates = (
+            db.query(models.Todo)
+            .filter(models.Todo.done.is_(False), models.Todo.due_date.is_(None))
+            .order_by(models.Todo.created_at)
+            .all()
+        )
+        for t in candidates:
+            if not t.created_at or (now - t.created_at).days < SUGGESTION_TODO_NO_DATE_MIN_DAYS:
+                continue
+            days = (now - t.created_at).days
+            suggestion = crud.create_suggestion_if_new(
+                db, kind="todo_no_date", ref_id=t.id,
+                title=f"To-Do „{t.title}“ seit {days} Tagen ohne Datum - terminieren oder streichen?",
+            )
+            if suggestion:
+                notifications.notify(
+                    settings,
+                    f"💡 Vorschlag: {suggestion.title}\nAntworte mit /ok (auf heute terminieren), "
+                    f"/später (in 7 Tagen erneut fragen) oder /verwerfen.",
+                )
+            break  # nur der erste Kandidat - Rest folgt an den naechsten Tagen
+    finally:
+        db.close()
+
+
 def _geocode_missing_event_locations(db: Session):
     """Geokodiert Termin-Orte, die noch keine Koordinaten haben - einmalig pro
     Termin, nicht bei jedem Digest-Lauf (siehe CalendarEvent.lat/lon). Nur
@@ -1506,10 +1686,13 @@ def _scheduled_travel_reminder():
 
             leave_by = ev.start - timedelta(minutes=minutes + buffer_minutes)
             if now >= leave_by:
+                # urgent=True: durchbricht Quiet Mode (Spezifikation Abschnitt
+                # C nennt "Losfahren" explizit als Beispiel, das durch muss).
                 notifications.notify(
                     settings,
                     f"🚗 Los geht's: Fahrzeit ca. {minutes} Min zu „{ev.title}“ um "
                     f"{ev.start.strftime('%H:%M')}. Jetzt losfahren, um pünktlich zu sein.{rain_note}",
+                    urgent=True,
                 )
                 ev.travel_reminder_sent = True
                 db.commit()
@@ -1728,6 +1911,15 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_digest, CronTrigger(hour=",".join(str(h) for h in DIGEST_HOURS), minute=30),
     id="digest", misfire_grace_time=1800,
+)
+scheduler.add_job(
+    _scheduled_morning_briefing,
+    CronTrigger(hour=INITIAL_MORNING_BRIEFING_HOUR, minute=INITIAL_MORNING_BRIEFING_MINUTE),
+    id="morning_briefing", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_suggestion_check, CronTrigger(hour=9, minute=15),
+    id="suggestion_check", misfire_grace_time=3600,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es

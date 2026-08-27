@@ -1757,6 +1757,292 @@ def build_digest(
     return "\n".join(lines)
 
 
+# Schwelle fuer "haengt zu lange" - Todos ohne Faelligkeitsdatum, Business-
+# Issues, siehe get_hanging_items. Business/Leben/Wunschliste-Ueberfaelligkeit
+# haben bereits eigene, schaerfere Schwellen (check_interval_days je Eintrag)
+# und werden hier bewusst NICHT erneut mit dieser groben Konstante geprueft.
+HANGING_TODO_NO_DATE_DAYS = 14
+HANGING_BUSINESS_ISSUE_DAYS = 14
+
+
+def get_hanging_items(db: Session) -> dict:
+    """"Was hängt schon zu lange?" (Spezifikation Abschnitt E) - bewusst KEIN
+    zweites Projektmanagement-System, sondern eine reine Zusammenstellung
+    bestehender Daten für /haengt (telegram_bot.py) und den Morgen-Briefing-
+    Kurzhinweis (siehe build_morning_briefing). Todos/Business-Projekte sind
+    bereichsübergreifend (kein space_id, siehe models.Todo/BusinessProject),
+    deshalb kein space_id-Parameter, analog zu _scheduled_evening_review.
+
+    Lebensbereiche/Wunschliste bewusst NICHT hier erneut geprüft - die haben
+    schon eigene tägliche Erinnerungen (main._scheduled_life_check_reminder/
+    _scheduled_wishlist_reminder) mit eigenen, pro Eintrag konfigurierbaren
+    Schwellen (check_interval_days) - eine zweite, gröbere Prüfung hier würde
+    nur denselben Zustand doppelt melden (Leitprinzip 5: nicht doppelt nerven).
+    Todos ohne Datum sind dagegen eine echte Lücke: die werden bisher NIRGENDS
+    proaktiv gemeldet, nur passiv in der normalen To-Do-Liste sichtbar."""
+    now = datetime.utcnow()
+    today = date.today()
+
+    todos_no_date = [
+        t for t in db.query(models.Todo)
+        .filter(models.Todo.done.is_(False), models.Todo.due_date.is_(None))
+        .all()
+        if t.created_at and (now - t.created_at).days >= HANGING_TODO_NO_DATE_DAYS
+    ]
+    todos_overdue = [
+        t for t in db.query(models.Todo)
+        .filter(models.Todo.done.is_(False), models.Todo.due_date.isnot(None), models.Todo.due_date < today)
+        .all()
+    ]
+    business_issues = [
+        i for i in db.query(models.BusinessIssue).filter(models.BusinessIssue.resolved.is_(False)).all()
+        if i.created_at and (now - i.created_at).days >= HANGING_BUSINESS_ISSUE_DAYS
+    ]
+    return {
+        "todos_no_date": todos_no_date,
+        "todos_overdue": todos_overdue,
+        "business_issues": business_issues,
+    }
+
+
+def build_hanging_summary(db: Session) -> str:
+    """Telegram-Text für /haengt (telegram_bot.py) - reine Textdarstellung von
+    get_hanging_items(), plus Lebensbereiche/Wunschliste auf Zuruf (die eigenen
+    proaktiven täglichen Erinnerungen bleiben unverändert, siehe dortige
+    Docstrings - hier nur zusätzlich als Pull-Übersicht auf einen Blick)."""
+    items = get_hanging_items(db)
+    lines = ["🕸 Was hängt:"]
+    if items["todos_no_date"]:
+        lines.append(f"\n📝 {len(items['todos_no_date'])} To-Do(s) ohne Datum seit {HANGING_TODO_NO_DATE_DAYS}+ Tagen:")
+        for t in items["todos_no_date"][:8]:
+            lines.append(f"- „{t.title}“")
+    if items["todos_overdue"]:
+        lines.append(f"\n⏰ {len(items['todos_overdue'])} überfällige(s) To-Do(s):")
+        for t in items["todos_overdue"][:8]:
+            lines.append(f"- „{t.title}“ (fällig {t.due_date.strftime('%d.%m.%Y')})")
+    if items["business_issues"]:
+        lines.append(f"\n📋 {len(items['business_issues'])} offene(r) Projekt-Punkt(e) seit {HANGING_BUSINESS_ISSUE_DAYS}+ Tagen.")
+
+    now = datetime.utcnow()
+    areas = db.query(models.LifeArea).filter(
+        models.LifeArea.active.is_(True), models.LifeArea.check_interval_days.isnot(None),
+    ).all()
+    overdue_areas = [
+        a for a in areas
+        if (a.last_checked_at or a.created_at) and (now - (a.last_checked_at or a.created_at)).days >= a.check_interval_days
+    ]
+    if overdue_areas:
+        lines.append("\n🎯 Check-in überfällig: " + ", ".join(f"„{a.name}“" for a in overdue_areas) + ".")
+
+    overdue_wishlist = [
+        w for w in db.query(models.WishlistItem).filter(
+            models.WishlistItem.active.is_(True), models.WishlistItem.purchased.is_(False),
+            models.WishlistItem.check_interval_days.isnot(None),
+        ).all()
+        if (now - (w.last_checked_at or w.created_at)).days >= w.check_interval_days
+    ]
+    if overdue_wishlist:
+        lines.append(f"\n🛒 {len(overdue_wishlist)} Wunschlisten-Eintrag/Einträge überfällig zur Prüfung.")
+
+    if len(lines) == 1:
+        return "🕸 Nichts hängt gerade - alles im grünen Bereich. 👍"
+    return "\n".join(lines)
+
+
+def build_morning_briefing(
+    db: Session, space_id: int,
+    home_coords: tuple[float, float] | None = None, ors_api_key: str | None = None,
+) -> str | None:
+    """Morgen-Briefing (Spezifikation Abschnitt A) - EIN kompakter Ping am
+    Morgen, klar abgegrenzt vom 3-stündlichen Digest (main.build_digest, dort
+    volle Nettovermögen-Aufschlüsselung + 3-Tage-Kalenderausblick + Ziele +
+    Dubletten) und vom taeglichen Abend-Review (nur Lebensbereiche/Projekte/
+    Wunschliste). Bewusst NUR: heutige Termine, faellige/ueberfaellige Todos,
+    EINE knappe Finanzzeile (Vergleich zu GESTERN, nicht die volle Aufteilung),
+    nahe Fristen, und ein Kurzhinweis auf Todos ohne Datum (Details via
+    /haengt) - kein Fortschritts-Duplikat der bereits separat laufenden
+    Lebensbereich-/Projekt-/Wunschlisten-Erinnerungen (siehe get_hanging_items-
+    Docstring).
+
+    Nutzt dieselben Bausteine wie main.today_overview (/api/today, Hub "Heute"-
+    Tab) fuer Termine/Todos/Fristen, statt die Abfragen zu duplizieren - baut
+    aber einen eigenen, kompakten Telegram-Text statt der vollen JSON-Struktur.
+
+    Gibt None zurueck, wenn wirklich nichts Relevantes ansteht - main.
+    _scheduled_morning_briefing entscheidet anhand von
+    settings.morning_briefing_send_empty, ob dann trotzdem eine (leere)
+    Meldung rausgeht oder ganz geschwiegen wird (Default: schweigen)."""
+    today = date.today()
+    day_start = datetime.combine(today, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+    lines = [f"☀️ Guten Morgen ({today.strftime('%d.%m.%Y')}):"]
+    has_content = False
+
+    raw_events = get_calendar_events(db, day_start, day_end)
+    if raw_events:
+        has_content = True
+        lines.append("\n🗓 Heute:")
+        for ev in sorted(raw_events, key=lambda e: (not e.all_day, e.start))[:8]:
+            zeit = "ganztägig" if ev.all_day else ev.start.strftime("%H:%M")
+            ort = f" @ {ev.location}" if ev.location else ""
+            fahrzeit = ""
+            if (
+                home_coords and ors_api_key and not ev.all_day and ev.lat and ev.lon
+                and ev.start >= datetime.utcnow()
+            ):
+                try:
+                    minuten = travel_time.travel_time_minutes(ors_api_key, home_coords, (ev.lat, ev.lon))
+                except Exception:
+                    minuten = None
+                if minuten is not None:
+                    leave_at = (ev.start - timedelta(minutes=minuten)).strftime("%H:%M")
+                    fahrzeit = f" · 🚗 ~{minuten} Min, losfahren ca. {leave_at}"
+            lines.append(f"- {zeit}: {ev.title}{ort}{fahrzeit}")
+
+    todos_today = [t for t in get_todos(db, include_done=False) if t.due_date and t.due_date <= today]
+    if todos_today:
+        has_content = True
+        todos_today.sort(key=lambda t: t.due_date)
+        lines.append("\n✅ Fällig/überfällig:")
+        for t in todos_today[:8]:
+            marker = " (überfällig)" if t.due_date < today else ""
+            lines.append(f"- „{t.title}“{marker}")
+
+    yesterday = today - timedelta(days=1)
+    nw = net_worth(db, space_id)
+    snap_yesterday = (
+        db.query(models.NetWorthSnapshot)
+        .filter(models.NetWorthSnapshot.space_id == space_id, models.NetWorthSnapshot.date == yesterday)
+        .first()
+    )
+    if snap_yesterday:
+        delta = round(nw.total - snap_yesterday.total, 2)
+        if delta:
+            has_content = True
+            pfeil = "📈" if delta > 0 else "📉"
+            lines.append(f"\n💰 Nettovermögen: {nw.total:.2f} EUR ({pfeil} {delta:+.2f} EUR seit gestern)")
+
+    deadlines: list[str] = []
+    for r in get_contract_reminders(db, space_id):
+        if r.days_until_reminder <= 3:
+            deadlines.append(f"- „{r.label}“ (Kündigungsfrist beginnt in {r.days_until_reminder} Tag(en))")
+    for d in get_return_deadlines(db, space_id):
+        if not d.returned and d.days_left <= 3:
+            deadlines.append(f"- „{d.transaction_description or 'Rückgabe'}“ (noch {d.days_left} Tag(e))")
+    if deadlines:
+        has_content = True
+        lines.append("\n⏳ Fristen (nächste 3 Tage):")
+        lines.extend(deadlines[:5])
+
+    hanging = get_hanging_items(db)
+    n_hanging = len(hanging["todos_no_date"])
+    if n_hanging:
+        has_content = True
+        lines.append(f"\n📝 {n_hanging} To-Do(s) ohne Datum seit {HANGING_TODO_NO_DATE_DAYS}+ Tagen - Details via /haengt.")
+
+    if not has_content:
+        return None
+    return "\n".join(lines)
+
+
+# ---------- Jarvis-Vorschläge (Spezifikation Abschnitt B) ----------
+# Bewusst ein EINZELNER offener Vorschlag zur Zeit (main._scheduled_
+# suggestion_check erzeugt nie einen zweiten, solange einer pending ist) -
+# hält den Telegram-Dialog eindeutig ("worauf bezieht sich /ok gerade"),
+# ohne IDs im Chat nennen zu müssen. Weitere Kandidaten warten einfach bis
+# zur nächsten Prüfung.
+def get_pending_suggestion(db: Session) -> models.AssistantSuggestion | None:
+    return (
+        db.query(models.AssistantSuggestion)
+        .filter(models.AssistantSuggestion.status == models.AssistantSuggestionStatus.pending)
+        .order_by(models.AssistantSuggestion.created_at)
+        .first()
+    )
+
+
+def create_suggestion_if_new(db: Session, kind: str, ref_id: int, title: str) -> models.AssistantSuggestion | None:
+    """Legt einen neuen Vorschlag an, AUSSER es gibt für (kind, ref_id) schon
+    einen (UNIQUE-Constraint, siehe models.AssistantSuggestion) - dann nur bei
+    status=snoozed UND abgelaufenem snoozed_until reaktivieren (erneut als
+    pending melden), sonst None (bereits entschieden oder noch snoozed,
+    keine Wiedervorlage - Leitprinzip: einmal abgelehnt heißt nicht täglich
+    wieder gefragt)."""
+    existing = (
+        db.query(models.AssistantSuggestion)
+        .filter(models.AssistantSuggestion.kind == kind, models.AssistantSuggestion.ref_id == ref_id)
+        .first()
+    )
+    if existing:
+        if (
+            existing.status == models.AssistantSuggestionStatus.snoozed
+            and existing.snoozed_until and existing.snoozed_until <= date.today()
+        ):
+            existing.status = models.AssistantSuggestionStatus.pending
+            existing.title = title
+            existing.snoozed_until = None
+            existing.decided_at = None
+            db.commit()
+            return existing
+        return None
+    suggestion = models.AssistantSuggestion(kind=kind, ref_id=ref_id, title=title)
+    db.add(suggestion)
+    db.commit()
+    return suggestion
+
+
+def decide_pending_suggestion(db: Session, decision: str) -> tuple[models.AssistantSuggestion | None, str]:
+    """Verarbeitet /ok, /später oder /verwerfen (telegram_bot.py) auf den
+    aktuell einzigen offenen Vorschlag. Gibt (Vorschlag-oder-None, Antworttext)
+    zurück - der Vorschlag wird auch bei "kein offener Vorschlag" nicht
+    gebraucht, nur der Text für die Telegram-Antwort.
+
+    /ok führt bei kind="todo_no_date" eine konkrete, sichere Aktion aus
+    (Fälligkeitsdatum auf heute setzen - "terminieren" statt "streichen",
+    da ein automatisches Löschen ohne expliziten Nutzerwunsch zu riskant
+    wäre, siehe Leitprinzip 2 "bei Geld/irreversiblen Aktionen nie still
+    raten"). Weitere `kind`-Werte bräuchten hier jeweils ihre eigene
+    Ausführung, sobald es sie gibt."""
+    suggestion = get_pending_suggestion(db)
+    if not suggestion:
+        return None, "Gerade kein offener Vorschlag."
+
+    if decision == "accept":
+        suggestion.status = models.AssistantSuggestionStatus.accepted
+        suggestion.decided_at = datetime.utcnow()
+        result = f"✓ Übernommen: „{suggestion.title}“."
+        if suggestion.kind == "todo_no_date" and suggestion.ref_id:
+            todo = db.query(models.Todo).filter(models.Todo.id == suggestion.ref_id).first()
+            if todo and not todo.done:
+                todo.due_date = date.today()
+                result = f"✓ „{todo.title}“ auf heute terminiert."
+        db.commit()
+        return suggestion, result
+
+    if decision == "snooze":
+        suggestion.status = models.AssistantSuggestionStatus.snoozed
+        suggestion.snoozed_until = date.today() + timedelta(days=7)
+        suggestion.decided_at = datetime.utcnow()
+        db.commit()
+        return suggestion, "🔁 Ok, melde mich in 7 Tagen wieder, falls dann immer noch offen."
+
+    suggestion.status = models.AssistantSuggestionStatus.rejected
+    suggestion.decided_at = datetime.utcnow()
+    db.commit()
+    return suggestion, "Verworfen - wird nicht nochmal vorgeschlagen."
+
+
+def get_recent_suggestions(db: Session, limit: int = 20) -> list[models.AssistantSuggestion]:
+    """"Was Jarvis getan hat" (Spezifikation Abschnitt J) - kein separates
+    Log-System, die Vorschlags-Tabelle selbst ist die Aktivitätsspur (Status +
+    Zeitstempel reichen aus, siehe models.AssistantSuggestion-Docstring)."""
+    return (
+        db.query(models.AssistantSuggestion)
+        .order_by(models.AssistantSuggestion.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def record_net_worth_snapshot(db: Session, space_id: int) -> None:
     """Schreibt einen Nettovermoegen-Snapshot fuer heute, falls noch keiner
     existiert - idempotent, damit ein Neustart des Schedulers am selben Tag

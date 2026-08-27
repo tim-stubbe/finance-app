@@ -293,6 +293,21 @@ class Settings(Base):
     # eine Umbuchungs-Markierung (anders als eine Kategorie) nicht rueckwirkend
     # nachvollziehbar sein muss.
     transfers_marked_since_digest = Column(Integer, nullable=False, default=0)
+    # --- Morgen-Briefing (main._scheduled_morning_briefing) - ergänzt den
+    # 3-stündlichen Digest um einen EINEN kompakten Ping am Morgen, siehe
+    # crud.build_morning_briefing. send_empty Default False: "still, wenn
+    # nichts ist" ist ausdrücklicher Nutzerwunsch, nicht die Ausnahme.
+    morning_briefing_enabled = Column(Boolean, nullable=False, default=True)
+    morning_briefing_hour = Column(Integer, nullable=False, default=7)
+    morning_briefing_minute = Column(Integer, nullable=False, default=30)
+    morning_briefing_send_empty = Column(Boolean, nullable=False, default=False)
+    # --- Quiet Mode (Ruhezeiten) - zentral in notifications.notify() geprüft,
+    # siehe dort. quiet_until ist die manuelle "Ruhe bis HH:MM"-Überschreibung
+    # (App + Telegram /ruhe), unabhängig von den festen Ruhezeiten.
+    quiet_hours_enabled = Column(Boolean, nullable=False, default=False)
+    quiet_hours_start_hour = Column(Integer, nullable=False, default=22)
+    quiet_hours_end_hour = Column(Integer, nullable=False, default=7)
+    quiet_until = Column(DateTime, nullable=True)
     # --- E-Mail-Postfach (Belege aus Anhängen) ---
     mail_enabled = Column(Boolean, nullable=False, default=False)
     imap_host = Column(String, nullable=True)
@@ -1433,6 +1448,45 @@ class CategorySuggestion(Base):
 
     transaction = relationship("Transaction")
     suggested_category = relationship("Category")
+
+
+class AssistantSuggestionStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+    snoozed = "snoozed"
+
+
+class AssistantSuggestion(Base):
+    """Generische Warteschlange für proaktive Jarvis-Vorschläge, die eine
+    Bestätigung brauchen (siehe main._scheduled_suggestion_check,
+    telegram_bot._handle_suggestion_reply) - bewusst NICHT category_suggestions
+    wiederverwendet: das dortige Schema ist fest an (Transaction, Kategorie)
+    gebunden, hier braucht es beliebige Vorschlagsarten (aktuell nur
+    "todo_no_date", weitere `kind`-Werte können später dazukommen, ohne
+    Schema-Änderung). Gleiches Grundprinzip wie category_suggestions:
+    UNIQUE(kind, ref_id) verhindert, dass ein einmal entschiedener Vorschlag
+    beim nächsten Lauf kommentarlos wieder auftaucht - "snoozed" ist die
+    einzige Ausnahme, die nach snoozed_until absichtlich erneut auftaucht
+    (siehe _scheduled_suggestion_check).
+
+    Verdoppelt zugleich als schlanke "Was Jarvis getan hat"-Aktivitätsspur
+    (Punkt J der Spezifikation) - kein separates Log-System nötig, Status +
+    Zeitstempel dieser Tabelle reichen für eine Anzeige der letzten Einträge."""
+
+    __tablename__ = "assistant_suggestions"
+    __table_args__ = (
+        UniqueConstraint("kind", "ref_id", name="uq_assistant_suggestion_kind_ref"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, nullable=False)
+    ref_id = Column(Integer, nullable=True)
+    title = Column(String, nullable=False)
+    status = Column(Enum(AssistantSuggestionStatus), nullable=False, default=AssistantSuggestionStatus.pending)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    decided_at = Column(DateTime, nullable=True)
+    snoozed_until = Column(Date, nullable=True)
 
 
 class Note(Base):

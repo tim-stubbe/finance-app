@@ -134,11 +134,28 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
 Änderungen an der Datenbank schlägt die KI immer nur vor. Übernommen wird erst
 nach ausdrücklicher Bestätigung.
 
-**Benachrichtigungen**
-- Telegram für Ziele, Cashflow und Budgets
-- Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die Weboberfläche.
-  Er hat bewusst **nur Lesezugriff** und kann nichts an den Daten ändern – falls
-  das Bot-Token je abhandenkommt, bleibt der Schaden begrenzt
+**Benachrichtigungen ("Jarvis"-Verhalten)**
+- Telegram für Ziele, Cashflow und Budgets, außerdem ein 3-stündlicher
+  Finanz-Digest und ein optionales **Morgen-Briefing** (Uhrzeit einstellbar,
+  Default 7:30) mit heutigen Terminen + Fahrzeit, fälligen/überfälligen
+  To-Dos, einer knappen Finanzzeile und nahen Fristen – bleibt bewusst still,
+  wenn nichts Relevantes ansteht
+- **Quiet Mode**: einstellbare Ruhezeiten (z. B. 22–7 Uhr) plus manuelles
+  „Ruhe bis HH:MM" (App oder Telegram-Kommando `/ruhe`). In Ruhezeiten bleiben
+  reine Info-Meldungen aus, wirklich Dringendes (Losfahren-Erinnerung,
+  Dispo-/Cashflow-Risiko) kommt trotzdem durch
+- **Vorschläge mit Bestätigen**: z. B. „To-Do seit 14 Tagen ohne Datum" –
+  Kies fragt statt still zu handeln, per Telegram mit `/ok`, `/später` oder
+  `/verwerfen` zu beantworten. Entscheidungen stehen unter Einstellungen →
+  Benachrichtigungen → „Assistent – was Jarvis getan hat"
+- `/haengt` in Telegram zeigt auf Zuruf eine Zusammenfassung liegengebliebener
+  Dinge (To-Dos ohne Datum, überfällige To-Dos, offene Projekt-Punkte,
+  überfällige Check-ins/Wunschlisten-Prüfungen)
+- Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die
+  Weboberfläche und kann To-Dos/Termine/Projekt-Punkte/Check-ins/Wunschlisten-
+  Einträge anlegen bzw. abhaken (per festem Kommando oder KI-erkannter
+  Absicht, mit Bestätigungsmeldung) – Kontostände bleiben davon ausdrücklich
+  ausgenommen (`/saldo` ist die einzige Ausnahme, ohne KI-Interpretation)
 - Telefonanrufe über Twilio, ausschließlich für wirklich zeitkritische Fälle
   (Ziel erreicht, akuter Liquiditätsengpass innerhalb von ein bis drei Tagen)
 

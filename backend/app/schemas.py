@@ -590,6 +590,51 @@ class SyncScheduleUpdate(BaseModel):
     hour: int
 
 
+# ---------- Morgen-Briefing & Quiet Mode ("Jarvis"-Verhalten) ----------
+class MorningBriefingSettingsOut(BaseModel):
+    enabled: bool
+    hour: int
+    minute: int
+    send_empty: bool
+
+
+class MorningBriefingSettingsUpdate(BaseModel):
+    enabled: bool
+    hour: int
+    minute: int
+    send_empty: bool
+
+
+class QuietHoursSettingsOut(BaseModel):
+    enabled: bool
+    start_hour: int
+    end_hour: int
+    quiet_until: Optional[datetime] = None
+
+
+class QuietHoursSettingsUpdate(BaseModel):
+    enabled: bool
+    start_hour: int
+    end_hour: int
+
+
+class QuietUntilUpdate(BaseModel):
+    # None = manuelle Überschreibung sofort aufheben ("/ruhe aus"-Äquivalent
+    # in der App).
+    until: Optional[datetime] = None
+
+
+class AssistantSuggestionOut(BaseModel):
+    id: int
+    kind: str
+    title: str
+    status: str
+    created_at: datetime
+    decided_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ---------- Enable Banking (Open-Banking-Aggregator für PSD2-Banken) ----------
 class EnableBankingSettingsUpdate(BaseModel):
     app_id: str

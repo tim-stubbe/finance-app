@@ -279,6 +279,9 @@ async function loadSettingsTab() {
   await loadMailSettings();
   await loadCreditCardSettings();
   await loadNotificationSettings();
+  await loadMorningBriefingSettings();
+  await loadQuietHoursSettings();
+  await loadAssistantActivity();
   await loadAlertRules();
   await loadCallSettings();
   await loadBackupSettings();

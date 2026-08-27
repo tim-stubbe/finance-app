@@ -2606,6 +2606,66 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5"/><path d="M12 7v5l3 2"/></svg> Morgen-Briefing</h3>
+        <p class="page-sub">
+          Ein kompakter Ping am Morgen: heutige Termine + Fahrzeit, fällige/überfällige To-Dos, kurze
+          Finanzzeile, nahe Fristen. Bleibt still, wenn nichts Relevantes ansteht (außer „auch leere
+          Briefings“ ist aktiviert). Ergänzt den 3-stündlichen Digest, wiederholt ihn nicht.
+        </p>
+        <form id="morning-briefing-form" class="form-grid">
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="morning-briefing-enabled">
+            <span>Morgen-Briefing aktiv</span>
+          </label>
+          <label>Uhrzeit
+            <span class="inline-time">
+              <select id="morning-briefing-hour"></select> :
+              <select id="morning-briefing-minute"></select>
+            </span>
+          </label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="morning-briefing-send-empty">
+            <span>Auch leere Briefings schicken (statt zu schweigen)</span>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg> Quiet Mode (Ruhezeiten)</h3>
+        <p class="page-sub">
+          In Ruhezeiten bleiben reine Info-Meldungen aus (Digest, Morgen-Briefing, Anomalie-Hinweise, ...).
+          Wirklich Dringendes (Losfahren-Erinnerung, Dispo-/Cashflow-Risiko) kommt trotzdem durch.
+        </p>
+        <form id="quiet-hours-form" class="form-grid">
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="quiet-hours-enabled">
+            <span>Ruhezeiten aktiv</span>
+          </label>
+          <label>Von <select id="quiet-hours-start"></select></label>
+          <label>Bis <select id="quiet-hours-end"></select></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <h4 class="settings-subhead">Manuell „Ruhe bis“</h4>
+        <p class="page-sub" id="quiet-until-status"></p>
+        <div class="form-actions">
+          <input type="time" id="quiet-until-input">
+          <button type="button" id="quiet-until-set" class="btn-ghost">Setzen</button>
+          <button type="button" id="quiet-until-clear" class="btn-ghost hidden">Aufheben</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6M12 3a6 6 0 0 0-4 10.5c.6.5 1 1.3 1 2.1V17h6v-1.4c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg> Assistent – was Jarvis getan hat</h3>
+        <p class="page-sub">Letzte Vorschläge und wie sie entschieden wurden (bestätigt per /ok, verschoben per /später, abgelehnt per /verwerfen in Telegram).</p>
+        <ul id="assistant-activity-list" class="settings-list"></ul>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg> Eigene Regeln</h3>
         <p class="page-sub">
           Eigene Schwellwerte, die sofort per Telegram melden, sobald sie zutreffen (höchstens einmal pro Tag
@@ -3044,6 +3104,7 @@
 <script src="js/settings-export-backup.js"></script>
 <script src="js/settings-auto-backups.js"></script>
 <script src="js/settings-auto-sync.js"></script>
+<script src="js/settings-assistent.js"></script>
 <script src="js/eigene-regeln.js"></script>
 <script src="js/settings-fints.js"></script>
 <script src="js/settings-bitvavo.js"></script>

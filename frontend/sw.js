@@ -6,7 +6,7 @@
 // CACHE_NAME-Version erzwingt bei bestehenden Installationen den Wechsel,
 // damit der Login-Screen nicht aus einem alten, ihn noch nicht kennenden
 // Precache fehlt.
-const CACHE_NAME = "finanztool-shell-v26";
+const CACHE_NAME = "finanztool-shell-v27";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -21,7 +21,7 @@ const SHELL_ASSETS = [
   "/js/dashboard.js", "/js/geschaeftlich.js", "/js/schulden.js",
   "/js/schwebender-ki-assistent.js", "/js/ziele.js", "/js/init.js",
   "/js/command-palette.js", "/js/jahresrueckblick.js", "/js/notizen.js",
-  "/js/auth-login.js",
+  "/js/auth-login.js", "/js/settings-assistent.js",
 ];
 
 self.addEventListener("install", event => {

@@ -40,7 +40,7 @@ errät, an Finanzdaten oder Ollama-Antworten herankommt."""
 import json
 import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import requests
 
@@ -91,6 +91,18 @@ _LIFE_CHECKIN_CMD_RE = re.compile(r"^/leben\s+(.+?)\s*;\s*(.+)$", re.IGNORECASE)
 _WISHLIST_ADD_CMD_RE = re.compile(r"^/wunsch\s+(.+)$", re.IGNORECASE)
 # Format: /wunsch_geprueft <Name> - bestätigt "gerade nachgeschaut".
 _WISHLIST_CHECKED_CMD_RE = re.compile(r"^/wunsch_geprueft\s+(.+)$", re.IGNORECASE)
+# --- "Jarvis"-Kommandos (Quiet Mode, Vorschläge, "was hängt") ---
+# Format: /ruhe HH:MM - manuelle Ruhe-bis-Überschreibung (siehe
+# notifications._in_quiet_hours). /ruhe aus hebt sie vorzeitig auf.
+_QUIET_CMD_RE = re.compile(r"^/ruhe\s+(\d{1,2}):(\d{2})\s*$", re.IGNORECASE)
+_QUIET_OFF_CMD_RE = re.compile(r"^/ruhe\s+aus\s*$", re.IGNORECASE)
+# Format: /ok, /später (oder /spaeter), /verwerfen - Antwort auf den aktuell
+# einzigen offenen Vorschlag (siehe main._scheduled_suggestion_check).
+_SUGGESTION_OK_CMD_RE = re.compile(r"^/ok\s*$", re.IGNORECASE)
+_SUGGESTION_LATER_CMD_RE = re.compile(r"^/sp(ä|ae)ter\s*$", re.IGNORECASE)
+_SUGGESTION_DISMISS_CMD_RE = re.compile(r"^/verwerfen\s*$", re.IGNORECASE)
+# Format: /haengt - Zusammenfassung auf Zuruf (siehe crud.get_hanging_items).
+_HANGING_CMD_RE = re.compile(r"^/h(ä|ae)ngt\s*$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -496,6 +508,59 @@ def _handle_wishlist_checked_command(db, settings, token: str, chat_id: str, tex
     return True
 
 
+def _handle_quiet_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/ruhe HH:MM setzt eine manuelle "Ruhe bis"-Überschreibung (siehe
+    notifications._in_quiet_hours), /ruhe aus hebt sie vorzeitig auf. Nächster
+    Tag, falls HH:MM heute schon vorbei ist - "/ruhe 8:00" um 20 Uhr abends
+    gesagt meint offensichtlich morgen früh, nicht in der Vergangenheit
+    (was sofort wirkungslos wäre)."""
+    stripped = text.strip()
+    if _QUIET_OFF_CMD_RE.match(stripped):
+        settings.quiet_until = None
+        db.commit()
+        _send(token, chat_id, "🔔 Ruhe-Überschreibung aufgehoben.")
+        return True
+    match = _QUIET_CMD_RE.match(stripped)
+    if not match:
+        return False
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        _send(token, chat_id, "Ungültige Uhrzeit - Format /ruhe HH:MM.")
+        return True
+    now = datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    settings.quiet_until = target
+    db.commit()
+    _send(token, chat_id, f"🔕 Ruhe bis {target.strftime('%d.%m. %H:%M')} - nur wirklich Dringendes kommt noch durch.")
+    return True
+
+
+def _handle_suggestion_reply(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/ok, /später (oder /spaeter), /verwerfen - Antwort auf den aktuell
+    einzigen offenen Jarvis-Vorschlag (siehe crud.decide_pending_suggestion)."""
+    stripped = text.strip()
+    if _SUGGESTION_OK_CMD_RE.match(stripped):
+        decision = "accept"
+    elif _SUGGESTION_LATER_CMD_RE.match(stripped):
+        decision = "snooze"
+    elif _SUGGESTION_DISMISS_CMD_RE.match(stripped):
+        decision = "reject"
+    else:
+        return False
+    _, reply = crud.decide_pending_suggestion(db, decision)
+    _send(token, chat_id, reply)
+    return True
+
+
+def _handle_hanging_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    if not _HANGING_CMD_RE.match(text.strip()):
+        return False
+    _send(token, chat_id, crud.build_hanging_summary(db))
+    return True
+
+
 def _execute_action(db, settings, action: dict) -> str:
     """Führt einen von der KI erkannten Aktions-Block aus und gibt die
     Bestätigungs-/Fehlermeldung zurück, die dem Nutzer geschickt wird - nutzt
@@ -666,6 +731,12 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_wishlist_checked_command(db, settings, token, chat_id, text):
         return
     if _handle_wishlist_add_command(db, settings, token, chat_id, text):
+        return
+    if _handle_quiet_command(db, settings, token, chat_id, text):
+        return
+    if _handle_suggestion_reply(db, settings, token, chat_id, text):
+        return
+    if _handle_hanging_command(db, settings, token, chat_id, text):
         return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model
