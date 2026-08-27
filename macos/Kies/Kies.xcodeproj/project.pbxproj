@@ -34,6 +34,7 @@
 		D43A5A9488E7F7D21E19D705 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008EF147F6F711851A57C502 /* SettingsView.swift */; };
 		D5DA9586FA47BDBE13636A9E /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D573748D2D41F520FEAB9035 /* TodayView.swift */; };
 		E0F43EA44B23B0CB186047C5 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 269859CF78204993C6524A99 /* RootTabView.swift */; };
+		F3C8B0F2B1B6D04F206C91B7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */; };
 		F5AD507D32FCC36D3AD9640D /* KiesShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B07429E1CD635C2287F7651F /* KiesShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FAFF51A8EF6AACA402ADC33A /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44C034838E984EFE80BB21E /* SearchView.swift */; };
 /* End PBXBuildFile section */
@@ -73,6 +74,7 @@
 /* Begin PBXFileReference section */
 		003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesiOSApp.swift; sourceTree = "<group>"; };
 		008EF147F6F711851A57C502 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		139D81983F28F707A0312AC6 /* KiesiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KiesiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C96DEEF5122EF2D08A40156 /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
 		269859CF78204993C6524A99 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 		AFFD80D94B400C933BF7088C /* KiesiOS */ = {
 			isa = PBXGroup;
 			children = (
+				1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */,
 				88B5A0449D8D65E38F7C81F5 /* Info.plist */,
 				E581F3707BA30C9B425A56BB /* KiesiOS.entitlements */,
 				003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */,
@@ -266,6 +269,7 @@
 			buildConfigurationList = 21454B39E637BA1761F6E70C /* Build configuration list for PBXNativeTarget "KiesiOS" */;
 			buildPhases = (
 				BC931CE24431776B90B35281 /* Sources */,
+				85A2EC9D15C235B36D5F7F39 /* Resources */,
 				23B1CCB9145FDC88EC2B7A6F /* Frameworks */,
 				0EE0FBD41956C28CA7E11F5D /* Embed Foundation Extensions */,
 			);
@@ -345,6 +349,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		85A2EC9D15C235B36D5F7F39 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F3C8B0F2B1B6D04F206C91B7 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1F8017E7F08A86B01D850B1E /* Sources */ = {
