@@ -731,6 +731,20 @@ def _scheduled_bank_sync():
     # Kontoständen/Kursen rechnen - kein eigener Zeitplan nötig.
     _scheduled_goal_evaluation()
     _check_daily_alerts()
+    _scheduled_price_history_refresh()
+
+
+def _scheduled_price_history_refresh():
+    """Wärmt den Kurshistorie-Cache aller Positionen einmal täglich im
+    Hintergrund vor, siehe crud_investments.refresh_price_history_cache -
+    ohne das musste das Investments-Chart bei jedem Öffnen (24h-Cache meist
+    schon abgelaufen) live auf ~15+ sequenzielle Yahoo/CoinGecko-Anfragen
+    warten."""
+    db = SessionLocal()
+    try:
+        crud.refresh_price_history_cache(db)
+    finally:
+        db.close()
 
 
 def _scheduled_goal_evaluation():

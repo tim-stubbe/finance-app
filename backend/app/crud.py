@@ -19,7 +19,7 @@ from .crud_investments import (
     delete_lot, portfolio_diversification, compute_volatility, portfolio_volatility,
     get_cached_dividends, holding_dividends, portfolio_dividends,
     estimate_next_dividends, evaluate_dividend_reminders, holding_history,
-    portfolio_history,
+    portfolio_history, refresh_price_history_cache,
 )
 # To-Dos & Kalender (inkl. RRULE-Expansion) lebt in crud_todos.py -
 # get_upcoming_calendar_events wird unten von build_digest gebraucht.

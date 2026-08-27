@@ -29,7 +29,17 @@ def get_cached_history(db: Session, asset_type: str, symbol: str, range_key: str
     Tag lang auf der Festplatte statt bei jedem Chart-Aufruf erneut die externe API
     zu befragen. 1d/2w bleiben bewusst immer live, da sie kurzfristige Bewegungen
     zeigen sollen. Schlägt der Live-Abruf fehl, wird - falls vorhanden - auf einen
-    auch älteren Cache-Stand zurückgegriffen statt einen Fehler zu werfen."""
+    auch älteren Cache-Stand zurückgegriffen statt einen Fehler zu werfen.
+
+    Live beobachtet: einige automatisch von Scalable Capital übernommene
+    Positionen tragen eine ISIN statt eines Yahoo-Tickers als symbol - Yahoo
+    liefert dafür zuverlässig 404. Ohne die fetched_at-Aktualisierung unten hat
+    das JEDEN Portfolio-Chart-Aufruf erneut denselben aussichtslosen Live-Abruf
+    versuchen lassen (10+ Positionen x mehrere Sekunden Latenz = das Chart hat
+    "mega lange" gebraucht). fetched_at wird deshalb IMMER aktualisiert, auch
+    bei einem fehlgeschlagenen Abruf (negatives Caching) - ein dauerhaft
+    kaputtes Symbol wird dadurch höchstens einmal pro CACHE_TTL neu versucht,
+    nicht bei jedem einzelnen Request."""
     if range_key in prices.LIVE_RANGES:
         return prices.fetch_history(asset_type, symbol, range_key)
 
@@ -45,8 +55,15 @@ def get_cached_history(db: Session, asset_type: str, symbol: str, range_key: str
         points = prices.fetch_history(asset_type, symbol, range_key)
     except Exception:
         if row:
+            row.fetched_at = datetime.utcnow()
+            db.commit()
             return json.loads(row.data_json)
-        raise
+        db.add(models.PriceHistoryCache(
+            asset_type=asset_type, symbol=symbol, range_key=range_key,
+            fetched_at=datetime.utcnow(), data_json="[]",
+        ))
+        db.commit()
+        return []
 
     payload = json.dumps(points)
     if row:
@@ -59,6 +76,43 @@ def get_cached_history(db: Session, asset_type: str, symbol: str, range_key: str
         ))
     db.commit()
     return points
+
+
+# Ranges, die get_cached_history tatsächlich auf der Festplatte cacht (alles
+# außer LIVE_RANGES, siehe prices.py) - für refresh_price_history_cache unten.
+_CACHEABLE_RANGES = [r for r in prices.RANGE_MAP if r not in prices.LIVE_RANGES]
+
+
+def refresh_price_history_cache(db: Session) -> dict:
+    """Wärmt den Kurshistorie-Cache für ALLE gehaltenen Positionen einmal täglich
+    im Hintergrund vor (aufgerufen von main._scheduled_bank_sync, gleicher
+    Rhythmus wie der Bank-/Broker-Sync) - live beobachtet: portfolio_history()
+    ruft get_cached_history() für jede Position sequenziell auf, war der
+    24h-Cache beim Öffnen des Investments-Tabs abgelaufen (was bei täglichem
+    Öffnen praktisch IMMER der Fall war, siehe CACHE_TTL), hat das bei ~15+
+    Positionen ~15+ blockierende Live-Anfragen an Yahoo/CoinGecko HINTEREINANDER
+    im selben Request ausgelöst - das Portfolio-Chart hat dadurch spürbar lange
+    gebraucht. Läuft dieser Refresh stattdessen einmal täglich im Hintergrund,
+    ist der Cache beim nächsten Öffnen praktisch immer frisch (< 24h alt) und
+    get_cached_history liest nur noch aus der DB - keine Wartezeit mehr.
+    Jede Position/Range isoliert in try/except, damit eine einzelne kaputte
+    Notierung (z.B. delistetes Symbol) nicht die übrigen blockiert."""
+    symbols = (
+        db.query(models.Holding.asset_type, models.Holding.symbol)
+        .filter(models.Holding.lots.any())
+        .distinct()
+        .all()
+    )
+    refreshed, failed = 0, []
+    for asset_type, symbol in symbols:
+        asset_type_value = asset_type.value if hasattr(asset_type, "value") else asset_type
+        for range_key in _CACHEABLE_RANGES:
+            try:
+                get_cached_history(db, asset_type_value, symbol, range_key)
+                refreshed += 1
+            except Exception as e:
+                failed.append(f"{symbol} ({range_key}): {e}")
+    return {"refreshed": refreshed, "failed": failed}
 
 
 # ---------- Holdings (Investments) ----------
@@ -563,7 +617,14 @@ def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.Por
         except Exception:
             partial = True
             continue
+        # get_cached_history wirft seit dem negativen Caching (siehe dort) bei
+        # einem fehlgeschlagenen Live-Abruf keine Exception mehr, sondern gibt
+        # [] zurück - der except-Zweig oben greift also praktisch nie mehr für
+        # diesen Fall. "partial" trotzdem hier setzen, sonst verschwindet der
+        # Hinweis für dauerhaft kaputte Symbole (z.B. ISIN statt Yahoo-Ticker
+        # bei manchen Scalable-Capital-Positionen) einfach kommentarlos.
         if not points:
+            partial = True
             continue
         series_by_holding[h.id] = {
             "prices_by_date": dict(points),
