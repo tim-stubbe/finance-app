@@ -154,8 +154,19 @@ def fetch_stock_history(symbol: str, range_key: str) -> list[tuple[str, float]]:
 
 
 def fetch_crypto_history(coingecko_id: str, range_key: str) -> list[tuple[str, float]]:
-    """Kurse (Datums-/Zeitlabel, Kurs in EUR) über CoinGecko."""
+    """Kurse (Datums-/Zeitlabel, Kurs in EUR) über CoinGecko.
+
+    CoinGeckos kostenlose/anonyme API liefert seit einer Richtlinienänderung
+    nur noch ein rollierendes Jahr Historie ohne bezahlten API-Key - live
+    beobachtet: 5J/Alles (days=1825/max aus RANGE_MAP) werden zuverlässig mit
+    "401 Unauthorized" abgelehnt, nicht nur gedrosselt. Deshalb hier auf
+    maximal 365 Tage gedeckelt statt den rohen RANGE_MAP-Wert durchzureichen
+    - liefert für 5J/Alles wenigstens das letzte Jahr an echten Daten statt
+    eines kompletten Fehlschlags (der Portfolio-Chart hat diese Positionen
+    sonst für JEDE Range komplett ausgeblendet, siehe portfolio_history)."""
     _, _, days, _ = RANGE_MAP.get(range_key, RANGE_MAP["1y"])
+    if days not in ("1", "14", "30"):
+        days = "365"
     resp = requests.get(
         COINGECKO_HISTORY_URL.format(id=coingecko_id),
         params={"vs_currency": "eur", "days": days},
