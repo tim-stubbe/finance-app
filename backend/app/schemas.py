@@ -636,6 +636,40 @@ class AssistantSuggestionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ---------- Routinen (Spezifikation Abschnitt G) ----------
+class RoutineBase(BaseModel):
+    name: str
+    weekdays: List[str]  # z.B. ["mon", "wed", "fri"]
+    hour: int
+    minute: int
+    items: List[str]
+    active: bool = True
+
+
+class RoutineCreate(RoutineBase):
+    pass
+
+
+class RoutineUpdate(RoutineBase):
+    pass
+
+
+class RoutineOut(BaseModel):
+    id: int
+    name: str
+    weekdays: List[str]
+    hour: int
+    minute: int
+    items: List[str]
+    active: bool
+    checked_items: List[str] = []  # heutiger Abhak-Stand, siehe models.RoutineRun
+
+
+class RoutineItemToggle(BaseModel):
+    item: str
+    checked: bool
+
+
 # ---------- Enable Banking (Open-Banking-Aggregator für PSD2-Banken) ----------
 class EnableBankingSettingsUpdate(BaseModel):
     app_id: str

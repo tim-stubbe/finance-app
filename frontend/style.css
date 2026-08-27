@@ -1258,6 +1258,13 @@ button:active { transform: scale(0.97); }
   font-weight: 600;
 }
 .inline-time { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Routinen-Checkliste im Hub (siehe dashboard.js loadRoutinesToday). */
+.routine-card + .routine-card { margin-top: 14px; }
+.routine-card h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.routine-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; font-size: 13.5px; }
+.routine-item input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; }
+.routine-item span.done { text-decoration: line-through; color: var(--muted); }
 .settings-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .settings-list li {
   display: flex;

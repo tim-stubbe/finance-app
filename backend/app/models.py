@@ -1489,6 +1489,57 @@ class AssistantSuggestion(Base):
     snoozed_until = Column(Date, nullable=True)
 
 
+class Routine(Base):
+    """Wiederkehrende Jarvis-Checkliste (Spezifikation Abschnitt G) - bewusst
+    schlank: nur Wochentage + eine feste Uhrzeit, keine vollen Kalender-RRULEs
+    wie bei CalendarEvent (dafür gibt es den echten Kalender). Checklist-Items
+    als einfache, newline-getrennte Textliste statt einer eigenen Tabelle -
+    bei typischerweise wenigen kurzen Einträgen (siehe Nutzerbeispiele:
+    Wochenrückblick-Vorbereitung, Müll, Fitness) unnötiger Aufwand, eine
+    eigene Item-Tabelle mit fester Reihenfolge zu pflegen.
+
+    Nutzerseitig frei benannt und befüllt, keine hardcodierten Rituale -
+    reine Infrastruktur."""
+
+    __tablename__ = "routines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    # Komma-getrennt, z.B. "mon,wed,fri" (python date.strftime("%a").lower()-
+    # kompatible Kürzel: mon/tue/wed/thu/fri/sat/sun).
+    weekdays = Column(String, nullable=False)
+    hour = Column(Integer, nullable=False, default=9)
+    minute = Column(Integer, nullable=False, default=0)
+    items_text = Column(Text, nullable=False)  # ein Item pro Zeile
+    active = Column(Boolean, nullable=False, default=True)
+    # Verhindert Mehrfachversand am selben Tag (Muster wie Settings.
+    # last_cashflow_alert_date) - der Scheduler prüft alle 15 Minuten, ohne
+    # das würde ein Routine-Fenster von mehreren Prüfläufen mehrfach treffen.
+    last_sent_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RoutineRun(Base):
+    """Der heutige Abhak-Stand einer Routine (siehe models.Routine) - eine
+    Zeile pro (Routine, Datum), erst bei der ersten Interaktion angelegt
+    (nicht schon beim Versand). checked_items als JSON-Liste der abgehakten
+    Item-TEXTE (nicht Indizes) - robust gegen eine spätere Änderung der
+    Item-Liste in Routine.items_text, ein Index würde dann auf ein anderes
+    Item zeigen."""
+
+    __tablename__ = "routine_runs"
+    __table_args__ = (UniqueConstraint("routine_id", "date", name="uq_routine_run_date"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    routine_id = Column(Integer, ForeignKey("routines.id"), nullable=False)
+    date = Column(Date, nullable=False, default=date.today)
+    checked_items_json = Column(Text, nullable=False, default="[]")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    routine = relationship("Routine")
+
+
 class Note(Base):
     """Freie, durchsuchbare Notiz, die an ein beliebiges anderes Objekt gehängt
     ist (Ziel, To-Do, Business-Projekt, den Schweiz-Tab, ...) - bewusst EINE

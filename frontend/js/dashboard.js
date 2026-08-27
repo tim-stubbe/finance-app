@@ -159,6 +159,7 @@ async function loadHubTab() {
     .toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   loadTodayPanel();
   loadCategorySuggestions();
+  loadRoutinesToday();
   const cardsEl = document.getElementById("hub-finance-cards");
   cardsEl.innerHTML = skelBento();
   document.getElementById("hub-todos-body").innerHTML = skelRows(3);
@@ -582,4 +583,47 @@ async function loadIntegrationsWidget() {
 
 document.getElementById("db-refresh").addEventListener("click", loadDashboard);
 document.getElementById("cat-filter-btn").addEventListener("click", loadCategories);
+
+// ---------- Routinen heute (Spezifikation Abschnitt G) - Abhaken im Hub ----------
+// Gleiche Wochentag-Kürzel wie backend crud_routines.WEEKDAY_CODES.
+const HUB_WEEKDAY_CODES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]; // Date.getDay(): 0=So
+
+async function loadRoutinesToday() {
+  const panel = document.getElementById("hub-routines-panel");
+  let routines = [];
+  try {
+    routines = await api("/routines");
+  } catch (e) {
+    panel.classList.add("hidden");
+    return;
+  }
+  const todayCode = HUB_WEEKDAY_CODES[new Date().getDay()];
+  const dueToday = routines.filter(r => r.active && r.weekdays.includes(todayCode));
+  panel.classList.toggle("hidden", dueToday.length === 0);
+  if (!dueToday.length) return;
+
+  document.getElementById("hub-routines-body").innerHTML = dueToday.map(r => {
+    const items = r.items.map(item => {
+      const checked = r.checked_items.includes(item);
+      return `<label class="routine-item">
+        <input type="checkbox" data-routine-id="${r.id}" data-item="${esc(item)}" ${checked ? "checked" : ""}>
+        <span${checked ? ' class="done"' : ""}>${esc(item)}</span>
+      </label>`;
+    }).join("");
+    return `<div class="routine-card">
+      <h4>${esc(r.name)}</h4>
+      ${items}
+    </div>`;
+  }).join("");
+}
+
+document.getElementById("hub-routines-body").addEventListener("change", async e => {
+  const input = e.target.closest("input[data-routine-id]");
+  if (!input) return;
+  await api(`/routines/${input.dataset.routineId}/check`, {
+    method: "PUT",
+    body: JSON.stringify({ item: input.dataset.item, checked: input.checked }),
+  });
+  input.nextElementSibling.classList.toggle("done", input.checked);
+});
 

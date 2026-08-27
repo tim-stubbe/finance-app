@@ -255,6 +255,11 @@
         <div id="hub-today-body"></div>
       </div>
 
+      <div class="panel hidden" id="hub-routines-panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3" stroke-linecap="round"/><path d="M18 3v4h-4M6 21v-4h4" stroke-linecap="round" stroke-linejoin="round"/></svg> Routinen heute</h3>
+        <div id="hub-routines-body"></div>
+      </div>
+
       <div class="hub-bento" id="hub-finance-cards"></div>
 
       <div class="panel hidden" id="hub-runway-panel">
@@ -2663,6 +2668,39 @@
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6M12 3a6 6 0 0 0-4 10.5c.6.5 1 1.3 1 2.1V17h6v-1.4c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg> Assistent – was Jarvis getan hat</h3>
         <p class="page-sub">Letzte Vorschläge und wie sie entschieden wurden (bestätigt per /ok, verschoben per /später, abgelehnt per /verwerfen in Telegram).</p>
         <ul id="assistant-activity-list" class="settings-list"></ul>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3" stroke-linecap="round"/><path d="M18 3v4h-4M6 21v-4h4" stroke-linecap="round" stroke-linejoin="round"/></svg> Routinen</h3>
+        <p class="page-sub">Wiederkehrende Checklisten (z.B. Sonntag Wochenrückblick-Vorbereitung, Müll, Fitness) - kommen zur eingestellten Zeit per Telegram, abgehakt wird im Hub.</p>
+        <ul id="routines-list" class="settings-list"></ul>
+        <form id="routine-form" class="form-grid" style="margin-top:14px">
+          <label class="wide">Name <input type="text" id="routine-name" required placeholder="z.B. Sonntag-Vorbereitung"></label>
+          <div class="wide">
+            <span class="page-sub" style="display:block;margin-bottom:4px">Wochentage</span>
+            <div class="theme-switch" id="routine-weekdays">
+              <button type="button" class="theme-option" data-weekday="mon">Mo</button>
+              <button type="button" class="theme-option" data-weekday="tue">Di</button>
+              <button type="button" class="theme-option" data-weekday="wed">Mi</button>
+              <button type="button" class="theme-option" data-weekday="thu">Do</button>
+              <button type="button" class="theme-option" data-weekday="fri">Fr</button>
+              <button type="button" class="theme-option" data-weekday="sat">Sa</button>
+              <button type="button" class="theme-option" data-weekday="sun">So</button>
+            </div>
+          </div>
+          <label>Uhrzeit
+            <span class="inline-time">
+              <select id="routine-hour"></select> :
+              <select id="routine-minute"></select>
+            </span>
+          </label>
+          <label class="wide">Checklist-Punkte (einer pro Zeile)
+            <textarea id="routine-items" rows="4" required placeholder="Wäsche waschen&#10;Kühlschrank prüfen&#10;Wochenplan schreiben"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button type="submit" class="btn-primary">Routine anlegen</button>
+          </div>
+        </form>
       </div>
 
       <div class="panel">

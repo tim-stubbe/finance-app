@@ -642,6 +642,40 @@ def get_assistant_suggestions(db: Session = Depends(get_db)):
     return crud.get_recent_suggestions(db)
 
 
+# ---------------- Routinen (Spezifikation Abschnitt G) ----------------
+@api_router.get("/routines", response_model=List[schemas.RoutineOut])
+def list_routines(db: Session = Depends(get_db)):
+    return crud.get_routines(db)
+
+
+@api_router.post("/routines", response_model=schemas.RoutineOut)
+def create_routine_endpoint(data: schemas.RoutineCreate, db: Session = Depends(get_db)):
+    return crud.create_routine(db, data)
+
+
+@api_router.put("/routines/{routine_id}", response_model=schemas.RoutineOut)
+def update_routine_endpoint(routine_id: int, data: schemas.RoutineUpdate, db: Session = Depends(get_db)):
+    routine = crud.update_routine(db, routine_id, data)
+    if not routine:
+        raise HTTPException(404, "Routine nicht gefunden")
+    return routine
+
+
+@api_router.delete("/routines/{routine_id}")
+def delete_routine_endpoint(routine_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_routine(db, routine_id):
+        raise HTTPException(404, "Routine nicht gefunden")
+    return {"ok": True}
+
+
+@api_router.put("/routines/{routine_id}/check", response_model=schemas.RoutineOut)
+def toggle_routine_item_endpoint(routine_id: int, data: schemas.RoutineItemToggle, db: Session = Depends(get_db)):
+    routine = crud.toggle_routine_item(db, routine_id, data.item, data.checked)
+    if not routine:
+        raise HTTPException(404, "Routine nicht gefunden")
+    return routine
+
+
 # ---------------- Heute / Fokus ----------------
 # Fenster für den Fokus-View. Bewusst unterschiedlich weit: eine Kündigungs-
 # oder Rückgabefrist muss man ein paar Tage vorher sehen (sonst ist sie weg),
@@ -1645,6 +1679,31 @@ def _scheduled_suggestion_check():
         db.close()
 
 
+def _scheduled_routines():
+    """Alle 15 Minuten: prüft, ob eine Routine (Spezifikation Abschnitt G)
+    jetzt fällig ist (siehe crud.get_due_routines) und schickt die Checkliste
+    als Text per Telegram - bewusst KEIN interaktives Abhaken direkt in
+    Telegram (dieser Bot ist Long-Polling/reiner Text, keine Inline-Keyboards/
+    Callback-Queries, siehe telegram_bot.py-Docstring), das Abhaken passiert
+    stattdessen in der App (Hub, siehe frontend). last_sent_date wird SOFORT
+    nach dem Versand gesetzt, nicht erst nach einer Bestätigung - eine
+    Routine-Erinnerung ist keine Rückfrage, die eine Antwort braucht."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        now = datetime.now()  # lokale Zeit, wie die Routine-Uhrzeit in der UI gemeint ist
+        for routine in crud.get_due_routines(db, now):
+            items = [i for i in routine.items_text.split("\n") if i.strip()]
+            item_lines = "\n".join(f"☐ {i}" for i in items)
+            notifications.notify(settings, f"🔁 Routine „{routine.name}“:\n{item_lines}\n\nAbhaken in der App (Hub).")
+            routine.last_sent_date = date.today()
+            db.commit()
+    finally:
+        db.close()
+
+
 def _geocode_missing_event_locations(db: Session):
     """Geokodiert Termin-Orte, die noch keine Koordinaten haben - einmalig pro
     Termin, nicht bei jedem Digest-Lauf (siehe CalendarEvent.lat/lon). Nur
@@ -1958,6 +2017,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_suggestion_check, CronTrigger(hour=9, minute=15),
     id="suggestion_check", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_routines, CronTrigger(minute="0,15,30,45"),
+    id="routines", misfire_grace_time=600,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es

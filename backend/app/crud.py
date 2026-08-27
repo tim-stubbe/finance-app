@@ -81,6 +81,10 @@ from .crud_trips_review import (
     get_trips, get_trip, create_trip, update_trip, delete_trip, trip_summary,
     get_pending_category_suggestions, decide_category_suggestion,
 )
+from .crud_routines import (
+    get_routines, create_routine, update_routine, delete_routine,
+    toggle_routine_item, get_due_routines,
+)
 
 CACHE_TTL = timedelta(hours=24)
 

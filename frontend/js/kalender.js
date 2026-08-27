@@ -282,6 +282,7 @@ async function loadSettingsTab() {
   await loadMorningBriefingSettings();
   await loadQuietHoursSettings();
   await loadAssistantActivity();
+  await loadRoutinesSettings();
   await loadAlertRules();
   await loadCallSettings();
   await loadBackupSettings();

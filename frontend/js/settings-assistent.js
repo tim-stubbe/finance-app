@@ -124,3 +124,66 @@ async function loadAssistantActivity() {
       <span class="page-sub">${ASSISTANT_SUGGESTION_STATUS_LABELS[s.status] || esc(s.status)} · ${new Date(s.created_at).toLocaleDateString("de-DE")}</span>
     </li>`).join("");
 }
+
+// ---------- Routinen (Einstellungen: anlegen/löschen; Abhaken im Hub, siehe dashboard.js) ----------
+const WEEKDAY_LABELS_DE = { mon: "Mo", tue: "Di", wed: "Mi", thu: "Do", fri: "Fr", sat: "Sa", sun: "So" };
+
+async function loadRoutinesSettings() {
+  _fillHourSelect(document.getElementById("routine-hour"));
+  _fillMinuteSelect(document.getElementById("routine-minute"));
+  const list = document.getElementById("routines-list");
+  let routines = [];
+  try {
+    routines = await api("/routines");
+  } catch (e) {
+    return;
+  }
+  if (!routines.length) {
+    list.innerHTML = `<li class="page-sub" style="background:none;padding:0">Noch keine Routinen angelegt.</li>`;
+    return;
+  }
+  list.innerHTML = routines.map(r => `
+    <li>
+      <span>${esc(r.name)} <span class="page-sub">(${r.weekdays.map(w => WEEKDAY_LABELS_DE[w] || w).join(", ")}, ${String(r.hour).padStart(2, "0")}:${String(r.minute).padStart(2, "0")} Uhr, ${r.items.length} Punkt${r.items.length !== 1 ? "e" : ""})</span></span>
+      <button type="button" class="btn-ghost btn-sm" data-delete-routine="${r.id}">Löschen</button>
+    </li>`).join("");
+}
+
+document.getElementById("routines-list").addEventListener("click", async e => {
+  const btn = e.target.closest("[data-delete-routine]");
+  if (!btn) return;
+  if (!confirm("Routine wirklich löschen?")) return;
+  await api(`/routines/${btn.dataset.deleteRoutine}`, { method: "DELETE" });
+  loadRoutinesSettings();
+});
+
+document.getElementById("routine-weekdays").addEventListener("click", e => {
+  const btn = e.target.closest("[data-weekday]");
+  if (!btn) return;
+  btn.classList.toggle("active");
+});
+
+document.getElementById("routine-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const weekdays = [...document.querySelectorAll("#routine-weekdays .theme-option.active")].map(b => b.dataset.weekday);
+  if (!weekdays.length) {
+    toast("Bitte mindestens einen Wochentag wählen.");
+    return;
+  }
+  const items = document.getElementById("routine-items").value.split("\n").map(s => s.trim()).filter(Boolean);
+  await api("/routines", {
+    method: "POST",
+    body: JSON.stringify({
+      name: document.getElementById("routine-name").value,
+      weekdays,
+      hour: parseInt(document.getElementById("routine-hour").value, 10),
+      minute: parseInt(document.getElementById("routine-minute").value, 10),
+      items,
+      active: true,
+    }),
+  });
+  document.getElementById("routine-form").reset();
+  document.querySelectorAll("#routine-weekdays .theme-option.active").forEach(b => b.classList.remove("active"));
+  loadRoutinesSettings();
+  toast("Routine angelegt.");
+});

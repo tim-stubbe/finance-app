@@ -151,6 +151,9 @@ nach ausdrücklicher Bestätigung.
 - `/haengt` in Telegram zeigt auf Zuruf eine Zusammenfassung liegengebliebener
   Dinge (To-Dos ohne Datum, überfällige To-Dos, offene Projekt-Punkte,
   überfällige Check-ins/Wunschlisten-Prüfungen)
+- **Routinen**: frei definierbare wiederkehrende Checklisten (Name,
+  Wochentage, Uhrzeit, Punkte) – kommen zur eingestellten Zeit per Telegram,
+  abgehakt wird im Hub (Einstellungen → Benachrichtigungen → „Routinen")
 - Der Telegram-Bot beantwortet auch Fragen mit derselben KI wie die
   Weboberfläche und kann To-Dos/Termine/Projekt-Punkte/Check-ins/Wunschlisten-
   Einträge anlegen bzw. abhaken (per festem Kommando oder KI-erkannter
