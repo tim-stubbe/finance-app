@@ -47,6 +47,48 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
+<!-- Web-Login (siehe js/auth-login.js) - eigener Bereich neben #app, wird
+     von bootAuthGate() gezeigt statt #app, solange keine gültige Session
+     besteht. Vier Unterformulare (Setup/Login/TOTP/Wiederherstellung),
+     jeweils per .hidden ein-/ausgeblendet, analog zum Tab-Umschalten
+     weiter unten in #app. -->
+<div id="login-screen" class="hidden">
+  <div class="login-card">
+    <h1 class="login-title">Kies</h1>
+
+    <form id="setup-form" class="login-form hidden">
+      <p class="login-sub">Ersteinrichtung – lege ein Passwort für diese Instanz fest.</p>
+      <label>Passwort <input type="password" id="setup-password" required minlength="10" autocomplete="new-password"></label>
+      <label>Passwort wiederholen <input type="password" id="setup-password-confirm" required minlength="10" autocomplete="new-password"></label>
+      <p id="setup-error" class="login-error hidden"></p>
+      <button type="submit" class="btn-primary">Einrichten</button>
+      <p class="login-hint">Zwei-Faktor (Authenticator-App) und Passkeys lassen sich danach in den Einstellungen aktivieren.</p>
+    </form>
+
+    <form id="login-form" class="login-form hidden">
+      <p id="login-message" class="login-message hidden"></p>
+      <label>Passwort <input type="password" id="login-password" required autocomplete="current-password"></label>
+      <p id="login-error" class="login-error hidden"></p>
+      <button type="submit" class="btn-primary">Anmelden</button>
+      <button type="button" id="login-passkey-btn" class="btn-ghost hidden">🔐 Mit Passkey anmelden</button>
+    </form>
+
+    <form id="totp-form" class="login-form hidden">
+      <p class="login-sub">Code aus deiner Authenticator-App eingeben.</p>
+      <label>Code <input type="text" id="totp-code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autocomplete="one-time-code"></label>
+      <p id="totp-error" class="login-error hidden"></p>
+      <button type="submit" class="btn-primary">Bestätigen</button>
+      <button type="button" id="totp-recovery-link" class="btn-link">Wiederherstellungscode verwenden</button>
+    </form>
+
+    <form id="recovery-form" class="login-form hidden">
+      <p class="login-sub">Einmaliger Wiederherstellungscode - deaktiviert danach den zweiten Faktor.</p>
+      <label>Wiederherstellungscode <input type="text" id="recovery-code" required autocomplete="off"></label>
+      <p id="recovery-error" class="login-error hidden"></p>
+      <button type="submit" class="btn-primary">Bestätigen</button>
+    </form>
+  </div>
+</div>
 <div id="app" class="hidden">
   <aside class="sidebar">
     <div class="brand">
@@ -2068,6 +2110,71 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Anmeldung &amp; Sicherheit</h3>
+        <p class="page-sub">Passwort, Zwei-Faktor (TOTP) und Passkeys für den Web-Zugriff. Native Apps (macOS/iOS) nutzen weiterhin ein eigenes Pairing-Secret, siehe „Weitere Verbindungen“ → „Nativer Client“.</p>
+
+        <form id="session-timeout-form" class="form-grid">
+          <label>Automatische Abmeldung nach Inaktivität (Minuten)
+            <input type="number" id="session-timeout-input" min="1" max="1440" required>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+
+        <h4 class="settings-subhead">Passwort ändern</h4>
+        <form id="password-change-form" class="form-grid">
+          <label>Aktuelles Passwort <input type="password" id="password-change-current" required autocomplete="current-password"></label>
+          <label>Neues Passwort <input type="password" id="password-change-new" required minlength="10" autocomplete="new-password"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Ändern</button>
+          </div>
+          <p id="password-change-error" class="login-error hidden wide"></p>
+        </form>
+
+        <h4 class="settings-subhead">Zwei-Faktor-Authentifizierung (TOTP)</h4>
+        <div id="totp-status-off">
+          <p class="page-sub">Noch nicht aktiviert - schützt zusätzlich zum Passwort mit einem 30-Sekunden-Code aus einer Authenticator-App (z.B. Authy, Aegis, Google Authenticator, 1Password).</p>
+          <button type="button" id="totp-start-setup" class="btn-ghost">Aktivieren</button>
+        </div>
+        <div id="totp-setup-flow" class="hidden">
+          <p class="page-sub">QR-Code mit der Authenticator-App scannen oder das Secret manuell eintragen, dann den angezeigten Code hier bestätigen.</p>
+          <img id="totp-qr-img" alt="QR-Code fürs TOTP-Setup" style="max-width:200px;border-radius:8px">
+          <p class="page-sub">Manuelles Secret: <code id="totp-manual-secret"></code></p>
+          <form id="totp-confirm-form" class="form-grid">
+            <label>Code aus der App <input type="text" id="totp-confirm-code" maxlength="6" inputmode="numeric" pattern="[0-9]*" required></label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Bestätigen</button>
+              <button type="button" id="totp-setup-cancel" class="btn-ghost">Abbrechen</button>
+            </div>
+          </form>
+          <p id="totp-setup-error" class="login-error hidden"></p>
+        </div>
+        <div id="totp-recovery-display" class="hidden">
+          <p class="page-sub"><strong>Wiederherstellungscode jetzt notieren</strong> - wird nur dieses eine Mal angezeigt und gilt für den Fall, dass dein Zweitfaktor-Gerät verloren geht:</p>
+          <p><code id="totp-recovery-code-text" style="font-size:15px"></code></p>
+          <button type="button" id="totp-recovery-done" class="btn-primary">Notiert</button>
+        </div>
+        <div id="totp-status-on" class="hidden">
+          <p class="page-sub">Zwei-Faktor ist aktiv.</p>
+          <label>Zum Deaktivieren: Passwort ODER aktueller Code <input type="text" id="totp-disable-confirm" autocomplete="off"></label>
+          <button type="button" id="totp-disable-btn" class="btn-warn">Deaktivieren</button>
+          <p id="totp-disable-error" class="login-error hidden"></p>
+        </div>
+
+        <h4 class="settings-subhead">Passkeys</h4>
+        <ul id="passkey-list" class="settings-list"></ul>
+        <div class="form-actions">
+          <input type="text" id="passkey-new-name" placeholder="Gerätename, z.B. iPhone" style="max-width:200px">
+          <button type="button" id="passkey-add-btn" class="btn-ghost">Passkey hinzufügen</button>
+        </div>
+        <p id="passkey-error" class="login-error hidden"></p>
+
+        <h4 class="settings-subhead">Sitzung</h4>
+        <button type="button" id="logout-btn" class="btn-warn">Abmelden</button>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M3 12h18"/></svg> Land</h3>
         <p class="page-sub">Blendet landesspezifische Anbindungen unten aus (z.B. FinTS ist deutschlandspezifisch). Betrifft nicht die Anzeige-Währung (EUR/CHF oben in der Kopfzeile) - die bleibt unabhängig davon einstellbar.</p>
         <div class="theme-switch" id="country-switch">
@@ -2885,6 +2992,11 @@
      teilen sich weiterhin denselben globalen Scope (klassische <script>-Tags,
      kein type="module"), Ladereihenfolge = ursprüngliche Reihenfolge in app.js. -->
 <script src="js/core.js"></script>
+<!-- Früh geladen: settings-auth.js (Einstellungen-Tab) braucht logout()/
+     registerPasskey()/setFormError() schon beim Anhängen seiner Event-
+     Listener, lange bevor js/auth-login.js (Boot-Gate, muss als LETZTES
+     Skript laden) an der Reihe wäre. -->
+<script src="js/auth-helpers.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/categories.js"></script>
 <script src="js/investments.js"></script>
@@ -2902,6 +3014,7 @@
 <script src="js/belege-emails.js"></script>
 <script src="js/webhook-n8n.js"></script>
 <script src="js/vermoegensvergleich.js"></script>
+<script src="js/settings-auth.js"></script>
 <script src="js/settings-budgets.js"></script>
 <script src="js/settings-export-backup.js"></script>
 <script src="js/settings-auto-backups.js"></script>
@@ -2921,5 +3034,9 @@
 <script src="js/command-palette.js"></script>
 <script src="js/jahresrueckblick.js"></script>
 <script src="js/notizen.js"></script>
+<!-- Muss als LETZTES Skript laden - bootAuthGate() am Ende von auth-login.js
+     braucht startApp()/init() (core.js/init.js) und alle Tab-Ladefunktionen
+     bereits definiert, siehe js/auth-login.js-Kopfkommentar. -->
+<script src="js/auth-login.js"></script>
 </body>
 </html>

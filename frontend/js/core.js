@@ -152,11 +152,32 @@ function formatApiErrorDetail(detail) {
   return String(detail);
 }
 
+// CSRF-Double-Submit (siehe backend/app/auth.py:require_auth): das Backend
+// setzt beim Login ein zusätzliches, per JS lesbares csrf_token-Cookie (nicht
+// httpOnly, anders als das Session-Cookie) - bei jeder zustandsändernden
+// Anfrage wird derselbe Wert hier ausgelesen und als Header gespiegelt.
+// Ein Angreifer von einer fremden Seite kann den Cookie-Wert nicht auslesen
+// (Same-Origin-Policy), kann den Header also nicht korrekt setzen.
+function getCsrfToken() {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function api(path, options = {}) {
-  const res = await fetch(API + path, {
-    headers: options.body instanceof FormData ? {} : { "Content-Type": "application/json" },
-    ...options,
-  });
+  const method = (options.method || "GET").toUpperCase();
+  const headers = options.body instanceof FormData ? {} : { "Content-Type": "application/json" };
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
+  const res = await fetch(API + path, { headers, ...options });
+  if (res.status === 401) {
+    // Sitzung fehlt/abgelaufen - zurück zum Login statt der generischen
+    // Fehler-Alert-Box (siehe auth-login.js:handleUnauthorized). Kein
+    // generischer Alert hier, der Login-Screen erklärt selbst, was los ist.
+    if (typeof handleUnauthorized === "function") handleUnauthorized();
+    throw new Error("Nicht angemeldet.");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const message = formatApiErrorDetail(err.detail ?? res.statusText);

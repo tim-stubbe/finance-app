@@ -11,15 +11,25 @@ schnell wie möglich behoben.
 - **Dependabot** meldet bekannte Sicherheitslücken in Abhängigkeiten und
   öffnet wöchentlich Pull Requests für Versions-Updates (Python-Pakete,
   Docker-Basis-Image, GitHub Actions).
+- **Web-Login** (Passwort + optional TOTP/Passkeys, siehe „Zugriffsschutz"
+  in der [README](README.md)) schützt jetzt jeden `/api/*`-Endpunkt mit
+  Finanzdaten - ausgenommen `/api/sync/*` (nativer Client) und
+  `/api/webhook/*` (n8n), die statt eines Browser-Logins weiterhin ein
+  eigenes, geteiltes Secret im Header verlangen. Passwörter werden nur als
+  Argon2id-Hash gespeichert (passlib), nie im Klartext oder reversibel.
+  TOTP-Secrets liegen wie alle anderen Zugangsdaten Fernet-verschlüsselt in
+  der Datenbank. Login/TOTP sind rate-limitiert (progressive Sperre nach 5
+  Fehlversuchen), zustandsändernde Anfragen zusätzlich per
+  Double-Submit-CSRF-Token abgesichert.
 - Alle Zugangsdaten (Bank-, KI-, Benachrichtigungs-Anbindungen) liegen
   Fernet-verschlüsselt in der Datenbank, nie im Klartext oder als
   Umgebungsvariable.
 - Datei-Endpunkte (Belege, Backups) sind gegen Pfad-Manipulation abgesichert.
 - Externe Skript-Einbindungen tragen eine Subresource-Integrity-Prüfung.
-- Die Anwendung ist bewusst nicht öffentlich aus dem Internet erreichbar
-  (nur eigenes Netz / Tailscale) – siehe „Zugriffsschutz" in der
-  [README](README.md). Das ist die wichtigste Absicherung überhaupt und
-  entschärft die meisten sonst kritischen Funde deutlich.
+- Die Anwendung ist zusätzlich bewusst nicht öffentlich aus dem Internet
+  erreichbar (nur eigenes Netz / Tailscale) – siehe „Zugriffsschutz" in der
+  [README](README.md). Das bleibt die wichtigste Absicherung überhaupt und
+  entschärft die meisten sonst kritischen Funde deutlich, auch mit Login.
 
 ## Eine Schwachstelle melden
 
@@ -41,8 +51,9 @@ nicht publik wird, bevor ein Fix da ist.
 ## Was explizit außerhalb des Rahmens liegt
 
 - Diese Anwendung ist für **einen einzigen Nutzer** gedacht und wird das
-  auch bleiben – es gibt bewusst keine Anmeldung/Mehrbenutzer-Trennung.
-  Wer sie öffentlich oder mehrbenutzerfähig betreiben will, muss selbst für
-  Zugriffsschutz sorgen (siehe README).
+  auch bleiben – es gibt seit Kurzem einen Web-Login (siehe oben), aber
+  bewusst kein Mehrbenutzer-System, keine Rollen, keine Registrierung für
+  Dritte. Wer sie öffentlich erreichbar machen will, muss trotzdem selbst
+  für zusätzlichen Zugriffsschutz sorgen (siehe README).
 - Der Telegram-Bot hat bewusst nur Lesezugriff, gerade damit ein
   kompromittiertes Bot-Token keinen Schreibzugriff auf die Daten ermöglicht.

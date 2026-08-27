@@ -86,7 +86,9 @@ async function init() {
   handleEnableBankingReturn();
   handleEbayReturn();
 }
-startApp();
+// startApp() wird jetzt NICHT mehr direkt hier aufgerufen, sondern von
+// bootAuthGate() (siehe js/auth-login.js, als letztes Skript geladen) - erst
+// nachdem GET /api/auth/status eine gültige Session bestätigt hat.
 
 async function loadVersionWatermark() {
   const el = document.getElementById("version-watermark-hub");

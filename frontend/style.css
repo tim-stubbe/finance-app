@@ -1198,6 +1198,77 @@ button:active { transform: scale(0.97); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .btn-warn { color: var(--neg); border-color: var(--neg); }
 
+/* Reiner Text-Button ohne Rahmen/Hintergrund - z.B. "Wiederherstellungscode
+   verwenden?" im Login (siehe #login-screen weiter unten), wo ein
+   vollwertiger Button optisch zu viel Gewicht hätte. */
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent-strong);
+  font-weight: 500;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.btn-link:hover { color: var(--accent); }
+
+/* ---------- Web-Login (siehe js/auth-login.js) ---------- */
+#login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.login-title {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+.login-form { display: flex; flex-direction: column; gap: 14px; }
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.login-sub { margin: 0 0 4px; font-size: 13px; color: var(--text-secondary); }
+.login-hint { margin: 8px 0 0; font-size: 12px; color: var(--text-secondary); text-align: center; }
+.login-error { margin: 0; font-size: 13px; color: var(--neg); }
+.login-message { margin: 0; font-size: 13px; color: var(--warn); }
+
+/* Anmeldung & Sicherheit-Panel (Einstellungen → Allgemein) */
+.settings-subhead {
+  margin: 22px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.settings-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
 /* ---------- Forms ---------- */
 .form-grid {
   display: grid;

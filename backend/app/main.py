@@ -36,11 +36,12 @@ from .routers.spaces_accounts import spaces_accounts_router
 from .routers.backup_restore import backup_router, write_backup_to_disk
 from .routers.export_import import export_import_router
 from .routers.analytics import analytics_router
-from .routers.settings_misc import settings_misc_router, run_ai_maintenance_for_space
+from .routers.settings_misc import settings_misc_router, webhook_public_router, run_ai_maintenance_for_space
 from .routers.notify_settings import notify_settings_router
 from .routers.dashboard import dashboard_router
 from .routers.profile_ollama import profile_ollama_router
 from .routers.sync_all import sync_all_router, sync_all_connections
+from .routers.auth_login import auth_public_router, auth_protected_router
 from .routers.ai_assistant import ai_assistant_router, websearch_configured, websearch_run
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
@@ -244,6 +245,21 @@ ensure_columns("settings", {
 })
 ensure_columns("spaces", {
     "last_digest_net_worth": "FLOAT",
+})
+# Web-Login (siehe auth.py/models.Settings-Kommentar) - password_hash bleibt
+# nach diesem Update erstmal NULL, bestehende Installationen brauchen einmal
+# den Setup-Assistenten (siehe ROADMAP.md).
+ensure_columns("settings", {
+    "password_hash": "VARCHAR",
+    "password_set_at": "DATETIME",
+    "setup_completed_at": "DATETIME",
+    "totp_secret_encrypted": "VARCHAR",
+    "totp_enabled": "BOOLEAN DEFAULT 0",
+    "totp_confirmed_at": "DATETIME",
+    "totp_recovery_code_hash": "VARCHAR",
+    "session_idle_timeout_minutes": "INTEGER DEFAULT 5",
+    "failed_login_count": "INTEGER DEFAULT 0",
+    "failed_login_locked_until": "DATETIME",
 })
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
@@ -660,33 +676,46 @@ def update_backup_settings(data: schemas.BackupSettingsUpdate, db: Session = Dep
     return schemas.BackupSettingsOut(enabled=s.auto_backup_enabled, hour=s.backup_hour, retention=s.backup_retention)
 
 
-app.include_router(api_router)
-app.include_router(investments_router)
-app.include_router(tax_router)
-app.include_router(debts_router)
-app.include_router(goals_router)
-app.include_router(trips_router)
-app.include_router(wishlist_router)
-app.include_router(personal_router)
-app.include_router(business_life_router)
-app.include_router(budgets_alerts_router)
-app.include_router(deadlines_router)
-app.include_router(calendar_todos_router)
-app.include_router(categories_router)
-app.include_router(immich_router)
-app.include_router(bank_connections_router)
-app.include_router(enablebanking_ebay_router)
-app.include_router(mail_router)
-app.include_router(spaces_accounts_router)
-app.include_router(backup_router)
-app.include_router(export_import_router)
-app.include_router(analytics_router)
-app.include_router(settings_misc_router)
-app.include_router(notify_settings_router)
-app.include_router(dashboard_router)
-app.include_router(profile_ollama_router)
-app.include_router(sync_all_router)
-app.include_router(ai_assistant_router)
+# Web-Login (siehe auth.py/routers/auth_login.py): jeder Router hier drunter
+# bekommt dependencies=[Depends(auth.require_auth)] und ist damit nur noch
+# mit gültiger Session erreichbar - EXCEPT die drei bewusst öffentlichen:
+# auth_public_router (Status/Setup/Login/TOTP-Verify/Logout/Passkey-Login -
+# genau dafür ist er da), sync_router (eigenes X-Sync-Secret, native Clients)
+# und webhook_public_router (eigenes X-Webhook-Secret, n8n). Diese
+# Absicherung sitzt bewusst hier am Einbinde-Ort statt als globale Pfad-
+# Middleware - jede Zeile zeigt im main.py-Diff explizit, ob und wie ein
+# Router geschützt ist, statt sich auf String-Pfad-Vergleiche zu verlassen.
+_require_auth = [Depends(auth.require_auth)]
+app.include_router(auth_public_router)
+app.include_router(auth_protected_router, dependencies=_require_auth)
+app.include_router(webhook_public_router)
+app.include_router(api_router, dependencies=_require_auth)
+app.include_router(investments_router, dependencies=_require_auth)
+app.include_router(tax_router, dependencies=_require_auth)
+app.include_router(debts_router, dependencies=_require_auth)
+app.include_router(goals_router, dependencies=_require_auth)
+app.include_router(trips_router, dependencies=_require_auth)
+app.include_router(wishlist_router, dependencies=_require_auth)
+app.include_router(personal_router, dependencies=_require_auth)
+app.include_router(business_life_router, dependencies=_require_auth)
+app.include_router(budgets_alerts_router, dependencies=_require_auth)
+app.include_router(deadlines_router, dependencies=_require_auth)
+app.include_router(calendar_todos_router, dependencies=_require_auth)
+app.include_router(categories_router, dependencies=_require_auth)
+app.include_router(immich_router, dependencies=_require_auth)
+app.include_router(bank_connections_router, dependencies=_require_auth)
+app.include_router(enablebanking_ebay_router, dependencies=_require_auth)
+app.include_router(mail_router, dependencies=_require_auth)
+app.include_router(spaces_accounts_router, dependencies=_require_auth)
+app.include_router(backup_router, dependencies=_require_auth)
+app.include_router(export_import_router, dependencies=_require_auth)
+app.include_router(analytics_router, dependencies=_require_auth)
+app.include_router(settings_misc_router, dependencies=_require_auth)
+app.include_router(notify_settings_router, dependencies=_require_auth)
+app.include_router(dashboard_router, dependencies=_require_auth)
+app.include_router(profile_ollama_router, dependencies=_require_auth)
+app.include_router(sync_all_router, dependencies=_require_auth)
+app.include_router(ai_assistant_router, dependencies=_require_auth)
 app.include_router(sync_router)
 
 

@@ -38,6 +38,12 @@ from ..database import get_db
 from .ai_assistant import websearch_configured
 
 settings_misc_router = APIRouter(prefix="/api")
+# Eigener Router NUR für den n8n-Webhook-Empfänger (siehe unten) - der ist
+# bewusst öffentlich (eigenes Secret im Header statt Login, siehe Docstring
+# dort), alles andere in dieser Datei braucht ab jetzt eine Session (siehe
+# main.py: settings_misc_router bekommt dependencies=[Depends(auth.
+# require_auth)], webhook_public_router explizit NICHT).
+webhook_public_router = APIRouter(prefix="/api")
 
 
 # ---------------- FinTS Bank-Sync ----------------
@@ -210,7 +216,7 @@ def remove_native_sync_secret(db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@settings_misc_router.post("/webhook/business-issue", response_model=schemas.BusinessIssueOut)
+@webhook_public_router.post("/webhook/business-issue", response_model=schemas.BusinessIssueOut)
 def webhook_create_business_issue(
     data: schemas.WebhookIssueCreate, db: Session = Depends(get_db),
     x_webhook_secret: Optional[str] = Header(None),

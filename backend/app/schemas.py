@@ -2119,6 +2119,100 @@ class CategorySuggestionOut(BaseModel):
     created_at: datetime
 
 
+# ---------- Web-Login (siehe routers/auth_login.py) ----------
+class AuthStatusOut(BaseModel):
+    setup_required: bool
+    authenticated: bool
+    totp_required: bool  # True = Passwort war richtig, TOTP-Code fehlt noch
+    totp_enabled: bool
+    passkeys_enabled: bool  # mind. ein Passkey registriert
+    session_idle_timeout_minutes: int
+
+
+class SetupIn(BaseModel):
+    password: str
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class LoginIn(BaseModel):
+    password: str
+
+
+class LoginOut(BaseModel):
+    authenticated: bool
+    totp_required: bool
+
+
+class TotpVerifyIn(BaseModel):
+    code: str
+
+
+class TotpSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_code_data_uri: str  # data:image/png;base64,... - fertiges <img src>
+
+
+class TotpConfirmIn(BaseModel):
+    code: str
+
+
+class TotpConfirmOut(BaseModel):
+    recovery_code: str  # nur EINMAL im Klartext - danach nur noch der Hash gespeichert
+
+
+class TotpDisableIn(BaseModel):
+    # Verlangt eine erneute Bestätigung (Passwort ODER aktueller TOTP-Code),
+    # damit nicht ein gekapertes offenes Browser-Fenster allein reicht, um
+    # den zweiten Faktor abzuschalten.
+    password: Optional[str] = None
+    code: Optional[str] = None
+
+
+class RecoveryLoginIn(BaseModel):
+    recovery_code: str
+
+
+class SessionTimeoutOut(BaseModel):
+    session_idle_timeout_minutes: int
+
+
+class SessionTimeoutUpdate(BaseModel):
+    session_idle_timeout_minutes: int
+
+
+class PasskeyCredentialOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: Optional[str] = None
+    transports: Optional[str] = None
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+
+
+class PasskeyRegisterOptionsIn(BaseModel):
+    name: Optional[str] = None  # Geräte-Label, z.B. "iPhone" - vom Nutzer vergeben
+
+
+class WebAuthnOptionsOut(BaseModel):
+    # Rohe WebAuthn-Optionen als JSON-Objekt (siehe py_webauthn:
+    # options_to_json) - das Frontend reicht es unveraendert an
+    # navigator.credentials.create()/.get() durch, kein eigenes Schema fuer
+    # jedes Detail der WebAuthn-Spec noetig.
+    publicKey: Dict[str, Any]
+
+
+class WebAuthnCredentialIn(BaseModel):
+    # Rohe Antwort von navigator.credentials.create()/.get() (bereits vom
+    # Frontend in JSON umgewandelt) - py_webauthn parst/verifiziert sie direkt.
+    credential: Dict[str, Any]
+    name: Optional[str] = None  # nur bei der Registrierung genutzt
+
+
 # ---------- Globale Suche ----------
 class GlobalSearchResult(BaseModel):
     entity_type: str

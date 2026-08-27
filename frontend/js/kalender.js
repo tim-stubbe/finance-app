@@ -265,6 +265,7 @@ async function refreshIntegrationBadge() {
 
 async function loadSettingsTab() {
   await loadCountrySettings();
+  await loadAuthSettingsPanel();
   await loadIntegrationStatus();
   await loadBudgets();
   await loadOllamaSettings();

@@ -320,6 +320,62 @@ class Settings(Base):
     # sonst wie beim manuellen Sync ueber auth.get_active_space_id ein Bereich
     # ableiten liesse. NULL faellt auf den ersten Bereich zurueck.
     scalable_space_id = Column(Integer, ForeignKey("spaces.id"), nullable=True)
+    # --- Web-Login (siehe auth.py) - ersetzt die bisherige "keine Anmeldung"
+    # (README/SECURITY.md, jetzt angepasst). Weiterhin Single-User: eine Zeile
+    # reicht, kein User-Table noetig. password_hash bleibt NULL bis zum
+    # Ersteinrichtungs-Assistenten (Setup-Wizard) - solange gilt "noch nicht
+    # eingerichtet", GET /api/auth/status meldet das als setup_required.
+    password_hash = Column(String, nullable=True)
+    password_set_at = Column(DateTime, nullable=True)
+    setup_completed_at = Column(DateTime, nullable=True)
+    # TOTP-Secret verschluesselt wie alle anderen Secrets (encrypt_secret mit
+    # secret_key) - erst NACH einer bestaetigten Erst-Verifikation aktiv
+    # (totp_enabled=True), damit ein Nutzer, der den QR-Code nicht richtig
+    # gescannt hat, sich nicht versehentlich aussperrt.
+    totp_secret_encrypted = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
+    totp_confirmed_at = Column(DateTime, nullable=True)
+    # Einmaliger Wiederherstellungscode fuer den Fall "TOTP-Geraet weg" -
+    # gehasht wie das Passwort (nie im Klartext gespeichert), wird beim
+    # Aktivieren von TOTP neu erzeugt und dem Nutzer GENAU EINMAL angezeigt.
+    # Bewusst diese Variante statt "Restore aus Backup" als Dokumentations-
+    # Empfehlung: ein Recovery-Code ist fuer eine Einzelperson ohne Support-
+    # Team der pragmatischere Weg, keinen vollen Datenbank-Restore nur wegen
+    # eines verlorenen Zweitfaktors zu brauchen.
+    totp_recovery_code_hash = Column(String, nullable=True)
+    # Default 5 Minuten (siehe Auftrag) - bewusst kurz, laesst sich in den
+    # Einstellungen aendern (require_auth prueft das bei jeder Anfrage).
+    session_idle_timeout_minutes = Column(Integer, nullable=False, default=5)
+    # --- Brute-Force-Bremse (Login-Passwort UND TOTP-Code teilen sich denselben
+    # Zaehler - beides ist "ein Versuch, sich anzumelden") ---
+    failed_login_count = Column(Integer, nullable=False, default=0)
+    failed_login_locked_until = Column(DateTime, nullable=True)
+
+
+class PasskeyCredential(Base):
+    """Ein registrierter Passkey (WebAuthn) - 1:n, ein Nutzer kann mehrere
+    Geraete hinterlegen (z.B. iPhone + MacBook). Kein user_id-Fremdschluessel
+    noetig: die App ist Single-User, jeder hier gespeicherte Credential
+    gehoert implizit dem einen Nutzer."""
+
+    __tablename__ = "passkey_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Base64url-kodierte raw Credential-ID vom Authenticator - eindeutig,
+    # wird bei jedem Login-Versuch zum Nachschlagen gebraucht.
+    credential_id = Column(String, nullable=False, unique=True, index=True)
+    # COSE-Public-Key (CBOR-kodierte Bytes) als Base64 gespeichert - SQLite hat
+    # zwar einen BLOB-Typ, Base64+String passt aber zum Rest der App (siehe
+    # z.B. verschluesselte Secrets, auch als Text gespeichert) und bleibt in
+    # jedem DB-Browser lesbar/kopierbar.
+    public_key = Column(Text, nullable=False)
+    # Anti-Cloning-Zaehler (WebAuthn-Spec) - muss bei jedem Login strikt steigen,
+    # sonst deutet das auf einen geklonten Credential hin (siehe webauthn_routes).
+    sign_count = Column(Integer, nullable=False, default=0)
+    transports = Column(String, nullable=True)  # z.B. "internal,hybrid", nur Anzeige/Hint
+    name = Column(String, nullable=True)  # Geraete-Label, z.B. "iPhone"
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
 
 
 class BasiszinsRate(Base):

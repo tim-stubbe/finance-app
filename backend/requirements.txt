@@ -4,6 +4,15 @@ sqlalchemy==2.0.52
 python-multipart==0.0.32
 pydantic==2.13.4
 itsdangerous==2.2.0
+# Web-Login (siehe backend/app/auth.py/routers/auth_login.py) - Passwort-
+# Hashing (Argon2id), TOTP (2FA), Passkeys (WebAuthn), QR-Code fuers TOTP-
+# Setup. Alle vier reine Python-Wheels bzw. abi3-Wheels (argon2-cffi-
+# bindings) fuer python:3.14-slim geprueft, kein Compiler im Docker-Image
+# noetig.
+passlib[argon2]==1.7.4
+pyotp==2.10.0
+qrcode==8.2
+webauthn==2.7.1
 requests==2.34.2
 fints==5.0.0
 cryptography==50.0.0

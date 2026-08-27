@@ -18,6 +18,7 @@ KI-Duplikatserkennung), wird das genutzt statt neu erfunden.
 - ✅ Konten, Buchungen, Investments, Ziele, Schulden, Steuerauswertung
 - ✅ Automatische Bankanbindungen (FinTS, Enable Banking, PayPal, Bitvavo, eBay, Scalable Capital)
 - ✅ Native, offline-fähige Companion-Apps für macOS und iOS (eigener Zwei-Wege-Sync, Face ID/Touch-ID-Sperre)
+- ✅ Web-Login mit Passwort, optionalem TOTP (2FA) und Passkeys (WebAuthn), automatische Abmeldung nach Inaktivität
 - ✅ KI-Assistent (Kategorisierung, Beleg-Auswertung, Chat) über eigenen Ollama-Server
 - ✅ Belege automatisch aus E-Mail-Postfach holen und Buchungen zuordnen, Volltextsuche über alle Belege
 - ✅ Automatische Datei-Sortierung eines Eingangsordners (Kategorien, Kontoauszug-Import)
@@ -241,14 +242,39 @@ veröffentlicht, aber noch nicht angekommen ist.
 
 ## Zugriffsschutz
 
-Die Anwendung hat **keine Anmeldung**. Das ist eine bewusste Entscheidung: Sie
-wird von einer einzigen Person genutzt und ist nur im eigenen Netz bzw. über
-Tailscale erreichbar, nie offen aus dem Internet.
+Die Web-App braucht seit Kurzem eine **echte Anmeldung** – vorher gab es
+bewusst keine, weil die App nur im eigenen Netz bzw. über Tailscale
+erreichbar ist. Das bleibt die wichtigste Absicherung, kommt aber jetzt
+zusätzlich zu einem Login, statt sich allein darauf zu verlassen. Die App
+bleibt weiterhin **Single-User** – kein Mehrbenutzer-System, keine
+Registrierung, nur ein Passwort für die eine Person, die sie nutzt.
 
-Wer sie anders betreibt, muss den Zugriff selbst absichern – etwa über einen
-vorgeschalteten Reverse Proxy mit Authentifizierung. Ohne das kann jeder, der
-die Adresse erreicht, sämtliche Finanzdaten einsehen und die hinterlegten
-Bankverbindungen nutzen.
+- **Passwort** – beim ersten Start fragt ein Setup-Assistent ein Passwort ab
+  (mind. 10 Zeichen), gehasht mit Argon2id (nie im Klartext gespeichert).
+- **Zwei-Faktor (TOTP)** – optional, 30-Sekunden-Code aus einer
+  Authenticator-App (Authy, Aegis, Google Authenticator, 1Password, …),
+  einrichtbar unter Einstellungen → Allgemein → „Anmeldung & Sicherheit“.
+  Ein einmaliger Wiederherstellungscode wird beim Aktivieren angezeigt, für
+  den Fall, dass das Gerät mit der Authenticator-App verloren geht.
+- **Passkeys (WebAuthn)** – optional, Anmeldung per Face ID/Touch ID/
+  Sicherheitsschlüssel statt Passwort+TOTP. Braucht einen echten Domainnamen
+  (z. B. den Tailscale-MagicDNS-Hostnamen) – über eine reine IP-Adresse
+  funktionieren Passkeys aus Browser-Gründen grundsätzlich nicht.
+- **Automatische Abmeldung** nach Inaktivität, Standard 5 Minuten, in den
+  Einstellungen anpassbar.
+- Login-Versuche sind rate-limitiert (progressive Sperre nach 5
+  Fehlversuchen).
+
+**Was weiterhin ohne diesen Login läuft** (siehe [SECURITY.md](SECURITY.md)
+für Details): der native Sync für die macOS-/iOS-Apps (`/api/sync/*`, eigenes
+Pairing-Secret) und der eingehende n8n-Webhook (`/api/webhook/*`, eigenes
+Secret) – beide haben nie einen Browser-Login gebraucht und bekommen auch
+jetzt keinen, sie bleiben bei ihrem jeweiligen geteilten Secret im Header.
+
+Wer die App zusätzlich öffentlich aus dem Internet erreichbar machen will,
+muss dafür trotzdem selbst sorgen (z. B. über einen vorgeschalteten Reverse
+Proxy) – dafür ist sie nicht gedacht, das Tailscale-/eigene-Netz-Modell
+bleibt die Grundannahme.
 
 ## Lizenz
 
