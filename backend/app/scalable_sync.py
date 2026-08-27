@@ -219,6 +219,13 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
         if not cursor or not page.get("items"):
             break
 
+    # Eigener, unkritischer Schritt: gibt es dabei ein Problem, soll das den
+    # eigentlichen Holdings-/Lots-Sync oben nicht mit reißen (siehe try/except).
+    try:
+        sync_savings_plans(db, space_id)
+    except Exception:
+        pass
+
     settings.scalable_last_sync_at = datetime.utcnow()
     settings.scalable_last_sync_status = (
         f"OK: {created} neu, {updated} aktualisiert"
@@ -227,3 +234,50 @@ def sync(db: Session, settings: models.Settings, space_id: int) -> dict:
     )
     db.commit()
     return {"created": created, "updated": updated, "lots_added": lots_added, "error": None}
+
+
+def sync_savings_plans(db: Session, space_id: int) -> int:
+    """Synct die aktuell aktiven Scalable-Sparpläne (wiederkehrende Käufe -
+    NICHT die bisherigen Ausführungen, die laufen weiterhin über sync() oben
+    als eigene Lots) in eine eigene Tabelle (siehe models.SavingsPlan) -
+    bewusst nicht als Holding mit quantity=0 modelliert: live beobachtet,
+    dass genau das dazu geführt hat, dass ein Sparplan ohne bisherige
+    Ausführung als verwirrende "0"-Zeile in der Holdings-Tabelle auftaucht.
+    Ersetzt den kompletten Bestand je Aufruf (Upsert + Löschen nicht mehr
+    gelisteter Pläne) - 'sc broker savings-plans' liefert immer den
+    vollständigen aktuellen Stand, kein inkrementelles Delta."""
+    result = _run_sc("broker", "savings-plans")
+    items = result.get("items", [])
+    seen_isins = set()
+    synced = 0
+    for item in items:
+        isin = item.get("isin")
+        if not isin or item.get("amount") is None:
+            continue
+        seen_isins.add(isin)
+        plan = db.query(models.SavingsPlan).filter_by(space_id=space_id, isin=isin).first()
+        next_exec_raw = item.get("next_execution_date")
+        next_exec_date = datetime.strptime(next_exec_raw, "%Y-%m-%d").date() if next_exec_raw else None
+        if plan:
+            plan.name = item.get("name") or plan.name
+            plan.amount = item["amount"]
+            plan.frequency = item.get("frequency") or plan.frequency
+            plan.day_of_month = item.get("day_of_month")
+            plan.dynamization_rate = item.get("dynamization_rate")
+            plan.next_execution_date = next_exec_date
+            plan.security_type = item.get("security_type")
+        else:
+            db.add(models.SavingsPlan(
+                space_id=space_id, isin=isin, name=item.get("name") or isin,
+                amount=item["amount"], frequency=item.get("frequency") or "MONTHLY",
+                day_of_month=item.get("day_of_month"), dynamization_rate=item.get("dynamization_rate"),
+                next_execution_date=next_exec_date, security_type=item.get("security_type"),
+            ))
+        synced += 1
+    # Nicht mehr gelistete Pläne (pausiert/gekündigt) hier ebenfalls entfernen -
+    # sonst würden aufgehobene Sparpläne dauerhaft weiter angezeigt.
+    for plan in db.query(models.SavingsPlan).filter_by(space_id=space_id).all():
+        if plan.isin not in seen_isins:
+            db.delete(plan)
+    db.commit()
+    return synced

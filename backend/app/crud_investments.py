@@ -125,6 +125,23 @@ def get_holdings(db: Session, space_id: int):
     )
 
 
+def get_savings_plans(db: Session, space_id: int) -> schemas.SavingsPlansOut:
+    """Liest die von scalable_sync.sync_savings_plans synchronisierten
+    Sparpläne - reiner Lesezugriff, die eigentliche Sync-Logik lebt bewusst
+    in scalable_sync.py (analog zu holdings/lots dort)."""
+    plans = (
+        db.query(models.SavingsPlan)
+        .filter(models.SavingsPlan.space_id == space_id)
+        .order_by(models.SavingsPlan.name)
+        .all()
+    )
+    total = round(sum(p.amount for p in plans if p.frequency == "MONTHLY"), 2)
+    return schemas.SavingsPlansOut(
+        plans=[schemas.SavingsPlanOut.model_validate(p) for p in plans],
+        total_monthly_amount=total,
+    )
+
+
 def get_holding(db: Session, holding_id: int, space_id: int):
     return (
         db.query(models.Holding)

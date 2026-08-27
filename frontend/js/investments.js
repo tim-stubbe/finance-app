@@ -420,10 +420,40 @@ async function loadInvestmentsTab() {
   loadGlobalTopbar();
   await loadHoldings();
   await loadPortfolioHistoryChart(portfolioRange);
+  await loadSavingsPlans();
   await loadDiversification();
   await loadHeatmap();
   if (dividendsLoaded) await loadDividendsTab();
   if (taxLoaded) await loadTaxTab();
+}
+
+const SAVINGS_PLAN_FREQUENCY_LABELS = { MONTHLY: "Monatlich", WEEKLY: "Wöchentlich", QUARTERLY: "Vierteljährlich" };
+
+// ---------- Sparpläne (aktuell nur Scalable Capital, siehe scalable_sync.py) ----------
+async function loadSavingsPlans() {
+  const panel = document.getElementById("savings-plans-panel");
+  let data;
+  try {
+    data = await api("/investments/savings-plans");
+  } catch (e) {
+    panel.classList.add("hidden");
+    return;
+  }
+  // Kein eigener Anbindungs-Hinweis noetig - ohne Scalable-Anbindung liefert
+  // der Endpunkt einfach eine leere Liste, das Panel blendet sich dann
+  // komplett aus statt eine leere Tabelle anzuzeigen.
+  panel.classList.toggle("hidden", data.plans.length === 0);
+  if (data.plans.length === 0) return;
+
+  document.getElementById("savings-plans-sub").textContent =
+    `Wiederkehrende automatische Käufe, aktuell nur Scalable Capital · zusammen ${eur(data.total_monthly_amount)}/Monat.`;
+  document.getElementById("savings-plans-list").innerHTML = data.plans.map(p => `
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${eur(p.amount)}</td>
+      <td>${SAVINGS_PLAN_FREQUENCY_LABELS[p.frequency] || esc(p.frequency)}</td>
+      <td>${p.next_execution_date ? fmtDate(p.next_execution_date) : "–"}</td>
+    </tr>`).join("");
 }
 
 let dividendHistoryChart = null;

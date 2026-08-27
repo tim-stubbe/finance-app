@@ -173,6 +173,14 @@ def get_portfolio_dividends(db: Session = Depends(get_db), space_id: int = Depen
     return crud.portfolio_dividends(db, space_id)
 
 
+@investments_router.get("/investments/savings-plans", response_model=schemas.SavingsPlansOut)
+def get_savings_plans(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    """Aktuell laufende Sparpläne (aktuell nur Scalable Capital, siehe
+    scalable_sync.sync_savings_plans) - reiner Lesezugriff auf die zuletzt
+    synchronisierten Daten, kein Live-Abruf bei jedem Aufruf."""
+    return crud.get_savings_plans(db, space_id)
+
+
 @investments_router.get("/portfolio/dividends/upcoming", response_model=List[schemas.UpcomingDividendOut])
 def get_upcoming_dividends(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.estimate_next_dividends(db, space_id)

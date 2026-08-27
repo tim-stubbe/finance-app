@@ -385,6 +385,26 @@ class HoldingVolatility(BaseModel):
     volatility_pct: Optional[float] = None
 
 
+class SavingsPlanOut(BaseModel):
+    id: int
+    isin: str
+    name: str
+    amount: float
+    frequency: str
+    day_of_month: Optional[int] = None
+    dynamization_rate: Optional[float] = None
+    next_execution_date: Optional[date] = None
+    security_type: Optional[str] = None
+    import_source: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SavingsPlansOut(BaseModel):
+    plans: List[SavingsPlanOut]
+    total_monthly_amount: float
+
+
 class VolatilityOut(BaseModel):
     holdings: List[HoldingVolatility]
 

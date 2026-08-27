@@ -459,6 +459,34 @@ class Holding(Base):
     lots = relationship("HoldingLot", back_populates="holding", cascade="all, delete-orphan", order_by="HoldingLot.date")
 
 
+class SavingsPlan(Base):
+    """Konfigurierte Sparpläne (wiederkehrende automatische Käufe), aktuell nur
+    von Scalable Capital synchronisiert (siehe scalable_sync.sync_savings_plans)
+    - bewusst NICHT als Holding mit quantity=0 modelliert (das war der alte
+    Ansatz, hat live dazu geführt, dass Positionen ohne bisherige Ausführung als
+    verwirrende "0"-Zeilen in der Holdings-Tabelle auftauchten). Ein Sparplan
+    kann noch keine einzige Ausführung gehabt haben und trotzdem hier stehen -
+    die zugehörige Holding (falls schon mind. 1x gekauft) existiert getrennt
+    davon, verknüpft nur locker über die ISIN (symbol), keine feste Relation."""
+    __tablename__ = "savings_plans"
+    __table_args__ = (UniqueConstraint("space_id", "isin", name="uq_savings_plan_isin"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    isin = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    frequency = Column(String, nullable=False)
+    day_of_month = Column(Integer, nullable=True)
+    dynamization_rate = Column(Float, nullable=True)
+    next_execution_date = Column(Date, nullable=True)
+    security_type = Column(String, nullable=True)
+    import_source = Column(String, nullable=False, default="scalable")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    space = relationship("Space")
+
+
 class HoldingLot(Base):
     __tablename__ = "holding_lots"
 
