@@ -188,6 +188,15 @@
         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>Profil</span>
       </button>
+      <!-- Kein data-tab absichtlich: keine Tab-Umschaltung, sondern eigene
+           Aktion (siehe js/auth-helpers.js logout()). Der generische
+           nav-btn-Klick-Handler in core.js überspringt Buttons ohne
+           data-tab deshalb explizit. Zusätzlich zum Abmelden-Button unten
+           in Einstellungen → Anmeldung & Sicherheit, hier gut sichtbar. -->
+      <button class="nav-btn" id="nav-logout-btn" title="Abmelden">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Abmelden</span>
+      </button>
     </div>
   </aside>
 

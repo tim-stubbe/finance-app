@@ -45,7 +45,7 @@ function handleUnauthorized() {
   }
 }
 
-// ---------- Logout (Einstellungen-Tab UND ggf. anderswo) ----------
+// ---------- Logout (Einstellungen-Tab UND Sidebar) ----------
 async function logout() {
   try {
     await fetch(API + "/auth/logout", { method: "POST" });
@@ -55,6 +55,11 @@ async function logout() {
   }
   location.reload();
 }
+// Sidebar-Button (#logout-btn in Einstellungen wird separat in
+// settings-auth.js verdrahtet, siehe dort) - hier direkt, da diese Datei
+// früh genug lädt und der Button ohne data-tab vom generischen
+// nav-btn-Handler in core.js übersprungen wird.
+document.getElementById("nav-logout-btn").addEventListener("click", logout);
 
 // ---------- Passkey-Registrierung (Einstellungen-Tab) ----------
 async function registerPasskey(name) {

@@ -288,6 +288,10 @@ function moveNavIndicator(btn) {
 
 document.querySelectorAll(".nav-btn").forEach(btn => {
   btn.addEventListener("click", () => {
+    // Buttons ohne data-tab sind keine Tab-Umschalter, sondern eigene
+    // Aktionen (z.B. #nav-logout-btn, siehe index.html) - eigener
+    // Click-Handler dafür, hier nichts weiter tun.
+    if (!btn.dataset.tab) return;
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
     btn.classList.add("active");
