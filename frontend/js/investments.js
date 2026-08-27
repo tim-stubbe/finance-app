@@ -202,7 +202,7 @@ async function loadPortfolioHistoryChart(range) {
   }
   noteEl.classList.remove("loading-pulse");
   noteEl.textContent = data.partial
-    ? "Hinweis: mindestens eine Position konnte nicht einbezogen werden (Kurshistorie nicht verfügbar)."
+    ? "Hinweis: für mindestens eine Position ist keine Kurshistorie verfügbar - sie ist nur im heutigen Stand enthalten, nicht im Verlauf davor (daher der Sprung am aktuellen Rand)."
     : "";
 
   const ctx = document.getElementById("chart-portfolio-history");

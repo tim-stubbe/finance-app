@@ -607,6 +607,15 @@ def _position_at(lots: list[models.HoldingLot], target_date: date) -> tuple[floa
 def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.PortfolioHistoryOut:
     holdings = get_holdings(db, space_id)
     series_by_holding = {}
+    # Positionen ganz ohne abrufbare Kurshistorie (z.B. Scalable-Capital-
+    # Positionen mit ISIN statt Yahoo-Ticker als symbol, siehe
+    # get_cached_history) - live beobachtet: diese wurden bisher komplett
+    # aus Investiert/Wert rausgelassen, obwohl ihr AKTUELLER Kurs (über
+    # Scalable selbst, nicht Yahoo, siehe scalable_sync.py) längst bekannt
+    # ist. Bei 11 von 15 Positionen betroffen ist "Investiert" dadurch von
+    # ~600€ auf ~97€ eingebrochen - deutlich sichtbar falsch statt nur
+    # "ein bisschen unvollständig".
+    no_history_holdings = []
     partial = False
     for h in holdings:
         if not h.lots:
@@ -616,6 +625,7 @@ def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.Por
             points = get_cached_history(db, asset_type, h.symbol, range_key)
         except Exception:
             partial = True
+            no_history_holdings.append(h)
             continue
         # get_cached_history wirft seit dem negativen Caching (siehe dort) bei
         # einem fehlgeschlagenen Live-Abruf keine Exception mehr, sondern gibt
@@ -625,6 +635,7 @@ def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.Por
         # bei manchen Scalable-Capital-Positionen) einfach kommentarlos.
         if not points:
             partial = True
+            no_history_holdings.append(h)
             continue
         series_by_holding[h.id] = {
             "prices_by_date": dict(points),
@@ -632,10 +643,17 @@ def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.Por
             "lots": sorted(h.lots, key=lambda l: (l.date, l.id)),
         }
 
-    if not series_by_holding:
+    if not series_by_holding and not no_history_holdings:
         return schemas.PortfolioHistoryOut(points=[], partial=partial)
 
     all_dates = sorted({d for s in series_by_holding.values() for d in s["dates"]})
+    today_str = date.today().isoformat()
+    # Sicherstellen, dass der heutige Stichtag immer als letzter Punkt
+    # existiert, auch wenn keine der Kurshistorien-Serien selbst schon
+    # einen heutigen Eintrag hat - genau an diesem Punkt werden unten die
+    # Positionen ohne Kurshistorie mit ihrem aktuellen Preis ergänzt.
+    if not all_dates or all_dates[-1] != today_str:
+        all_dates.append(today_str)
     last_price: dict[int, float | None] = {hid: None for hid in series_by_holding}
     result_points = []
     for d in all_dates:
@@ -649,6 +667,16 @@ def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.Por
             total_invested += cost
             if price is not None:
                 total_value += qty * price
+        # Positionen ohne Kurshistorie NUR am heutigen Stichtag mit ihrem
+        # aktuellen Preis einrechnen (für frühere Tage fehlt uns schlicht
+        # die Kursdaten-Grundlage) - gleicher current_price-Fallback wie
+        # holding_out(), damit das zur Holdings-Tabelle/net-worth passt.
+        if d == today_str:
+            for h in no_history_holdings:
+                qty, cost = _position_at(sorted(h.lots, key=lambda l: (l.date, l.id)), d_date)
+                total_invested += cost
+                current = h.current_price if h.current_price is not None else h.purchase_price
+                total_value += qty * current
         return_pct = round((total_value - total_invested) / total_invested * 100, 2) if total_invested else None
         result_points.append(schemas.PortfolioHistoryPoint(
             date=d, value=round(total_value, 2), invested=round(total_invested, 2), return_pct=return_pct,
