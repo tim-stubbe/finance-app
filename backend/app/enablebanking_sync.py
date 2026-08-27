@@ -36,6 +36,37 @@ def _headers(app_id: str, private_key_pem: str) -> dict:
     return {"Authorization": f"Bearer {_build_jwt(app_id, private_key_pem)}"}
 
 
+def _get_with_retry(url: str, headers: dict, timeout: int, max_retries: int = 3) -> requests.Response:
+    """requests.get() mit Retry bei 429 (Enable Bankings Kurzzeit-Rate-Limit)
+    und bei kurzzeitigen Verbindungsfehlern - live beobachtet: die reinen
+    Vorab-Pausen zwischen den Aufrufen (siehe sync()/sync_all.py) haben das
+    429-Problem NICHT zuverlässig behoben, es trat trotzdem weiter auf,
+    zusätzlich beobachtet ein einmaliger DNS-Fehler ("Failed to resolve
+    api.enablebanking.com"). Wartet bei 429 die von der API genannte
+    Retry-After-Zeit ab, sonst exponentiell (5/15/30s) - Verbindungsfehler
+    bekommen dieselbe Wartezeit, ein DNS-Hänger von wenigen Sekunden ist
+    damit meist schon vorbei."""
+    delay = 5
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            last_exc = e
+            if attempt == max_retries:
+                raise
+            time.sleep(delay)
+            delay *= 3
+            continue
+        if resp.status_code != 429 or attempt == max_retries:
+            return resp
+        retry_after = resp.headers.get("Retry-After")
+        wait = float(retry_after) if retry_after and retry_after.replace(".", "", 1).isdigit() else delay
+        time.sleep(wait)
+        delay *= 3
+    raise last_exc or RuntimeError("_get_with_retry: unerwarteter Zustand")
+
+
 def list_aspsps(app_id: str, private_key_pem: str, country: str) -> list[dict]:
     resp = requests.get(
         f"{BASE_URL}/aspsps", params={"country": country},
@@ -85,7 +116,7 @@ def create_session(app_id: str, private_key_pem: str, code: str) -> dict:
 
 
 def get_transactions(app_id: str, private_key_pem: str, eb_account_id: str) -> list[dict]:
-    resp = requests.get(
+    resp = _get_with_retry(
         f"{BASE_URL}/accounts/{eb_account_id}/transactions",
         headers=_headers(app_id, private_key_pem), timeout=20,
     )
@@ -176,7 +207,7 @@ def fetch_account_balance(app_id: str, private_key_pem: str, eb_account_id: str,
     beobachtet: fuer alle Nicht-PayPal-Konten kam deshalb immer None zurueck, der
     Saldo-Abgleich in sync() lief seit Einfuehrung fuer keins dieser Konten je)."""
     url_path = f"/accounts/{eb_account_id}/balances"
-    resp = requests.get(f"{BASE_URL}{url_path}", headers=_headers(app_id, private_key_pem), timeout=15)
+    resp = _get_with_retry(f"{BASE_URL}{url_path}", headers=_headers(app_id, private_key_pem), timeout=15)
     resp.raise_for_status()
     for b in resp.json().get("balances", []):
         amt = b.get("balance_amount") or {}
@@ -188,17 +219,14 @@ def fetch_account_balance(app_id: str, private_key_pem: str, eb_account_id: str,
 def sync(db: Session, conn: models.EnableBankingConnection, app_id: str, private_key_pem: str) -> dict:
     try:
         transactions = get_transactions(app_id, private_key_pem, conn.eb_account_id)
-        # Kurze Pause vor dem zweiten Aufruf (Saldo) - live beobachtet: bei
-        # mehreren Enable-Banking-Konten hintereinander (sync_all_connections
-        # ruft sync() ohne Pause je Verbindung auf, dieser hier macht selbst
-        # schon zwei Aufrufe) reisst Enable Bankings Kurzzeit-Rate-Limit
-        # ("429 Too Many Requests") - besonders spuerbar bei mehreren Konten
-        # UNTER derselben Verbindung (z.B. C24/Finom mit 2-3 Konten), weil
-        # sync_all_connections() dafuer sync() mehrfach kurz hintereinander
-        # aufruft. 8x taeglich (taeglicher Bank-Sync + 7x Digest, siehe
-        # main.DIGEST_HOURS), eine Sekunde Pause faellt dabei nicht ins
-        # Gewicht.
-        time.sleep(1)
+        # Pause vor dem zweiten Aufruf (Saldo) - live beobachtet: die
+        # urspruengliche 1-Sekunden-Pause hat die 429er NICHT zuverlaessig
+        # verhindert (siehe _get_with_retry oben, das ist jetzt die eigentliche
+        # Absicherung) - Pause hier trotzdem auf 2s angehoben, damit gar nicht
+        # erst so oft ein Retry noetig wird. 8x taeglich (taeglicher Bank-Sync
+        # + 7x Digest, siehe main.DIGEST_HOURS), ein paar Sekunden mehr fallen
+        # nicht ins Gewicht.
+        time.sleep(2)
         result = import_transactions(db, conn.account_id, transactions)
 
         # Echten Kontostand von der Bank abgleichen, statt ihn blind aus der Summe

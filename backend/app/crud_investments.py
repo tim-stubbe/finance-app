@@ -24,6 +24,27 @@ from . import models, schemas, prices
 CACHE_TTL = timedelta(hours=24)
 
 
+def _resolve_fetch_symbol(db: Session, asset_type: str, symbol: str) -> str:
+    """Liefert das Symbol, das tatsächlich für den Live-Kursabruf verwendet
+    werden soll - bei einer ISIN (Aktie/ETF, kommt so von Scalable Capital,
+    siehe scalable_sync.py) wird über IsinTickerCache/OpenFIGI versucht,
+    einen echten Yahoo-Ticker aufzulösen (siehe prices.resolve_isin_to_
+    ticker). Holding.symbol selbst bleibt unangetastet die ISIN - das hier
+    ist nur ein interner Lookup fürs Nachladen von Kursdaten. Negatives
+    Caching auch für die OpenFIGI-Auflösung selbst (ticker=NULL gespeichert),
+    damit eine nicht auflösbare ISIN nicht bei jedem Aufruf erneut angefragt
+    wird."""
+    if asset_type == "krypto" or not prices.looks_like_isin(symbol):
+        return symbol
+    cached = db.query(models.IsinTickerCache).filter_by(isin=symbol).first()
+    if cached:
+        return cached.ticker or symbol
+    ticker = prices.resolve_isin_to_ticker(symbol)
+    db.add(models.IsinTickerCache(isin=symbol, ticker=ticker, resolved_at=datetime.utcnow()))
+    db.commit()
+    return ticker or symbol
+
+
 def get_cached_history(db: Session, asset_type: str, symbol: str, range_key: str) -> list[tuple[str, float]]:
     """Holt Kurshistorie, cacht sie aber für 'lange' Ranges (alles außer 1d/2w) einen
     Tag lang auf der Festplatte statt bei jedem Chart-Aufruf erneut die externe API
@@ -41,7 +62,7 @@ def get_cached_history(db: Session, asset_type: str, symbol: str, range_key: str
     kaputtes Symbol wird dadurch höchstens einmal pro CACHE_TTL neu versucht,
     nicht bei jedem einzelnen Request."""
     if range_key in prices.LIVE_RANGES:
-        return prices.fetch_history(asset_type, symbol, range_key)
+        return prices.fetch_history(asset_type, _resolve_fetch_symbol(db, asset_type, symbol), range_key)
 
     row = (
         db.query(models.PriceHistoryCache)
@@ -52,7 +73,7 @@ def get_cached_history(db: Session, asset_type: str, symbol: str, range_key: str
         return json.loads(row.data_json)
 
     try:
-        points = prices.fetch_history(asset_type, symbol, range_key)
+        points = prices.fetch_history(asset_type, _resolve_fetch_symbol(db, asset_type, symbol), range_key)
     except Exception:
         if row:
             row.fetched_at = datetime.utcnow()

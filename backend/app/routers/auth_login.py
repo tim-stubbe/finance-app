@@ -311,6 +311,12 @@ def totp_disable(data: schemas.TotpDisableIn, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
     if not s.totp_enabled:
         raise HTTPException(400, "TOTP ist nicht aktiv.")
+    # Gleiches Lockout wie bei login/totp_verify/recovery_login/change_password
+    # (Sicherheits-Review: fehlte hier bisher als einzigem Endpunkt, der
+    # Passwort ODER TOTP-Code prüft) - eine gestohlene, bereits angemeldete
+    # Session ohne Kenntnis von Passwort/Code könnte sonst unbegrenzt raten,
+    # um 2FA zu entfernen.
+    auth.check_not_locked_out(s)
     confirmed = False
     if data.password and s.password_hash and auth.verify_password(data.password, s.password_hash):
         confirmed = True
@@ -318,7 +324,9 @@ def totp_disable(data: schemas.TotpDisableIn, db: Session = Depends(get_db)):
         secret = bank_sync.decrypt_secret(s.secret_key, s.totp_secret_encrypted)
         confirmed = pyotp.TOTP(secret).verify(data.code.strip(), valid_window=1)
     if not confirmed:
+        auth.register_failed_login(db, s)
         raise HTTPException(401, "Bitte Passwort oder aktuellen TOTP-Code zur Bestätigung angeben.")
+    auth.reset_failed_login(db, s)
     s.totp_enabled = False
     s.totp_secret_encrypted = None
     s.totp_confirmed_at = None

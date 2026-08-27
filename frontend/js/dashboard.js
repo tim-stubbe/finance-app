@@ -267,15 +267,28 @@ async function loadHubTab() {
   // abzuwarten, bis die tägliche Erinnerung kommt.
   const attentionPanel = document.getElementById("hub-attention-panel");
   try {
-    const [projects, areas, wishlist] = await Promise.all([
+    const [projects, areas, wishlist, syncErrors] = await Promise.all([
       api("/business-projects").catch(() => []),
       api("/life-areas").catch(() => []),
       api("/wishlist").catch(() => []),
+      api("/assistant/sync-errors").catch(() => []),
     ]);
     const rows = [];
     projects.filter(projectIsOverdue).forEach(p => rows.push({ icon: "📋", label: p.name, jump: "projects" }));
     areas.filter(lifeAreaIsOverdue).forEach(a => rows.push({ icon: "🎯", label: a.name, jump: "life" }));
     wishlist.filter(wishlistItemIsOverdue).forEach(w => rows.push({ icon: "🛒", label: w.name, jump: "wishlist" }));
+    // Fehler-Log (siehe Einstellungen → Allgemein) zusätzlich hier im Hub
+    // sichtbar - eine Zusammenfassungszeile statt jeden einzelnen Fehler
+    // aufzulisten, sonst würde ein einzelner hängender Sync (z.B. Enable
+    // Banking-429, siehe ROADMAP) das Panel mit vielen Zeilen fluten.
+    if (syncErrors.length) {
+      const sources = [...new Set(syncErrors.map(e => e.source))];
+      rows.push({
+        icon: "⚠️",
+        label: `${syncErrors.length} Sync-Fehler (${sources.join(", ")}) in den letzten 24h`,
+        jump: "settings",
+      });
+    }
     if (rows.length) {
       attentionPanel.classList.remove("hidden");
       document.getElementById("hub-attention-body").innerHTML = rows.map(r => `

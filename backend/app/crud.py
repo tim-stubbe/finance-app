@@ -1849,6 +1849,44 @@ def get_hanging_items(db: Session) -> dict:
     }
 
 
+def get_recent_sync_errors(db: Session, settings: models.Settings, hours: int = 24) -> list[dict]:
+    """Fehler-Log für die Einstellungen (vorgemerkte Idee, siehe Obsidian-
+    Notiz "Kies - Offene Punkte") - aggregiert die bereits vorhandenen
+    last_sync_status-Felder ALLER Verbindungsarten (Bank/Bitvavo/PayPal/
+    Enable Banking/eBay/Scalable) zu einer Liste, statt eine neue Tabelle +
+    Schreib-Hooks an jeder Sync-Stelle einzuführen - bewusst risikoarm
+    gehalten (rein lesend, kein neuer Schreibpfad), da diese Funktion ohne
+    Live-Rücksprache entstanden ist. `settings` wird wie überall sonst in
+    crud.py vom Aufrufer übergeben statt hier selbst geladen (crud.py holt
+    Settings nirgends selbst, das bleibt Aufgabe von auth.get_or_create_
+    settings beim Router/Scheduler). Dieselbe Konvention wie
+    sync_all_connections: die get_all_*-Funktionen sind nicht nach Space
+    gefiltert (Verbindungen sind bei diesem Single-User-System ohnehin
+    faktisch global relevant)."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    errors = []
+
+    def _add(source: str, name: str, status: str | None, at: datetime | None):
+        if status and status.startswith("Fehler") and at and at >= cutoff:
+            errors.append({"source": source, "name": name, "status": status, "at": at})
+
+    for c in get_all_bank_connections(db):
+        _add("Bank (FinTS)", c.name, c.last_sync_status, c.last_sync_at)
+    for c in get_all_bitvavo_connections(db):
+        _add("Bitvavo", c.name, c.last_sync_status, c.last_sync_at)
+    for c in get_all_paypal_connections(db):
+        _add("PayPal", c.name, c.last_sync_status, c.last_sync_at)
+    for c in get_all_enablebanking_connections(db):
+        _add("Enable Banking", c.aspsp_name, c.last_sync_status, c.last_sync_at)
+    for c in get_all_ebay_connections(db):
+        _add("eBay", c.ebay_username or "eBay", c.last_sync_status, c.last_sync_at)
+    if settings.scalable_enabled:
+        _add("Scalable Capital", "Scalable Capital", settings.scalable_last_sync_status, settings.scalable_last_sync_at)
+
+    errors.sort(key=lambda e: e["at"], reverse=True)
+    return errors
+
+
 def build_hanging_summary(db: Session) -> str:
     """Telegram-Text für /haengt (telegram_bot.py) - reine Textdarstellung von
     get_hanging_items(), plus Lebensbereiche/Wunschliste auf Zuruf (die eigenen

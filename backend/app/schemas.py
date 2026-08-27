@@ -648,6 +648,13 @@ class CategoryRuleOut(BaseModel):
     created_at: datetime
 
 
+class SyncErrorOut(BaseModel):
+    source: str
+    name: str
+    status: str
+    at: datetime
+
+
 class AssistantSuggestionOut(BaseModel):
     id: int
     kind: str

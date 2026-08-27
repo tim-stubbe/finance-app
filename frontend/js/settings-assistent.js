@@ -101,6 +101,25 @@ document.getElementById("quiet-until-clear").addEventListener("click", async () 
   toast("Ruhe-Überschreibung aufgehoben.");
 });
 
+// ---------- Fehler-Log (letzte 24h) ----------
+async function loadErrorLog() {
+  const panel = document.getElementById("error-log-panel");
+  let errors = [];
+  try {
+    errors = await api("/assistant/sync-errors");
+  } catch (e) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.toggle("hidden", errors.length === 0);
+  if (!errors.length) return;
+  document.getElementById("error-log-list").innerHTML = errors.map(e => `
+    <li>
+      <span>${esc(e.source)} – ${esc(e.name)}</span>
+      <span class="page-sub">${esc(e.status)} · ${new Date(e.at).toLocaleString("de-DE")}</span>
+    </li>`).join("");
+}
+
 // ---------- Kommunikationsstil ----------
 async function loadCommunicationStyle() {
   let s;

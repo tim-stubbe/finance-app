@@ -75,12 +75,17 @@ def sync_all_connections(db, settings):
         # Finom, PayPal, ING) kurz hintereinander ohne Pause synct hat
         # Enable Bankings Kurzzeit-Rate-Limit gerissen ("429 Too Many
         # Requests"), lief 8x taeglich unbemerkt schief (taeglicher Bank-
-        # Sync + 7x Digest, siehe main.DIGEST_HOURS). Ein paar Sekunden
-        # mehr Laufzeit im Hintergrund-Job faellt nicht ins Gewicht.
+        # Sync + 7x Digest, siehe main.DIGEST_HOURS). Erste Fassung (1.5s)
+        # hat live NICHT gereicht (429er traten trotzdem weiter auf) - auf
+        # 3s angehoben, zusaetzlich zu einem echten Retry-Mechanismus bei
+        # 429 innerhalb von enablebanking_sync._get_with_retry (die eigentliche
+        # Absicherung, diese Pause ist nur noch die erste Verteidigungslinie).
+        # Ein paar Sekunden mehr Laufzeit im Hintergrund-Job faellt nicht ins
+        # Gewicht.
         eb_connections = [c for c in crud.get_all_enablebanking_connections(db) if c.status == "linked"]
         for i, eb_conn in enumerate(eb_connections):
             if i > 0:
-                time.sleep(1.5)
+                time.sleep(3)
             try:
                 enablebanking_sync.sync(db, eb_conn, settings.enablebanking_app_id, private_key)
             except Exception as e:

@@ -882,6 +882,23 @@ class PriceHistoryCache(Base):
     data_json = Column(Text, nullable=False)
 
 
+class IsinTickerCache(Base):
+    """Merkt sich eine per OpenFIGI aufgelöste ISIN->Ticker-Zuordnung (siehe
+    prices.resolve_isin_to_ticker) - vermeidet einen erneuten OpenFIGI-Aufruf
+    bei jedem Kurshistorie-Abruf. Bewusst getrennt von Holding.symbol (der
+    bleibt die ISIN) - reiner interner Lookup fürs Nachladen von Kursdaten,
+    kein Umschreiben von Bestandsdaten. `ticker=NULL` bedeutet "Auflösung
+    versucht, aber gescheitert" (negatives Caching, gleiches Prinzip wie bei
+    PriceHistoryCache), damit nicht bei jedem Aufruf erneut OpenFIGI gefragt
+    wird, wenn eine ISIN sich einfach nicht auflösen lässt."""
+
+    __tablename__ = "isin_ticker_cache"
+
+    isin = Column(String, primary_key=True)
+    ticker = Column(String, nullable=True)
+    resolved_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class MailAttachment(Base):
     """Ein aus einer E-Mail geholter Beleg, bevor er einer Buchung zugeordnet ist.
 

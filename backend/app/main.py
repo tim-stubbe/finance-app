@@ -684,6 +684,16 @@ def get_hanging_summary(db: Session = Depends(get_db)):
     return {"summary": crud.build_hanging_summary(db)}
 
 
+@api_router.get("/assistant/sync-errors", response_model=List[schemas.SyncErrorOut])
+def get_sync_errors(hours: int = 24, db: Session = Depends(get_db)):
+    """Fehler-Log (vorgemerkte Idee aus den Offene-Punkte-Notizen) - alle
+    fehlgeschlagenen Syncs (Bank/Bitvavo/PayPal/Enable Banking/eBay/
+    Scalable) der letzten `hours` Stunden an einer Stelle, siehe
+    crud.get_recent_sync_errors."""
+    settings = auth.get_or_create_settings(db)
+    return crud.get_recent_sync_errors(db, settings, hours=hours)
+
+
 @api_router.get("/assistant/suggestions", response_model=List[schemas.AssistantSuggestionOut])
 def get_assistant_suggestions(db: Session = Depends(get_db)):
     """"Was Jarvis getan hat" (Spezifikation Abschnitt J) - letzte Vorschläge

@@ -267,6 +267,7 @@ async function loadSettingsTab() {
   await loadCountrySettings();
   await loadAuthSettingsPanel();
   await loadIntegrationStatus();
+  await loadErrorLog();
   await loadBudgets();
   await loadOllamaSettings();
   await loadSyncSchedule();

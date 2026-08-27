@@ -1,3 +1,4 @@
+import re
 import time
 from datetime import datetime, timezone
 
@@ -7,7 +8,71 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 YAHOO_QUOTESUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
 COINGECKO_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
 COINGECKO_HISTORY_URL = "https://api.coingecko.com/api/v3/coins/{id}/market_chart"
+OPENFIGI_MAPPING_URL = "https://api.openfigi.com/v3/mapping"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; finance-app/1.0)"}
+
+# ISO 6166: 2 Buchstaben Laendercode + 9 alphanumerische Zeichen + 1 Pruefziffer.
+_ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
+
+
+def looks_like_isin(symbol: str) -> bool:
+    return bool(_ISIN_RE.match((symbol or "").strip().upper()))
+
+
+# OpenFIGI exchCode -> Yahoo-Finance-Suffix. US-Börsen brauchen KEIN Suffix
+# (siehe _US_EXCHANGES unten) - alles andere live gegen echte Depot-Positionen
+# geprüft (z.B. GB00BLDYK618 -> "SMT"/"LN" -> muss als "SMT.L" bei Yahoo
+# angefragt werden, sonst 404 trotz an sich korrekt aufgelöstem Ticker).
+# Bewusst nur die gängigsten Börsen abgedeckt, nicht erschöpfend - eine nicht
+# gelistete Börse führt zum unveränderten (wahrscheinlich falschen) Ticker,
+# nicht schlechter als der bisherige Zustand (ISIN, die Yahoo nie kannte).
+_EXCHANGE_TO_YAHOO_SUFFIX = {
+    "LN": ".L", "GR": ".DE", "GY": ".DE", "GF": ".F", "PA": ".PA", "MI": ".MI",
+    "SW": ".SW", "NA": ".AS", "BB": ".BR", "MC": ".MC", "VI": ".VI", "SG": ".SI",
+    "HK": ".HK", "JP": ".T", "TG": ".TO", "CN": ".CN", "CV": ".V", "AU": ".AX",
+}
+_US_EXCHANGES = {"US", "UN", "UA", "UC", "UB", "UM", "UP", "UX", "UQ", "UW"}
+
+
+def resolve_isin_to_ticker(isin: str) -> str | None:
+    """Löst eine ISIN in einen Yahoo-Finance-tauglichen Ticker (inkl. Börsen-
+    Suffix, falls nötig) auf, über die kostenlose, unauthentifizierte
+    OpenFIGI-Mapping-API (Bloombergs offene Referenzdaten-Initiative). Betrifft
+    die per Scalable-Capital-Sync übernommenen Positionen, die dort nur die
+    ISIN liefert, keinen Ticker (siehe scalable_sync.py) - Yahoo kann damit
+    weder aktuelle Kurse noch Historie liefern.
+
+    Bevorzugt eine US-Notierung (kein Suffix nötig, am zuverlässigsten),
+    sonst die erste Notierung mit bekanntem Börsen-Suffix, sonst den bloßen
+    Ticker der ersten Notierung als letzter Versuch. Bei falscher/mehrdeutiger
+    Zuordnung ist der Schaden begrenzt (nur die Kurshistorie dieser einen
+    Position wäre falsch, nicht die Bestandsdaten selbst - Holding.symbol
+    bleibt die ISIN, siehe crud_investments.get_cached_history, das hier nur
+    für den Live-Abruf einen Ticker braucht, nichts wird dauerhaft
+    umgeschrieben)."""
+    try:
+        resp = requests.post(
+            OPENFIGI_MAPPING_URL,
+            json=[{"idType": "ID_ISIN", "idValue": isin}],
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = [r for r in ((data[0] or {}).get("data") or []) if r.get("ticker")]
+    except Exception:
+        return None
+    if not results:
+        return None
+    if isin.upper().startswith("US"):
+        for r in results:
+            if r.get("exchCode") in _US_EXCHANGES:
+                return r["ticker"]
+    for r in results:
+        suffix = _EXCHANGE_TO_YAHOO_SUFFIX.get(r.get("exchCode"))
+        if suffix:
+            return r["ticker"] + suffix
+    return results[0]["ticker"]
 
 # Range-Auswahl in der UI -> (Yahoo-range, Yahoo-interval, CoinGecko-days, Tage zum Zurückschneiden oder None)
 RANGE_MAP = {
