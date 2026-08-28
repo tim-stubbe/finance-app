@@ -115,16 +115,19 @@ async def smarthome_voice_stream(ws: WebSocket):
     (einfache Energie-VAD, oder Client sendet {"type":"stop"}), transkribiert
     lokal und schickt {"type":"result", ...} - selbe Pipeline wie /command.
     """
-    # Cross-Site-WebSocket-Hijacking abwehren: der Origin muss zum Host der
-    # Anfrage passen (Kies wird immer von derselben Origin ausgeliefert).
-    # WebSockets kennen keine CORS-Preflight - das hier ist der Ersatz.
+    # Cross-Site-WebSocket-Hijacking abwehren: schickt der Client einen Origin
+    # (jeder Browser tut das), muss er zum Host der Verbindung passen - Kies
+    # wird immer von derselben Origin ausgeliefert. WebSockets kennen keine
+    # CORS-Preflight, das hier ist der Ersatz. Ohne Origin (Nicht-Browser-
+    # Client) greift weiterhin die Session-Pruefung darunter.
     from urllib.parse import urlparse
-    origin = ws.headers.get("origin") or ""
-    host = ws.headers.get("host") or ""
-    if not host or urlparse(origin).netloc != host:
-        await ws.close(code=1008)
-        return
-    if not ws.session.get("authenticated"):
+    origin = ws.headers.get("origin")
+    if origin:
+        req_host = ws.headers.get("host") or ws.url.netloc
+        if urlparse(origin).netloc != req_host:
+            await ws.close(code=1008)
+            return
+    if not ws.session.get("user_id"):
         await ws.close(code=1008)
         return
     await ws.accept()

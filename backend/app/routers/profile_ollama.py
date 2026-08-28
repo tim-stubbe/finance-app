@@ -21,19 +21,23 @@ from ..database import get_db
 profile_ollama_router = APIRouter(prefix="/api")
 
 
-# ---------------- Profil ----------------
+# ---------------- Profil (= Name des angemeldeten Nutzers, siehe models.User) ----------------
 @profile_ollama_router.get("/auth/profile", response_model=schemas.ProfileOut)
-def get_profile(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.ProfileOut(display_name=settings.display_name)
+def get_profile(me=Depends(auth.current_user)):
+    return schemas.ProfileOut(display_name=me.name)
 
 
 @profile_ollama_router.put("/auth/profile", response_model=schemas.ProfileOut)
-def update_profile(data: schemas.ProfileUpdate, db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    settings.display_name = data.display_name
+def update_profile(data: schemas.ProfileUpdate, db: Session = Depends(get_db), me=Depends(auth.current_user)):
+    name = (data.display_name or "").strip()[:80] or me.name
+    other = auth.find_user_by_name(db, name)
+    if other and other.id != me.id:
+        raise HTTPException(409, "Diesen Namen gibt es schon.")
+    me.name = name
+    if me.id == 1:
+        auth.get_or_create_settings(db).display_name = name
     db.commit()
-    return schemas.ProfileOut(display_name=settings.display_name)
+    return schemas.ProfileOut(display_name=me.name)
 
 # ---------------- KI-Assistent (Ollama) ----------------
 @profile_ollama_router.get("/settings/ollama", response_model=schemas.OllamaSettingsOut)

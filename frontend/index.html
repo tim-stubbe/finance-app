@@ -86,6 +86,7 @@
 
     <form id="login-form" class="login-form hidden">
       <p id="login-message" class="login-message hidden"></p>
+      <label id="login-name-label" class="hidden">Name <input type="text" id="login-name" autocomplete="username"></label>
       <label>Passwort <input type="password" id="login-password" required autocomplete="current-password"></label>
       <p id="login-error" class="login-error hidden"></p>
       <button type="submit" class="btn-primary">Anmelden</button>
@@ -2573,6 +2574,16 @@
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Anmeldung &amp; Sicherheit</h3>
         <p class="page-sub">Passwort, Zwei-Faktor (TOTP) und Passkeys für den Web-Zugriff. Native Apps (macOS/iOS) nutzen weiterhin ein eigenes Pairing-Secret, siehe „Weitere Verbindungen“ → „Nativer Client“.</p>
+
+        <h4 class="settings-subhead">Personen</h4>
+        <p class="page-sub">Jede Person meldet sich mit eigenem Namen und Passwort an (eigene 2FA/Passkeys). Getrennte private Daten folgen in weiteren Ausbaustufen – aktuell teilen sich alle Personen dieselben Inhalte.</p>
+        <ul id="users-list" class="settings-list"></ul>
+        <form id="user-add-form" class="form-grid">
+          <label>Name <input type="text" id="user-add-name" required></label>
+          <label>Passwort <input type="password" id="user-add-password" required minlength="10" autocomplete="new-password"></label>
+          <div class="form-actions"><button type="submit" class="btn-ghost">Person hinzufügen</button></div>
+          <p id="user-add-error" class="login-error hidden wide"></p>
+        </form>
 
         <form id="session-timeout-form" class="form-grid">
           <label>Automatische Abmeldung nach Inaktivität (Minuten)

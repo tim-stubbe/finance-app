@@ -25,7 +25,7 @@ async function bootAuthGate() {
   } else if (status.totp_required) {
     showTotpScreen();
   } else {
-    showLoginScreen({ showPasskey: status.passkeys_enabled });
+    showLoginScreen({ showPasskey: status.passkeys_enabled, showName: (status.users_count || 1) > 1 });
   }
 }
 
@@ -35,11 +35,12 @@ function hideAllLoginForms() {
   });
 }
 
-function showLoginScreen({ message, error, showPasskey } = {}) {
+function showLoginScreen({ message, error, showPasskey, showName } = {}) {
   document.getElementById("login-screen").classList.remove("hidden");
   hideAllLoginForms();
   document.getElementById("login-form").classList.remove("hidden");
   document.getElementById("login-password").value = "";
+  document.getElementById("login-name-label").classList.toggle("hidden", !showName);
   setFormMessage("login-message", message);
   setFormError("login-error", error);
   document.getElementById("login-passkey-btn").classList.toggle(
@@ -101,11 +102,12 @@ document.getElementById("setup-form").addEventListener("submit", async e => {
 document.getElementById("login-form").addEventListener("submit", async e => {
   e.preventDefault();
   const password = document.getElementById("login-password").value;
+  const name = document.getElementById("login-name").value.trim();
   setFormError("login-error", null);
   try {
     const res = await fetch(API + "/auth/login", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, name: name || null }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

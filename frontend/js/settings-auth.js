@@ -18,7 +18,48 @@ async function loadAuthSettingsPanel() {
   document.getElementById("totp-recovery-display").classList.add("hidden");
 
   await loadPasskeyList();
+  await loadUsersList();
 }
+
+// ---------- Personen (Multi-User) ----------
+async function loadUsersList() {
+  const list = document.getElementById("users-list");
+  let users = [];
+  try { users = await api("/auth/users"); } catch { return; }
+  list.innerHTML = users.map(u => `
+    <li>
+      <span>${esc(u.name)}${u.is_self ? " (du)" : ""}
+        <span class="page-sub">${u.totp_enabled ? "2FA · " : ""}${u.passkey_count} Passkey(s)</span></span>
+      ${u.is_self ? "" : `<button type="button" class="btn-ghost btn-sm" data-user-del="${u.id}">Entfernen</button>`}
+    </li>`).join("") || `<li class="page-sub" style="background:none;padding:0">–</li>`;
+}
+
+document.getElementById("users-list").addEventListener("click", async e => {
+  const id = e.target.closest("[data-user-del]")?.dataset.userDel;
+  if (!id) return;
+  if (!confirm("Diese Person entfernen? Ihr Login und ihre Passkeys werden gelöscht (die geteilten Daten bleiben).")) return;
+  try { await api(`/auth/users/${id}`, { method: "DELETE" }); toast("Person entfernt."); loadUsersList(); }
+  catch (err) { toast(err.message || "Entfernen fehlgeschlagen."); }
+});
+
+document.getElementById("user-add-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  setFormError("user-add-error", null);
+  try {
+    await api("/auth/users", {
+      method: "POST",
+      body: JSON.stringify({
+        name: document.getElementById("user-add-name").value.trim(),
+        password: document.getElementById("user-add-password").value,
+      }),
+    });
+    e.target.reset();
+    toast("Person hinzugefügt.");
+    loadUsersList();
+  } catch (err) {
+    setFormError("user-add-error", err.message || "Konnte nicht angelegt werden.");
+  }
+});
 
 document.getElementById("session-timeout-form").addEventListener("submit", async e => {
   e.preventDefault();

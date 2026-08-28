@@ -3,10 +3,37 @@ from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, Request
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models
 from .database import get_db
+
+
+# ---------- Benutzer (Multi-User, siehe models.User) ----------
+def get_user(db: Session, user_id) -> "models.User | None":
+    if not user_id:
+        return None
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def find_user_by_name(db: Session, name: str) -> "models.User | None":
+    if not name or not name.strip():
+        return None
+    return (
+        db.query(models.User)
+        .filter(func.lower(models.User.name) == name.strip().lower())
+        .first()
+    )
+
+
+def current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
+    """Dependency fuer geschuetzte Endpunkte, die den angemeldeten Nutzer
+    brauchen (Passwort aendern, TOTP, Passkeys, Benutzerverwaltung)."""
+    u = get_user(db, request.session.get("user_id"))
+    if not u or not u.is_active:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    return u
 
 
 def get_or_create_settings(db: Session) -> models.Settings:
@@ -148,11 +175,12 @@ IDLE_TIMEOUT_MAX_MINUTES = 1440  # 24h - "prakisch nie" ohne den Timeout ganz ab
 
 
 def require_auth(request: Request, db: Session = Depends(get_db)) -> None:
-    if not request.session.get("authenticated"):
+    user = get_user(db, request.session.get("user_id"))
+    if not user or not user.is_active:
+        request.session.pop("user_id", None)
         raise HTTPException(status_code=401, detail="Nicht angemeldet.")
 
-    settings = get_or_create_settings(db)
-    timeout_minutes = settings.session_idle_timeout_minutes or 5
+    timeout_minutes = user.session_idle_timeout_minutes or 5
     last_activity_raw = request.session.get("last_activity")
     if last_activity_raw:
         last_activity = datetime.fromisoformat(last_activity_raw)

@@ -106,14 +106,15 @@ def test_change_password_success_resets_lockout_counter(client):
 
 
 def _enable_totp_directly(secret: str = "JBSWY3DPEHPK3PXP"):
-    """Setzt TOTP direkt in der DB (statt über den vollen QR-Setup-Flow) -
-    für diese Tests zaehlt nur die Lockout-Logik in totp_disable, nicht der
-    Setup-Flow selbst."""
+    """Setzt TOTP direkt am (einzigen) User (statt über den vollen QR-Setup-
+    Flow) - fuer diese Tests zaehlt nur die Lockout-Logik in totp_disable."""
+    from app import models
     db = SessionLocal()
     try:
         s = auth.get_or_create_settings(db)
-        s.totp_enabled = True
-        s.totp_secret_encrypted = bank_sync.encrypt_secret(s.secret_key, secret)
+        u = db.query(models.User).first()
+        u.totp_enabled = True
+        u.totp_secret_encrypted = bank_sync.encrypt_secret(s.secret_key, secret)
         db.commit()
     finally:
         db.close()
@@ -147,10 +148,10 @@ def test_totp_disable_valid_code_succeeds(client):
     valid_code = pyotp.TOTP(secret).now()
     r = client.request("DELETE", "/api/auth/totp", json={"code": valid_code}, headers=headers)
     assert r.status_code == 200
+    from app import models
     db = SessionLocal()
     try:
-        s = auth.get_or_create_settings(db)
-        assert s.totp_enabled is False
+        assert db.query(models.User).first().totp_enabled is False
     finally:
         db.close()
 
@@ -185,3 +186,48 @@ def test_setup_stores_display_name(client):
     client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
     prof = client.get("/api/auth/profile").json()
     assert prof["display_name"] == "Tim"
+
+
+# ---------------- Multi-User (Phase 1) ----------------
+PW = "Sehr-langes-Passwort-12"
+
+
+def _setup(client, name="Tim"):
+    r = client.post("/api/auth/setup", json={"password": PW, "display_name": name})
+    assert r.status_code == 200
+    client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
+
+
+def test_second_user_and_login_by_name(client):
+    _setup(client, "Tim")
+    r = client.post("/api/auth/users", json={"name": "Mila", "password": PW})
+    assert r.status_code == 200
+    names = {u["name"] for u in client.get("/api/auth/users").json()}
+    assert names == {"Tim", "Mila"}
+
+    # Mit zwei Konten braucht der Login jetzt den Namen
+    client.post("/api/auth/logout")
+    assert client.get("/api/auth/status").json()["users_count"] == 2
+    r = client.post("/api/auth/login", json={"password": PW})           # ohne Name
+    assert r.status_code == 400
+    r = client.post("/api/auth/login", json={"name": "mila", "password": PW})  # case-insensitiv
+    assert r.status_code == 200
+    client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
+    assert client.get("/api/auth/profile").json()["display_name"] == "Mila"
+
+
+def test_cannot_delete_self_or_last_user(client):
+    _setup(client, "Tim")
+    me = [u for u in client.get("/api/auth/users").json() if u["is_self"]][0]
+    assert client.delete(f"/api/auth/users/{me['id']}").status_code == 400  # self
+    client.post("/api/auth/users", json={"name": "Mila", "password": PW})
+    mila = [u for u in client.get("/api/auth/users").json() if u["name"] == "Mila"][0]
+    assert client.delete(f"/api/auth/users/{mila['id']}").status_code == 200
+    # jetzt ist Tim der letzte -> von Milas Session aus koennte man ihn loeschen,
+    # aber es ist ohnehin nur noch einer uebrig
+    assert client.get("/api/auth/users").json().__len__() == 1
+
+
+def test_duplicate_user_name_rejected(client):
+    _setup(client, "Tim")
+    assert client.post("/api/auth/users", json={"name": "tim", "password": PW}).status_code == 409

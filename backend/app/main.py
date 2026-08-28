@@ -294,6 +294,10 @@ ensure_columns("settings", {
     "homeassistant_electricity_price": "FLOAT DEFAULT 0.35",
 })
 
+# Multi-User (Phase 1): Passkeys bekommen einen Nutzer-Bezug (Bootstrap
+# weiter unten migriert bestehende Zeilen).
+ensure_columns("passkey_credentials", {"user_id": "INTEGER"})
+
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
 # bisher auf fast allen Tabellen ausser todos/calendar_events, ohne die Spalte
 # ist kein Diff-Sync ("was hat sich seit dem letzten Pull geaendert") moeglich.
@@ -327,6 +331,27 @@ INITIAL_MORNING_BRIEFING_HOUR = _settings.morning_briefing_hour
 INITIAL_MORNING_BRIEFING_MINUTE = _settings.morning_briefing_minute
 if not _bootstrap_db.query(models.Space).first():
     _bootstrap_db.add(models.Space(name="Privat", icon="🏠"))
+    _bootstrap_db.commit()
+
+# Multi-User-Migration (Phase 1): bestehende Installation hatte die Auth-Felder
+# am Settings-Singleton. Beim ersten Start nach dem Update daraus den ersten
+# User bauen, damit sich niemand aussperrt. Passkeys auf diesen User zeigen.
+if _bootstrap_db.query(models.User).count() == 0 and _settings.password_hash:
+    _u = models.User(
+        name=_settings.display_name or "Ich",
+        password_hash=_settings.password_hash,
+        password_set_at=_settings.password_set_at,
+        totp_secret_encrypted=_settings.totp_secret_encrypted,
+        totp_enabled=bool(_settings.totp_enabled),
+        totp_confirmed_at=_settings.totp_confirmed_at,
+        totp_recovery_code_hash=_settings.totp_recovery_code_hash,
+        session_idle_timeout_minutes=_settings.session_idle_timeout_minutes or 5,
+    )
+    _bootstrap_db.add(_u)
+    _bootstrap_db.commit()
+    _bootstrap_db.query(models.PasskeyCredential).filter(
+        models.PasskeyCredential.user_id.is_(None)
+    ).update({"user_id": _u.id})
     _bootstrap_db.commit()
 
 # Basiszins-Werte (BMF-Veröffentlichung) für die Vorabpauschale-Berechnung - einmalig

@@ -475,15 +475,42 @@ class SmartHomeAutomationDraft(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class User(Base):
+    """Ein Anmelde-Konto. Multi-User-Ausbau (Phase 1, siehe ROADMAP): die
+    Authentifizierung (Passwort/TOTP/Passkeys/Lockout) haengt jetzt hier statt
+    am Settings-Singleton. `Settings` bleibt fuer Instanz-Config (Integrations-
+    Secrets, Backup-Zeitplan usw.). Datentrennung der eigentlichen Inhalte
+    kommt in spaeteren Phasen.
+
+    Bewusst KEIN Rollen-/Rechtesystem: jeder angemeldete Nutzer darf andere
+    Konten anlegen/entfernen (Haushalt, kein Admin-Konzept)."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    password_hash = Column(String, nullable=False)
+    password_set_at = Column(DateTime, nullable=True)
+    totp_secret_encrypted = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
+    totp_confirmed_at = Column(DateTime, nullable=True)
+    totp_recovery_code_hash = Column(String, nullable=True)
+    session_idle_timeout_minutes = Column(Integer, nullable=False, default=5)
+    failed_login_count = Column(Integer, nullable=False, default=0)
+    failed_login_locked_until = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class PasskeyCredential(Base):
-    """Ein registrierter Passkey (WebAuthn) - 1:n, ein Nutzer kann mehrere
-    Geraete hinterlegen (z.B. iPhone + MacBook). Kein user_id-Fremdschluessel
-    noetig: die App ist Single-User, jeder hier gespeicherte Credential
-    gehoert implizit dem einen Nutzer."""
+    """Ein registrierter Passkey (WebAuthn). 1:n je Nutzer (iPhone + MacBook
+    + Bitwarden ...). `user_id` seit dem Multi-User-Ausbau; NULL nur bei
+    Altbestand vor der Migration (siehe main.py-Bootstrap)."""
 
     __tablename__ = "passkey_credentials"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # Base64url-kodierte raw Credential-ID vom Authenticator - eindeutig,
     # wird bei jedem Login-Versuch zum Nachschlagen gebraucht.
     credential_id = Column(String, nullable=False, unique=True, index=True)

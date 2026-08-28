@@ -2263,6 +2263,8 @@ class AuthStatusOut(BaseModel):
     totp_enabled: bool
     passkeys_enabled: bool  # mind. ein Passkey registriert
     session_idle_timeout_minutes: int
+    users_count: int = 1
+    display_name: Optional[str] = None  # Name des angemeldeten Nutzers
 
 
 class SetupIn(BaseModel):
@@ -2277,6 +2279,16 @@ class PasswordChangeIn(BaseModel):
 
 class LoginIn(BaseModel):
     password: str
+    name: Optional[str] = None  # noetig, sobald es mehr als ein Konto gibt
+
+
+class UserCreateIn(BaseModel):
+    name: str
+    password: str
+
+
+class UserRenameIn(BaseModel):
+    name: str
 
 
 class LoginOut(BaseModel):
