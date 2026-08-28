@@ -124,3 +124,24 @@ def test_push_unknown_entity_type_reports_conflict(client):
     r = client.post("/api/sync/push", json=body, headers=headers)
     assert r.status_code == 200
     assert len(r.json()["conflicts"]) == 1
+
+
+# --- Universelle Kommandozeile fuer native Clients (Siri-Shortcut) ---
+def test_native_command_needs_secret(client):
+    _enable_native_sync()
+    assert client.post("/api/sync/command", json={"text": "hallo"}).status_code == 403
+
+
+def test_native_command_routes_via_hub(client, monkeypatch):
+    from app import ollama_client, auth as _auth
+    _enable_native_sync()
+    db = SessionLocal()
+    s = _auth.get_or_create_settings(db)
+    s.ollama_url = "http://o"; s.ollama_model = "m"
+    db.commit(); db.close()
+    monkeypatch.setattr(ollama_client, "chat",
+                        lambda *a, **k: '{"domain": "todo", "title": "Test-Aufgabe", "due": null, "reply": "Notiert."}')
+    r = client.post("/api/sync/command", json={"text": "erinnere mich an Test-Aufgabe"},
+                    headers={"X-Sync-Secret": SECRET})
+    assert r.status_code == 200
+    assert r.json()["domain"] == "todo"

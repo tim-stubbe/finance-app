@@ -187,3 +187,26 @@ def push(
             conflicts.append({"entity_type": op.entity_type, "server_id": op.server_id, "reason": str(e)})
 
     return {"id_map": id_map, "applied": applied, "conflicts": conflicts}
+
+
+# --- Universelle Kommandozeile fuer native Clients (Siri-Shortcut, siehe
+# macos/Kies/Sources/KiesiOS/KiesAskIntent.swift). Auth ueber dasselbe
+# X-Sync-Secret wie pull/push - ein nativer Client hat keinen Browser-
+# Cookie. Routet durch hub_command (Smart Home, To-do, Wunschliste, ...).
+class NativeCommandRequest(BaseModel):
+    text: str
+    confirm: bool = False
+
+
+@sync_router.post("/command")
+def native_command(
+    body: NativeCommandRequest,
+    db: Session = Depends(get_db),
+    x_sync_secret: Optional[str] = Header(None),
+):
+    _verify_secret(db, x_sync_secret)
+    from . import crud, hub_command
+    settings = auth.get_or_create_settings(db)
+    spaces = crud.get_spaces(db)
+    space_id = spaces[0].id if spaces else 1
+    return hub_command.route(db, settings, body.text, space_id, confirm=body.confirm)
