@@ -2749,6 +2749,52 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   }
 }
 
+/* ---------- Mobile Bottom-Nav (Spezifikationspunkt D, 2026-08-28) ---------- */
+/* Standardmäßig komplett ausgeblendet - existiert nur ≤720px, siehe Media-
+   Query unten. Auf breiteren Viewports bleibt die klassische Sidebar-
+   Navigation die einzige, damit hier nichts doppelt/überflüssig herumsteht. */
+.bottom-nav { display: none; }
+@media (max-width: 720px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 140;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    /* env(safe-area-inset-bottom): dieselbe Home-Indicator-Logik wie beim
+       Quick-Capture-FAB/main-Padding - ohne den Zuschlag klebt die Leiste
+       in der installierten PWA hinter dem Home-Indicator. */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 4px 7px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+  .bottom-nav-btn svg { width: 20px; height: 20px; }
+  .bottom-nav-btn.active { color: var(--accent-strong); }
+  /* Platz für die Leiste selbst freihalten, sonst verschwindet der letzte
+     Inhalt/das Formular-Ende dahinter - dieselbe Überlegung wie beim
+     safe-area-Zuschlag auf main weiter oben, hier zusätzlich obendrauf. */
+  main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* Quick-Capture/KI-FAB liegen sonst genau hinter der neuen Leiste. */
+  .quick-capture-wrap { bottom: calc(64px + env(safe-area-inset-bottom) + 14px); }
+  .global-ai-fab { bottom: calc(64px + env(safe-area-inset-bottom) + 14px); }
+  .toast-host { bottom: calc(64px + env(safe-area-inset-bottom) + 14px); }
+}
+
 /* ---------- Einrichtungsstatus der Anbindungen ---------- */
 .integration-grid {
   display: grid;

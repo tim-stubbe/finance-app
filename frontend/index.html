@@ -200,6 +200,38 @@
     </div>
   </aside>
 
+  <!-- Mobile Bottom-Nav (nur ≤720px sichtbar, siehe style.css) - schneller
+       Zugriff auf die 4-5 Tages-Pfade, ohne die bestehende waagrechte
+       Scroll-Leiste (alle 18 Tabs) im Kopf zu ersetzen. Buttons rufen
+       bewusst goToTab() statt eigener Umschalt-Logik auf - klickt intern den
+       echten oberen .nav-btn, damit exakt dieselbe Lade-/Aktiv-Logik greift
+       (siehe core.js), keine zweite Tab-Umschaltung nötig. "Mehr" öffnet die
+       Command Palette (⌘K) statt eines dritten Navigations-Musters - deckt
+       damit automatisch alle restlichen Tabs plus Datensuche ab.
+       Spezifikationspunkt D, 2026-08-28. -->
+  <nav id="bottom-nav" class="bottom-nav">
+    <button type="button" class="bottom-nav-btn" data-bottom-tab="hub">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11L12 4L20 11"/><path d="M6 10V19a1 1 0 0 0 1 1h4v-5h2v5h4a1 1 0 0 0 1-1V10"/></svg>
+      <span>Hub</span>
+    </button>
+    <button type="button" class="bottom-nav-btn" data-bottom-tab="transactions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7H20M4 12H20M4 17H14"/></svg>
+      <span>Buchungen</span>
+    </button>
+    <button type="button" class="bottom-nav-btn" data-bottom-tab="goals">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      <span>Kalender</span>
+    </button>
+    <button type="button" class="bottom-nav-btn" data-bottom-tab="life">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 5 6.5 5c2 0 3.5 1.2 5.5 3.5C14 6.2 15.5 5 17.5 5 21 5 23.5 8.5 21.5 12.5 19 16.65 12 21 12 21z"/></svg>
+      <span>Leben</span>
+    </button>
+    <button type="button" id="bottom-nav-more" class="bottom-nav-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+      <span>Mehr</span>
+    </button>
+  </nav>
+
   <main>
     <div id="global-topbar" class="global-topbar">
       <div class="global-topbar-item">
@@ -3232,6 +3264,7 @@
 <script src="js/schulden.js"></script>
 <script src="js/schwebender-ki-assistent.js"></script>
 <script src="js/quick-capture.js"></script>
+<script src="js/bottom-nav.js"></script>
 <script src="js/ziele.js"></script>
 <script src="js/init.js"></script>
 <script src="js/command-palette.js"></script>

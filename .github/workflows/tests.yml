@@ -1,0 +1,35 @@
+name: Backend-Tests
+
+# Rein informativ - läuft NEBEN docker-publish.yml (das baut/veröffentlicht
+# unabhängig davon, siehe README/Chat-Verlauf: bewusst kein CI-Gate vor dem
+# Deploy, Watchtower zieht neue Images ohnehin automatisch). Dieser Workflow
+# blockiert also nichts, meldet aber sichtbar (roter Haken im PR/Commit-
+# Verlauf), wenn ein Push die bestehenden Tests bricht.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v7
+
+      - name: Python einrichten
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Abhängigkeiten installieren
+        # lxml-Override wie im Dockerfile (siehe dort) - fints==5.0.0 zieht
+        # sonst das per CVE-2026-41066 (XXE) betroffene lxml 6.0.4.
+        run: |
+          pip install --no-cache-dir -r backend/requirements-dev.txt
+          pip install --no-cache-dir --no-deps lxml==6.1.0
+
+      - name: Tests ausführen
+        working-directory: backend
+        run: python3 -m pytest tests/ -v

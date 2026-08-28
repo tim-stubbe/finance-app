@@ -1,0 +1,6 @@
+# Nur für Tests/CI - bewusst NICHT in requirements.txt (das Produktions-
+# Image, siehe Dockerfile, soll schlank bleiben, Tests laufen nie im
+# laufenden Container mit).
+-r requirements.txt
+pytest==9.1.1
+httpx==0.28.1
