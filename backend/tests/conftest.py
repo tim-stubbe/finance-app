@@ -29,18 +29,27 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 from app.database import SessionLocal, engine, Base  # noqa: E402
+from app import models  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _fresh_db():
     """Leert vor JEDEM Test alle Tabellen (statt einer komplett neuen DB pro
     Test - schneller, und create_all()/ensure_columns() liefen ohnehin schon
-    beim Modul-Import einmal). Reihenfolge rückwärts wegen Foreign Keys."""
+    beim Modul-Import einmal). Reihenfolge rückwärts wegen Foreign Keys.
+
+    Danach denselben Default-"Privat"-Bereich wie main.py's Bootstrap wieder
+    anlegen (siehe main.py: `if not _bootstrap_db.query(models.Space).first()`)
+    - der lief nur EINMAL beim Modul-Import, das Leeren hier würde ihn sonst
+    ab dem zweiten Test entfernen. auth.get_active_space_id() wählt bei genau
+    einem Bereich automatisch aus (kein manuelles space_id-Handling in jedem
+    einzelnen Test nötig, entspricht dem echten Verhalten nach Erstinstallation)."""
     yield
     db = SessionLocal()
     try:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(table.delete())
+        db.add(models.Space(name="Privat", icon="🏠"))
         db.commit()
     finally:
         db.close()
@@ -55,3 +64,15 @@ def client():
     # Secure-Flags nie wieder zurückgeschickt (live beobachtet: /status zeigte
     # nach erfolgreichem /setup fälschlich authenticated=False).
     return TestClient(app, base_url="https://testserver")
+
+
+@pytest.fixture
+def auth_client(client):
+    """Fertig eingerichteter, eingeloggter Client mit CSRF-Header bereits
+    gesetzt (X-CSRF-Token als Default-Header, statt ihn in jedem einzelnen
+    mutierenden Aufruf jedes Tests wiederholen zu müssen) - für alle Tests,
+    die einen geschützten Endpunkt (dependencies=[Depends(auth.require_auth)],
+    siehe main.py) brauchen, nicht nur den Login-Flow selbst."""
+    client.post("/api/auth/setup", json={"password": "Sicheres-Testpasswort-123"})
+    client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
+    return client
