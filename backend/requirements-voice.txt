@@ -1,0 +1,14 @@
+# Sprach-Ein-/Ausgabe fuer den Smart-Home-Assistenten (Phase 2, siehe
+# backend/app/voice/ und README-Abschnitt "Smart Home - Sprache").
+#
+# BEWUSST NICHT in requirements.txt: zieht ctranslate2 + onnxruntime + PyAV +
+# numpy nach (~250 MB im Image). Wer Sprachsteuerung will, nimmt diese Datei
+# im Dockerfile mit auf ODER faehrt einen lokalen Whisper-/Piper-HTTP-Dienst
+# und setzt STT_BACKEND=http / TTS_BACKEND=http (dann bleibt das Image schlank).
+#
+# Beide Pakete sind reine Wheels fuer python:3.14-slim (kein Compiler noetig,
+# espeak-ng ist in piper-tts gebuendelt). Modelle laden beim ersten Aufruf
+# nach $DATA_DIR und ueberleben dank des Volumes einen Neustart.
+
+faster-whisper==1.2.1
+piper-tts==1.7.0

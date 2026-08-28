@@ -276,6 +276,7 @@ async function loadSettingsTab() {
   await loadErrorLog();
   await loadBudgets();
   await loadOllamaSettings();
+  await loadSmartHomeSettingsPanel();
   await loadSyncSchedule();
   await loadAutoCategorizeSettings();
   await loadWebSearchSettings();

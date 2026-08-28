@@ -135,3 +135,19 @@ rejection.
 text, urgent=False)` is the single choke point for all Telegram sends —
 quiet-hours logic lives there once. Don't add a per-caller quiet-hours
 check; call `notify()`.
+
+**Smart Home** (`smarthome.py` + `ha_client.py` + `routers/smarthome.py`,
+`crud_smarthome.py`): the non-finance "life OS" bridge — Home Assistant REST
+(`ha_client`, sync `requests`, same shape as `ollama_client`) plus the local
+Ollama for free-form requests. `smarthome.process_command(db, settings, text,
+confirm=False)` is the one pipeline entry point (fast path: alias/keyword →
+direct HA service; else LLM intent JSON), never raises — errors come back as
+`{"ok": False, "reply": <de>}`. Policy is an allowlist of `domain.service`
+pairs (`DEFAULT_ALLOWED_SERVICES`) plus a hard `BLOCKED_SERVICES` denylist;
+extra pairs opt-in via `settings.homeassistant_extra_services`. HA
+URL/token/filters live on `Settings` (token Fernet-encrypted like every other
+secret). `voice/` (`stt.py`/`tts.py`, chosen via `STT_BACKEND`/`TTS_BACKEND`
+env — `stub`|`faster-whisper`|`piper`|`http`) does local speech in/out for
+`POST /api/smarthome/voice/command`; heavy deps are opt-in via
+`requirements-voice.txt`, default `stub` returns 501. WebSocket live-state and
+the 3D floor plan are explicitly later phases.

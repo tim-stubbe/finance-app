@@ -2424,3 +2424,41 @@ class VehicleGoalOut(VehicleGoalBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     done: bool
+
+
+# ---------- Smart Home (Home Assistant + Ollama, siehe smarthome.py) ----------
+class SmartHomeSettingsOut(BaseModel):
+    url: Optional[str] = None
+    token_set: bool = False
+    allowed_domains: Optional[str] = None
+    allowed_areas: Optional[str] = None
+    extra_services: Optional[str] = None
+    require_confirmation: bool = True
+    dry_run: bool = False
+
+
+class SmartHomeSettingsUpdate(BaseModel):
+    url: Optional[str] = None
+    # Leer / weggelassen = Token unveraendert lassen. Der String "" loescht ihn.
+    token: Optional[str] = None
+    allowed_domains: Optional[str] = None
+    allowed_areas: Optional[str] = None
+    extra_services: Optional[str] = None
+    require_confirmation: Optional[bool] = None
+    dry_run: Optional[bool] = None
+
+
+class SmartHomeCommand(BaseModel):
+    text: str
+    confirm: bool = False
+
+
+class SmartHomeAliasCreate(BaseModel):
+    phrase: str
+    entity_id: str
+
+
+class SmartHomeAliasOut(BaseModel):
+    id: int
+    phrase: str
+    entity_id: str

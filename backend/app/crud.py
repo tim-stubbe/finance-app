@@ -92,6 +92,10 @@ from .crud_vehicle import (
     get_vehicle_goals, create_vehicle_goal, get_vehicle_goal, update_vehicle_goal,
     delete_vehicle_goal,
 )
+from .crud_smarthome import (
+    get_smarthome_aliases, create_smarthome_alias, delete_smarthome_alias,
+    log_smarthome_action, get_smarthome_actions,
+)
 
 CACHE_TTL = timedelta(hours=24)
 

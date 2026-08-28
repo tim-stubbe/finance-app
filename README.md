@@ -185,6 +185,24 @@ nach ausdrücklicher Bestätigung.
   Quick-Capture-Button für Buchung/To-Do/Check-in in einem Sheet
 - macOS-App mit denselben Kernbereichen, gleiche Sync-Basis
 
+**Smart Home (Home Assistant, komplett lokal)**
+- Tab „Smart Home": Haus per Text steuern und Zustände abfragen – Brücke
+  zwischen der Home-Assistant-REST-API und der lokalen Ollama-Instanz, keine
+  Cloud-KI. Erster Schritt weg vom reinen Finanz-Tool hin zum „Life OS"-Hub.
+- Schneller Pfad ohne KI für bekannte Befehle: Alias-Liste (Sprich-Name →
+  `entity_id`) und Stichwort-Erkennung schalten direkt; Ollama nur bei
+  unklaren oder freien Anfragen. Bei mehreren möglichen Geräten wird
+  nachgefragt statt geraten.
+- Allowlist erlaubter `domain.service`-Paare (Standard: Licht/Schalter/
+  Rollladen/Klima/Media), fest gesperrte gefährliche Dienste (Türschloss
+  öffnen, HA neu starten …), optionaler Trockenlauf, Protokoll aller
+  ausgeführten Aktionen.
+- Sprach-Ein-/Ausgabe komplett lokal: `POST /api/smarthome/voice/command`
+  (Audio hoch → faster-whisper → Aktion → Antworttext, optional gesprochen per
+  Piper). Umschaltbar über `STT_BACKEND`/`TTS_BACKEND` (`stub`/`faster-whisper`/
+  `piper`/`http`), Standard `stub` mit dokumentiertem Offline-Fallback. 3D-
+  Grundriss bleibt Phase 3.
+
 **Sonstiges**
 - Fünf Themes (Dunkel, Hell, Gelb, Alpen, Alpen Desktop mit Top-Navigation für
   breite Bildschirme), umschaltbar zwischen EUR- und CHF-Anzeige
@@ -221,9 +239,45 @@ ins Bild gemountet und uvicorn startet mit `--reload`.
 ### Einstellungen
 
 Zugangsdaten für Banken, PayPal, Bitvavo, Telegram, Twilio, Brave/SearXNG, das
-E-Mail-Postfach und Immich werden nicht über Umgebungsvariablen gesetzt,
-sondern in der Oberfläche unter **Einstellungen** hinterlegt. Sie liegen mit
-Fernet verschlüsselt in der Datenbank.
+E-Mail-Postfach, Immich und Home Assistant werden nicht über Umgebungsvariablen
+gesetzt, sondern in der Oberfläche unter **Einstellungen** hinterlegt. Sie
+liegen mit Fernet verschlüsselt in der Datenbank.
+
+Für **Smart Home** dort die Home-Assistant-URL (z. B.
+`http://homeassistant.local:8123`) und einen langlebigen Zugangs-Token
+eintragen (in Home Assistant: Profil → „Langlebige Zugangs-Tokens" → Token
+erstellen; der Token wird nur einmal angezeigt). Das KI-Modell ist dasselbe wie
+für die übrigen Assistenz-Funktionen (Einstellungen → KI-Assistent, lokale
+Ollama-Instanz). Optional lassen sich die freigegebenen Bereiche/Domains
+einschränken und ein Trockenlauf aktivieren.
+
+#### Smart Home – Sprache (STT/TTS, komplett lokal)
+
+`POST /api/smarthome/voice/command` (Audiodatei hochladen) nutzt dieselbe
+Pipeline wie die Texteingabe: Audio → Spracherkennung → Aktion/Auskunft →
+Antworttext (optional zusätzlich als gesprochenes WAV, base64 in
+`reply_audio_b64`). Gesteuert über Umgebungsvariablen – **kein Cloud-STT/TTS**:
+
+| Variable            | Werte / Standard                          | Bedeutung                                             |
+|---------------------|-------------------------------------------|------------------------------------------------------|
+| `STT_BACKEND`       | `stub` (Std.), `faster-whisper`, `http`   | Spracherkennung. `stub` → Endpunkt antwortet 501     |
+| `WHISPER_MODEL`     | `base` (auch `tiny`/`small`/`medium`)     | Whisper-Modellgröße (Download bei 1. Nutzung nach `$DATA_DIR/whisper-models`) |
+| `WHISPER_HTTP_URL`  | –                                         | bei `STT_BACKEND=http`: eigener Whisper-Webservice (z. B. `onerahmet/openai-whisper-asr-webservice`) |
+| `TTS_BACKEND`       | `stub` (Std.), `piper`, `http`            | Sprachausgabe. `stub` → nur Textantwort              |
+| `PIPER_VOICE`       | `de_DE-thorsten-medium`                   | Piper-Stimme (Download bei 1. Nutzung nach `$DATA_DIR/piper-voices`) |
+| `PIPER_HTTP_URL`    | –                                         | bei `TTS_BACKEND=http`: eigener Piper-HTTP-Server    |
+| `ASSISTANT_LANGUAGE`| `de`                                      | Sprache für STT/TTS                                  |
+
+Standard ist `stub` – der **dokumentierte Offline-Fallback**: ohne Konfiguration
+antwortet der Voice-Endpunkt mit 501 und einer Anleitung, die Textsteuerung
+läuft normal weiter.
+
+Für `faster-whisper`/`piper` müssen die (bewusst nicht im Standard-Image
+enthaltenen, ~250 MB) Pakete aus `backend/requirements-voice.txt` mit ins Bild –
+im `Dockerfile` nach der `requirements.txt`-Zeile ein
+`&& pip install --no-cache-dir -r requirements-voice.txt` ergänzen. Wer das
+Image schlank halten will, fährt stattdessen einen eigenen Whisper-/Piper-
+Dienst im Netz und setzt `STT_BACKEND=http` / `TTS_BACKEND=http`.
 
 Nur zwei Umgebungsvariablen gibt es:
 

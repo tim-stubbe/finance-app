@@ -198,6 +198,10 @@
         <svg viewBox="0 0 24 24" fill="none"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm14 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0zM3 17V11l2-5h10l4 5h2v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Auto</span>
       </button>
+      <button class="nav-btn" data-tab="smarthome">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Smart Home</span>
+      </button>
     </nav>
 
     <div class="nav-bottom">
@@ -2293,6 +2297,88 @@
       </div>
     </div>
 
+    <!-- ================= SMART HOME (Home Assistant <-> lokale Ollama) ================= -->
+    <!-- Phase 1: Steuer-/Auskunfts-Bruecke + einfache Cockpit-UI. Voice (STT/TTS)
+         ist Phase 2, 3D-Visualisierung Phase 3 - siehe backend/app/smarthome.py. -->
+    <section id="tab-smarthome" class="tab-content">
+      <header class="page-head">
+        <div>
+          <h1>Smart Home</h1>
+          <p class="page-sub">Haus per Text steuern und Zustände abfragen — komplett lokal über Home&nbsp;Assistant + deinen Ollama-Server, nichts verlässt dein Netzwerk. Sprache (Whisper/Piper) und ein 3D-Grundriss folgen als spätere Phasen.</p>
+        </div>
+      </header>
+
+      <div id="smarthome-setup-hint" class="panel hidden">
+        <p class="page-sub">Noch nicht eingerichtet. Trage unter
+        <a href="#" id="smarthome-goto-settings">Einstellungen → Smart Home</a>
+        die Home-Assistant-URL und einen langlebigen Zugangs-Token ein.</p>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 7M5 10v10h14V10M9 21v-6h6v6"/></svg> Verbindung</h3>
+        <p class="page-sub" id="smarthome-status-line">Status wird geprüft …</p>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 3.2 6.4L4 20l1.2-3.4A7.96 7.96 0 0 1 4 12z"/></svg> Befehl</h3>
+        <p class="page-sub">z. B. „Mach das Licht im Wohnzimmer aus“, „Rollladen im Bad runter“, „Wie warm ist es im Wohnzimmer?“</p>
+        <form id="smarthome-command-form" class="chat-input-row">
+          <input type="text" id="smarthome-command-input" placeholder="Befehl oder Frage …" autocomplete="off">
+          <button type="button" id="smarthome-mic-btn" class="btn-ghost" title="Sprechen (lokale Spracherkennung)">🎤</button>
+          <button type="submit" class="btn-primary">Senden</button>
+        </form>
+        <p class="page-sub" id="smarthome-mic-hint" style="display:none">Sprachsteuerung ist serverseitig nicht aktiv (STT_BACKEND). Siehe README.</p>
+        <div id="smarthome-reply" class="ai-insight-text hidden"></div>
+        <div id="smarthome-confirm" class="ai-insight-text hidden">
+          <p id="smarthome-confirm-text"></p>
+          <div class="form-actions">
+            <button type="button" id="smarthome-confirm-yes" class="btn-primary btn-sm">Ja, ausführen</button>
+            <button type="button" id="smarthome-confirm-no" class="btn-ghost btn-sm">Abbrechen</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg> Geräte</h3>
+        <div class="filter-row">
+          <button type="button" id="smarthome-devices-refresh" class="btn-ghost btn-sm">Aktualisieren</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Bereich</th><th>Status</th><th></th></tr></thead>
+            <tbody id="smarthome-device-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg> Aliase</h3>
+        <p class="page-sub">Sprich-Name → <code>entity_id</code>. Trifft ein Alias, geht der Befehl sofort an Home Assistant (ohne KI).</p>
+        <form id="smarthome-alias-form" class="filter-row">
+          <label>Sprich-Name <input type="text" id="smarthome-alias-phrase" placeholder="Wohnzimmerlicht" autocomplete="off"></label>
+          <label>entity_id <input type="text" id="smarthome-alias-entity" placeholder="light.wohnzimmer" autocomplete="off"></label>
+          <button type="submit" class="btn-ghost btn-sm">Hinzufügen</button>
+        </form>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Sprich-Name</th><th>entity_id</th><th></th></tr></thead>
+            <tbody id="smarthome-alias-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Letzte Aktionen</h3>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Zeit</th><th>Verstanden als</th><th>HA-Service</th><th>Ergebnis</th></tr></thead>
+            <tbody id="smarthome-history-list"></tbody>
+          </table>
+        </div>
+        <p class="page-sub">Phase 3: interaktiver 3D-Grundriss der Wohnung an dieser Stelle.</p>
+      </div>
+    </section>
+
     <!-- SETTINGS -->
     <section id="tab-settings" class="tab-content">
       <header class="page-head">
@@ -2441,6 +2527,24 @@
           </div>
         </div>
         <p id="ollama-pull-status" class="page-sub"></p>
+      </div>
+
+      <div class="panel" data-integration-key="homeassistant">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg> Smart Home (Home Assistant)</h3>
+        <p class="page-sub">Verbindet den Tab „Smart Home" mit deiner Home-Assistant-Instanz. Der Token wird verschlüsselt gespeichert (in HA: Profil → „Langlebige Zugangs-Tokens"). Das KI-Modell ist dasselbe wie oben bei Ollama.</p>
+        <form id="smarthome-settings-form" class="form-grid">
+          <label>Home-Assistant-URL <input type="text" id="smarthome-cfg-url" placeholder="http://homeassistant.local:8123"></label>
+          <label>Zugangs-Token <input type="password" id="smarthome-cfg-token" placeholder="leer lassen = unverändert" autocomplete="new-password"></label>
+          <label>Erlaubte Domains <input type="text" id="smarthome-cfg-domains" placeholder="light,switch,climate,cover,fan,media_player (leer = Standard)"></label>
+          <label>Erlaubte Bereiche <input type="text" id="smarthome-cfg-areas" placeholder="leer = alle Bereiche"></label>
+          <label>Zusätzliche Dienste <input type="text" id="smarthome-cfg-extra" placeholder="z.B. vacuum.start,humidifier.turn_on"></label>
+          <label class="checkbox-label"><input type="checkbox" id="smarthome-cfg-confirm"> Steuer-Aktionen der KI erst nach Bestätigung ausführen</label>
+          <label class="checkbox-label"><input type="checkbox" id="smarthome-cfg-dry"> Trockenlauf (nichts wirklich schalten)</label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <p id="smarthome-cfg-status" class="page-sub"></p>
       </div>
 
       <div class="panel">
@@ -3401,6 +3505,8 @@
 <script src="js/jahresrueckblick.js"></script>
 <script src="js/notizen.js"></script>
 <script src="js/vehicle.js"></script>
+<script src="js/smarthome.js"></script>
+<script src="js/settings-smarthome.js"></script>
 <!-- Muss als LETZTES Skript laden - bootAuthGate() am Ende von auth-login.js
      braucht startApp()/init() (core.js/init.js) und alle Tab-Ladefunktionen
      bereits definiert, siehe js/auth-login.js-Kopfkommentar. -->

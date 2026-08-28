@@ -4,3 +4,8 @@
 -r requirements.txt
 pytest==9.1.1
 httpx==0.28.1
+# Sprach-Ein-/Ausgabe des Smart-Home-Assistenten (Phase 2). In CI mit dabei,
+# damit der echte End-to-End-Test (Piper synthetisiert -> faster-whisper
+# transkribiert -> /api/smarthome/voice/command) tatsächlich läuft. Fürs
+# Produktions-Image separat in requirements-voice.txt (Opt-in, ~250 MB).
+-r requirements-voice.txt

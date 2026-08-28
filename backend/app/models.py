@@ -373,6 +373,57 @@ class Settings(Base):
     # Zaehler - beides ist "ein Versuch, sich anzumelden") ---
     failed_login_count = Column(Integer, nullable=False, default=0)
     failed_login_locked_until = Column(DateTime, nullable=True)
+    # --- Smart Home (Home Assistant, siehe smarthome.py) --- Teil des
+    # "Life OS"-Ausbaus: Kies als zentraler Hub, nicht nur Finanzen. URL im
+    # Klartext (kein Geheimnis), Token verschluesselt wie alle anderen Secrets.
+    homeassistant_url = Column(String, nullable=True)
+    homeassistant_token_encrypted = Column(String, nullable=True)
+    # CSV. Leer = DEFAULT_ALLOWED_DOMAINS aus smarthome.py.
+    homeassistant_allowed_domains = Column(String, nullable=True)
+    # CSV der freigegebenen Bereiche. Leer = alle Bereiche.
+    homeassistant_allowed_areas = Column(String, nullable=True)
+    # CSV zusaetzlicher "domain.service"-Freigaben ueber die fest verdrahtete
+    # Allowlist hinaus (BLOCKED_SERVICES bleiben trotzdem gesperrt).
+    homeassistant_extra_services = Column(String, nullable=True)
+    # Steuer-Aktionen aus dem LLM-Pfad erst nach "ja" ausfuehren (sicherer).
+    # Exakte Alias-Befehle laufen unabhaengig davon immer direkt.
+    homeassistant_require_confirmation = Column(Boolean, nullable=False, default=True)
+    # Trockenlauf: nichts wirklich schalten, nur protokollieren/antworten.
+    homeassistant_dry_run = Column(Boolean, nullable=False, default=False)
+
+
+class SmartHomeAlias(Base):
+    """Sprich-Name -> Home-Assistant-entity_id ("Wohnzimmerlicht" ->
+    light.wohnzimmer). Ersetzt fuer den Schnellpfad das LLM: trifft ein Alias,
+    geht der Befehl direkt an HA. Vom Nutzer im Smart-Home-Tab gepflegt."""
+
+    __tablename__ = "smarthome_aliases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phrase = Column(String, nullable=False)
+    entity_id = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SmartHomeAction(Base):
+    """Protokoll jeder verstandenen Anweisung: was verstanden wurde, welcher
+    HA-Service, Erfolg/Fehler. Grundlage fuer die "Letzte Aktionen"-Liste und
+    fuer spaeteres Debugging der Sprachpipeline."""
+
+    __tablename__ = "smarthome_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    text = Column(Text, nullable=True)
+    intent = Column(String, nullable=True)
+    domain = Column(String, nullable=True)
+    service = Column(String, nullable=True)
+    entity_id = Column(String, nullable=True)
+    data_json = Column(Text, nullable=True)
+    ok = Column(Boolean, nullable=False, default=True)
+    error = Column(Text, nullable=True)
+    source = Column(String, nullable=True)  # "text" | "voice" | "hub"
 
 
 class PasskeyCredential(Base):

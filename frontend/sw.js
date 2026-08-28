@@ -6,7 +6,11 @@
 // CACHE_NAME-Version erzwingt bei bestehenden Installationen den Wechsel,
 // damit der Login-Screen nicht aus einem alten, ihn noch nicht kennenden
 // Precache fehlt.
-const CACHE_NAME = "finanztool-shell-v36";
+// v37: Smart-Home-Tab ergaenzt (js/smarthome.js, js/settings-smarthome.js) -
+// Home Assistant <-> lokale Ollama, Teil des "Life OS"-Hub-Ausbaus. Inkl.
+// lokaler Sprach-Ein-/Ausgabe (Mikrofon-Button -> /api/smarthome/voice/command,
+// faster-whisper + Piper serverseitig).
+const CACHE_NAME = "finanztool-shell-v37";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -23,6 +27,7 @@ const SHELL_ASSETS = [
   "/js/command-palette.js", "/js/jahresrueckblick.js", "/js/notizen.js",
   "/js/auth-login.js", "/js/settings-assistent.js", "/js/quick-capture.js",
   "/js/settings-search.js", "/js/bottom-nav.js", "/js/vehicle.js",
+  "/js/smarthome.js", "/js/settings-smarthome.js",
 ];
 
 self.addEventListener("install", event => {

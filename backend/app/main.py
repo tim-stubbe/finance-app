@@ -45,6 +45,7 @@ from .routers.profile_ollama import profile_ollama_router
 from .routers.sync_all import sync_all_router, sync_all_connections
 from .routers.auth_login import auth_public_router, auth_protected_router
 from .routers.ai_assistant import ai_assistant_router, websearch_configured, websearch_run
+from .routers.smarthome import smarthome_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -275,6 +276,18 @@ ensure_columns("settings", {
     "quiet_until": "DATETIME",
     "midweek_checkin_enabled": "BOOLEAN DEFAULT 0",
     "communication_style": "VARCHAR DEFAULT 'freundlich'",
+})
+
+# Smart Home (Home Assistant <-> Ollama, siehe smarthome.py) - Teil des
+# "Life OS"-Ausbaus, Kies als zentraler Hub.
+ensure_columns("settings", {
+    "homeassistant_url": "VARCHAR",
+    "homeassistant_token_encrypted": "VARCHAR",
+    "homeassistant_allowed_domains": "VARCHAR",
+    "homeassistant_allowed_areas": "VARCHAR",
+    "homeassistant_extra_services": "VARCHAR",
+    "homeassistant_require_confirmation": "BOOLEAN DEFAULT 1",
+    "homeassistant_dry_run": "BOOLEAN DEFAULT 0",
 })
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
@@ -951,6 +964,7 @@ app.include_router(dashboard_router, dependencies=_require_auth)
 app.include_router(profile_ollama_router, dependencies=_require_auth)
 app.include_router(sync_all_router, dependencies=_require_auth)
 app.include_router(ai_assistant_router, dependencies=_require_auth)
+app.include_router(smarthome_router, dependencies=_require_auth)
 app.include_router(sync_router)
 
 
