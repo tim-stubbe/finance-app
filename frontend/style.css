@@ -1950,6 +1950,14 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .life-heatmap { display: flex; gap: 3px; flex-wrap: wrap; margin: 4px 0 8px; }
 .life-heatmap-day { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-3, rgba(120,120,120,0.18)); }
 .life-heatmap-day.filled { background: var(--accent); }
+
+.life-year-heatmap-svg { width: 100%; max-width: 760px; height: auto; }
+.life-year-heatmap-svg .lyh-0 { fill: var(--surface-3, rgba(120,120,120,.18)); }
+.life-year-heatmap-svg .lyh-1 { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+.life-year-heatmap-svg .lyh-2 { fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+.life-year-heatmap-svg .lyh-3 { fill: color-mix(in srgb, var(--accent) 78%, transparent); }
+.life-year-heatmap-svg .lyh-4 { fill: var(--accent); }
+
 .life-week-grid-wrap { margin: 4px 0 8px; }
 .life-week-count { margin: 0 0 4px; font-weight: 600; }
 .life-week-count.met { color: var(--accent-strong); }

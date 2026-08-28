@@ -7,6 +7,7 @@ async function loadLifeTab() {
     api("/life-checkins"),
   ]);
   lifeAreasCache = areas;
+  loadLifeYearHeatmap();
   const checkinsByArea = new Map();
   checkins.forEach(c => {
     if (!checkinsByArea.has(c.area_id)) checkinsByArea.set(c.area_id, []);
@@ -358,3 +359,27 @@ document.getElementById("life-checkin-form").addEventListener("submit", async e 
   loadLifeTab();
 });
 
+
+// ---------- Jahres-Heatmap (GitHub-Stil) über alle Lebensbereiche ----------
+async function loadLifeYearHeatmap() {
+  const panel = document.getElementById("life-year-panel");
+  let data = [];
+  try { data = await api("/life-areas/heatmap?days=371"); } catch { panel.hidden = true; return; }
+  if (!data.length || !data.some(d => d.count > 0)) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const first = new Date(data[0].date + "T00:00:00");
+  const pad = (first.getDay() + 6) % 7;               // Mo = 0
+  const cells = Array(pad).fill(null).concat(data);
+  const weeks = Math.ceil(cells.length / 7);
+  const max = Math.max(...data.map(d => d.count), 1);
+  const lvl = c => c === 0 ? 0 : Math.min(4, 1 + Math.floor((c - 1) / max * 3));
+  const S = 13, G = 3;
+  let rects = "";
+  cells.forEach((c, i) => {
+    if (!c) return;
+    const wk = Math.floor(i / 7), dy = i % 7;
+    rects += `<rect x="${wk * (S + G)}" y="${dy * (S + G)}" width="${S}" height="${S}" rx="2" class="lyh lyh-${lvl(c.count)}"><title>${c.date}: ${c.count} Check-in(s)</title></rect>`;
+  });
+  document.getElementById("life-year-heatmap").innerHTML =
+    `<svg class="life-year-heatmap-svg" viewBox="0 0 ${weeks * (S + G)} ${7 * (S + G)}" preserveAspectRatio="xMinYMin meet">${rects}</svg>`;
+}

@@ -58,7 +58,7 @@ from .crud_life_areas import (
     get_business_projects, get_business_project, create_business_project,
     update_business_project, mark_business_project_checked, get_business_issues,
     create_business_issue, resolve_business_issue, find_business_project_by_name,
-    find_open_business_issue, _life_area_streak_and_history, get_life_areas,
+    find_open_business_issue, _life_area_streak_and_history, life_heatmap, get_life_areas,
     get_life_area, create_life_area, update_life_area, get_life_checkins,
     create_life_checkin, find_life_area_by_name, get_wishlist_items,
     get_wishlist_item, create_wishlist_item, update_wishlist_item,

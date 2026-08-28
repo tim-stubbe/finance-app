@@ -201,6 +201,22 @@ def _life_area_streak_and_history(db: Session, area_id: int, days: int = LIFE_AR
     return sorted(checkin_days), streak
 
 
+def life_heatmap(db: Session, days: int = 371, area_id=None):
+    """Pro Tag die Anzahl Check-ins der letzten `days` Tage (fuer die
+    GitHub-artige Jahres-Heatmap). Fehlende Tage = 0, chronologisch."""
+    since = date.today() - timedelta(days=days - 1)
+    q = (
+        db.query(func.date(models.LifeCheckIn.created_at), func.count(models.LifeCheckIn.id))
+        .filter(models.LifeCheckIn.created_at >= datetime.combine(since, datetime.min.time()))
+    )
+    if area_id:
+        q = q.filter(models.LifeCheckIn.area_id == area_id)
+    counts = {str(d): int(c) for d, c in q.group_by(func.date(models.LifeCheckIn.created_at)).all()}
+    return [{"date": (since + timedelta(days=i)).isoformat(),
+             "count": counts.get((since + timedelta(days=i)).isoformat(), 0)}
+            for i in range(days)]
+
+
 def _life_area_week_days(checkin_days_30: list[str]) -> list[bool]:
     """Mo-So der laufenden Woche als Bool-Liste, aus checkin_days_30
     abgeleitet (deckt die letzten 30 Tage ab, die laufende Woche liegt immer

@@ -93,6 +93,11 @@ def update_life_area(area_id: int, data: schemas.LifeAreaUpdate, db: Session = D
     return crud.update_life_area(db, area, data)
 
 
+@business_life_router.get("/life-areas/heatmap")
+def life_areas_heatmap(days: int = 371, area_id: Optional[int] = None, db: Session = Depends(get_db)):
+    return crud.life_heatmap(db, days=max(7, min(days, 400)), area_id=area_id)
+
+
 @business_life_router.get("/life-checkins", response_model=List[schemas.LifeCheckInOut])
 def list_life_checkins(area_id: Optional[int] = None, db: Session = Depends(get_db)):
     return crud.get_life_checkins(db, area_id)

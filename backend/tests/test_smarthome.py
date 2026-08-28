@@ -387,3 +387,15 @@ def test_ha_down_returns_clean_message(auth_client, configured_ha, monkeypatch):
     body = r.json()
     assert body["ok"] is False
     assert "nicht erreichbar" in body["reply"]
+
+
+# ---------------- Lebensbereiche-Jahres-Heatmap (Phase 8) ----------------
+
+def test_life_heatmap(auth_client):
+    area = auth_client.post("/api/life-areas", json={"name": "Sport"}).json()
+    auth_client.post("/api/life-checkins", json={"area_id": area["id"], "note": "gelaufen"})
+    auth_client.post("/api/life-checkins", json={"area_id": area["id"], "note": "nochmal"})
+    hm = auth_client.get("/api/life-areas/heatmap?days=30").json()
+    assert len(hm) == 30
+    assert hm[-1]["count"] == 2          # beide Check-ins heute
+    assert all(h["count"] == 0 for h in hm[:-1])
