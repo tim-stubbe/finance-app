@@ -1783,6 +1783,26 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .sh-fp-editing .sh-fp-room, .sh-fp-editing .sh-fp-dev { cursor: move; }
 .sh-fp-resize { fill: var(--accent, #7a8cc8); cursor: nwse-resize; }
 
+.sh-auto-card {
+  border: 1px solid var(--border, rgba(128,128,128,.25));
+  border-radius: 10px; padding: 12px 14px; margin: 10px 0;
+  background: var(--panel-2, rgba(128,128,128,.05));
+}
+.sh-auto-head { display: flex; align-items: center; gap: 8px; }
+.sh-auto-badge {
+  font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  background: rgba(128,128,128,.2); color: var(--muted);
+}
+.sh-auto-badge.status-entwurf { background: rgba(120,140,200,.22); color: inherit; }
+.sh-auto-badge.status-angelegt { background: rgba(58,157,93,.22); color: #3a9d5d; }
+.sh-auto-yaml {
+  width: 100%; min-height: 150px; margin-top: 8px; resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  line-height: 1.45; white-space: pre; overflow-wrap: normal; overflow-x: auto;
+}
+.sh-auto-warn { margin: 6px 0 0; padding-left: 18px; color: #d9534f; font-size: 12px; }
+.sh-auto-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
 .danger-zone {
   margin-top: 18px;
   padding: 14px 16px;

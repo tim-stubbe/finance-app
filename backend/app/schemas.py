@@ -2484,3 +2484,15 @@ class FloorplanDevice(BaseModel):
 class SmartHomeFloorplanIn(BaseModel):
     rooms: List[FloorplanRoom] = []
     devices: List[FloorplanDevice] = []
+
+
+class AutomationSuggestRequest(BaseModel):
+    count: int = 5
+
+
+class AutomationFreeformRequest(BaseModel):
+    text: str
+
+
+class AutomationYamlUpdate(BaseModel):
+    yaml_text: str

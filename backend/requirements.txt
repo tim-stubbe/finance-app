@@ -17,6 +17,9 @@ requests==2.34.2
 fints==5.0.0
 cryptography==50.0.0
 APScheduler==3.11.3
+# Nur zum Parsen/Validieren der von der KI erzeugten Home-Assistant-
+# Automationen (siehe smarthome_automations.py) - reines Python-Wheel.
+PyYAML==6.0.2
 PyMuPDF==1.28.2
 # Fuer den Bildvergleich der Immich-Duplikate. Noetig, weil Immich seine
 # Vorschaubilder als WebP ausliefert und PyMuPDF dieses Format nicht liest.

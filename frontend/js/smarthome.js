@@ -10,6 +10,7 @@ async function loadSmartHomeTab() {
   loadSmartHomeAliases();
   loadSmartHomeHistory();
   if (typeof loadSmartHomeFloorplan === "function") loadSmartHomeFloorplan();
+  if (typeof loadSmartHomeAutomations === "function") loadSmartHomeAutomations();
 }
 
 async function loadSmartHomeHealth() {

@@ -87,6 +87,49 @@ def save_floorplan(db: Session, data: dict) -> dict:
     return clean
 
 
+# ---------------- KI-Automationen (Phase 4) ----------------
+def _automation_draft_dict(r) -> dict:
+    return {
+        "id": r.id,
+        "title": r.title,
+        "description": r.description,
+        "spec": json.loads(r.spec_json) if r.spec_json else None,
+        "yaml": r.yaml_text,
+        "warnings": json.loads(r.warnings_json) if r.warnings_json else [],
+        "status": r.status,
+        "ha_entity_id": r.ha_entity_id,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+def get_automation_drafts(db: Session):
+    rows = (
+        db.query(models.SmartHomeAutomationDraft)
+        .order_by(models.SmartHomeAutomationDraft.created_at.desc())
+        .all()
+    )
+    return [_automation_draft_dict(r) for r in rows]
+
+
+def set_automation_draft_status(db: Session, draft_id: int, status: str):
+    row = db.query(models.SmartHomeAutomationDraft).filter_by(id=draft_id).first()
+    if not row:
+        return None
+    row.status = status
+    db.commit()
+    db.refresh(row)
+    return _automation_draft_dict(row)
+
+
+def delete_automation_draft(db: Session, draft_id: int) -> bool:
+    row = db.query(models.SmartHomeAutomationDraft).filter_by(id=draft_id).first()
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
 def get_smarthome_actions(db: Session, limit: int = 30):
     rows = (
         db.query(models.SmartHomeAction)

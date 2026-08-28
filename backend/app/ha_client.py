@@ -83,6 +83,47 @@ def call_service(url: str, token: str, domain: str, service: str, data: dict) ->
         return []
 
 
+def list_automations(url: str, token: str) -> list:
+    """Vorhandene HA-Automationen (aus /states gefiltert) - nur fuer den
+    Prompt-Kontext ("was gibt es schon"), nicht sicherheitskritisch."""
+    out = []
+    for st in _request("GET", url, token, "/states").json():
+        ent = st.get("entity_id", "")
+        if ent.startswith("automation."):
+            out.append({
+                "entity_id": ent,
+                "name": st.get("attributes", {}).get("friendly_name", ent),
+                "state": st.get("state", ""),
+            })
+    return out
+
+
+def create_automation(url: str, token: str, automation_id: str, body: dict) -> dict:
+    """Legt/aktualisiert eine Automation ueber die HA-Config-API an. Setzt
+    voraus, dass HA die (bei HA OS standardmaessig aktive) `config`-Integration
+    hat und Automationen im UI-Modus fuehrt."""
+    try:
+        resp = _request(
+            "POST", url, token, f"/config/automation/config/{automation_id}", json=body
+        )
+    except HAError as exc:
+        if "404" in str(exc) or "405" in str(exc):
+            raise HAError(
+                "Die HA-Config-API ist nicht verfuegbar (config-Integration "
+                "aktiv? Automationen im UI-Modus?). Das YAML kann stattdessen "
+                "manuell in automations.yaml eingetragen werden."
+            )
+        raise
+    try:
+        return resp.json()
+    except ValueError:
+        return {}
+
+
+def reload_automations(url: str, token: str) -> None:
+    _request("POST", url, token, "/services/automation/reload", json={})
+
+
 def area_map(url: str, token: str) -> dict:
     """Entity-ID -> Bereichsname, ueber den Template-Endpunkt (Area-Registry
     ist per REST sonst nicht zugaenglich). Fehlschlag ist unkritisch - dann

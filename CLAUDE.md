@@ -151,4 +151,9 @@ env — `stub`|`faster-whisper`|`piper`|`http`) does local speech in/out for
 `POST /api/smarthome/voice/command`; heavy deps are opt-in via
 `requirements-voice.txt`, default `stub` returns 501. `SmartHomeFloorplan` is
 one JSON blob (rooms+devices geometry in metres) driven only by the 2D editor
-+ 3D view in `js/smarthome-floorplan.js`. WebSocket live-state is a later phase.
++ 3D view in `js/smarthome-floorplan.js`. `smarthome_automations.py` lets the
+LLM propose workflows and write the HA automation YAML for them
+(`SmartHomeAutomationDraft`, status vorschlag→entwurf→angelegt); YAML is
+validated against the same `service_allowed` allowlist + known entity_ids
+before it can be pushed via the HA config API — never auto-armed. WebSocket
+live-state is a later phase.

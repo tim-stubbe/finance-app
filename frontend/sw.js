@@ -12,7 +12,9 @@
 // faster-whisper + Piper serverseitig).
 // v38: Phase 3 - interaktiver Grundriss (js/smarthome-floorplan.js, 2D-Editor
 // + 3D-Ansicht, Geraete live/klickbar).
-const CACHE_NAME = "finanztool-shell-v38";
+// v39: Phase 4 - KI-Automationen (js/smarthome-automations.js): KI schlaegt
+// Ablaeufe vor und schreibt die HA-Automation (YAML), Nutzer legt sie an.
+const CACHE_NAME = "finanztool-shell-v39";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -29,7 +31,8 @@ const SHELL_ASSETS = [
   "/js/command-palette.js", "/js/jahresrueckblick.js", "/js/notizen.js",
   "/js/auth-login.js", "/js/settings-assistent.js", "/js/quick-capture.js",
   "/js/settings-search.js", "/js/bottom-nav.js", "/js/vehicle.js",
-  "/js/smarthome.js", "/js/smarthome-floorplan.js", "/js/settings-smarthome.js",
+  "/js/smarthome.js", "/js/smarthome-floorplan.js", "/js/smarthome-automations.js",
+  "/js/settings-smarthome.js",
 ];
 
 self.addEventListener("install", event => {

@@ -2389,6 +2389,18 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.3L18 9l-4.1 1.7L12 15l-1.9-4.3L6 9l4.1-1.7zM19 15l1 2.2L22 18l-2 .8L19 21l-1-2.2L16 18l2-.8z"/></svg> Abläufe &amp; Automationen (KI)</h3>
+        <p class="page-sub">Die KI schlägt Abläufe vor und schreibt die Home-Assistant-Automation dazu (YAML). Nichts wird automatisch aktiv – du prüfst das YAML und legst es explizit an.</p>
+        <div class="sh-fp-toolbar">
+          <button type="button" id="sh-auto-suggest" class="btn-ghost btn-sm">Vorschläge holen</button>
+          <input type="text" id="sh-auto-freeform" placeholder="oder eigenen Ablauf beschreiben …" autocomplete="off" style="flex:1;min-width:180px">
+          <button type="button" id="sh-auto-freeform-btn" class="btn-ghost btn-sm">Entwerfen</button>
+        </div>
+        <p class="page-sub" id="sh-auto-status"></p>
+        <div id="sh-auto-list"></div>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Letzte Aktionen</h3>
         <div class="table-wrap">
           <table class="data-table">
@@ -3527,6 +3539,7 @@
 <script src="js/vehicle.js"></script>
 <script src="js/smarthome.js"></script>
 <script src="js/smarthome-floorplan.js"></script>
+<script src="js/smarthome-automations.js"></script>
 <script src="js/settings-smarthome.js"></script>
 <!-- Muss als LETZTES Skript laden - bootAuthGate() am Ende von auth-login.js
      braucht startApp()/init() (core.js/init.js) und alle Tab-Ladefunktionen

@@ -443,6 +443,33 @@ class SmartHomeFloorplan(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SmartHomeAutomationDraft(Base):
+    """KI-Vorschlag fuer einen Ablauf/Workflow und dessen von der KI erzeugte
+    Home-Assistant-Automation (YAML). Wird NIE automatisch scharf geschaltet -
+    der Nutzer sieht das YAML und legt es explizit an (siehe
+    smarthome_automations.py).
+
+    status: "vorschlag" (nur Idee) -> "entwurf" (YAML erzeugt) ->
+            "angelegt" (in HA aktiv) | "verworfen"
+    """
+
+    __tablename__ = "smarthome_automation_drafts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    # Roh-Idee als JSON (trigger-Beschreibung, beteiligte entity_ids) - Basis
+    # fuer die spaetere YAML-Erzeugung.
+    spec_json = Column(Text, nullable=True)
+    yaml_text = Column(Text, nullable=True)
+    warnings_json = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="vorschlag")
+    # Von HA vergebene Automations-Entity nach dem Anlegen (automation.kies_...).
+    ha_entity_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class PasskeyCredential(Base):
     """Ein registrierter Passkey (WebAuthn) - 1:n, ein Nutzer kann mehrere
     Geraete hinterlegen (z.B. iPhone + MacBook). Kein user_id-Fremdschluessel

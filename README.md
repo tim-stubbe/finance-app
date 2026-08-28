@@ -204,6 +204,12 @@ nach ausdrücklicher Bestätigung.
 - Interaktiver Grundriss: 2D-Editor (Räume/Geräte per Drag platzieren, Größe
   ziehen) plus 3D-Ansicht (three.js). Geräte zeigen ihren Live-Zustand und
   sind per Klick schaltbar. Layout liegt als ein JSON-Blob in der DB.
+- KI-Automationen: die lokale KI schlägt Abläufe/Workflows vor (aus Geräten,
+  Bereichen und zuletzt genutzten Befehlen) **und schreibt die Home-Assistant-
+  Automation als YAML dazu**. Das YAML wird gegen die Service-Allowlist und die
+  bekannten `entity_id`s geprüft, ist im Browser editierbar und wird erst auf
+  ausdrücklichen Klick über die HA-Config-API angelegt (`automation.reload`).
+  Nichts wird automatisch scharf geschaltet.
 
 **Sonstiges**
 - Fünf Themes (Dunkel, Hell, Gelb, Alpen, Alpen Desktop mit Top-Navigation für

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from .. import schemas, auth, bank_sync, crud, smarthome, ha_client, voice
+from .. import smarthome_automations
 from ..database import get_db
 
 smarthome_router = APIRouter(prefix="/api/smarthome")
@@ -154,6 +155,80 @@ def get_floorplan(db: Session = Depends(get_db)):
 def put_floorplan(data: schemas.SmartHomeFloorplanIn, db: Session = Depends(get_db)):
     saved = crud.save_floorplan(db, data.model_dump())
     return saved
+
+
+# ---------------- KI-Automationen (Phase 4) ----------------
+def _automation_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, ha_client.HAError):
+        return HTTPException(502, str(exc))
+    if isinstance(exc, ValueError):
+        return HTTPException(400, str(exc))
+    return HTTPException(502, f"KI/Home Assistant nicht ansprechbar: {exc}")
+
+
+@smarthome_router.get("/automations")
+def list_automations(db: Session = Depends(get_db)):
+    return crud.get_automation_drafts(db)
+
+
+@smarthome_router.post("/automations/suggest")
+def suggest_automations(data: schemas.AutomationSuggestRequest, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome_automations.suggest(db, s, n=max(1, min(data.count, 10)))
+    except Exception as exc:  # noqa: BLE001
+        raise _automation_error(exc)
+
+
+@smarthome_router.post("/automations/draft-freeform")
+def draft_automation_freeform(data: schemas.AutomationFreeformRequest, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome_automations.draft_yaml(db, s, freeform=data.text)
+    except Exception as exc:  # noqa: BLE001
+        raise _automation_error(exc)
+
+
+@smarthome_router.post("/automations/{draft_id}/draft")
+def draft_automation_yaml(draft_id: int, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome_automations.draft_yaml(db, s, draft_id=draft_id)
+    except Exception as exc:  # noqa: BLE001
+        raise _automation_error(exc)
+
+
+@smarthome_router.put("/automations/{draft_id}")
+def update_automation_yaml(draft_id: int, data: schemas.AutomationYamlUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome_automations.save_yaml(db, s, draft_id, data.yaml_text)
+    except Exception as exc:  # noqa: BLE001
+        raise _automation_error(exc)
+
+
+@smarthome_router.post("/automations/{draft_id}/apply")
+def apply_automation(draft_id: int, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome_automations.apply(db, s, draft_id)
+    except Exception as exc:  # noqa: BLE001
+        raise _automation_error(exc)
+
+
+@smarthome_router.post("/automations/{draft_id}/reject")
+def reject_automation(draft_id: int, db: Session = Depends(get_db)):
+    out = crud.set_automation_draft_status(db, draft_id, "verworfen")
+    if not out:
+        raise HTTPException(404, "Vorschlag nicht gefunden.")
+    return out
+
+
+@smarthome_router.delete("/automations/{draft_id}")
+def delete_automation(draft_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_automation_draft(db, draft_id):
+        raise HTTPException(404, "Vorschlag nicht gefunden.")
+    return {"ok": True}
 
 
 # ---------------- Voice (Phase 2) ----------------
