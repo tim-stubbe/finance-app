@@ -576,7 +576,11 @@ def energy_summary(settings) -> dict:
         if dc == "power" or unit.lower() in ("w", "kw"):
             w = _to_watt(st.get("state"), unit)
             total_w += w
-            power.append({"entity_id": ent, "name": name, "watt": round(w, 1)})
+            day = w / 1000 * 24 * price
+            power.append({
+                "entity_id": ent, "name": name, "watt": round(w, 1),
+                "daily_cost": round(day, 2), "monthly_cost": round(day * 30, 2),
+            })
         elif dc == "energy" or unit.lower() in ("wh", "kwh"):
             try:
                 kwh = float(st.get("state"))
@@ -584,7 +588,11 @@ def energy_summary(settings) -> dict:
                     kwh /= 1000
             except (TypeError, ValueError):
                 kwh = None
-            energy.append({"entity_id": ent, "name": name, "kwh": round(kwh, 2) if kwh is not None else None})
+            energy.append({
+                "entity_id": ent, "name": name,
+                "kwh": round(kwh, 2) if kwh is not None else None,
+                "cost": round(kwh * price, 2) if kwh is not None else None,
+            })
     power.sort(key=lambda p: -p["watt"])
     energy.sort(key=lambda e: e["name"].lower())
     daily = total_w / 1000 * 24 * price

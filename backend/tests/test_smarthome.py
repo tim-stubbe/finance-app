@@ -335,6 +335,11 @@ def test_energy_summary(auth_client, configured_ha, monkeypatch):
     assert e["price_per_kwh"] == 0.40
     assert e["est_daily_cost"] == round(1.75 * 24 * 0.40, 2)
     assert any(s["entity_id"] == "sensor.zaehler" and s["kwh"] == 1234.5 for s in e["energy_sensors"])
+    # Kosten je Sensor
+    ges = next(s for s in e["power_sensors"] if s["entity_id"] == "sensor.gesamt")
+    assert ges["monthly_cost"] == round(0.25 * 24 * 0.40 * 30, 2)
+    zael = next(s for s in e["energy_sensors"] if s["entity_id"] == "sensor.zaehler")
+    assert zael["cost"] == round(1234.5 * 0.40, 2)
 
 
 # ---------------- Morgen-Briefing-Notizen (Phase 6) ----------------

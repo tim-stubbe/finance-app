@@ -2388,7 +2388,7 @@
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg> Geräte</h3>
         <div class="filter-row">
           <button type="button" id="smarthome-devices-refresh" class="btn-ghost btn-sm">Aktualisieren</button>
-          <label class="filter-checkbox"><input type="checkbox" id="smarthome-devices-all"> Alle Entitäten zeigen (auch Sensoren)</label>
+          <label class="filter-checkbox"><input type="checkbox" id="smarthome-devices-all" checked> Alle Entitäten zeigen (auch Sensoren)</label>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -2459,9 +2459,15 @@
       <div class="panel" id="smarthome-energy-panel" hidden>
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg> Energie</h3>
         <p class="page-sub" id="smarthome-energy-summary"></p>
+        <form id="smarthome-energy-price-form" class="filter-row" style="margin-bottom:.5rem">
+          <label>Preis pro kWh (€)
+            <input type="number" id="smarthome-energy-price" step="0.01" min="0" style="max-width:110px">
+          </label>
+          <button type="submit" class="btn-ghost btn-sm">Übernehmen</button>
+        </form>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Sensor</th><th>Leistung / Zählerstand</th></tr></thead>
+            <thead><tr><th>Sensor</th><th>Leistung / Zählerstand</th><th>Kosten</th></tr></thead>
             <tbody id="smarthome-energy-list"></tbody>
           </table>
         </div>

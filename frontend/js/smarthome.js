@@ -20,14 +20,24 @@ async function loadSmartHomeEnergy() {
   try { e = await api("/smarthome/energy"); } catch { panel.hidden = true; return; }
   if (!e.power_sensors.length && !e.energy_sensors.length) { panel.hidden = true; return; }
   panel.hidden = false;
+  document.getElementById("smarthome-energy-price").value = e.price_per_kwh;
   document.getElementById("smarthome-energy-summary").textContent =
     `Aktuell ${e.total_power_w.toLocaleString("de-DE")} W · geschätzt ${eur(e.est_daily_cost)}/Tag · ${eur(e.est_monthly_cost)}/Monat (${e.price_per_kwh.toFixed(2)} €/kWh)`;
   const rows = [
-    ...e.power_sensors.map(p => `<tr><td>${esc(p.name)}</td><td>${p.watt.toLocaleString("de-DE")} W</td></tr>`),
-    ...e.energy_sensors.map(x => `<tr><td>${esc(x.name)}</td><td>${x.kwh != null ? x.kwh.toLocaleString("de-DE") + " kWh" : "–"}</td></tr>`),
+    ...e.power_sensors.map(p => `<tr><td>${esc(p.name)}</td><td>${p.watt.toLocaleString("de-DE")} W</td><td>${eur(p.monthly_cost)}/Monat</td></tr>`),
+    ...e.energy_sensors.map(x => `<tr><td>${esc(x.name)}</td><td>${x.kwh != null ? x.kwh.toLocaleString("de-DE") + " kWh" : "–"}</td><td>${x.cost != null ? eur(x.cost) : "–"}</td></tr>`),
   ];
-  document.getElementById("smarthome-energy-list").innerHTML = rows.join("") || emptyRow(2, "list", "–");
+  document.getElementById("smarthome-energy-list").innerHTML = rows.join("") || emptyRow(3, "list", "–");
 }
+
+document.getElementById("smarthome-energy-price-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const price = parseFloat(document.getElementById("smarthome-energy-price").value);
+  if (!(price >= 0)) return;
+  await api("/smarthome/settings", { method: "PUT", body: JSON.stringify({ electricity_price: price }) });
+  toast("Strompreis gespeichert.");
+  loadSmartHomeEnergy();
+});
 
 async function loadSmartHomeHealth() {
   const line = document.getElementById("smarthome-status-line");
@@ -52,10 +62,19 @@ async function loadSmartHomeHealth() {
   }
 }
 
+// "Alle Entitäten zeigen" ist standardmäßig AN - Home Assistant liefert die
+// meisten Dinge als Sensoren, mit dem harten Domain-Filter blieben oft nur
+// eine Handvoll Geräte übrig. Wer nur Schaltbares sehen will, hakt es ab;
+// die Wahl bleibt lokal gespeichert.
+const shDevicesAllBox = document.getElementById("smarthome-devices-all");
+try {
+  shDevicesAllBox.checked = localStorage.getItem("sh-devices-all") !== "0";
+} catch { shDevicesAllBox.checked = true; }
+
 async function loadSmartHomeDevices() {
   const tbody = document.getElementById("smarthome-device-list");
   if (!tbody.children.length) tbody.innerHTML = emptyRow(4, "list", "Lädt …");
-  const showAll = document.getElementById("smarthome-devices-all")?.checked;
+  const showAll = shDevicesAllBox.checked;
   try {
     smartHomeDevices = await api("/smarthome/devices" + (showAll ? "?all=true" : ""));
   } catch {
@@ -63,7 +82,7 @@ async function loadSmartHomeDevices() {
     return;
   }
   if (!smartHomeDevices.length) {
-    tbody.innerHTML = emptyRow(4, "list", "Keine (freigegebenen) Geräte gefunden.");
+    tbody.innerHTML = emptyRow(4, "list", "Keine Geräte gefunden. Ist Home Assistant in den Einstellungen verbunden?");
     return;
   }
   tbody.innerHTML = smartHomeDevices.map(d => `
@@ -77,7 +96,10 @@ async function loadSmartHomeDevices() {
     </tr>`).join("");
 }
 
-document.getElementById("smarthome-devices-all").addEventListener("change", loadSmartHomeDevices);
+shDevicesAllBox.addEventListener("change", () => {
+  try { localStorage.setItem("sh-devices-all", shDevicesAllBox.checked ? "1" : "0"); } catch {}
+  loadSmartHomeDevices();
+});
 
 document.getElementById("smarthome-device-list").addEventListener("click", async e => {
   const entityId = e.target.closest("[data-sh-toggle]")?.dataset.shToggle;
