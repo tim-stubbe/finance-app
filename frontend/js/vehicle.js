@@ -26,37 +26,69 @@ async function loadVehicleTab() {
     summary.avg_cost_per_km != null ? `${summary.avg_cost_per_km.toFixed(3)} €/km` : "–";
   document.getElementById("vehicle-stat-total-cost").textContent = eur(summary.total_cost);
 
-  document.getElementById("vehicle-model-remove-btn").classList.toggle("hidden", !vehicle.model_3d_url);
   loadVehicle3DModel(vehicle.model_3d_url);
 
   renderVehicleFuelList();
   renderVehicleGoalList();
 }
 
-// ---------- 3D-Viewer (three.js) ----------
-let vehicleThree = null; // { renderer, scene, camera, controls, currentModel }
+// ---------- 3D-Viewer (three.js r128) ----------
+// vehicleThree: { renderer, scene, camera, controls, currentModel, dims, tween }
+// "dims" hält die Maße/Achsen des geladenen Modells, damit setVehicleView()
+// daraus Kamera-Positionen für Außen-/Innen-/Front-/… Ansichten ableiten kann.
+let vehicleThree = null;
+let vehicleView = "exterior";
 
 function initVehicleThree() {
   if (vehicleThree) return vehicleThree;
   const canvas = document.getElementById("vehicle-3d-canvas");
   const container = document.getElementById("vehicle-3d-viewer");
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-  camera.position.set(4, 3, 6);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(5, 8, 5);
-  scene.add(dirLight);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+
+  // Studio-Reflexionen (Autolack/Chrom) ohne HDR-Datei - prozedurale Szene
+  // aus three.js/examples, einmal in eine Env-Map gebacken.
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 2000);
+  camera.position.set(4, 2.4, 6);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a30, 0.45));
+  const key = new THREE.DirectionalLight(0xffffff, 1.6);
+  key.position.set(6, 10, 6);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.bias = -0.0004;
+  const d = 8;
+  Object.assign(key.shadow.camera, { left: -d, right: d, top: d, bottom: -d, near: 0.5, far: 60 });
+  scene.add(key);
+
+  // Schatten-Fänger: unsichtbare Ebene, die nur den Bodenschatten zeigt.
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(200, 200),
+    new THREE.ShadowMaterial({ opacity: 0.32 }),
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
 
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
+  controls.autoRotateSpeed = 1.4;
 
   function resize() {
     const w = container.clientWidth, h = container.clientHeight;
-    if (w === 0 || h === 0) return;
+    if (!w || !h) return;
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -64,58 +96,182 @@ function initVehicleThree() {
   new ResizeObserver(resize).observe(container);
   resize();
 
+  const clock = new THREE.Clock();
   function animate() {
     requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    const tw = vehicleThree.tween;
+    if (tw) {
+      tw.t = Math.min(1, tw.t + dt / tw.dur);
+      const e = tw.t < 0.5 ? 2 * tw.t * tw.t : 1 - Math.pow(-2 * tw.t + 2, 2) / 2; // easeInOutQuad
+      camera.position.lerpVectors(tw.fromPos, tw.toPos, e);
+      controls.target.lerpVectors(tw.fromTarget, tw.toTarget, e);
+      if (tw.t >= 1) vehicleThree.tween = null;
+    }
     controls.update();
     renderer.render(scene, camera);
   }
-  animate();
 
-  vehicleThree = { renderer, scene, camera, controls, currentModel: null };
+  vehicleThree = { renderer, scene, camera, controls, ground, currentModel: null, dims: null, tween: null };
+  animate();
   return vehicleThree;
 }
 
 function loadVehicle3DModel(url) {
   const empty = document.getElementById("vehicle-3d-empty");
   const canvas = document.getElementById("vehicle-3d-canvas");
+  const toolbar = document.getElementById("vehicle-view-toolbar");
+  const modelbar = document.getElementById("vehicle-stage-modelbar");
+
   if (!url) {
     empty.classList.remove("hidden");
     canvas.classList.add("hidden");
+    toolbar.hidden = true;
+    modelbar.hidden = true;
+    if (vehicleThree?.currentModel) {
+      vehicleThree.scene.remove(vehicleThree.currentModel);
+      vehicleThree.currentModel = null;
+    }
     return;
   }
+
   const three = initVehicleThree();
   if (three.currentModel) {
     three.scene.remove(three.currentModel);
     three.currentModel = null;
   }
-  const loader = new THREE.GLTFLoader();
-  loader.load(
+
+  new THREE.GLTFLoader().load(
     url,
     gltf => {
-      // Modell zentrieren + auf eine handliche Größe skalieren, unabhängig
-      // von den tatsächlichen Maßeinheiten der hochgeladenen Datei - sonst
-      // könnte ein Modell winzig oder riesig im Viewer erscheinen, je
-      // nachdem in welcher Einheit es exportiert wurde.
-      const box = new THREE.Box3().setFromObject(gltf.scene);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const root = gltf.scene;
+      // Auf eine handliche Größe normieren (unabhängig von der Export-Einheit)
+      // und mit den Rädern auf y=0 stellen, damit der Bodenschatten passt.
+      let box = new THREE.Box3().setFromObject(root);
+      const size0 = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size0.x, size0.y, size0.z) || 1;
       const scale = 4 / maxDim;
-      gltf.scene.scale.setScalar(scale);
-      gltf.scene.position.sub(center.multiplyScalar(scale));
-      three.scene.add(gltf.scene);
-      three.currentModel = gltf.scene;
+      root.scale.setScalar(scale);
+      root.updateMatrixWorld(true);
+      box = new THREE.Box3().setFromObject(root);
+      const center = box.getCenter(new THREE.Vector3());
+      root.position.x -= center.x;
+      root.position.z -= center.z;
+      root.position.y -= box.min.y;
+      root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      three.scene.add(root);
+      three.currentModel = root;
+
+      root.updateMatrixWorld(true);
+      const b = new THREE.Box3().setFromObject(root);
+      const size = b.getSize(new THREE.Vector3());
+      const mid = b.getCenter(new THREE.Vector3());
+      // Längsachse des Autos = die größere der beiden Horizontalen.
+      const lengthAxis = size.x >= size.z ? "x" : "z";
+      three.dims = {
+        center: mid, size,
+        len: size[lengthAxis], wid: lengthAxis === "x" ? size.z : size.x, hei: size.y,
+        lengthDir: new THREE.Vector3(lengthAxis === "x" ? 1 : 0, 0, lengthAxis === "z" ? 1 : 0),
+        sideDir: new THREE.Vector3(lengthAxis === "x" ? 0 : 1, 0, lengthAxis === "z" ? 0 : 1),
+        radius: Math.max(size.x, size.y, size.z),
+      };
+
       empty.classList.add("hidden");
       canvas.classList.remove("hidden");
+      toolbar.hidden = false;
+      modelbar.hidden = false;
+      setVehicleView(vehicleView, true);
     },
     undefined,
     () => {
       toast("3D-Modell konnte nicht geladen werden.");
       empty.classList.remove("hidden");
       canvas.classList.add("hidden");
+      toolbar.hidden = true;
+      modelbar.hidden = true;
     },
   );
 }
+
+// Kamera auf eine benannte Ansicht setzen ("exterior" | "interior" | "front"
+// | "rear" | "side" | "top"). Alle Positionen werden aus der Bounding-Box des
+// Modells abgeleitet, damit es für jedes hochgeladene Auto passt.
+function setVehicleView(name, instant) {
+  vehicleView = name;
+  document.querySelectorAll(".vehicle-view-btn[data-view]").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.view === name);
+  });
+  const three = vehicleThree;
+  if (!three || !three.dims) return;
+  const { center, len, wid, hei, lengthDir, sideDir, radius } = three.dims;
+  const up = new THREE.Vector3(0, 1, 0);
+  let pos, target = center.clone(), fov = 45, minD = 0.4;
+
+  if (name === "interior") {
+    // In die Fahrgastzelle: Kamera etwas hinter der Mitte + zur Seite +
+    // auf Kopfhöhe; Blick nach vorne die Längsachse entlang.
+    pos = center.clone()
+      .add(lengthDir.clone().multiplyScalar(-0.10 * len))
+      .add(sideDir.clone().multiplyScalar(0.18 * wid))
+      .add(up.clone().multiplyScalar(0.16 * hei));
+    target = center.clone()
+      .add(lengthDir.clone().multiplyScalar(0.55 * len))
+      .add(up.clone().multiplyScalar(0.06 * hei));
+    fov = 62;
+    minD = 0.01;
+  } else if (name === "front") {
+    pos = center.clone().add(lengthDir.clone().multiplyScalar(radius * 1.7)).add(up.clone().multiplyScalar(radius * 0.32));
+  } else if (name === "rear") {
+    pos = center.clone().add(lengthDir.clone().multiplyScalar(-radius * 1.7)).add(up.clone().multiplyScalar(radius * 0.32));
+  } else if (name === "side") {
+    pos = center.clone().add(sideDir.clone().multiplyScalar(radius * 1.9)).add(up.clone().multiplyScalar(radius * 0.18));
+  } else if (name === "top") {
+    pos = center.clone().add(up.clone().multiplyScalar(radius * 2.4)).add(lengthDir.clone().multiplyScalar(radius * 0.001));
+  } else { // exterior (3/4-Ansicht)
+    pos = center.clone()
+      .add(lengthDir.clone().multiplyScalar(radius * 1.3))
+      .add(sideDir.clone().multiplyScalar(radius * 1.15))
+      .add(up.clone().multiplyScalar(radius * 0.8));
+  }
+
+  three.camera.fov = fov;
+  three.camera.updateProjectionMatrix();
+  three.controls.minDistance = minD;
+  three.controls.maxDistance = radius * 6;
+
+  if (instant || !three.currentModel) {
+    three.camera.position.copy(pos);
+    three.controls.target.copy(target);
+    three.tween = null;
+  } else {
+    three.tween = {
+      fromPos: three.camera.position.clone(), toPos: pos,
+      fromTarget: three.controls.target.clone(), toTarget: target,
+      t: 0, dur: 0.7,
+    };
+  }
+}
+
+document.querySelectorAll(".vehicle-view-btn[data-view]").forEach(btn => {
+  btn.addEventListener("click", () => setVehicleView(btn.dataset.view));
+});
+
+document.getElementById("vehicle-view-spin").addEventListener("click", e => {
+  const three = initVehicleThree();
+  three.controls.autoRotate = !three.controls.autoRotate;
+  e.currentTarget.classList.toggle("is-active", three.controls.autoRotate);
+  e.currentTarget.setAttribute("aria-pressed", String(three.controls.autoRotate));
+});
+
+document.getElementById("vehicle-view-fs").addEventListener("click", () => {
+  const stage = document.getElementById("vehicle-3d-viewer");
+  if (document.fullscreenElement) document.exitFullscreen();
+  else stage.requestFullscreen?.();
+});
+document.addEventListener("fullscreenchange", () => {
+  const stage = document.getElementById("vehicle-3d-viewer");
+  stage.classList.toggle("is-fullscreen", document.fullscreenElement === stage);
+});
 
 document.getElementById("vehicle-model-upload").addEventListener("change", async e => {
   const file = e.target.files[0];
@@ -127,7 +283,6 @@ document.getElementById("vehicle-model-upload").addEventListener("change", async
   try {
     const vehicle = await api("/vehicle/model", { method: "POST", body: formData });
     vehicleCache = vehicle;
-    document.getElementById("vehicle-model-remove-btn").classList.remove("hidden");
     loadVehicle3DModel(vehicle.model_3d_url);
     statusEl.textContent = "";
     toast("3D-Modell hochgeladen.");
@@ -138,9 +293,9 @@ document.getElementById("vehicle-model-upload").addEventListener("change", async
 });
 
 document.getElementById("vehicle-model-remove-btn").addEventListener("click", async () => {
+  if (!confirm("3D-Modell entfernen?")) return;
   const vehicle = await api("/vehicle/model", { method: "DELETE" });
   vehicleCache = vehicle;
-  document.getElementById("vehicle-model-remove-btn").classList.add("hidden");
   loadVehicle3DModel(null);
   toast("3D-Modell entfernt.");
 });

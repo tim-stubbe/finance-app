@@ -56,6 +56,11 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"
         integrity="sha384-fljlqkjWlmSFjkESkQvm77heIZpoWmXEOzlCA7kOpGUH+95Zk0yGfQieWM2q136E"
         crossorigin="anonymous"></script>
+<!-- Prozedurale Studio-Umgebung (Google model-viewer) - liefert die
+     Reflexionen für Autolack/Chrom, ohne eine HDR-Datei laden zu müssen. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"
+        integrity="sha384-UpJYDNQ/8wDmBlzh4lZ9VMbunag9yRAOGFiBWYVaf6/FCnrwc9qlto25EZVLhpph"
+        crossorigin="anonymous"></script>
 <link rel="stylesheet" href="style.css">
 <!-- Nur für das Alpen-Desktop-Theme geladen (Cormorant Garamond/Lora) - ein
      <link> im Kopf für alle Themes, die Schrift wirkt sich aber erst aus,
@@ -2202,44 +2207,46 @@
       <header class="page-head">
         <div>
           <h1 id="vehicle-name-heading">Mein Auto</h1>
-          <p class="page-sub">3D-Modell, Tanklog (Verbrauch/Kosten) und Ziele fürs Auto.</p>
+          <p class="page-sub">3D-Ansicht mit Außen-/Innenperspektiven, Tanklog und Ziele fürs Auto.</p>
         </div>
         <button type="button" id="vehicle-rename-btn" class="btn-ghost">Umbenennen</button>
       </header>
 
-      <div class="panel vehicle-hero-panel">
-        <div class="vehicle-hero-grid">
-          <div class="vehicle-stat-corner vehicle-stat-tl">
-            <span class="vehicle-stat-label">Kilometerstand</span>
-            <span class="vehicle-stat-value" id="vehicle-stat-odometer">–</span>
+      <div class="panel vehicle-stage-panel">
+        <div class="vehicle-stage" id="vehicle-3d-viewer">
+          <input type="file" id="vehicle-model-upload" accept=".glb" class="hidden">
+          <canvas id="vehicle-3d-canvas" class="hidden"></canvas>
+
+          <div class="vehicle-3d-empty" id="vehicle-3d-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm14 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0zM3 17V11l2-5h10l4 5h2v6"/></svg>
+            <span>Noch kein 3D-Modell hochgeladen</span>
+            <label class="btn-ghost btn-sm" for="vehicle-model-upload">Modell hochladen (.glb)</label>
           </div>
-          <div class="vehicle-stat-corner vehicle-stat-tr">
-            <span class="vehicle-stat-label">Ø Verbrauch</span>
-            <span class="vehicle-stat-value" id="vehicle-stat-consumption">–</span>
+
+          <div class="vehicle-stage-toolbar" id="vehicle-view-toolbar" hidden>
+            <button type="button" class="vehicle-view-btn is-active" data-view="exterior">Außen</button>
+            <button type="button" class="vehicle-view-btn" data-view="interior">Innen</button>
+            <button type="button" class="vehicle-view-btn" data-view="front">Front</button>
+            <button type="button" class="vehicle-view-btn" data-view="rear">Heck</button>
+            <button type="button" class="vehicle-view-btn" data-view="side">Seite</button>
+            <button type="button" class="vehicle-view-btn" data-view="top">Oben</button>
+            <span class="vehicle-toolbar-sep"></span>
+            <button type="button" class="vehicle-view-btn" id="vehicle-view-spin" title="Automatisch drehen" aria-pressed="false">⟲</button>
+            <button type="button" class="vehicle-view-btn" id="vehicle-view-fs" title="Vollbild">⤢</button>
           </div>
-          <div class="vehicle-3d-viewer" id="vehicle-3d-viewer">
-            <div class="vehicle-3d-empty" id="vehicle-3d-empty">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm14 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0zM3 17V11l2-5h10l4 5h2v6"/></svg>
-              <span>Noch kein 3D-Modell hochgeladen</span>
-            </div>
-            <canvas id="vehicle-3d-canvas" class="hidden"></canvas>
-          </div>
-          <div class="vehicle-stat-corner vehicle-stat-bl">
-            <span class="vehicle-stat-label">Ø Kosten/km</span>
-            <span class="vehicle-stat-value" id="vehicle-stat-cost-per-km">–</span>
-          </div>
-          <div class="vehicle-stat-corner vehicle-stat-br">
-            <span class="vehicle-stat-label">Gesamtkosten</span>
-            <span class="vehicle-stat-value" id="vehicle-stat-total-cost">–</span>
+
+          <div class="vehicle-stage-modelbar" id="vehicle-stage-modelbar" hidden>
+            <label class="link-btn" for="vehicle-model-upload">Modell ersetzen</label>
+            <button type="button" id="vehicle-model-remove-btn" class="link-btn">Entfernen</button>
+            <span class="page-sub" id="vehicle-model-upload-status"></span>
           </div>
         </div>
-        <div class="vehicle-3d-upload-row">
-          <label class="btn-ghost btn-sm">
-            3D-Modell hochladen (.glb)
-            <input type="file" id="vehicle-model-upload" accept=".glb" class="hidden">
-          </label>
-          <button type="button" id="vehicle-model-remove-btn" class="link-btn hidden">Entfernen</button>
-          <span class="page-sub" id="vehicle-model-upload-status"></span>
+
+        <div class="vehicle-stat-row">
+          <div class="vehicle-stat"><span class="vehicle-stat-label">Kilometerstand</span><span class="vehicle-stat-value" id="vehicle-stat-odometer">–</span></div>
+          <div class="vehicle-stat"><span class="vehicle-stat-label">Ø Verbrauch</span><span class="vehicle-stat-value" id="vehicle-stat-consumption">–</span></div>
+          <div class="vehicle-stat"><span class="vehicle-stat-label">Ø Kosten/km</span><span class="vehicle-stat-value" id="vehicle-stat-cost-per-km">–</span></div>
+          <div class="vehicle-stat"><span class="vehicle-stat-label">Gesamtkosten</span><span class="vehicle-stat-value" id="vehicle-stat-total-cost">–</span></div>
         </div>
       </div>
 
