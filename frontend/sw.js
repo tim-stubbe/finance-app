@@ -28,7 +28,8 @@
 // v46: Automations-Dashboard (Live-Automationen an/aus + "jetzt ausfuehren"
 // + Verlauf aus dem HA-Logbook).
 // v47: Energie-Panel (HA-Strom-/Energiesensoren + grobe Kostenschaetzung).
-const CACHE_NAME = "finanztool-shell-v47";
+// v48: universelle Hub-Kommandozeile (js/hub-command.js -> /api/hub/command).
+const CACHE_NAME = "finanztool-shell-v48";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -40,7 +41,7 @@ const SHELL_ASSETS = [
   "/js/settings-auto-backups.js", "/js/settings-auto-sync.js",
   "/js/eigene-regeln.js", "/js/settings-fints.js", "/js/settings-bitvavo.js",
   "/js/settings-paypal.js", "/js/settings-enablebanking.js", "/js/kalender.js",
-  "/js/dashboard.js", "/js/geschaeftlich.js", "/js/schulden.js",
+  "/js/dashboard.js", "/js/hub-command.js", "/js/geschaeftlich.js", "/js/schulden.js",
   "/js/schwebender-ki-assistent.js", "/js/ziele.js", "/js/init.js",
   "/js/command-palette.js", "/js/jahresrueckblick.js", "/js/notizen.js",
   "/js/auth-login.js", "/js/settings-assistent.js", "/js/quick-capture.js",

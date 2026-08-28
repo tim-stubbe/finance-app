@@ -308,6 +308,21 @@
 
       <p class="page-sub hidden" id="sync-all-result" style="margin:-8px 0 14px"></p>
 
+      <div class="panel" id="hub-command-panel">
+        <form id="hub-command-form" class="chat-input-row">
+          <input type="text" id="hub-command-input" placeholder="Sag mir, was du willst … (z. B. „Licht Wohnzimmer aus", „erinnere mich morgen an X", „wie viel für Lebensmittel diesen Monat")" autocomplete="off">
+          <button type="submit" class="btn-primary">Los</button>
+        </form>
+        <div id="hub-command-reply" class="ai-insight-text hidden"></div>
+        <div id="hub-command-confirm" class="ai-insight-text hidden">
+          <span id="hub-command-confirm-text"></span>
+          <div class="form-actions">
+            <button type="button" id="hub-command-confirm-yes" class="btn-primary btn-sm">Ja</button>
+            <button type="button" id="hub-command-confirm-no" class="btn-ghost btn-sm">Abbrechen</button>
+          </div>
+        </div>
+      </div>
+
       <div class="panel" id="hub-today-panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><circle cx="12" cy="15.5" r="1.4" fill="currentColor" stroke="none"/></svg> <span id="hub-today-title">Heute</span></h3>
         <div id="hub-today-body"></div>
@@ -3573,6 +3588,7 @@
 <script src="js/kalender.js"></script>
 <script src="js/settings-search.js"></script>
 <script src="js/dashboard.js"></script>
+<script src="js/hub-command.js"></script>
 <script src="js/geschaeftlich.js"></script>
 <script src="js/schulden.js"></script>
 <script src="js/schwebender-ki-assistent.js"></script>

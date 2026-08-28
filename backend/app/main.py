@@ -46,6 +46,7 @@ from .routers.sync_all import sync_all_router, sync_all_connections
 from .routers.auth_login import auth_public_router, auth_protected_router
 from .routers.ai_assistant import ai_assistant_router, websearch_configured, websearch_run
 from .routers.smarthome import smarthome_router, smarthome_ws_router
+from .routers.hub import hub_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 
 models.Base.metadata.create_all(bind=engine)
@@ -968,6 +969,7 @@ app.include_router(sync_all_router, dependencies=_require_auth)
 app.include_router(ai_assistant_router, dependencies=_require_auth)
 app.include_router(smarthome_router, dependencies=_require_auth)
 app.include_router(smarthome_ws_router)  # WebSocket, Auth im Handler
+app.include_router(hub_router, dependencies=_require_auth)
 app.include_router(sync_router)
 
 
