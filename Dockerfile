@@ -3,7 +3,6 @@ FROM python:3.14-slim
 WORKDIR /app
 
 COPY backend/requirements.txt .
-COPY backend/requirements-voice.txt .
 
 # pip selbst aktualisieren - die im Basis-Image mitgelieferte Version hat
 # bekannte Schwachstellen.
@@ -16,13 +15,15 @@ RUN pip install --no-cache-dir --upgrade pip \
  # CAMT-Umsaetze liefert. Die Einschraenkung von fints ist nur konservativ
  # gesetzt - fints laeuft mit 6.1.0 nachweislich einwandfrei -, daher wird lxml
  # bewusst nachtraeglich ohne Abhaengigkeitsaufloesung angehoben.
- && pip install --no-cache-dir --no-deps lxml==6.1.0 \
- # Sprach-Ein-/Ausgabe des Smart-Home-Assistenten (faster-whisper + Piper,
- # siehe backend/app/voice/). Reine Wheels fuer python:3.14-slim, kein
- # Compiler noetig, espeak-ng ist in piper-tts gebuendelt. Bleibt inaktiv
- # (STT_BACKEND=stub), bis die Env-Variablen gesetzt sind - Modelle laden
- # dann beim ersten Aufruf nach /data. Erhoeht das Image um ~250 MB.
- && pip install --no-cache-dir -r requirements-voice.txt
+ && pip install --no-cache-dir --no-deps lxml==6.1.0
+
+# Sprach-Ein-/Ausgabe (faster-whisper + Piper + openWakeWord) ist BEWUSST
+# nicht im Standard-Image: die Kette hat auf python:3.14-slim (linux/amd64)
+# keine vollstaendigen Wheels und liess den CI-Build fehlschlagen. Wer
+# Sprachsteuerung will, baut ein eigenes Image mit
+# `pip install -r requirements-voice.txt` ODER faehrt einen lokalen
+# Whisper-/Piper-HTTP-Dienst und setzt STT_BACKEND=http / TTS_BACKEND=http.
+# Ohne die Pakete bleibt /api/smarthome/voice/* im Stub-Modus (HTTP 501).
 
 # Offizielles Scalable-Capital-CLI-Binary ("sc") fuer die Investments-
 # Anbindung (siehe backend/app/scalable_sync.py) - kein REST-API verfuegbar,

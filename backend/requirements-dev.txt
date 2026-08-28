@@ -7,8 +7,12 @@ httpx==0.28.1
 # Harte Obergrenze pro Test - ohne die haengt ein blockierender Test (z.B. ein
 # nie zurueckkommender Netz-/Stream-Aufruf) die ganze CI. Siehe pytest.ini.
 pytest-timeout==2.4.0
-# Sprach-Ein-/Ausgabe des Smart-Home-Assistenten (Phase 2). In CI mit dabei,
-# damit der echte End-to-End-Test (Piper synthetisiert -> faster-whisper
-# transkribiert -> /api/smarthome/voice/command) tatsächlich läuft. Fürs
-# Produktions-Image separat in requirements-voice.txt (Opt-in, ~250 MB).
--r requirements-voice.txt
+# Sprach-Ein-/Ausgabe (requirements-voice.txt) ist hier NICHT eingebunden:
+# die Kette (onnxruntime/scipy/ctranslate2 ...) hat auf python:3.14 in CI
+# keine vollstaendigen Wheels und brach den Lauf ab. Die Voice-E2E-Tests
+# ueberspringen sich sauber, wenn die Pakete fehlen (siehe test_voice.py,
+# _HAS_WHISPER / KIES_VOICE_E2E). Lokal bei Bedarf:
+#   pip install -r requirements-voice.txt
+# numpy allein ist klein und hat verlaessliche cp314-Wheels - reicht fuer
+# den Frame-Slicing-Unit-Test von voice/wakeword.py (test_voice.py).
+numpy==2.5.2
