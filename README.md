@@ -204,6 +204,9 @@ nach ausdrücklicher Bestätigung.
 - Interaktiver Grundriss: 2D-Editor (Räume/Geräte per Drag platzieren, Größe
   ziehen) plus 3D-Ansicht (three.js). Geräte zeigen ihren Live-Zustand und
   sind per Klick schaltbar. Layout liegt als ein JSON-Blob in der DB.
+- Auch per Telegram steuerbar: `/haus <Befehl>` (z. B. `/haus Licht Wohnzimmer
+  aus`, `/haus Wie warm ist es im Bad?`) läuft über dieselbe Pipeline;
+  Bestätigung mit `/haus ja`. Und direkt im Hub-„Jarvis"-Panel.
 - KI-Automationen: die lokale KI schlägt Abläufe/Workflows vor (aus Geräten,
   Bereichen und zuletzt genutzten Befehlen) **und schreibt die Home-Assistant-
   Automation als YAML dazu**. Das YAML wird gegen die Service-Allowlist und die

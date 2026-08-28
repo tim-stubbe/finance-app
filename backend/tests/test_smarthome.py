@@ -189,6 +189,38 @@ def test_floorplan_merges_live_states(auth_client, configured_ha):
     assert body["states"]["light.wohnzimmer"]["state"] == "on"
 
 
+# ---------------- Telegram /haus ----------------
+
+def test_telegram_haus_command(auth_client, configured_ha, monkeypatch):
+    from app import telegram_bot
+    from app.database import SessionLocal
+    from app import auth as _auth
+
+    auth_client.post("/api/smarthome/aliases",
+                     json={"phrase": "Wohnzimmerlicht", "entity_id": "light.wohnzimmer"})
+    sent = []
+    monkeypatch.setattr(telegram_bot, "_send", lambda tok, cid, txt: sent.append(txt))
+
+    db = SessionLocal()
+    s = _auth.get_or_create_settings(db)
+    handled = telegram_bot._handle_home_command(db, s, "tok", "cid", "/haus Wohnzimmerlicht aus")
+    db.close()
+
+    assert handled is True
+    assert sent and "Wohnzimmer Licht" in sent[0]
+    assert configured_ha == [("light", "turn_off", {"entity_id": "light.wohnzimmer"})]
+
+
+def test_telegram_haus_ignores_other_text(monkeypatch):
+    from app import telegram_bot
+    from app.database import SessionLocal
+    from app import auth as _auth
+    db = SessionLocal()
+    s = _auth.get_or_create_settings(db)
+    assert telegram_bot._handle_home_command(db, s, "t", "c", "/saldo Giro 100") is False
+    db.close()
+
+
 def test_ha_down_returns_clean_message(auth_client, configured_ha, monkeypatch):
     def boom(url, token):
         raise ha_client.HAError("Home Assistant ist nicht erreichbar unter http://ha.test:8123. Laeuft HA?")

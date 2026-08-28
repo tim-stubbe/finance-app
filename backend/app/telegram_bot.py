@@ -111,6 +111,9 @@ _HANGING_CMD_RE = re.compile(r"^/h(ä|ae)ngt\s*$", re.IGNORECASE)
 _EXPENSE_CMD_RE = re.compile(
     r"^/ausgabe\s+(.+?)\s*;\s*(-?\d+(?:[.,]\d{1,2})?)\s*€?\s*;\s*(.+)$", re.IGNORECASE,
 )
+# Format: /haus <Befehl> - Smart-Home-Steuerung/Abfrage ueber dieselbe
+# Pipeline wie der Smart-Home-Tab (siehe smarthome.process_command).
+_HOME_CMD_RE = re.compile(r"^/haus\s+(.+)$", re.IGNORECASE | re.DOTALL)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -589,6 +592,24 @@ def _handle_hanging_command(db, settings, token: str, chat_id: str, text: str) -
     return True
 
 
+def _handle_home_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/haus <Befehl> - Smart-Home ueber dieselbe Pipeline wie der Web-Tab.
+    Bestaetigung laeuft ueber '/haus ja' (process_command kennt "ja")."""
+    m = _HOME_CMD_RE.match(text.strip())
+    if not m:
+        return False
+    if not (settings.homeassistant_url and settings.homeassistant_token_encrypted):
+        _send(token, chat_id, "Smart Home ist in der App noch nicht eingerichtet (Einstellungen -> Smart Home).")
+        return True
+    from . import smarthome
+    res = smarthome.process_command(db, settings, m.group(1).strip(), source="telegram")
+    reply = res.get("reply") or ("Erledigt." if res.get("ok") else "Das hat nicht geklappt.")
+    if res.get("needs_confirmation"):
+        reply += "\n\nZum Bestaetigen: /haus ja"
+    _send(token, chat_id, reply)
+    return True
+
+
 def _handle_expense_command(db, settings, token: str, chat_id: str, text: str) -> bool:
     """/ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
     Abschnitt D). Legt die Buchung sofort an (Betrag als Ausgabe, also negativ,
@@ -810,6 +831,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_suggestion_reply(db, settings, token, chat_id, text):
         return
     if _handle_hanging_command(db, settings, token, chat_id, text):
+        return
+    if _handle_home_command(db, settings, token, chat_id, text):
         return
     if _handle_expense_command(db, settings, token, chat_id, text):
         return
