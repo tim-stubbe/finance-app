@@ -362,6 +362,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "wishlist") loadWishlistTab();
     if (btn.dataset.tab === "vehicle") loadVehicleTab();
     if (btn.dataset.tab === "smarthome") loadSmartHomeTab();
+    if (btn.dataset.tab === "meals") loadMealsTab();
     if (btn.dataset.tab === "photos") loadPhotosTab();
     if (btn.dataset.tab === "settings") loadSettingsTab();
     if (btn.dataset.tab === "profile") loadProfile();

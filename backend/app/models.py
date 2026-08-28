@@ -1789,6 +1789,39 @@ class VehicleGoal(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class Recipe(Base):
+    """Rezept (Essensplanung, siehe crud_meals.py). Zutaten als Freitext,
+    eine pro Zeile - bewusst kein strukturiertes Zutaten-Modell, das waere
+    fuer eine Ein-Personen-Wochenplanung Overkill."""
+
+    __tablename__ = "recipes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    ingredients = Column(Text, nullable=True)   # eine Zutat pro Zeile
+    instructions = Column(Text, nullable=True)
+    servings = Column(Integer, nullable=True)
+    tags = Column(String, nullable=True)        # CSV
+    source = Column(String, nullable=True)      # "manuell" | "ki"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MealPlanEntry(Base):
+    """Ein Eintrag im Wochenplan: Datum + Mahlzeit -> Rezept oder Freitext."""
+
+    __tablename__ = "meal_plan_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, index=True)
+    meal = Column(String, nullable=False)       # "mittag" | "abend"
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=True)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("date", "meal", name="uq_mealplan_date_meal"),)
+
+
 class SyncTombstone(Base):
     """Lösch-Protokoll für den Offline-Sync des nativen Clients - fast alle
     Löschungen in dieser App sind Hard Deletes (siehe crud.py), ohne dieses

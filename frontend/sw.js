@@ -29,7 +29,9 @@
 // + Verlauf aus dem HA-Logbook).
 // v47: Energie-Panel (HA-Strom-/Energiesensoren + grobe Kostenschaetzung).
 // v48: universelle Hub-Kommandozeile (js/hub-command.js -> /api/hub/command).
-const CACHE_NAME = "finanztool-shell-v48";
+// v49: Essen-Tab (js/meals.js) - Wochenplan, Rezepte, KI-Vorschlaege,
+// Einkaufsliste -> Wunschliste/To-do.
+const CACHE_NAME = "finanztool-shell-v49";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -47,7 +49,7 @@ const SHELL_ASSETS = [
   "/js/auth-login.js", "/js/settings-assistent.js", "/js/quick-capture.js",
   "/js/settings-search.js", "/js/bottom-nav.js", "/js/vehicle.js",
   "/js/smarthome.js", "/js/smarthome-floorplan.js", "/js/smarthome-automations.js",
-  "/js/settings-smarthome.js",
+  "/js/settings-smarthome.js", "/js/meals.js",
 ];
 
 self.addEventListener("install", event => {

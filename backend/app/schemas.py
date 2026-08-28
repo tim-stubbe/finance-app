@@ -2509,3 +2509,30 @@ class SceneCreate(BaseModel):
 
 class SceneActivate(BaseModel):
     entity_id: str
+
+
+class RecipeIn(BaseModel):
+    name: str
+    ingredients: Optional[str] = ""
+    instructions: Optional[str] = ""
+    servings: Optional[int] = None
+    tags: Optional[str] = ""
+    source: Optional[str] = "manuell"
+
+
+class MealPlanIn(BaseModel):
+    date: date
+    meal: str
+    recipe_id: Optional[int] = None
+    note: Optional[str] = ""
+
+
+class MealSuggestIn(BaseModel):
+    count: int = 3
+    prompt: Optional[str] = ""
+
+
+class ShoppingPushIn(BaseModel):
+    date_from: date
+    date_to: date
+    target: str = "wishlist"  # "wishlist" | "todo"
