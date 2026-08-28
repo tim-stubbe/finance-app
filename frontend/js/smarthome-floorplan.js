@@ -11,6 +11,7 @@ let fpView = "2d";
 let fpDirty = false;
 let fpThree = null;
 let fpDrag = null;
+let fpSelected = new Set(); // Geräte-Auswahl für "Szene aus Auswahl"
 
 const FP_SVG = () => document.getElementById("sh-fp-svg");
 
@@ -25,6 +26,7 @@ async function loadSmartHomeFloorplan() {
   fpData.states = fpData.states || {};
   fpRefreshDevicePicker();
   fpRender();
+  loadSmartHomeScenes();
 }
 
 // ---------- Geometrie-Helfer ----------
@@ -88,7 +90,8 @@ function fpRender() {
     const st = fpDeviceState(d.entity_id);
     const info = fpData.states[d.entity_id] || {};
     const label = info.name || d.entity_id;
-    html += `<circle class="sh-fp-dev is-${st}" data-dev="${esc(d.entity_id)}" cx="${d.x}" cy="${d.y}" r="0.28">`
+    const sel = fpSelected.has(d.entity_id) ? " is-selected" : "";
+    html += `<circle class="sh-fp-dev is-${st}${sel}" data-dev="${esc(d.entity_id)}" cx="${d.x}" cy="${d.y}" r="0.28">`
           + `<title>${esc(label)} — ${esc(info.state || "?")}</title></circle>`;
   });
   svg.innerHTML = html;
@@ -232,6 +235,8 @@ function fpToggleEdit() {
   document.getElementById("sh-fp-edit").classList.toggle("active", fpEdit);
   ["sh-fp-autolayout", "sh-fp-add-room", "sh-fp-add-device", "sh-fp-save"].forEach(id =>
     document.getElementById(id).classList.toggle("hidden", !fpEdit));
+  if (!fpEdit) fpSelected.clear();
+  fpUpdateSceneButton();
   if (fpEdit && fpView === "3d") fpSetView("2d");
   fpRender();
 }
@@ -294,7 +299,7 @@ function fpSave() {
       fpDrag = { type: "resize", room: r, sx: p.x, sy: p.y, ow: r.w, oh: r.h };
     } else if (devEl) {
       const d = fpData.devices.find(x => x.entity_id === devEl.dataset.dev);
-      fpDrag = { type: "dev", dev: d, dx: d.x - p.x, dy: d.y - p.y };
+      fpDrag = { type: "dev", dev: d, dx: d.x - p.x, dy: d.y - p.y, moved: false };
     } else if (roomEl) {
       const r = fpData.rooms.find(x => x.id === roomEl.dataset.room);
       fpDrag = { type: "room", room: r, dx: r.x - p.x, dy: r.y - p.y };
@@ -310,6 +315,7 @@ function fpSave() {
       fpDrag.room.x = snap(p.x + fpDrag.dx);
       fpDrag.room.y = snap(p.y + fpDrag.dy);
     } else if (fpDrag.type === "dev") {
+      fpDrag.moved = true;
       fpDrag.dev.x = snap(p.x + fpDrag.dx);
       fpDrag.dev.y = snap(p.y + fpDrag.dy);
     } else if (fpDrag.type === "resize") {
@@ -320,9 +326,18 @@ function fpSave() {
     fpRender();
   });
 
-  const endDrag = () => { fpDrag = null; };
+  const endDrag = () => {
+    // Klick (ohne Ziehen) auf ein Gerät im Editier-Modus = Auswahl umschalten
+    if (fpDrag && fpDrag.type === "dev" && !fpDrag.moved) {
+      const eid = fpDrag.dev.entity_id;
+      if (fpSelected.has(eid)) fpSelected.delete(eid); else fpSelected.add(eid);
+      fpUpdateSceneButton();
+      fpRender();
+    }
+    fpDrag = null;
+  };
   svg.addEventListener("pointerup", endDrag);
-  svg.addEventListener("pointercancel", endDrag);
+  svg.addEventListener("pointercancel", () => { fpDrag = null; });
 
   svg.addEventListener("dblclick", e => {
     if (!fpEdit) return;
@@ -347,4 +362,43 @@ function fpSave() {
   document.getElementById("sh-fp-add-room").addEventListener("click", fpAddRoom);
   document.getElementById("sh-fp-add-device").addEventListener("change", fpAddDevice);
   document.getElementById("sh-fp-save").addEventListener("click", fpSave);
+  document.getElementById("sh-fp-scene").addEventListener("click", fpCreateScene);
+  document.getElementById("sh-fp-scenes").addEventListener("click", e => {
+    const chip = e.target.closest("[data-scene]");
+    if (chip) api("/smarthome/scenes/activate", { method: "POST", body: JSON.stringify({ entity_id: chip.dataset.scene }) })
+      .then(() => { toast("Szene aktiviert."); setTimeout(loadSmartHomeFloorplan, 800); })
+      .catch(err => toast(err.message || "Szene fehlgeschlagen."));
+  });
 })();
+
+function fpUpdateSceneButton() {
+  const btn = document.getElementById("sh-fp-scene");
+  btn.textContent = `Szene aus Auswahl (${fpSelected.size})`;
+  btn.classList.toggle("hidden", !fpEdit || fpSelected.size === 0);
+}
+
+async function fpCreateScene() {
+  if (!fpSelected.size) return;
+  const name = prompt("Name der Szene (nimmt die aktuellen Zustände der ausgewählten Geräte auf):", "");
+  if (!name || !name.trim()) return;
+  try {
+    await api("/smarthome/scenes", { method: "POST", body: JSON.stringify({ name: name.trim(), entity_ids: [...fpSelected] }) });
+    fpSelected.clear();
+    fpUpdateSceneButton();
+    fpRender();
+    loadSmartHomeScenes();
+    toast("Szene gespeichert.");
+  } catch (err) {
+    toast(err.message || "Szene konnte nicht gespeichert werden.");
+  }
+}
+
+async function loadSmartHomeScenes() {
+  const host = document.getElementById("sh-fp-scenes");
+  if (!host) return;
+  let scenes = [];
+  try { scenes = await api("/smarthome/scenes"); } catch { /* still */ }
+  host.innerHTML = scenes.map(s =>
+    `<button type="button" class="sh-fp-scene-chip" data-scene="${esc(s.entity_id)}">▶ ${esc(s.name)}</button>`
+  ).join("");
+}

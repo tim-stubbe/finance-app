@@ -112,6 +112,15 @@ async def smarthome_voice_stream(ws: WebSocket):
     (einfache Energie-VAD, oder Client sendet {"type":"stop"}), transkribiert
     lokal und schickt {"type":"result", ...} - selbe Pipeline wie /command.
     """
+    # Cross-Site-WebSocket-Hijacking abwehren: der Origin muss zum Host der
+    # Anfrage passen (Kies wird immer von derselben Origin ausgeliefert).
+    # WebSockets kennen keine CORS-Preflight - das hier ist der Ersatz.
+    from urllib.parse import urlparse
+    origin = ws.headers.get("origin") or ""
+    host = ws.headers.get("host") or ""
+    if not host or urlparse(origin).netloc != host:
+        await ws.close(code=1008)
+        return
     if not ws.session.get("authenticated"):
         await ws.close(code=1008)
         return
@@ -313,6 +322,43 @@ def get_floorplan(db: Session = Depends(get_db)):
 def put_floorplan(data: schemas.SmartHomeFloorplanIn, db: Session = Depends(get_db)):
     saved = crud.save_floorplan(db, data.model_dump())
     return saved
+
+
+@smarthome_router.get("/scenes")
+def list_scenes(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome.list_scenes(s)
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+
+
+@smarthome_router.post("/scenes")
+def create_scene(data: schemas.SceneCreate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome.create_scene_from_current(s, data.name, data.entity_ids)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+
+
+@smarthome_router.post("/scenes/activate")
+def activate_scene(data: schemas.SceneActivate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not data.entity_id.startswith("scene."):
+        raise HTTPException(400, "Keine Szene.")
+    try:
+        ha_client.call_service(s.homeassistant_url, smarthome._token(s),
+                               "scene", "turn_on", {"entity_id": data.entity_id})
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+    crud.log_smarthome_action(db, text=f"Szene aktiviert: {data.entity_id}",
+                              intent="control", domain="scene", service="turn_on",
+                              entity_id=data.entity_id, data={}, ok=True, error=None,
+                              source="text")
+    return {"ok": True}
 
 
 @smarthome_router.post("/floorplan/autolayout")

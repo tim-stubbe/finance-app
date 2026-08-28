@@ -2498,3 +2498,12 @@ class AutomationFreeformRequest(BaseModel):
 
 class AutomationYamlUpdate(BaseModel):
     yaml_text: str
+
+
+class SceneCreate(BaseModel):
+    name: str
+    entity_ids: List[str] = []
+
+
+class SceneActivate(BaseModel):
+    entity_id: str

@@ -231,6 +231,44 @@ def test_events_stream_generator_yields_comment_first():
         gen.close()
 
 
+# ---------------- Szenen (Phase 2 der Liste) ----------------
+
+def test_create_and_list_scene(auth_client, configured_ha, monkeypatch):
+    from app import ha_client as hac
+    # Geraet mit Zusatz-Attribut
+    states = [{"entity_id": "light.wohnzimmer", "state": "on",
+               "attributes": {"friendly_name": "Wohnzimmer Licht", "brightness": 180}},
+              {"entity_id": "scene.kies_abend", "state": "unknown",
+               "attributes": {"friendly_name": "Abend", "entity_id": ["light.wohnzimmer"]}}]
+    monkeypatch.setattr(hac, "get_states", lambda u, t: states)
+    created = {}
+    monkeypatch.setattr(hac, "create_scene",
+                        lambda u, t, sid, body: created.update(sid=sid, body=body) or {})
+    monkeypatch.setattr(hac, "reload_scenes", lambda u, t: None)
+
+    r = auth_client.post("/api/smarthome/scenes",
+                         json={"name": "Abend", "entity_ids": ["light.wohnzimmer"]})
+    assert r.status_code == 200
+    assert r.json()["entity_id"] == "scene.kies_abend"
+    assert created["sid"] == "kies_abend"
+    ent = created["body"]["entities"]["light.wohnzimmer"]
+    assert ent["state"] == "on" and ent["brightness"] == 180
+
+    scenes = auth_client.get("/api/smarthome/scenes").json()
+    assert any(s["entity_id"] == "scene.kies_abend" for s in scenes)
+
+
+def test_activate_scene(auth_client, configured_ha):
+    r = auth_client.post("/api/smarthome/scenes/activate", json={"entity_id": "scene.kies_abend"})
+    assert r.status_code == 200
+    assert ("scene", "turn_on", {"entity_id": "scene.kies_abend"}) in configured_ha
+
+
+def test_activate_scene_rejects_non_scene(auth_client, configured_ha):
+    assert auth_client.post("/api/smarthome/scenes/activate",
+                            json={"entity_id": "light.x"}).status_code == 400
+
+
 # ---------------- Telegram /haus ----------------
 
 def test_telegram_haus_command(auth_client, configured_ha, monkeypatch):

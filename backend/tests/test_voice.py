@@ -181,24 +181,38 @@ def test_wakeword_process_slices_frames(monkeypatch):
     assert best == 0.9
 
 
-def _ws_session_header(c):
-    # http.cookiejar (im TestClient) haengt ein Secure-Cookie NICHT an eine
-    # wss://-Anfrage an - echte Browser tun das sehr wohl. Fuer den Test also
-    # das Session-Cookie explizit als Header mitgeben.
+def _ws_headers(c):
+    # 1) http.cookiejar (im TestClient) haengt ein Secure-Cookie NICHT an eine
+    #    wss://-Anfrage an - echte Browser tun das. Cookie also explizit setzen.
+    # 2) Origin muss zum Host passen (CSWSH-Schutz im Handler).
     v = c.cookies.get("finance_session")
-    return {"Cookie": f"finance_session={v}"} if v else {}
+    h = {"Origin": "https://testserver"}
+    if v:
+        h["Cookie"] = f"finance_session={v}"
+    return h
 
 
 def test_voice_stream_requires_auth(client):
     from starlette.websockets import WebSocketDisconnect
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/api/smarthome/voice/stream"):
+        with client.websocket_connect(
+            "/api/smarthome/voice/stream", headers={"Origin": "https://testserver"}
+        ):
+            pass
+
+
+def test_voice_stream_rejects_foreign_origin(auth_client):
+    from starlette.websockets import WebSocketDisconnect
+    h = _ws_headers(auth_client)
+    h["Origin"] = "https://evil.example"
+    with pytest.raises(WebSocketDisconnect):
+        with auth_client.websocket_connect("/api/smarthome/voice/stream", headers=h):
             pass
 
 
 def test_voice_stream_errors_without_setup(auth_client):
     with auth_client.websocket_connect(
-        "/api/smarthome/voice/stream", headers=_ws_session_header(auth_client)
+        "/api/smarthome/voice/stream", headers=_ws_headers(auth_client)
     ) as ws:
         msg = ws.receive_json()
         assert msg["type"] == "error"

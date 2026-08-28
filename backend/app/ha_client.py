@@ -124,6 +124,30 @@ def reload_automations(url: str, token: str) -> None:
     _request("POST", url, token, "/services/automation/reload", json={})
 
 
+def create_scene(url: str, token: str, scene_id: str, body: dict) -> dict:
+    """Persistente HA-Szene ueber die Config-API (wie create_automation).
+    Setzt die aktive config-Integration voraus."""
+    try:
+        resp = _request(
+            "POST", url, token, f"/config/scene/config/{scene_id}", json=body
+        )
+    except HAError as exc:
+        if "404" in str(exc) or "405" in str(exc):
+            raise HAError(
+                "Die HA-Config-API ist nicht verfuegbar (config-Integration "
+                "aktiv? Szenen im UI-Modus?)."
+            )
+        raise
+    try:
+        return resp.json()
+    except ValueError:
+        return {}
+
+
+def reload_scenes(url: str, token: str) -> None:
+    _request("POST", url, token, "/services/scene/reload", json={})
+
+
 def area_map(url: str, token: str) -> dict:
     """Entity-ID -> Bereichsname, ueber den Template-Endpunkt (Area-Registry
     ist per REST sonst nicht zugaenglich). Fehlschlag ist unkritisch - dann

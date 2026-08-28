@@ -1782,6 +1782,14 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .sh-fp-dev.is-unknown { fill: #b5651d; }
 .sh-fp-editing .sh-fp-room, .sh-fp-editing .sh-fp-dev { cursor: move; }
 .sh-fp-resize { fill: var(--accent, #7a8cc8); cursor: nwse-resize; }
+.sh-fp-dev.is-selected { stroke: var(--accent, #e1ad66); stroke-width: .09; }
+.sh-fp-scenes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.sh-fp-scene-chip {
+  font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border, rgba(128,128,128,.3)); background: transparent;
+  color: inherit;
+}
+.sh-fp-scene-chip:hover { background: var(--accent-wash, rgba(128,128,128,.12)); }
 
 .sh-auto-card {
   border: 1px solid var(--border, rgba(128,128,128,.25));

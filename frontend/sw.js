@@ -23,7 +23,9 @@
 // v43: Freihaendige Sprachsteuerung mit Weckwort (js/smarthome.js "zuhoeren").
 // v44: echtes serverseitiges Weckwort (openWakeWord "hey jarvis") - Browser
 // streamt 16-kHz-PCM per WebSocket an /api/smarthome/voice/stream.
-const CACHE_NAME = "finanztool-shell-v44";
+// v45: Szenen aus dem Grundriss (Geraete markieren -> aktuelle Zustaende als
+// HA-Szene speichern), Szenen-Chips zum Aktivieren.
+const CACHE_NAME = "finanztool-shell-v45";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

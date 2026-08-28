@@ -457,6 +457,66 @@ def autolayout(settings) -> dict:
     return {"rooms": rooms, "devices": devices}
 
 
+_SCENE_ATTRS = {
+    "light": ("brightness", "color_temp", "rgb_color", "hs_color", "effect"),
+    "climate": ("temperature", "hvac_mode"),
+    "cover": ("current_position",),
+    "media_player": ("volume_level",),
+    "fan": ("percentage",),
+}
+
+
+def _slugify(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "_", (name or "").lower().strip()).strip("_")
+    return s or "szene"
+
+
+def list_scenes(settings) -> list:
+    out = []
+    for st in _get_states(settings):
+        if st.get("entity_id", "").startswith("scene."):
+            attrs = st.get("attributes", {})
+            out.append({
+                "entity_id": st["entity_id"],
+                "name": attrs.get("friendly_name", st["entity_id"]),
+                "entities": attrs.get("entity_id", []),
+            })
+    out.sort(key=lambda s: s["name"].lower())
+    return out
+
+
+def create_scene_from_current(settings, name: str, entity_ids: list) -> dict:
+    """Nimmt die AKTUELLEN Zustaende der gewaehlten Geraete als Szene auf
+    (Idee: Raum wie gewuenscht einstellen, dann speichern) und legt sie
+    persistent in HA an."""
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Bitte einen Namen fuer die Szene angeben.")
+    if not entity_ids:
+        raise ValueError("Keine Geraete ausgewaehlt.")
+    states = {s["entity_id"]: s for s in _get_states(settings)}
+    entities = {}
+    for eid in entity_ids:
+        st = states.get(eid)
+        if not st:
+            continue
+        dom = _entity_domain(eid)
+        entry = {"state": st.get("state")}
+        for a in _SCENE_ATTRS.get(dom, ()):
+            v = st.get("attributes", {}).get(a)
+            if v is not None:
+                entry[a] = v
+        entities[eid] = entry
+    if not entities:
+        raise ValueError("Die ausgewaehlten Geraete sind gerade nicht bekannt.")
+    scene_id = f"kies_{_slugify(name)}"
+    token = _token(settings)
+    ha_client.create_scene(settings.homeassistant_url, token, scene_id,
+                           {"name": name, "entities": entities})
+    ha_client.reload_scenes(settings.homeassistant_url, token)
+    return {"entity_id": f"scene.{scene_id}", "name": name, "entities": list(entities)}
+
+
 def process_command(db, settings, text: str, confirm: bool = False, source: str = "text") -> dict:
     """Kernpipeline. Wirft nie - Fehler kommen als {"ok": False, "reply": ...}."""
     text = (text or "").strip()
