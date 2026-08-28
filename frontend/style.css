@@ -1761,7 +1761,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 /* Smart-Home-Tab (js/smarthome.js) - nur die paar Kleinigkeiten, die es
    nicht schon als generische Klasse gibt. */
-#smarthome-reply.is-error { color: #d9534f; }
+#smarthome-reply.is-error, .ai-insight-text.reply-error { color: #d9534f; }
 .sh-ok { color: #3a9d5d; font-weight: 600; }
 .sh-warn { color: #d9534f; font-weight: 600; }
 .sh-sub { display: block; color: var(--muted); font-size: 11.5px; }

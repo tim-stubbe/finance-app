@@ -356,6 +356,21 @@
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M8 21h8M12 17v4"/></svg> Jarvis</h3>
         <div id="hub-jarvis-suggestion" class="hidden"></div>
         <div id="hub-jarvis-hanging" class="hidden"></div>
+        <div id="hub-jarvis-home" class="hidden">
+          <p class="page-sub">Haus steuern</p>
+          <form id="hub-home-form" class="chat-input-row">
+            <input type="text" id="hub-home-input" placeholder="z. B. „Licht Wohnzimmer aus" oder „Wie warm ist es im Bad?"" autocomplete="off">
+            <button type="submit" class="btn-ghost btn-sm">Senden</button>
+          </form>
+          <div id="hub-home-reply" class="ai-insight-text hidden"></div>
+          <div id="hub-home-confirm" class="ai-insight-text hidden">
+            <span id="hub-home-confirm-text"></span>
+            <div class="form-actions">
+              <button type="button" id="hub-home-confirm-yes" class="btn-primary btn-sm">Ja</button>
+              <button type="button" id="hub-home-confirm-no" class="btn-ghost btn-sm">Abbrechen</button>
+            </div>
+          </div>
+        </div>
         <div id="hub-jarvis-log" class="hidden"></div>
       </div>
 

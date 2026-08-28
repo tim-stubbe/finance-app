@@ -66,6 +66,15 @@ def test_health_endpoint_reports_unconfigured(auth_client):
     assert body["ha_connected"] is False
 
 
+def test_health_quick_skips_network_probes(auth_client, monkeypatch):
+    # quick=1 darf ha_client/ollama gar nicht erst anfassen (Hub-Panel-Aufruf)
+    import app.smarthome as sh
+    monkeypatch.setattr(sh, "health", lambda s: (_ for _ in ()).throw(AssertionError("nicht aufrufen")))
+    r = auth_client.get("/api/smarthome/health?quick=1")
+    assert r.status_code == 200
+    assert r.json() == {"ha_configured": False, "ollama_configured": False}
+
+
 def test_command_without_setup_is_soft_error(auth_client):
     r = auth_client.post("/api/smarthome/command", json={"text": "Licht an"})
     assert r.status_code == 200  # kein 500-Stacktrace an den Nutzer

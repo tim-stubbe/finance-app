@@ -64,8 +64,16 @@ def update_smarthome_settings(data: schemas.SmartHomeSettingsUpdate, db: Session
 
 # ---------------- Status ----------------
 @smarthome_router.get("/health")
-def smarthome_health(db: Session = Depends(get_db)):
+def smarthome_health(quick: bool = False, db: Session = Depends(get_db)):
+    """quick=1 ueberspringt die Netz-Probes (HA/Ollama anpingen) und meldet nur,
+    ob ueberhaupt konfiguriert - fuer Aufrufer wie das Hub-Panel, die nur
+    wissen wollen, ob das Feature sichtbar sein soll."""
     s = auth.get_or_create_settings(db)
+    if quick:
+        return {
+            "ha_configured": bool(s.homeassistant_url and s.homeassistant_token_encrypted),
+            "ollama_configured": bool(s.ollama_url and s.ollama_model),
+        }
     return smarthome.health(s)
 
 

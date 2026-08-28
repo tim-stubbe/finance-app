@@ -546,8 +546,64 @@ async function loadHubJarvisPanel() {
     logEl.classList.add("hidden");
   }
 
+  // Haus-Steuerung direkt im Hub (nur wenn Home Assistant eingerichtet ist) -
+  // Teil des "alles im Hub"-Gedankens, nutzt dieselbe Pipeline wie der
+  // Smart-Home-Tab (/api/smarthome/command).
+  const homeEl = document.getElementById("hub-jarvis-home");
+  try {
+    const h = await api("/smarthome/health?quick=1");
+    if (h.ha_configured) {
+      anyVisible = true;
+      homeEl.classList.remove("hidden");
+    } else {
+      homeEl.classList.add("hidden");
+    }
+  } catch {
+    homeEl.classList.add("hidden");
+  }
+
   panel.classList.toggle("hidden", !anyVisible);
 }
+
+async function hubSendHomeCommand(text, confirm) {
+  const replyEl = document.getElementById("hub-home-reply");
+  const confirmEl = document.getElementById("hub-home-confirm");
+  replyEl.classList.remove("hidden", "reply-error");
+  replyEl.textContent = "…";
+  confirmEl.classList.add("hidden");
+  let res;
+  try {
+    res = await api("/smarthome/command", { method: "POST", body: JSON.stringify({ text, confirm }) });
+  } catch (err) {
+    replyEl.textContent = "Fehler: " + (err.message || err);
+    return;
+  }
+  if (res.needs_confirmation && res.intent === "control") {
+    document.getElementById("hub-home-confirm-text").textContent = res.reply || "Ausführen?";
+    confirmEl.classList.remove("hidden");
+    replyEl.classList.add("hidden");
+  } else {
+    replyEl.textContent = res.reply || (res.ok ? "Erledigt." : "Das hat nicht geklappt.");
+    replyEl.classList.toggle("reply-error", !res.ok);
+  }
+}
+
+document.getElementById("hub-home-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("hub-home-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  hubSendHomeCommand(text, false);
+});
+document.getElementById("hub-home-confirm-yes").addEventListener("click", () => {
+  document.getElementById("hub-home-confirm").classList.add("hidden");
+  hubSendHomeCommand("ja", true);
+});
+document.getElementById("hub-home-confirm-no").addEventListener("click", () => {
+  document.getElementById("hub-home-confirm").classList.add("hidden");
+  hubSendHomeCommand("nein", false);
+});
 
 document.getElementById("tab-hub").addEventListener("click", async e => {
   const decideBtn = e.target.closest("[data-jarvis-decide]");

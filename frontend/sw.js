@@ -14,7 +14,9 @@
 // + 3D-Ansicht, Geraete live/klickbar).
 // v39: Phase 4 - KI-Automationen (js/smarthome-automations.js): KI schlaegt
 // Ablaeufe vor und schreibt die HA-Automation (YAML), Nutzer legt sie an.
-const CACHE_NAME = "finanztool-shell-v39";
+// v40: Haus-Steuerung direkt im Hub-Jarvis-Panel (js/dashboard.js), gleiche
+// Pipeline wie der Smart-Home-Tab.
+const CACHE_NAME = "finanztool-shell-v40";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
