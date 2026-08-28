@@ -403,6 +403,52 @@ def list_devices(settings) -> list:
     return out
 
 
+def autolayout(settings) -> dict:
+    """Erzeugt aus den HA-Bereichen (Areas) automatisch einen Grundriss:
+    ein Raum je Bereich in einem Raster, die Geraete des Bereichs darin
+    verteilt. Grobe Startaufteilung, die der Nutzer dann verschiebt."""
+    token = _token(settings)
+    states = ha_client.get_states(settings.homeassistant_url, token)
+    try:
+        areas = ha_client.area_map(settings.homeassistant_url, token)
+    except ha_client.HAError:
+        areas = {}
+    allowed = _allowed_domains(settings)
+    areas_filter = _allowed_areas(settings)
+
+    by_area = {}
+    for st in states:
+        ent = st.get("entity_id", "")
+        if _entity_domain(ent) not in allowed:
+            continue
+        area = areas.get(ent) or "Ohne Bereich"
+        if areas_filter and area not in areas_filter and area != "Ohne Bereich":
+            continue
+        by_area.setdefault(area, []).append(ent)
+
+    names = sorted(by_area)
+    cols = max(1, int(len(names) ** 0.5 + 0.999)) if names else 1
+    rw, rh, gap = 4.0, 3.2, 0.6
+    rooms, devices = [], []
+    for i, name in enumerate(names):
+        ox, oy = (i % cols) * (rw + gap), (i // cols) * (rh + gap)
+        rid = f"r{i}"
+        rooms.append({"id": rid, "name": name, "x": round(ox, 1), "y": round(oy, 1),
+                      "w": rw, "h": rh, "area": name})
+        ents = by_area[name]
+        dcols = max(1, int(len(ents) ** 0.5 + 0.999))
+        drows = (len(ents) + dcols - 1) // dcols
+        for j, ent in enumerate(ents):
+            gx = (j % dcols) / (dcols - 1) if dcols > 1 else 0.5
+            gy = (j // dcols) / (drows - 1) if drows > 1 else 0.5
+            devices.append({
+                "entity_id": ent, "room_id": rid,
+                "x": round(ox + 0.6 + gx * (rw - 1.2), 1),
+                "y": round(oy + 0.6 + gy * (rh - 1.2), 1),
+            })
+    return {"rooms": rooms, "devices": devices}
+
+
 def process_command(db, settings, text: str, confirm: bool = False, source: str = "text") -> dict:
     """Kernpipeline. Wirft nie - Fehler kommen als {"ok": False, "reply": ...}."""
     text = (text or "").strip()

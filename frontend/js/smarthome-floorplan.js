@@ -230,10 +230,21 @@ function fpSetView(v) {
 function fpToggleEdit() {
   fpEdit = !fpEdit;
   document.getElementById("sh-fp-edit").classList.toggle("active", fpEdit);
-  ["sh-fp-add-room", "sh-fp-add-device", "sh-fp-save"].forEach(id =>
+  ["sh-fp-autolayout", "sh-fp-add-room", "sh-fp-add-device", "sh-fp-save"].forEach(id =>
     document.getElementById(id).classList.toggle("hidden", !fpEdit));
   if (fpEdit && fpView === "3d") fpSetView("2d");
   fpRender();
+}
+
+async function fpAutolayout() {
+  if (fpData.rooms.length && !confirm("Vorhandenes Layout durch die automatische Aufteilung aus den HA-Bereichen ersetzen?")) return;
+  try {
+    await api("/smarthome/floorplan/autolayout", { method: "POST" });
+    toast("Grundriss aus Home Assistant übernommen.");
+    loadSmartHomeFloorplan();
+  } catch (err) {
+    toast(err.message || "Übernahme fehlgeschlagen.");
+  }
 }
 
 function fpAddRoom() {
@@ -332,6 +343,7 @@ function fpSave() {
   document.getElementById("sh-fp-view-2d").addEventListener("click", () => fpSetView("2d"));
   document.getElementById("sh-fp-view-3d").addEventListener("click", () => fpSetView("3d"));
   document.getElementById("sh-fp-edit").addEventListener("click", fpToggleEdit);
+  document.getElementById("sh-fp-autolayout").addEventListener("click", fpAutolayout);
   document.getElementById("sh-fp-add-room").addEventListener("click", fpAddRoom);
   document.getElementById("sh-fp-add-device").addEventListener("change", fpAddDevice);
   document.getElementById("sh-fp-save").addEventListener("click", fpSave);

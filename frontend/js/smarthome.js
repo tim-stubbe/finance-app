@@ -36,7 +36,7 @@ async function loadSmartHomeHealth() {
 
 async function loadSmartHomeDevices() {
   const tbody = document.getElementById("smarthome-device-list");
-  tbody.innerHTML = emptyRow(4, "list", "Lädt …");
+  if (!tbody.children.length) tbody.innerHTML = emptyRow(4, "list", "Lädt …");
   try {
     smartHomeDevices = await api("/smarthome/devices");
   } catch {
@@ -263,3 +263,15 @@ document.getElementById("smarthome-goto-settings")?.addEventListener("click", e 
   e.preventDefault();
   goToTab("settings");
 });
+
+// Sanftes Live-Update, solange der Smart-Home-Tab offen ist - REST-Polling
+// statt HA-WebSocket (bewusst, siehe smarthome.py "Naechste Schritte").
+// Grundriss wird waehrend einer Bearbeitung nicht angefasst.
+setInterval(() => {
+  const tab = document.getElementById("tab-smarthome");
+  if (!tab || !tab.classList.contains("active")) return;
+  loadSmartHomeHealth();
+  loadSmartHomeDevices();
+  const editing = typeof fpEdit !== "undefined" && (fpEdit || fpDrag);
+  if (!editing && typeof loadSmartHomeFloorplan === "function") loadSmartHomeFloorplan();
+}, 12000);

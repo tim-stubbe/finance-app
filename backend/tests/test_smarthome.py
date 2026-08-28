@@ -166,6 +166,21 @@ def test_floorplan_save_and_reload(auth_client):
     assert back["devices"][0]["entity_id"] == "light.wohnzimmer"
 
 
+def test_floorplan_autolayout_from_areas(auth_client, configured_ha, monkeypatch):
+    from app import ha_client as hac
+    monkeypatch.setattr(hac, "area_map", lambda u, t: {"light.wohnzimmer": "Wohnzimmer",
+                                                       "light.kueche": "Küche"})
+    r = auth_client.post("/api/smarthome/floorplan/autolayout")
+    assert r.status_code == 200
+    plan = r.json()
+    names = {room["name"] for room in plan["rooms"]}
+    assert {"Wohnzimmer", "Küche"} <= names
+    # jedes Geraet hat einen Raum zugeordnet bekommen
+    assert all(d.get("room_id") for d in plan["devices"])
+    # bleibt gespeichert
+    assert auth_client.get("/api/smarthome/floorplan").json()["rooms"]
+
+
 def test_floorplan_merges_live_states(auth_client, configured_ha):
     auth_client.put("/api/smarthome/floorplan", json={
         "rooms": [], "devices": [{"entity_id": "light.wohnzimmer", "x": 1, "y": 1}],

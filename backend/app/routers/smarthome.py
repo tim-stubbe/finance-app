@@ -165,6 +165,18 @@ def put_floorplan(data: schemas.SmartHomeFloorplanIn, db: Session = Depends(get_
     return saved
 
 
+@smarthome_router.post("/floorplan/autolayout")
+def autolayout_floorplan(db: Session = Depends(get_db)):
+    """Ersetzt das Layout durch eine automatische Aufteilung aus den
+    HA-Bereichen (ein Raum je Bereich, Geraete darin verteilt)."""
+    s = auth.get_or_create_settings(db)
+    try:
+        plan = smarthome.autolayout(s)
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+    return crud.save_floorplan(db, plan)
+
+
 # ---------------- KI-Automationen (Phase 4) ----------------
 def _automation_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ha_client.HAError):
