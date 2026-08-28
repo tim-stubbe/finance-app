@@ -24,6 +24,9 @@ from . import models, schemas, prices
 CACHE_TTL = timedelta(hours=24)
 
 
+ISIN_NEGATIVE_CACHE_TTL = timedelta(days=7)
+
+
 def _resolve_fetch_symbol(db: Session, asset_type: str, symbol: str) -> str:
     """Liefert das Symbol, das tatsächlich für den Live-Kursabruf verwendet
     werden soll - bei einer ISIN (Aktie/ETF, kommt so von Scalable Capital,
@@ -33,14 +36,28 @@ def _resolve_fetch_symbol(db: Session, asset_type: str, symbol: str) -> str:
     ist nur ein interner Lookup fürs Nachladen von Kursdaten. Negatives
     Caching auch für die OpenFIGI-Auflösung selbst (ticker=NULL gespeichert),
     damit eine nicht auflösbare ISIN nicht bei jedem Aufruf erneut angefragt
-    wird."""
+    wird - ABER mit TTL (ISIN_NEGATIVE_CACHE_TTL), sonst würde ein bloß
+    kurzzeitig nicht erreichbares OpenFIGI (Rate-Limit, Netzwerk-Hänger beim
+    allerersten Versuch) die ISIN für immer als "nicht auflösbar" einfrieren
+    - Bugfix (Code-Review), ursprünglich fehlte die TTL-Prüfung trotz
+    gegenteiliger Doku hier und dem resolved_at-Feld in models.py, das genau
+    dafür gedacht war. Eine bereits erfolgreich aufgelöste ISIN (ticker
+    gesetzt) wird dagegen dauerhaft nicht erneut abgefragt - ein einmal
+    gefundener Ticker ändert sich praktisch nie."""
     if asset_type == "krypto" or not prices.looks_like_isin(symbol):
         return symbol
     cached = db.query(models.IsinTickerCache).filter_by(isin=symbol).first()
-    if cached:
+    if cached and (cached.ticker or (datetime.utcnow() - cached.resolved_at) < ISIN_NEGATIVE_CACHE_TTL):
         return cached.ticker or symbol
     ticker = prices.resolve_isin_to_ticker(symbol)
-    db.add(models.IsinTickerCache(isin=symbol, ticker=ticker, resolved_at=datetime.utcnow()))
+    if cached:
+        # Abgelaufener Negativ-Cache-Eintrag - dieselbe Zeile aktualisieren
+        # (isin ist Primary Key), statt eine zweite mit demselben Schlüssel
+        # einzufügen (IntegrityError).
+        cached.ticker = ticker
+        cached.resolved_at = datetime.utcnow()
+    else:
+        db.add(models.IsinTickerCache(isin=symbol, ticker=ticker, resolved_at=datetime.utcnow()))
     db.commit()
     return ticker or symbol
 

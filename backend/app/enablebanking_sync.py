@@ -43,7 +43,9 @@ def _get_with_retry(url: str, headers: dict, timeout: int, max_retries: int = 3)
     429-Problem NICHT zuverlässig behoben, es trat trotzdem weiter auf,
     zusätzlich beobachtet ein einmaliger DNS-Fehler ("Failed to resolve
     api.enablebanking.com"). Wartet bei 429 die von der API genannte
-    Retry-After-Zeit ab, sonst exponentiell (5/15/30s) - Verbindungsfehler
+    Retry-After-Zeit ab, sonst exponentiell mit Faktor 3 (5/15/45s, siehe
+    `delay *= 3` unten - Bugfix Code-Review: hier stand vorher fälschlich
+    "5/15/30s") - Verbindungsfehler
     bekommen dieselbe Wartezeit, ein DNS-Hänger von wenigen Sekunden ist
     damit meist schon vorbei."""
     delay = 5
