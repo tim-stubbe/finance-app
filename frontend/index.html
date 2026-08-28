@@ -38,6 +38,24 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"
         integrity="sha384-DhxhYObIMeMNGyAG7iK11OHzBIKyEIeRL0ad1iFPAOwZB8iirUlTT0O/WJJUk8+o"
         crossorigin="anonymous"></script>
+<!-- Drei weitere CDN-Skripte für den 3D-Modell-Viewer im Auto-Tab
+     (Spezifikationswunsch 2026-08-28) - dieselbe SRI-Absicherung wie
+     Chart.js oben. three.js r128 bewusst statt einer neueren Version: ab
+     ~r150 gibt es nur noch ES-Module-Builds, dieses Repo bleibt aber bei
+     klassischen <script>-Tags im gemeinsamen globalen Scope (kein Build-
+     Schritt, siehe README "Technik") - r128 ist die letzte Reihe mit
+     "klassischen" globalen UMD-Skripten für Core + Addons (OrbitControls/
+     GLTFLoader hängen sich als THREE.OrbitControls/THREE.GLTFLoader an
+     dasselbe globale THREE-Objekt). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+        integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"
+        integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"
+        integrity="sha384-fljlqkjWlmSFjkESkQvm77heIZpoWmXEOzlCA7kOpGUH+95Zk0yGfQieWM2q136E"
+        crossorigin="anonymous"></script>
 <link rel="stylesheet" href="style.css">
 <!-- Nur für das Alpen-Desktop-Theme geladen (Cormorant Garamond/Lora) - ein
      <link> im Kopf für alle Themes, die Schrift wirkt sich aber erst aus,
@@ -175,6 +193,10 @@
       <button class="nav-btn" data-tab="wishlist">
         <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="21" r="1.3"/><circle cx="18" cy="21" r="1.3"/><path d="M2 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Wunschliste</span>
+      </button>
+      <button class="nav-btn" data-tab="vehicle">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm14 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0zM3 17V11l2-5h10l4 5h2v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Auto</span>
       </button>
     </nav>
 
@@ -2127,6 +2149,114 @@
       </div>
     </section>
 
+    <!-- ================= AUTO (Spezifikationswunsch 2026-08-28) ================= -->
+    <section id="tab-vehicle" class="tab-content">
+      <header class="page-head">
+        <div>
+          <h1 id="vehicle-name-heading">Mein Auto</h1>
+          <p class="page-sub">3D-Modell, Tanklog (Verbrauch/Kosten) und Ziele fürs Auto.</p>
+        </div>
+        <button type="button" id="vehicle-rename-btn" class="btn-ghost">Umbenennen</button>
+      </header>
+
+      <div class="panel vehicle-hero-panel">
+        <div class="vehicle-hero-grid">
+          <div class="vehicle-stat-corner vehicle-stat-tl">
+            <span class="vehicle-stat-label">Kilometerstand</span>
+            <span class="vehicle-stat-value" id="vehicle-stat-odometer">–</span>
+          </div>
+          <div class="vehicle-stat-corner vehicle-stat-tr">
+            <span class="vehicle-stat-label">Ø Verbrauch</span>
+            <span class="vehicle-stat-value" id="vehicle-stat-consumption">–</span>
+          </div>
+          <div class="vehicle-3d-viewer" id="vehicle-3d-viewer">
+            <div class="vehicle-3d-empty" id="vehicle-3d-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm14 0a2 2 0 1 0 4 0 2 2 0 0 0-4 0zM3 17V11l2-5h10l4 5h2v6"/></svg>
+              <span>Noch kein 3D-Modell hochgeladen</span>
+            </div>
+            <canvas id="vehicle-3d-canvas" class="hidden"></canvas>
+          </div>
+          <div class="vehicle-stat-corner vehicle-stat-bl">
+            <span class="vehicle-stat-label">Ø Kosten/km</span>
+            <span class="vehicle-stat-value" id="vehicle-stat-cost-per-km">–</span>
+          </div>
+          <div class="vehicle-stat-corner vehicle-stat-br">
+            <span class="vehicle-stat-label">Gesamtkosten</span>
+            <span class="vehicle-stat-value" id="vehicle-stat-total-cost">–</span>
+          </div>
+        </div>
+        <div class="vehicle-3d-upload-row">
+          <label class="btn-ghost btn-sm">
+            3D-Modell hochladen (.glb)
+            <input type="file" id="vehicle-model-upload" accept=".glb" class="hidden">
+          </label>
+          <button type="button" id="vehicle-model-remove-btn" class="link-btn hidden">Entfernen</button>
+          <span class="page-sub" id="vehicle-model-upload-status"></span>
+        </div>
+      </div>
+
+      <div class="panel-grid">
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg> Tanklog</h3>
+            <button type="button" id="vehicle-fuel-new-btn" class="btn-ghost btn-sm">+ Tankvorgang</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Datum</th><th>km-Stand</th><th>Liter</th><th>Kosten</th><th>l/100km</th><th></th></tr></thead>
+              <tbody id="vehicle-fuel-list"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg> Auto-Ziele</h3>
+            <button type="button" id="vehicle-goal-new-btn" class="btn-ghost btn-sm">+ Ziel</button>
+          </div>
+          <div id="vehicle-goal-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal: Tankvorgang anlegen -->
+    <div id="vehicle-fuel-modal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:480px">
+        <button type="button" class="modal-close" id="vehicle-fuel-modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header"><h2>Tankvorgang</h2></div>
+        <form id="vehicle-fuel-form" class="form-grid">
+          <label>Datum <input type="date" id="vehicle-fuel-date" required></label>
+          <label>Kilometerstand <input type="number" id="vehicle-fuel-odometer" step="1" min="0" required></label>
+          <label>Liter <input type="number" id="vehicle-fuel-liters" step="0.01" min="0"></label>
+          <label>Kosten (€) <input type="number" id="vehicle-fuel-cost" step="0.01" min="0" required></label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="vehicle-fuel-full-tank" checked>
+            <span>Volltanken</span>
+          </label>
+          <label class="wide">Notiz <input type="text" id="vehicle-fuel-notes"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Auto-Ziel anlegen -->
+    <div id="vehicle-goal-modal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:480px">
+        <button type="button" class="modal-close" id="vehicle-goal-modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header"><h2>Neues Auto-Ziel</h2></div>
+        <form id="vehicle-goal-form" class="form-grid">
+          <label class="wide">Titel <input type="text" id="vehicle-goal-title" required placeholder="z.B. Neue Bremsen"></label>
+          <label class="wide">Notiz <input type="text" id="vehicle-goal-notes"></label>
+          <label>Ziel-Datum <input type="date" id="vehicle-goal-date"></label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="wishlist-modal" class="modal-overlay hidden">
       <div class="modal-box">
         <button type="button" id="wishlist-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
@@ -3270,6 +3400,7 @@
 <script src="js/command-palette.js"></script>
 <script src="js/jahresrueckblick.js"></script>
 <script src="js/notizen.js"></script>
+<script src="js/vehicle.js"></script>
 <!-- Muss als LETZTES Skript laden - bootAuthGate() am Ende von auth-login.js
      braucht startApp()/init() (core.js/init.js) und alle Tab-Ladefunktionen
      bereits definiert, siehe js/auth-login.js-Kopfkommentar. -->

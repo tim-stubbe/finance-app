@@ -2749,6 +2749,76 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   }
 }
 
+/* ---------- Auto-Tab (Spezifikationswunsch 2026-08-28) ---------- */
+.vehicle-hero-panel { padding-bottom: 16px; }
+.vehicle-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 2fr) 1fr;
+  grid-template-rows: auto auto;
+  gap: 14px;
+  align-items: stretch;
+}
+.vehicle-stat-corner {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.vehicle-stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.vehicle-stat-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vehicle-stat-tl { grid-column: 1; grid-row: 1; }
+.vehicle-stat-tr { grid-column: 3; grid-row: 1; }
+.vehicle-stat-bl { grid-column: 1; grid-row: 2; }
+.vehicle-stat-br { grid-column: 3; grid-row: 2; }
+.vehicle-3d-viewer {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  position: relative;
+  min-height: 280px;
+  border-radius: var(--radius-sm);
+  background: radial-gradient(ellipse at center, var(--surface-2), var(--surface));
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.vehicle-3d-viewer canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+.vehicle-3d-viewer canvas:active { cursor: grabbing; }
+.vehicle-3d-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13.5px;
+  text-align: center;
+  padding: 20px;
+}
+.vehicle-3d-empty svg { width: 40px; height: 40px; opacity: 0.5; }
+.vehicle-3d-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .vehicle-hero-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .vehicle-stat-tl { grid-column: 1; grid-row: 1; }
+  .vehicle-stat-tr { grid-column: 2; grid-row: 1; }
+  .vehicle-3d-viewer { grid-column: 1 / 3; grid-row: 2; min-height: 220px; }
+  .vehicle-stat-bl { grid-column: 1; grid-row: 3; }
+  .vehicle-stat-br { grid-column: 2; grid-row: 3; }
+}
+
 /* ---------- Mobile Bottom-Nav (Spezifikationspunkt D, 2026-08-28) ---------- */
 /* Standardmäßig komplett ausgeblendet - existiert nur ≤720px, siehe Media-
    Query unten. Auf breiteren Viewports bleibt die klassische Sidebar-

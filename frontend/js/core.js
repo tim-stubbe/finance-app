@@ -360,6 +360,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "projects") loadProjectsTab();
     if (btn.dataset.tab === "life") loadLifeTab();
     if (btn.dataset.tab === "wishlist") loadWishlistTab();
+    if (btn.dataset.tab === "vehicle") loadVehicleTab();
     if (btn.dataset.tab === "photos") loadPhotosTab();
     if (btn.dataset.tab === "settings") loadSettingsTab();
     if (btn.dataset.tab === "profile") loadProfile();

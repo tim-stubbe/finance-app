@@ -85,6 +85,13 @@ from .crud_routines import (
     get_routines, create_routine, update_routine, delete_routine,
     toggle_routine_item, get_due_routines,
 )
+from .crud_vehicle import (
+    get_or_create_vehicle, vehicle_out, update_vehicle, set_vehicle_model_3d,
+    get_fuel_entries, create_fuel_entry, get_fuel_entry, update_fuel_entry,
+    delete_fuel_entry, fuel_summary,
+    get_vehicle_goals, create_vehicle_goal, get_vehicle_goal, update_vehicle_goal,
+    delete_vehicle_goal,
+)
 
 CACHE_TTL = timedelta(hours=24)
 

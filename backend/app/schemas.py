@@ -2356,3 +2356,71 @@ class GlobalSearchResult(BaseModel):
     label: str
     sublabel: Optional[str] = None
     tab: str
+
+
+# ---------- Auto-Tab (2026-08-28) ----------
+class VehicleOut(BaseModel):
+    id: int
+    name: str
+    model_3d_url: Optional[str] = None
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class VehicleUpdate(BaseModel):
+    name: str
+
+
+class VehicleFuelEntryBase(BaseModel):
+    date: date
+    odometer_km: float
+    liters: Optional[float] = None
+    total_cost: float
+    full_tank: bool = True
+    notes: Optional[str] = None
+
+
+class VehicleFuelEntryCreate(VehicleFuelEntryBase):
+    pass
+
+
+class VehicleFuelEntryUpdate(BaseModel):
+    date: Optional[date] = None
+    odometer_km: Optional[float] = None
+    liters: Optional[float] = None
+    total_cost: Optional[float] = None
+    full_tank: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class VehicleFuelEntryOut(VehicleFuelEntryBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    # Verbrauch seit dem vorherigen VOLLEN Tankvorgang - None, wenn kein
+    # vorheriger voller Tankvorgang existiert oder dieser Eintrag selbst
+    # kein voller Tankvorgang ist (siehe crud_vehicle._enrich_fuel_entries).
+    consumption_l_per_100km: Optional[float] = None
+    cost_per_km: Optional[float] = None
+
+
+class VehicleGoalBase(BaseModel):
+    title: str
+    notes: Optional[str] = None
+    target_date: Optional[date] = None
+
+
+class VehicleGoalCreate(VehicleGoalBase):
+    pass
+
+
+class VehicleGoalUpdate(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    target_date: Optional[date] = None
+    done: Optional[bool] = None
+
+
+class VehicleGoalOut(VehicleGoalBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    done: bool

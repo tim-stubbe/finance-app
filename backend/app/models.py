@@ -1633,6 +1633,62 @@ class Note(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Vehicle(Base):
+    """Der neue Auto-Tab (2026-08-28, Tim-Wunsch) - bewusst EIN Fahrzeug pro
+    Bereich statt einer vollen Fahrzeugverwaltung (Single-User, "mein Auto"),
+    siehe crud_vehicle.get_or_create_vehicle (gleiches Singleton-Muster wie
+    models.Settings). model_3d_filename zeigt auf eine hochgeladene .glb/
+    .gltf-Datei (Three.js-Viewer im Frontend), noch nicht das Foto/Auto
+    selbst - das existiert unabhängig vom Modell."""
+
+    __tablename__ = "vehicles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    name = Column(String, nullable=False, default="Mein Auto")
+    model_3d_filename = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    space = relationship("Space")
+
+
+class VehicleFuelEntry(Base):
+    """Ein Tankvorgang - Grundlage für Verbrauch (l/100km aus Differenz zum
+    vorherigen Kilometerstand), Kosten pro km und Kosten-Auswertungen im
+    Auto-Tab. Bewusst ein eigenes, spezialisiertes Log statt normaler
+    Buchungen mit Kategorie "Auto" - nur so lässt sich Kilometerstand-
+    Differenz und Verbrauch überhaupt berechnen, das steckt in keiner
+    normalen Buchung."""
+
+    __tablename__ = "vehicle_fuel_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False)
+    date = Column(Date, nullable=False, default=date.today)
+    odometer_km = Column(Float, nullable=False)
+    liters = Column(Float, nullable=True)
+    total_cost = Column(Float, nullable=False)
+    full_tank = Column(Boolean, nullable=False, default=True)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class VehicleGoal(Base):
+    """Eigenständige Auto-Ziele-Liste (Tim-Wunsch: bewusst NICHT das normale
+    Ziele-System wiederverwenden, sondern getrennt) - z.B. neue
+    Stoßdämpfer, neue Bremsen."""
+
+    __tablename__ = "vehicle_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False)
+    title = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    target_date = Column(Date, nullable=True)
+    done = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class SyncTombstone(Base):
     """Lösch-Protokoll für den Offline-Sync des nativen Clients - fast alle
     Löschungen in dieser App sind Hard Deletes (siehe crud.py), ohne dieses

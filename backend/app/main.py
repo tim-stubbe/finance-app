@@ -22,6 +22,7 @@ from .routers.tax_endpoints import tax_router
 from .routers.debts import debts_router
 from .routers.goals import goals_router, goal_out
 from .routers.trips import trips_router
+from .routers.vehicle import vehicle_router
 from .routers.wishlist import wishlist_router
 from .routers.personal import personal_router
 from .routers.business_life import business_life_router
@@ -928,6 +929,7 @@ app.include_router(tax_router, dependencies=_require_auth)
 app.include_router(debts_router, dependencies=_require_auth)
 app.include_router(goals_router, dependencies=_require_auth)
 app.include_router(trips_router, dependencies=_require_auth)
+app.include_router(vehicle_router, dependencies=_require_auth)
 app.include_router(wishlist_router, dependencies=_require_auth)
 app.include_router(personal_router, dependencies=_require_auth)
 app.include_router(business_life_router, dependencies=_require_auth)
