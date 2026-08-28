@@ -18,6 +18,7 @@ async function loadSmartHomeHealth() {
   const hint = document.getElementById("smarthome-setup-hint");
   try {
     const h = await api("/smarthome/health");
+    smartHomeSetupSSE(h.ha_connected);
     const ha = h.ha_connected
       ? '<span class="sh-ok">Home Assistant verbunden</span>'
       : (h.ha_configured
@@ -27,7 +28,8 @@ async function loadSmartHomeHealth() {
       ? `<span class="sh-ok">Ollama verbunden</span> (${esc(h.ollama_model || "?")})`
       : '<span class="sh-warn">Ollama nicht erreichbar</span>';
     const dry = h.dry_run ? ' · <strong>Trockenlauf aktiv</strong>' : "";
-    line.innerHTML = `${ha} &nbsp;·&nbsp; ${ol}${dry}`;
+    const live = h.live ? ' · <span class="sh-ok">● live</span>' : "";
+    line.innerHTML = `${ha} &nbsp;·&nbsp; ${ol}${live}${dry}`;
     hint.classList.toggle("hidden", !!h.ha_configured);
   } catch {
     line.textContent = "Status konnte nicht geprüft werden.";
@@ -194,6 +196,126 @@ async function sendSmartHomeVoice(blob) {
   loadSmartHomeHistory();
 }
 
+// ---------- Freihändig zuhören (Weckwort-gesteuert) ----------
+// Der Browser hört über einen einfachen Lautstärke-Schwellwert (Web Audio)
+// mit. Ein Sprachsegment wird aufgenommen und an /voice/command?wake=1
+// geschickt; der Server reagiert nur, wenn das Segment mit dem Weckwort
+// beginnt. Zwischen den Segmenten wird nichts gesendet.
+let shListen = null; // { stream, ctx, analyser, raf, recorder, chunks, speaking, silenceStart }
+
+async function shToggleListen() {
+  const btn = document.getElementById("smarthome-listen-btn");
+  const hint = document.getElementById("smarthome-listen-hint");
+  if (shListen) {
+    shStopListen();
+    btn.classList.remove("btn-primary");
+    hint.style.display = "none";
+    return;
+  }
+  if (!navigator.mediaDevices || !window.MediaRecorder || !window.AudioContext) {
+    toast("Dieser Browser kann nicht freihändig zuhören.");
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch {
+    toast("Kein Mikrofonzugriff.");
+    return;
+  }
+  const ctx = new AudioContext();
+  const src = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  src.connect(analyser);
+  const buf = new Uint8Array(analyser.fftSize);
+  shListen = { stream, ctx, analyser, buf, recorder: null, chunks: [], speaking: false, silenceStart: 0, startedAt: 0 };
+
+  btn.classList.add("btn-primary");
+  hint.style.display = "block";
+  hint.textContent = "Hört zu … sag dein Weckwort gefolgt vom Befehl.";
+
+  const THRESH = 0.025, SILENCE_MS = 800, MAX_MS = 8000, MIN_MS = 400;
+  const tick = () => {
+    if (!shListen) return;
+    analyser.getByteTimeDomainData(shListen.buf);
+    let sum = 0;
+    for (let i = 0; i < shListen.buf.length; i++) {
+      const v = (shListen.buf[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / shListen.buf.length);
+    const now = performance.now();
+
+    if (!shListen.speaking && rms > THRESH) {
+      shListen.speaking = true;
+      shListen.startedAt = now;
+      shListen.chunks = [];
+      try {
+        shListen.recorder = new MediaRecorder(shListen.stream);
+        shListen.recorder.ondataavailable = e => { if (e.data.size) shListen.chunks.push(e.data); };
+        shListen.recorder.onstop = () => shListenFlush();
+        shListen.recorder.start();
+      } catch { shListen.speaking = false; }
+    } else if (shListen.speaking) {
+      if (rms < THRESH) {
+        if (!shListen.silenceStart) shListen.silenceStart = now;
+        if (now - shListen.silenceStart > SILENCE_MS || now - shListen.startedAt > MAX_MS) {
+          const long = now - shListen.startedAt > MIN_MS;
+          shListen.speaking = false;
+          shListen.silenceStart = 0;
+          if (shListen.recorder && shListen.recorder.state === "recording") shListen.recorder.stop();
+          if (!long) shListen.chunks = [];
+        }
+      } else {
+        shListen.silenceStart = 0;
+      }
+    }
+    shListen.raf = requestAnimationFrame(tick);
+  };
+  shListen.raf = requestAnimationFrame(tick);
+}
+
+function shStopListen() {
+  if (!shListen) return;
+  cancelAnimationFrame(shListen.raf);
+  try { if (shListen.recorder && shListen.recorder.state === "recording") shListen.recorder.stop(); } catch {}
+  shListen.stream.getTracks().forEach(t => t.stop());
+  try { shListen.ctx.close(); } catch {}
+  shListen = null;
+}
+
+async function shListenFlush() {
+  if (!shListen || !shListen.chunks.length) return;
+  const blob = new Blob(shListen.chunks, { type: shListen.chunks[0].type || "audio/webm" });
+  shListen.chunks = [];
+  const hint = document.getElementById("smarthome-listen-hint");
+  const fd = new FormData();
+  fd.append("file", blob, "segment.webm");
+  const headers = {};
+  const csrf = typeof getCsrfToken === "function" ? getCsrfToken() : null;
+  if (csrf) headers["X-CSRF-Token"] = csrf;
+  try {
+    const resp = await fetch(API + "/smarthome/voice/command?wake=1&speak=1", { method: "POST", headers, body: fd });
+    if (resp.status === 501) { hint.textContent = "Sprach-Backend nicht aktiv (STT_BACKEND)."; shStopListen(); document.getElementById("smarthome-listen-btn").classList.remove("btn-primary"); return; }
+    if (!resp.ok) return;
+    const res = await resp.json();
+    if (res.ignored) { hint.textContent = "Hört zu … (kein Weckwort erkannt)"; return; }
+    const replyEl = document.getElementById("smarthome-reply");
+    replyEl.classList.remove("hidden", "is-error");
+    replyEl.textContent = (res.transcript ? `„${res.transcript}" → ` : "") + (res.reply || "");
+    replyEl.classList.toggle("is-error", !res.ok);
+    hint.textContent = "Hört zu …";
+    if (res.reply_audio_b64) {
+      try { new Audio(`data:${res.reply_audio_format || "audio/wav"};base64,${res.reply_audio_b64}`).play().catch(() => {}); } catch {}
+    }
+    if (res.actions && res.actions.length) loadSmartHomeDevices();
+    loadSmartHomeHistory();
+  } catch { /* Segment verworfen */ }
+}
+
+document.getElementById("smarthome-listen-btn").addEventListener("click", shToggleListen);
+
 document.getElementById("smarthome-confirm-yes").addEventListener("click", () => {
   document.getElementById("smarthome-confirm").classList.add("hidden");
   sendSmartHomeCommand("ja", true);
@@ -264,14 +386,49 @@ document.getElementById("smarthome-goto-settings")?.addEventListener("click", e 
   goToTab("settings");
 });
 
-// Sanftes Live-Update, solange der Smart-Home-Tab offen ist - REST-Polling
-// statt HA-WebSocket (bewusst, siehe smarthome.py "Naechste Schritte").
-// Grundriss wird waehrend einer Bearbeitung nicht angefasst.
+// --- Live-Updates: Server-Sent-Events aus dem HA-WebSocket-Cache ---------
+let smartHomeSSE = null;
+let smartHomeSSERefreshTimer = null;
+
+function smartHomeSetupSSE(haConnected) {
+  if (!haConnected) {
+    if (smartHomeSSE) { smartHomeSSE.close(); smartHomeSSE = null; }
+    return;
+  }
+  if (smartHomeSSE) return;
+  try {
+    smartHomeSSE = new EventSource(API + "/smarthome/events");
+  } catch { return; }
+  smartHomeSSE.onmessage = () => {
+    // Ereignisse buendeln - nach 1,2 s Ruhe einmal die sichtbaren Listen neu laden
+    clearTimeout(smartHomeSSERefreshTimer);
+    smartHomeSSERefreshTimer = setTimeout(() => {
+      const tab = document.getElementById("tab-smarthome");
+      if (!tab || !tab.classList.contains("active")) return;
+      loadSmartHomeDevices();
+      const editing = typeof fpEdit !== "undefined" && (fpEdit || fpDrag);
+      if (!editing && typeof loadSmartHomeFloorplan === "function") loadSmartHomeFloorplan();
+    }, 1200);
+  };
+  smartHomeSSE.onerror = () => { /* EventSource verbindet selbst neu */ };
+}
+
+// Fallback-Polling (falls SSE nicht laeuft) - langsamer, da der Normalfall
+// jetzt SSE ist. Grundriss waehrend einer Bearbeitung nicht anfassen.
 setInterval(() => {
   const tab = document.getElementById("tab-smarthome");
-  if (!tab || !tab.classList.contains("active")) return;
+  if (!tab || !tab.classList.contains("active")) {
+    if (typeof shListen !== "undefined" && shListen) {
+      shStopListen();
+      document.getElementById("smarthome-listen-btn").classList.remove("btn-primary");
+      document.getElementById("smarthome-listen-hint").style.display = "none";
+    }
+    return;
+  }
   loadSmartHomeHealth();
+  const liveSSE = smartHomeSSE && smartHomeSSE.readyState === 1;
+  if (liveSSE) return;
   loadSmartHomeDevices();
   const editing = typeof fpEdit !== "undefined" && (fpEdit || fpDrag);
   if (!editing && typeof loadSmartHomeFloorplan === "function") loadSmartHomeFloorplan();
-}, 12000);
+}, 15000);

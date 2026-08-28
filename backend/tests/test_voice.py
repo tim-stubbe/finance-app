@@ -115,6 +115,28 @@ def test_voice_command_blank_transcript_is_soft_error(auth_client, monkeypatch):
     assert r.json()["ok"] is False
 
 
+def test_wake_word_gates_the_pipeline(auth_client, monkeypatch):
+    calls = _configure_fake_ha(monkeypatch)
+    auth_client.post("/api/smarthome/aliases",
+                     json={"phrase": "Wohnzimmerlicht", "entity_id": "light.wohnzimmer"})
+
+    # Ohne Weckwort -> ignoriert, keine Aktion
+    monkeypatch.setattr(voice, "get_stt", lambda: _FakeSTT("mach das Wohnzimmerlicht aus"))
+    r = auth_client.post("/api/smarthome/voice/command?wake=1&speak=false",
+                         files={"file": ("s.wav", _sine_wav(), "audio/wav")})
+    assert r.json()["ignored"] is True
+    assert calls == []
+
+    # Mit Weckwort -> Weckwort wird abgeschnitten, Rest laeuft
+    monkeypatch.setattr(voice, "get_stt", lambda: _FakeSTT("Jarvis, Wohnzimmerlicht aus"))
+    r = auth_client.post("/api/smarthome/voice/command?wake=1&speak=false",
+                         files={"file": ("s.wav", _sine_wav(), "audio/wav")})
+    body = r.json()
+    assert not body.get("ignored")
+    assert body["transcript"] == "Wohnzimmerlicht aus"
+    assert ("light", "turn_off") in calls
+
+
 def test_voice_command_speaks_reply_when_tts_backend_present(auth_client, monkeypatch):
     _configure_fake_ha(monkeypatch)
     monkeypatch.setattr(voice, "get_stt", lambda: _FakeSTT("Wie spaet ist es"))

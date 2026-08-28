@@ -390,6 +390,10 @@ class Settings(Base):
     homeassistant_require_confirmation = Column(Boolean, nullable=False, default=True)
     # Trockenlauf: nichts wirklich schalten, nur protokollieren/antworten.
     homeassistant_dry_run = Column(Boolean, nullable=False, default=False)
+    # Weckwort fuer die freihaendige Sprachsteuerung (Browser hoert mit, sendet
+    # aber nur Segmente, die mit diesem Wort beginnen; siehe /voice/command
+    # ?wake=1). Leer/None -> "jarvis".
+    homeassistant_wake_word = Column(String, nullable=True)
 
 
 class SmartHomeAlias(Base):

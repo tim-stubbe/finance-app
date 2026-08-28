@@ -189,6 +189,44 @@ def test_floorplan_merges_live_states(auth_client, configured_ha):
     assert body["states"]["light.wohnzimmer"]["state"] == "on"
 
 
+# ---------------- Live-Zustaende (WebSocket-Cache) ----------------
+
+def test_ws_cache_liveness_and_snapshot():
+    from app import smarthome_ws
+    c = smarthome_ws._Cache()
+    assert c.is_live() is False
+    c.connected = True
+    c.replace_all([{"entity_id": "light.x", "state": "on"}])
+    assert c.is_live() is True
+    assert {s["entity_id"] for s in c.snapshot()} == {"light.x"}
+    c.update_one("light.x", {"entity_id": "light.x", "state": "off"})
+    assert c.snapshot()[0]["state"] == "off"
+    c.update_one("light.x", None)  # removed
+    assert c.snapshot() == []
+
+
+def test_get_states_prefers_ws_cache(monkeypatch):
+    from app import smarthome, smarthome_ws, ha_client as hac
+    monkeypatch.setattr(smarthome_ws, "cached_states",
+                        lambda: [{"entity_id": "light.cached", "state": "on", "attributes": {}}])
+    monkeypatch.setattr(hac, "get_states", lambda u, t: (_ for _ in ()).throw(AssertionError("REST nicht noetig")))
+
+    class _S:
+        homeassistant_url = "http://ha"
+        secret_key = "k"
+        homeassistant_token_encrypted = None
+    got = smarthome._get_states(_S())
+    assert got[0]["entity_id"] == "light.cached"
+
+
+def test_events_endpoint_streams(auth_client):
+    with auth_client.stream("GET", "/api/smarthome/events") as r:
+        assert r.status_code == 200
+        assert "text/event-stream" in r.headers["content-type"]
+        first = next(r.iter_lines())
+        assert first.startswith(":")  # ": connected" Kommentarzeile
+
+
 # ---------------- Telegram /haus ----------------
 
 def test_telegram_haus_command(auth_client, configured_ha, monkeypatch):

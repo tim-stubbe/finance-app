@@ -2435,6 +2435,7 @@ class SmartHomeSettingsOut(BaseModel):
     extra_services: Optional[str] = None
     require_confirmation: bool = True
     dry_run: bool = False
+    wake_word: Optional[str] = None
 
 
 class SmartHomeSettingsUpdate(BaseModel):
@@ -2446,6 +2447,7 @@ class SmartHomeSettingsUpdate(BaseModel):
     extra_services: Optional[str] = None
     require_confirmation: Optional[bool] = None
     dry_run: Optional[bool] = None
+    wake_word: Optional[str] = None
 
 
 class SmartHomeCommand(BaseModel):

@@ -20,6 +20,9 @@ APScheduler==3.11.3
 # Nur zum Parsen/Validieren der von der KI erzeugten Home-Assistant-
 # Automationen (siehe smarthome_automations.py) - reines Python-Wheel.
 PyYAML==6.0.2
+# WebSocket-Client fuer die HA-Live-Zustaende (smarthome_ws.py) - ein
+# Hintergrund-Thread haelt die Verbindung, kein async noetig. Reines Wheel.
+websocket-client==1.9.0
 PyMuPDF==1.28.2
 # Fuer den Bildvergleich der Immich-Duplikate. Noetig, weil Immich seine
 # Vorschaubilder als WebP ausliefert und PyMuPDF dieses Format nicht liest.

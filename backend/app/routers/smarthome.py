@@ -12,10 +12,11 @@ import base64
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import schemas, auth, bank_sync, crud, smarthome, ha_client, voice
-from .. import smarthome_automations
+from .. import smarthome_automations, smarthome_ws
 from ..database import get_db
 
 smarthome_router = APIRouter(prefix="/api/smarthome")
@@ -33,6 +34,7 @@ def get_smarthome_settings(db: Session = Depends(get_db)):
         extra_services=s.homeassistant_extra_services,
         require_confirmation=s.homeassistant_require_confirmation,
         dry_run=s.homeassistant_dry_run,
+        wake_word=s.homeassistant_wake_word or "jarvis",
     )
 
 
@@ -58,6 +60,8 @@ def update_smarthome_settings(data: schemas.SmartHomeSettingsUpdate, db: Session
         s.homeassistant_require_confirmation = data.require_confirmation
     if data.dry_run is not None:
         s.homeassistant_dry_run = data.dry_run
+    if data.wake_word is not None:
+        s.homeassistant_wake_word = data.wake_word.strip().lower() or None
     db.commit()
     return get_smarthome_settings(db)
 
@@ -73,8 +77,23 @@ def smarthome_health(quick: bool = False, db: Session = Depends(get_db)):
         return {
             "ha_configured": bool(s.homeassistant_url and s.homeassistant_token_encrypted),
             "ollama_configured": bool(s.ollama_url and s.ollama_model),
+            "live": smarthome_ws.is_live(),
         }
-    return smarthome.health(s)
+    out = smarthome.health(s)
+    out["live"] = smarthome_ws.is_live()
+    return out
+
+
+@smarthome_router.get("/events")
+def smarthome_events():
+    """Server-Sent-Events: pro HA-Zustandsaenderung eine data:-Zeile
+    ({entity_id, state, friendly_name}). Speist aus dem WebSocket-Cache
+    (smarthome_ws) - die Web-UI zieht damit ohne eigenen WS-Client live nach."""
+    return StreamingResponse(
+        smarthome_ws.events_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------------- Geraete ----------------
@@ -261,6 +280,7 @@ def _voice_soft_error(reply: str) -> dict:
 async def smarthome_voice_command(
     file: UploadFile = File(...),
     speak: bool = True,
+    wake: bool = False,
     db: Session = Depends(get_db),
 ):
     """Audio hochladen -> lokale Spracherkennung -> exakt dieselbe Pipeline wie
@@ -285,6 +305,17 @@ async def smarthome_voice_command(
 
     if not transcript.strip():
         return _voice_soft_error("Ich habe nichts verstanden.")
+
+    if wake:
+        # Freihaendiger Betrieb: nur reagieren, wenn das Segment das Weckwort
+        # enthaelt. Alles bis einschliesslich Weckwort wird abgeschnitten.
+        ww = (s.homeassistant_wake_word or "jarvis").strip().lower()
+        idx = transcript.lower().find(ww)
+        rest = transcript[idx + len(ww):].lstrip(" ,.:;–-\t").strip() if idx != -1 else ""
+        if idx == -1 or not rest:
+            return {"ok": True, "ignored": True, "reply": "", "transcript": transcript,
+                    "intent": "chat", "actions": [], "needs_confirmation": False, "candidates": []}
+        transcript = rest
 
     result = smarthome.process_command(db, s, transcript, source="voice")
     result["transcript"] = transcript

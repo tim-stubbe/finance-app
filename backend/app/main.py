@@ -288,6 +288,7 @@ ensure_columns("settings", {
     "homeassistant_extra_services": "VARCHAR",
     "homeassistant_require_confirmation": "BOOLEAN DEFAULT 1",
     "homeassistant_dry_run": "BOOLEAN DEFAULT 0",
+    "homeassistant_wake_word": "VARCHAR",
 })
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
@@ -1850,6 +1851,42 @@ def _scheduled_suggestion_check():
         db.close()
 
 
+def _scheduled_smarthome_automation_suggestions():
+    """Einmal pro Woche: lässt die KI Automations-/Ablauf-Ideen fürs Zuhause
+    erzeugen (smarthome_automations.suggest) und meldet, falls neue dabei sind,
+    EINEN Sammel-Hinweis über die bestehende Vorschlags-Queue (dedupliziert
+    pro ISO-Woche - kein tägliches Nachfragen). Die eigentliche Arbeit (YAML
+    prüfen, in HA anlegen) passiert im Smart-Home-Tab."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not (settings.notifications_enabled and settings.homeassistant_url
+                and settings.homeassistant_token_encrypted
+                and settings.ollama_url and settings.ollama_model):
+            return
+        from . import smarthome_automations
+        try:
+            created = smarthome_automations.suggest(db, settings, n=3)
+        except Exception:  # noqa: BLE001 - KI/HA nicht erreichbar o.ä.
+            return
+        if not created:
+            return
+        iso = date.today().isocalendar()
+        suggestion = crud.create_suggestion_if_new(
+            db, kind="smarthome_automation", ref_id=iso[0] * 100 + iso[1],
+            title=f"{len(created)} neue Automations-Idee(n) fürs Zuhause – im Smart-Home-Tab ansehen",
+        )
+        if suggestion:
+            notifications.notify(
+                settings,
+                f"💡 Vorschlag: {suggestion.title}\n"
+                + "; ".join(c["title"] for c in created)
+                + "\nAntworte mit /ok, /später oder /verwerfen.",
+            )
+    finally:
+        db.close()
+
+
 def _scheduled_routines():
     """Alle 15 Minuten: prüft, ob eine Routine (Spezifikation Abschnitt G)
     jetzt fällig ist (siehe crud.get_due_routines) und schickt die Checkliste
@@ -2197,6 +2234,11 @@ scheduler.add_job(
     _scheduled_routines, CronTrigger(minute="0,15,30,45"),
     id="routines", misfire_grace_time=600,
 )
+scheduler.add_job(
+    _scheduled_smarthome_automation_suggestions,
+    CronTrigger(day_of_week="sun", hour=18, minute=0),
+    id="smarthome_automation_suggestions", misfire_grace_time=3600,
+)
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es
 # nach der Einfuehrung dieses Features fast einen ganzen Tag lang noch gar
@@ -2208,6 +2250,25 @@ _scheduled_net_worth_snapshot()
 # Läuft dauerhaft im Hintergrund (kein Cron-Job, da Long-Polling blockiert) -
 # prüft selbst bei jedem Durchlauf, ob Telegram überhaupt konfiguriert ist.
 threading.Thread(target=telegram_bot.run_polling_loop, daemon=True, name="telegram-polling").start()
+
+# Home-Assistant-Live-Zustände per WebSocket (smarthome_ws.py) - eigener
+# Hintergrund-Thread, verbindet sich selbst neu und prüft bei jedem Anlauf,
+# ob Smart Home überhaupt eingerichtet ist.
+def _ha_ws_conn():
+    _db = SessionLocal()
+    try:
+        _s = auth.get_or_create_settings(_db)
+        if not (_s.homeassistant_url and _s.homeassistant_token_encrypted):
+            return (None, None)
+        return (_s.homeassistant_url,
+                bank_sync.decrypt_secret(_s.secret_key, _s.homeassistant_token_encrypted))
+    except Exception:  # noqa: BLE001
+        return (None, None)
+    finally:
+        _db.close()
+
+from . import smarthome_ws  # noqa: E402
+smarthome_ws.start(_ha_ws_conn)
 
 
 @app.on_event("shutdown")

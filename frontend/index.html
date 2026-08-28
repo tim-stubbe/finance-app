@@ -2340,9 +2340,11 @@
         <form id="smarthome-command-form" class="chat-input-row">
           <input type="text" id="smarthome-command-input" placeholder="Befehl oder Frage …" autocomplete="off">
           <button type="button" id="smarthome-mic-btn" class="btn-ghost" title="Sprechen (lokale Spracherkennung)">🎤</button>
+          <button type="button" id="smarthome-listen-btn" class="btn-ghost" title="Freihändig zuhören (Weckwort)">👂</button>
           <button type="submit" class="btn-primary">Senden</button>
         </form>
         <p class="page-sub" id="smarthome-mic-hint" style="display:none">Sprachsteuerung ist serverseitig nicht aktiv (STT_BACKEND). Siehe README.</p>
+        <p class="page-sub" id="smarthome-listen-hint" style="display:none"></p>
         <div id="smarthome-reply" class="ai-insight-text hidden"></div>
         <div id="smarthome-confirm" class="ai-insight-text hidden">
           <p id="smarthome-confirm-text"></p>
@@ -2588,6 +2590,7 @@
           <label>Zusätzliche Dienste <input type="text" id="smarthome-cfg-extra" placeholder="z.B. vacuum.start,humidifier.turn_on"></label>
           <label class="checkbox-label"><input type="checkbox" id="smarthome-cfg-confirm"> Steuer-Aktionen der KI erst nach Bestätigung ausführen</label>
           <label class="checkbox-label"><input type="checkbox" id="smarthome-cfg-dry"> Trockenlauf (nichts wirklich schalten)</label>
+          <label>Weckwort (freihändige Sprachsteuerung) <input type="text" id="smarthome-cfg-wake" placeholder="jarvis"></label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
           </div>

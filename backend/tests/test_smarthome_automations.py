@@ -127,6 +127,29 @@ def test_freeform_draft(configured, monkeypatch):
     assert "cover.close_cover" in r.json()["yaml"]
 
 
+def test_scheduled_weekly_suggestion_nudge(configured, monkeypatch):
+    """Der Wochen-Job erzeugt Vorschläge und meldet EINEN Sammel-Hinweis
+    über die bestehende AssistantSuggestion-Queue."""
+    from app import main, notifications
+    db = SessionLocal()
+    s = auth.get_or_create_settings(db)
+    s.notifications_enabled = True
+    db.commit()
+    db.close()
+    _mock_chat(monkeypatch, json.dumps({"ideas": [
+        {"title": "Nachts alles aus", "description": "d", "trigger": "23 Uhr", "entities": ["light.wohnzimmer"]}]}))
+    notes = []
+    monkeypatch.setattr(notifications, "notify", lambda settings, text, **k: notes.append(text))
+
+    main._scheduled_smarthome_automation_suggestions()
+    assert notes and "Automations-Idee" in notes[0]
+
+    # Zweiter Lauf in derselben ISO-Woche -> kein neuer Hinweis (dedupliziert)
+    notes.clear()
+    main._scheduled_smarthome_automation_suggestions()
+    assert notes == []
+
+
 def test_suggest_without_ollama_is_400(auth_client, monkeypatch):
     monkeypatch.setattr(ha_client, "get_states", lambda u, t: [])
     monkeypatch.setattr(ha_client, "area_map", lambda u, t: {})

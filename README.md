@@ -204,6 +204,15 @@ nach ausdrücklicher Bestätigung.
 - Interaktiver Grundriss: 2D-Editor (Räume/Geräte per Drag platzieren, Größe
   ziehen) plus 3D-Ansicht (three.js). Geräte zeigen ihren Live-Zustand und
   sind per Klick schaltbar. Layout liegt als ein JSON-Blob in der DB.
+- Live-Zustände per Home-Assistant-WebSocket (Hintergrund-Thread hält einen
+  State-Cache); die Web-UI zieht über Server-Sent-Events (`/api/smarthome/
+  events`) ohne eigenen WebSocket-Client live nach, Polling nur als Fallback.
+- Freihändige Sprachsteuerung mit Weckwort: der Browser hört über eine
+  einfache Lautstärke-Erkennung mit, schickt aber nur Segmente ans lokale STT,
+  die mit dem konfigurierten Weckwort (Standard „jarvis") beginnen.
+- Wöchentlich schlägt die KI von selbst neue Automations-Ideen vor – als
+  EIN Sammel-Hinweis in der bestehenden „Vorschlag/Bestätigen"-Queue (Hub +
+  Telegram), nicht als tägliches Nachfragen.
 - Auch per Telegram steuerbar: `/haus <Befehl>` (z. B. `/haus Licht Wohnzimmer
   aus`, `/haus Wie warm ist es im Bad?`) läuft über dieselbe Pipeline;
   Bestätigung mit `/haus ja`. Und direkt im Hub-„Jarvis"-Panel.
@@ -278,6 +287,9 @@ Antworttext (optional zusätzlich als gesprochenes WAV, base64 in
 | `PIPER_VOICE`       | `de_DE-thorsten-medium`                   | Piper-Stimme (Download bei 1. Nutzung nach `$DATA_DIR/piper-voices`) |
 | `PIPER_HTTP_URL`    | –                                         | bei `TTS_BACKEND=http`: eigener Piper-HTTP-Server    |
 | `ASSISTANT_LANGUAGE`| `de`                                      | Sprache für STT/TTS                                  |
+
+Das **Weckwort** für die freihändige Steuerung wird in *Einstellungen → Smart
+Home* gesetzt (Standard „jarvis").
 
 Standard ist `stub` – der **dokumentierte Offline-Fallback**: ohne Konfiguration
 antwortet der Voice-Endpunkt mit 501 und einer Anleitung, die Textsteuerung

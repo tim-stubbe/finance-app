@@ -18,7 +18,11 @@
 // Pipeline wie der Smart-Home-Tab.
 // v41: Grundriss "Aus HA uebernehmen" (Auto-Layout aus Bereichen) + sanftes
 // Live-Polling im Smart-Home-Tab.
-const CACHE_NAME = "finanztool-shell-v41";
+// v42: HA-Live-Zustaende per WebSocket (Backend) + Server-Sent-Events an die
+// UI (js/smarthome.js EventSource), Polling nur noch als Fallback.
+// v43: Freihaendige Sprachsteuerung mit Weckwort (js/smarthome.js "zuhoeren",
+// Browser-VAD -> /voice/command?wake=1).
+const CACHE_NAME = "finanztool-shell-v43";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

@@ -20,16 +20,24 @@ Prinzipien: schnelle Pfade ohne LLM wo moeglich; im Zweifel nachfragen
 statt das falsche Licht schalten; jede Aktion wird protokolliert
 (SmartHomeAction).
 
-Naechste Schritte (bewusst noch NICHT hier):
- - HA-WebSocket fuer Live-State-Updates in der UI (jetzt: REST-Polling)
- - Voice: voice/stt.py + voice/tts.py sind Stubs (Phase 2: Whisper + Piper)
- - Wake-Word (Phase 2), 3D-Visualisierung (Phase 3)
+Live-Zustaende laufen ueber smarthome_ws.py (HA-WebSocket-Cache); _get_states
+liest bevorzugt daraus. Voice (voice/), Grundriss (smarthome-floorplan.js) und
+KI-Automationen (smarthome_automations.py) sind eigene Module.
 """
 
 import json
 import re
 
-from . import ha_client, ollama_client
+from . import ha_client, ollama_client, smarthome_ws
+
+
+def _get_states(settings):
+    """Bevorzugt die per WebSocket live gehaltenen Zustaende (smarthome_ws),
+    faellt auf REST zurueck, wenn der Cache nicht frisch ist."""
+    cached = smarthome_ws.cached_states()
+    if cached is not None:
+        return cached
+    return ha_client.get_states(settings.homeassistant_url, _token(settings))
 
 # --------------------------------------------------------------------------
 # Policy / Allowlist
@@ -377,7 +385,7 @@ def health(settings) -> dict:
 
 def list_devices(settings) -> list:
     """Gefilterte Geraeteliste fuer die UI."""
-    states = ha_client.get_states(settings.homeassistant_url, _token(settings))
+    states = _get_states(settings)
     areas = ha_client.area_map(settings.homeassistant_url, _token(settings))
     allowed = _allowed_domains(settings)
     areas_filter = _allowed_areas(settings)
@@ -408,7 +416,7 @@ def autolayout(settings) -> dict:
     ein Raum je Bereich in einem Raster, die Geraete des Bereichs darin
     verteilt. Grobe Startaufteilung, die der Nutzer dann verschiebt."""
     token = _token(settings)
-    states = ha_client.get_states(settings.homeassistant_url, token)
+    states = _get_states(settings)
     try:
         areas = ha_client.area_map(settings.homeassistant_url, token)
     except ha_client.HAError:
@@ -475,7 +483,7 @@ def process_command(db, settings, text: str, confirm: bool = False, source: str 
 
     # --- States / Bereiche einmal laden (fuer beide Pfade) ---
     try:
-        states = ha_client.get_states(settings.homeassistant_url, _token(settings))
+        states = _get_states(settings)
     except ha_client.HAError as exc:
         return _result(False, str(exc))
     try:

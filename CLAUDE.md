@@ -155,5 +155,11 @@ one JSON blob (rooms+devices geometry in metres) driven only by the 2D editor
 LLM propose workflows and write the HA automation YAML for them
 (`SmartHomeAutomationDraft`, status vorschlag→entwurf→angelegt); YAML is
 validated against the same `service_allowed` allowlist + known entity_ids
-before it can be pushed via the HA config API — never auto-armed. WebSocket
-live-state is a later phase.
+before it can be pushed via the HA config API — never auto-armed; a weekly
+scheduler job (`_scheduled_smarthome_automation_suggestions`) drops one
+digest nudge into the `AssistantSuggestion` queue. `smarthome_ws.py` is a
+background thread holding an HA-WebSocket state cache (`_get_states` prefers
+it over REST); `GET /api/smarthome/events` re-broadcasts changes to the UI as
+SSE. Hands-free voice: browser RMS-VAD sends segments to
+`/voice/command?wake=1`, which only acts on ones starting with the configured
+wake word.
