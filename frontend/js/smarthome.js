@@ -55,8 +55,9 @@ async function loadSmartHomeHealth() {
 async function loadSmartHomeDevices() {
   const tbody = document.getElementById("smarthome-device-list");
   if (!tbody.children.length) tbody.innerHTML = emptyRow(4, "list", "Lädt …");
+  const showAll = document.getElementById("smarthome-devices-all")?.checked;
   try {
-    smartHomeDevices = await api("/smarthome/devices");
+    smartHomeDevices = await api("/smarthome/devices" + (showAll ? "?all=true" : ""));
   } catch {
     tbody.innerHTML = emptyRow(4, "list", "Geräte konnten nicht geladen werden (Home Assistant nicht erreichbar?).");
     return;
@@ -67,7 +68,7 @@ async function loadSmartHomeDevices() {
   }
   tbody.innerHTML = smartHomeDevices.map(d => `
     <tr>
-      <td>${esc(d.name)}<span class="sh-sub">${esc(d.entity_id)}</span></td>
+      <td>${esc(d.name)}<span class="sh-sub">${esc(d.entity_id)}${d.controllable === false ? " · nur Ansicht" : ""}</span></td>
       <td>${d.area ? esc(d.area) : "–"}</td>
       <td>${esc(d.state)}</td>
       <td>${d.toggleable
@@ -75,6 +76,8 @@ async function loadSmartHomeDevices() {
         : ""}</td>
     </tr>`).join("");
 }
+
+document.getElementById("smarthome-devices-all").addEventListener("change", loadSmartHomeDevices);
 
 document.getElementById("smarthome-device-list").addEventListener("click", async e => {
   const entityId = e.target.closest("[data-sh-toggle]")?.dataset.shToggle;

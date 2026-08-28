@@ -253,10 +253,10 @@ def smarthome_events():
 
 # ---------------- Geraete ----------------
 @smarthome_router.get("/devices")
-def smarthome_devices(db: Session = Depends(get_db)):
+def smarthome_devices(all: bool = False, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
     try:
-        return smarthome.list_devices(s)
+        return smarthome.list_devices(s, include_all=all)
     except ha_client.HAError as exc:
         raise HTTPException(502, str(exc))
 

@@ -384,8 +384,16 @@ def health(settings) -> dict:
     }
 
 
-def list_devices(settings) -> list:
-    """Gefilterte Geraeteliste fuer die UI."""
+def list_devices(settings, include_all: bool = False) -> list:
+    """Geraeteliste fuer die UI.
+
+    Standard: nur steuerbare Domains (``_allowed_domains``) und ggf. der
+    Bereichs-Filter. Mit ``include_all`` kommt JEDE Entity aus Home Assistant
+    zurueck (auch Sensoren, ``binary_sensor``, ``device_tracker`` usw.) -
+    ``controllable`` markiert dann, welche Kies tatsaechlich schalten darf.
+    Das Schalten selbst bleibt unabhaengig davon durch ``service_allowed``
+    abgesichert.
+    """
     states = _get_states(settings)
     areas = ha_client.area_map(settings.homeassistant_url, _token(settings))
     allowed = _allowed_domains(settings)
@@ -394,11 +402,13 @@ def list_devices(settings) -> list:
     for st in states:
         ent = st.get("entity_id", "")
         domain = _entity_domain(ent)
-        if domain not in allowed:
-            continue
+        controllable = domain in allowed
         area = areas.get(ent, "")
-        if areas_filter and area not in areas_filter:
-            continue
+        if not include_all:
+            if not controllable:
+                continue
+            if areas_filter and area not in areas_filter:
+                continue
         attrs = st.get("attributes", {})
         out.append({
             "entity_id": ent,
@@ -406,6 +416,7 @@ def list_devices(settings) -> list:
             "name": attrs.get("friendly_name", ent),
             "area": area or None,
             "state": st.get("state", ""),
+            "controllable": controllable,
             "toggleable": domain in ("light", "switch", "fan", "input_boolean"),
         })
     out.sort(key=lambda d: (d["area"] or "zzz", d["name"].lower()))

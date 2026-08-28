@@ -146,6 +146,26 @@ def test_fastpath_ambiguous_asks_back(auth_client, configured_ha):
     assert configured_ha == []
 
 
+def test_devices_list_filters_non_controllable_by_default(auth_client, configured_ha, monkeypatch):
+    from app import smarthome
+    states = [
+        {"entity_id": "light.wohnzimmer", "state": "on", "attributes": {"friendly_name": "WZ"}},
+        {"entity_id": "sensor.temperatur", "state": "21", "attributes": {"friendly_name": "Temp"}},
+        {"entity_id": "device_tracker.tim", "state": "home", "attributes": {}},
+    ]
+    monkeypatch.setattr(smarthome, "_get_states", lambda s: states)
+
+    default = auth_client.get("/api/smarthome/devices").json()
+    assert {d["entity_id"] for d in default} == {"light.wohnzimmer"}
+
+    all_ents = auth_client.get("/api/smarthome/devices?all=true").json()
+    assert {d["entity_id"] for d in all_ents} == {
+        "light.wohnzimmer", "sensor.temperatur", "device_tracker.tim"}
+    by_id = {d["entity_id"]: d for d in all_ents}
+    assert by_id["light.wohnzimmer"]["controllable"] is True
+    assert by_id["sensor.temperatur"]["controllable"] is False
+
+
 # ---------------- Grundriss (Phase 3) ----------------
 
 def test_floorplan_defaults_empty(auth_client):
