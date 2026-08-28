@@ -8,18 +8,26 @@ Die eigentliche Pipeline steckt in app/smarthome.py; hier nur HTTP-Fassade
 + Einstellungen (HA-URL/-Token verschluesselt, wie Immich/Radicale).
 """
 
+import asyncio
 import base64
+import io
+import json
+import wave
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import schemas, auth, bank_sync, crud, smarthome, ha_client, voice
 from .. import smarthome_automations, smarthome_ws
-from ..database import get_db
+from ..database import get_db, SessionLocal
 
 smarthome_router = APIRouter(prefix="/api/smarthome")
+# Der WebSocket-Endpunkt haengt NICHT an dependencies=[Depends(auth.require_auth)]
+# (das braucht ein Request-Objekt, das es beim WS nicht gibt) - Auth laeuft im
+# Handler selbst ueber die Session. Wird in main.py ohne _require_auth inkludiert.
+smarthome_ws_router = APIRouter(prefix="/api/smarthome")
 
 
 # ---------------- Einstellungen ----------------
@@ -34,7 +42,7 @@ def get_smarthome_settings(db: Session = Depends(get_db)):
         extra_services=s.homeassistant_extra_services,
         require_confirmation=s.homeassistant_require_confirmation,
         dry_run=s.homeassistant_dry_run,
-        wake_word=s.homeassistant_wake_word or "jarvis",
+        wake_word=s.homeassistant_wake_word or "hey_jarvis",
     )
 
 
@@ -82,6 +90,129 @@ def smarthome_health(quick: bool = False, db: Session = Depends(get_db)):
     out = smarthome.health(s)
     out["live"] = smarthome_ws.is_live()
     return out
+
+
+def _pcm_to_wav(pcm: bytes, rate: int = 16000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+@smarthome_ws_router.websocket("/voice/stream")
+async def smarthome_voice_stream(ws: WebSocket):
+    """Freihand-Betrieb mit serverseitigem Weckwort.
+
+    Der Client streamt fortlaufend 16-kHz-Mono-PCM (int16, binaere Frames).
+    Server erkennt das Weckwort (openWakeWord "hey jarvis"), meldet
+    {"type":"wake"}, nimmt danach den Befehl bis zu einer Sprechpause auf
+    (einfache Energie-VAD, oder Client sendet {"type":"stop"}), transkribiert
+    lokal und schickt {"type":"result", ...} - selbe Pipeline wie /command.
+    """
+    if not ws.session.get("authenticated"):
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not (settings.homeassistant_url and settings.homeassistant_token_encrypted):
+            await ws.send_json({"type": "error", "message": "Smart Home ist nicht eingerichtet."})
+            return
+        stt = voice.get_stt()
+        if isinstance(stt, voice.StubSTT):
+            await ws.send_json({"type": "error",
+                                "message": "Kein Spracherkennungs-Backend aktiv (STT_BACKEND=stub)."})
+            return
+        try:
+            detector = voice.WakeWord(model=settings.homeassistant_wake_word or None)
+            await asyncio.to_thread(detector._load)
+        except NotImplementedError as exc:
+            await ws.send_json({"type": "error", "message": str(exc)})
+            return
+
+        await ws.send_json({"type": "ready", "wake_word": detector.model_name})
+
+        RATE = 16000
+        SILENCE_BYTES = int(0.7 * RATE) * 2
+        MAX_CMD_BYTES = 6 * RATE * 2
+        state = "idle"
+        cmd = bytearray()
+        low_run = 0
+
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            data = msg.get("bytes")
+            force_stop = False
+            if msg.get("text"):
+                try:
+                    force_stop = json.loads(msg["text"]).get("type") == "stop"
+                except (ValueError, TypeError):
+                    pass
+                if not force_stop:
+                    continue
+
+            if state == "idle":
+                if data and await asyncio.to_thread(detector.process, data) >= detector.threshold:
+                    await ws.send_json({"type": "wake"})
+                    state, cmd, low_run = "capturing", bytearray(), 0
+                continue
+
+            # state == "capturing"
+            if data:
+                cmd.extend(data)
+                import numpy as np
+                arr = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+                rms = float((arr * arr).mean() ** 0.5) if arr.size else 0.0
+                low_run = low_run + len(data) if rms < 500 else 0
+
+            if not (force_stop or low_run >= SILENCE_BYTES or len(cmd) >= MAX_CMD_BYTES):
+                continue
+
+            pcm, state = bytes(cmd), "idle"
+            cmd = bytearray()
+            detector.reset()
+            if len(pcm) < RATE:  # < 0,5 s -> zu kurz
+                await ws.send_json({"type": "result", "ok": True, "ignored": True,
+                                    "reply": "", "transcript": ""})
+                continue
+            wav = _pcm_to_wav(pcm, RATE)
+            try:
+                transcript = await asyncio.to_thread(stt.transcribe, wav)
+            except Exception as exc:  # noqa: BLE001
+                await ws.send_json({"type": "result", "ok": False,
+                                    "reply": f"Spracherkennung fehlgeschlagen: {exc}", "transcript": ""})
+                continue
+            if not transcript.strip():
+                await ws.send_json({"type": "result", "ok": True, "ignored": True,
+                                    "reply": "", "transcript": ""})
+                continue
+            settings = auth.get_or_create_settings(db)
+            result = await asyncio.to_thread(
+                smarthome.process_command, db, settings, transcript, False, "voice")
+            result["type"] = "result"
+            result["transcript"] = transcript
+            try:
+                tts = voice.get_tts()
+                wav_out = await asyncio.to_thread(tts.speak, result.get("reply") or "")
+                if wav_out:
+                    result["reply_audio_b64"] = base64.b64encode(wav_out).decode("ascii")
+                    result["reply_audio_format"] = getattr(tts, "audio_format", "audio/wav")
+            except NotImplementedError:
+                pass
+            except Exception as exc:  # noqa: BLE001
+                result["tts_error"] = str(exc)
+            await ws.send_json(result)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        db.close()
 
 
 @smarthome_router.get("/events")

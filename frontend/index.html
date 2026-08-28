@@ -2340,7 +2340,7 @@
         <form id="smarthome-command-form" class="chat-input-row">
           <input type="text" id="smarthome-command-input" placeholder="Befehl oder Frage …" autocomplete="off">
           <button type="button" id="smarthome-mic-btn" class="btn-ghost" title="Sprechen (lokale Spracherkennung)">🎤</button>
-          <button type="button" id="smarthome-listen-btn" class="btn-ghost" title="Freihändig zuhören (Weckwort)">👂</button>
+          <button type="button" id="smarthome-listen-btn" class="btn-ghost" title="Freihändig zuhören – Weckwort „hey jarvis" (serverseitig)">👂</button>
           <button type="submit" class="btn-primary">Senden</button>
         </form>
         <p class="page-sub" id="smarthome-mic-hint" style="display:none">Sprachsteuerung ist serverseitig nicht aktiv (STT_BACKEND). Siehe README.</p>
@@ -2590,7 +2590,15 @@
           <label>Zusätzliche Dienste <input type="text" id="smarthome-cfg-extra" placeholder="z.B. vacuum.start,humidifier.turn_on"></label>
           <label class="checkbox-label"><input type="checkbox" id="smarthome-cfg-confirm"> Steuer-Aktionen der KI erst nach Bestätigung ausführen</label>
           <label class="checkbox-label"><input type="checkbox" id="smarthome-cfg-dry"> Trockenlauf (nichts wirklich schalten)</label>
-          <label>Weckwort (freihändige Sprachsteuerung) <input type="text" id="smarthome-cfg-wake" placeholder="jarvis"></label>
+          <label>Weckwort (freihändiges Zuhören)
+            <select id="smarthome-cfg-wake">
+              <option value="hey_jarvis">Hey Jarvis</option>
+              <option value="alexa">Alexa</option>
+              <option value="hey_mycroft">Hey Mycroft</option>
+              <option value="hey_rhasspy">Hey Rhasspy</option>
+              <option value="ok_nabu">Ok Nabu</option>
+            </select>
+          </label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
           </div>

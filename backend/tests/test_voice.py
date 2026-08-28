@@ -159,6 +159,52 @@ def test_voice_command_speaks_reply_when_tts_backend_present(auth_client, monkey
     assert base64.b64decode(body["reply_audio_b64"]).startswith(b"RIFF")
 
 
+# ---------------- Weckwort / WebSocket-Stream ----------------
+
+def test_wakeword_process_slices_frames(monkeypatch):
+    from app.voice.wakeword import WakeWord, FRAME
+    ww = WakeWord()
+    seen = []
+
+    class _FakeModel:
+        def predict(self, frame):
+            seen.append(len(frame))
+            return {"hey_jarvis": 0.9 if len(seen) == 2 else 0.1}
+
+        def reset(self):
+            pass
+
+    monkeypatch.setattr(ww, "_load", lambda: _FakeModel())
+    # 3 Frames auf einmal reinschieben
+    best = ww.process(b"\x00\x00" * FRAME * 3)
+    assert seen == [FRAME, FRAME, FRAME]
+    assert best == 0.9
+
+
+def _ws_session_header(c):
+    # http.cookiejar (im TestClient) haengt ein Secure-Cookie NICHT an eine
+    # wss://-Anfrage an - echte Browser tun das sehr wohl. Fuer den Test also
+    # das Session-Cookie explizit als Header mitgeben.
+    v = c.cookies.get("finance_session")
+    return {"Cookie": f"finance_session={v}"} if v else {}
+
+
+def test_voice_stream_requires_auth(client):
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/api/smarthome/voice/stream"):
+            pass
+
+
+def test_voice_stream_errors_without_setup(auth_client):
+    with auth_client.websocket_connect(
+        "/api/smarthome/voice/stream", headers=_ws_session_header(auth_client)
+    ) as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "error"
+        assert "eingerichtet" in msg["message"].lower()
+
+
 # ---------------- Echte lokale Modelle (uebersprungen wenn nicht da) ----------------
 
 @pytest.mark.skipif(not (_HAS_WHISPER and _E2E), reason="Echte Modell-Tests nur mit KIES_VOICE_E2E=1 (laden ~140 MB von HuggingFace)")

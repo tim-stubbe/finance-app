@@ -26,8 +26,9 @@ import os
 
 from .stt import STT, StubSTT, FasterWhisperSTT, HttpWhisperSTT
 from .tts import TTS, StubTTS, PiperTTS, HttpPiperTTS
+from .wakeword import WakeWord
 
-__all__ = ["STT", "TTS", "get_stt", "get_tts"]
+__all__ = ["STT", "TTS", "StubSTT", "WakeWord", "get_stt", "get_tts"]
 
 
 def _language() -> str:

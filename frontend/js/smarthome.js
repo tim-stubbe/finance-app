@@ -196,12 +196,11 @@ async function sendSmartHomeVoice(blob) {
   loadSmartHomeHistory();
 }
 
-// ---------- Freihändig zuhören (Weckwort-gesteuert) ----------
-// Der Browser hört über einen einfachen Lautstärke-Schwellwert (Web Audio)
-// mit. Ein Sprachsegment wird aufgenommen und an /voice/command?wake=1
-// geschickt; der Server reagiert nur, wenn das Segment mit dem Weckwort
-// beginnt. Zwischen den Segmenten wird nichts gesendet.
-let shListen = null; // { stream, ctx, analyser, raf, recorder, chunks, speaking, silenceStart }
+// ---------- Freihändig zuhören (serverseitiges Weckwort) ----------
+// Der Browser streamt fortlaufend 16-kHz-Mono-PCM per WebSocket an
+// /api/smarthome/voice/stream. Der Server erkennt das Weckwort ("hey jarvis",
+// openWakeWord), nimmt danach den Befehl auf und schickt das Ergebnis zurück.
+let shListen = null; // { ws, stream, ctx, node, source }
 
 async function shToggleListen() {
   const btn = document.getElementById("smarthome-listen-btn");
@@ -212,106 +211,97 @@ async function shToggleListen() {
     hint.style.display = "none";
     return;
   }
-  if (!navigator.mediaDevices || !window.MediaRecorder || !window.AudioContext) {
+  if (!navigator.mediaDevices || !window.AudioContext || !window.WebSocket) {
     toast("Dieser Browser kann nicht freihändig zuhören.");
     return;
   }
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch {
     toast("Kein Mikrofonzugriff.");
     return;
   }
+
+  const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/smarthome/voice/stream";
+  const ws = new WebSocket(wsUrl);
+  ws.binaryType = "arraybuffer";
   const ctx = new AudioContext();
-  const src = ctx.createMediaStreamSource(stream);
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 512;
-  src.connect(analyser);
-  const buf = new Uint8Array(analyser.fftSize);
-  shListen = { stream, ctx, analyser, buf, recorder: null, chunks: [], speaking: false, silenceStart: 0, startedAt: 0 };
+  const source = ctx.createMediaStreamSource(stream);
+  const node = ctx.createScriptProcessor(4096, 1, 1);
+  shListen = { ws, stream, ctx, node, source };
 
   btn.classList.add("btn-primary");
   hint.style.display = "block";
-  hint.textContent = "Hört zu … sag dein Weckwort gefolgt vom Befehl.";
+  hint.textContent = "Verbinde …";
 
-  const THRESH = 0.025, SILENCE_MS = 800, MAX_MS = 8000, MIN_MS = 400;
-  const tick = () => {
-    if (!shListen) return;
-    analyser.getByteTimeDomainData(shListen.buf);
-    let sum = 0;
-    for (let i = 0; i < shListen.buf.length; i++) {
-      const v = (shListen.buf[i] - 128) / 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / shListen.buf.length);
-    const now = performance.now();
-
-    if (!shListen.speaking && rms > THRESH) {
-      shListen.speaking = true;
-      shListen.startedAt = now;
-      shListen.chunks = [];
-      try {
-        shListen.recorder = new MediaRecorder(shListen.stream);
-        shListen.recorder.ondataavailable = e => { if (e.data.size) shListen.chunks.push(e.data); };
-        shListen.recorder.onstop = () => shListenFlush();
-        shListen.recorder.start();
-      } catch { shListen.speaking = false; }
-    } else if (shListen.speaking) {
-      if (rms < THRESH) {
-        if (!shListen.silenceStart) shListen.silenceStart = now;
-        if (now - shListen.silenceStart > SILENCE_MS || now - shListen.startedAt > MAX_MS) {
-          const long = now - shListen.startedAt > MIN_MS;
-          shListen.speaking = false;
-          shListen.silenceStart = 0;
-          if (shListen.recorder && shListen.recorder.state === "recording") shListen.recorder.stop();
-          if (!long) shListen.chunks = [];
-        }
-      } else {
-        shListen.silenceStart = 0;
-      }
-    }
-    shListen.raf = requestAnimationFrame(tick);
+  node.onaudioprocess = e => {
+    if (!shListen || ws.readyState !== 1) return;
+    const inBuf = e.inputBuffer.getChannelData(0);
+    const pcm = shDownsampleTo16k(inBuf, ctx.sampleRate);
+    if (pcm.byteLength) ws.send(pcm.buffer);
   };
-  shListen.raf = requestAnimationFrame(tick);
+  source.connect(node);
+  node.connect(ctx.destination); // laeuft nur, wenn verbunden; Ausgabe bleibt still
+
+  ws.onopen = () => { hint.textContent = "Warte auf Weckwort (hey jarvis) …"; };
+  ws.onmessage = ev => {
+    let m;
+    try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === "ready") {
+      hint.textContent = `Warte auf Weckwort (${m.wake_word || "hey jarvis"}) …`;
+    } else if (m.type === "wake") {
+      hint.textContent = "🎙️ Weckwort erkannt – sprich deinen Befehl …";
+    } else if (m.type === "error") {
+      hint.textContent = "Fehler: " + (m.message || "unbekannt");
+      shStopListen();
+      btn.classList.remove("btn-primary");
+    } else if (m.type === "result") {
+      hint.textContent = `Warte auf Weckwort (hey jarvis) …`;
+      if (m.ignored) return;
+      const replyEl = document.getElementById("smarthome-reply");
+      replyEl.classList.remove("hidden", "is-error");
+      replyEl.textContent = (m.transcript ? `„${m.transcript}" → ` : "") + (m.reply || "");
+      replyEl.classList.toggle("is-error", !m.ok);
+      if (m.reply_audio_b64) {
+        try { new Audio(`data:${m.reply_audio_format || "audio/wav"};base64,${m.reply_audio_b64}`).play().catch(() => {}); } catch { /* egal */ }
+      }
+      if (m.actions && m.actions.length) loadSmartHomeDevices();
+      loadSmartHomeHistory();
+    }
+  };
+  ws.onclose = () => { if (shListen) { shStopListen(); btn.classList.remove("btn-primary"); hint.style.display = "none"; } };
+  ws.onerror = () => { hint.textContent = "Verbindung zum Sprach-Stream fehlgeschlagen."; };
 }
 
 function shStopListen() {
   if (!shListen) return;
-  cancelAnimationFrame(shListen.raf);
-  try { if (shListen.recorder && shListen.recorder.state === "recording") shListen.recorder.stop(); } catch {}
-  shListen.stream.getTracks().forEach(t => t.stop());
-  try { shListen.ctx.close(); } catch {}
+  try { shListen.node.disconnect(); shListen.source.disconnect(); } catch { /* egal */ }
+  try { shListen.node.onaudioprocess = null; } catch { /* egal */ }
+  try { shListen.stream.getTracks().forEach(t => t.stop()); } catch { /* egal */ }
+  try { shListen.ctx.close(); } catch { /* egal */ }
+  try { shListen.ws.close(); } catch { /* egal */ }
   shListen = null;
 }
 
-async function shListenFlush() {
-  if (!shListen || !shListen.chunks.length) return;
-  const blob = new Blob(shListen.chunks, { type: shListen.chunks[0].type || "audio/webm" });
-  shListen.chunks = [];
-  const hint = document.getElementById("smarthome-listen-hint");
-  const fd = new FormData();
-  fd.append("file", blob, "segment.webm");
-  const headers = {};
-  const csrf = typeof getCsrfToken === "function" ? getCsrfToken() : null;
-  if (csrf) headers["X-CSRF-Token"] = csrf;
-  try {
-    const resp = await fetch(API + "/smarthome/voice/command?wake=1&speak=1", { method: "POST", headers, body: fd });
-    if (resp.status === 501) { hint.textContent = "Sprach-Backend nicht aktiv (STT_BACKEND)."; shStopListen(); document.getElementById("smarthome-listen-btn").classList.remove("btn-primary"); return; }
-    if (!resp.ok) return;
-    const res = await resp.json();
-    if (res.ignored) { hint.textContent = "Hört zu … (kein Weckwort erkannt)"; return; }
-    const replyEl = document.getElementById("smarthome-reply");
-    replyEl.classList.remove("hidden", "is-error");
-    replyEl.textContent = (res.transcript ? `„${res.transcript}" → ` : "") + (res.reply || "");
-    replyEl.classList.toggle("is-error", !res.ok);
-    hint.textContent = "Hört zu …";
-    if (res.reply_audio_b64) {
-      try { new Audio(`data:${res.reply_audio_format || "audio/wav"};base64,${res.reply_audio_b64}`).play().catch(() => {}); } catch {}
-    }
-    if (res.actions && res.actions.length) loadSmartHomeDevices();
-    loadSmartHomeHistory();
-  } catch { /* Segment verworfen */ }
+// Float32 @ inRate -> Int16 @ 16 kHz (lineare Interpolation).
+function shDownsampleTo16k(input, inRate) {
+  if (inRate === 16000) {
+    const out = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) out[i] = Math.max(-1, Math.min(1, input[i])) * 0x7fff;
+    return out;
+  }
+  const ratio = inRate / 16000;
+  const outLen = Math.floor(input.length / ratio);
+  const out = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const frac = pos - i0;
+    const s = (input[i0] || 0) * (1 - frac) + (input[i0 + 1] || 0) * frac;
+    out[i] = Math.max(-1, Math.min(1, s)) * 0x7fff;
+  }
+  return out;
 }
 
 document.getElementById("smarthome-listen-btn").addEventListener("click", shToggleListen);

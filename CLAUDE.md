@@ -160,6 +160,9 @@ scheduler job (`_scheduled_smarthome_automation_suggestions`) drops one
 digest nudge into the `AssistantSuggestion` queue. `smarthome_ws.py` is a
 background thread holding an HA-WebSocket state cache (`_get_states` prefers
 it over REST); `GET /api/smarthome/events` re-broadcasts changes to the UI as
-SSE. Hands-free voice: browser RMS-VAD sends segments to
-`/voice/command?wake=1`, which only acts on ones starting with the configured
-wake word.
+SSE. Hands-free voice: browser streams 16 kHz PCM over the WebSocket
+`/api/smarthome/voice/stream` (its own `smarthome_ws_router`, no
+`require_auth` dep — auth checked in-handler via `ws.session`);
+`voice/wakeword.py` runs openWakeWord ("hey jarvis") server-side, then the
+captured command goes through the normal pipeline. `openwakeword` ships in
+`requirements-voice.txt`.

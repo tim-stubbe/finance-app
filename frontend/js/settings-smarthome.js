@@ -18,7 +18,7 @@ async function loadSmartHomeSettingsPanel() {
   document.getElementById("smarthome-cfg-extra").value = s.extra_services || "";
   document.getElementById("smarthome-cfg-confirm").checked = !!s.require_confirmation;
   document.getElementById("smarthome-cfg-dry").checked = !!s.dry_run;
-  document.getElementById("smarthome-cfg-wake").value = s.wake_word || "";
+  document.getElementById("smarthome-cfg-wake").value = s.wake_word || "hey_jarvis";
 }
 
 document.getElementById("smarthome-settings-form").addEventListener("submit", async e => {

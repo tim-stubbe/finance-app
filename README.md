@@ -207,9 +207,11 @@ nach ausdrücklicher Bestätigung.
 - Live-Zustände per Home-Assistant-WebSocket (Hintergrund-Thread hält einen
   State-Cache); die Web-UI zieht über Server-Sent-Events (`/api/smarthome/
   events`) ohne eigenen WebSocket-Client live nach, Polling nur als Fallback.
-- Freihändige Sprachsteuerung mit Weckwort: der Browser hört über eine
-  einfache Lautstärke-Erkennung mit, schickt aber nur Segmente ans lokale STT,
-  die mit dem konfigurierten Weckwort (Standard „jarvis") beginnen.
+- Freihändige Sprachsteuerung mit **serverseitigem Weckwort** (openWakeWord,
+  „hey jarvis" o. a.): der Browser streamt 16-kHz-PCM per WebSocket an
+  `/api/smarthome/voice/stream`, der Server erkennt das Weckwort, nimmt danach
+  den Befehl auf und schickt ihn durch dieselbe Pipeline. Modell in
+  *Einstellungen → Smart Home* wählbar.
 - Wöchentlich schlägt die KI von selbst neue Automations-Ideen vor – als
   EIN Sammel-Hinweis in der bestehenden „Vorschlag/Bestätigen"-Queue (Hub +
   Telegram), nicht als tägliches Nachfragen.
