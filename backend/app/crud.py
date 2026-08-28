@@ -943,8 +943,18 @@ def detect_spending_anomalies(db: Session, space_id: int, lookback_months: int =
         .all()
     )
     by_cat_month = {(r.category_id, int(r.y), int(r.m)): r.total for r in rows}
-    category_names = {c.id: c.name for c in db.query(models.Category).all()}
-    cat_ids = {cid for cid, _, _ in by_cat_month.keys()}
+    all_categories = db.query(models.Category).all()
+    category_names = {c.id: c.name for c in all_categories}
+    # Bugfix (live gemeldet, 2026-08-28): eine Einnahmen-Kategorie (type=
+    # einnahme, z.B. "Sonstige Einnahmen") konnte trotzdem "Ausgaben-
+    # Ausreißer" auslösen, wenn genug negativ vorzeichnete Buchungen darin
+    # landeten (z.B. Korrekturen/nicht als Umbuchung erkannte Transfers) -
+    # die alte Prüfung schaute nur auf das Vorzeichen der Monatssumme, nie
+    # auf category.type. Ein "Ausgaben-Ausreißer" ergibt für eine explizit
+    # als Einnahme markierte Kategorie konzeptionell keinen Sinn und war
+    # live nachweislich irreführend (siehe Beispiel "Sonstige Einnahmen").
+    expense_category_ids = {c.id for c in all_categories if c.type == models.CategoryType.ausgabe}
+    cat_ids = {cid for cid, _, _ in by_cat_month.keys() if cid in expense_category_ids}
 
     results = []
     for cat_id in cat_ids:
