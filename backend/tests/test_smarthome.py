@@ -269,6 +269,33 @@ def test_activate_scene_rejects_non_scene(auth_client, configured_ha):
                             json={"entity_id": "light.x"}).status_code == 400
 
 
+# ---------------- Automations-Dashboard (Phase 3 der Liste) ----------------
+
+def test_list_live_automations(auth_client, configured_ha, monkeypatch):
+    from app import ha_client as hac
+    monkeypatch.setattr(hac, "get_states", lambda u, t: [
+        {"entity_id": "automation.abends", "state": "on",
+         "attributes": {"friendly_name": "Abends", "last_triggered": "2026-08-28T20:00:00+00:00", "current": 0}},
+        {"entity_id": "automation.pause", "state": "off",
+         "attributes": {"friendly_name": "Pausiert"}},
+    ])
+    rows = auth_client.get("/api/smarthome/automations/live").json()
+    by = {r["entity_id"]: r for r in rows}
+    assert by["automation.abends"]["enabled"] is True
+    assert by["automation.pause"]["enabled"] is False
+
+
+def test_toggle_and_run_live_automation(auth_client, configured_ha):
+    assert auth_client.post("/api/smarthome/automations/live/automation.x/toggle?enabled=false").status_code == 200
+    assert ("automation", "turn_off", {"entity_id": "automation.x"}) in configured_ha
+    assert auth_client.post("/api/smarthome/automations/live/automation.x/run").status_code == 200
+    assert ("automation", "trigger", {"entity_id": "automation.x"}) in configured_ha
+
+
+def test_toggle_rejects_non_automation(auth_client, configured_ha):
+    assert auth_client.post("/api/smarthome/automations/live/light.x/toggle").status_code == 400
+
+
 # ---------------- Telegram /haus ----------------
 
 def test_telegram_haus_command(auth_client, configured_ha, monkeypatch):

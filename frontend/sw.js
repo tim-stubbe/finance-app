@@ -25,7 +25,9 @@
 // streamt 16-kHz-PCM per WebSocket an /api/smarthome/voice/stream.
 // v45: Szenen aus dem Grundriss (Geraete markieren -> aktuelle Zustaende als
 // HA-Szene speichern), Szenen-Chips zum Aktivieren.
-const CACHE_NAME = "finanztool-shell-v45";
+// v46: Automations-Dashboard (Live-Automationen an/aus + "jetzt ausfuehren"
+// + Verlauf aus dem HA-Logbook).
+const CACHE_NAME = "finanztool-shell-v46";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

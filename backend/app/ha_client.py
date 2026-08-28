@@ -148,6 +148,20 @@ def reload_scenes(url: str, token: str) -> None:
     _request("POST", url, token, "/services/scene/reload", json={})
 
 
+def get_logbook(url: str, token: str, hours: int = 24, entity=None) -> list:
+    """HA-Logbook der letzten `hours` Stunden, optional auf eine Entity
+    gefiltert. Nur lesend, fuer die Timeline-Ansicht."""
+    from datetime import datetime, timedelta
+    start = (datetime.utcnow() - timedelta(hours=max(1, hours))).strftime("%Y-%m-%dT%H:%M:%S")
+    path = f"/logbook/{start}"
+    if entity:
+        path += f"?entity={entity}"
+    try:
+        return _request("GET", url, token, path).json()
+    except HAError:
+        return []
+
+
 def area_map(url: str, token: str) -> dict:
     """Entity-ID -> Bereichsname, ueber den Template-Endpunkt (Area-Registry
     ist per REST sonst nicht zugaenglich). Fehlschlag ist unkritisch - dann

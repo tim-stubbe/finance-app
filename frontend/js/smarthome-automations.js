@@ -16,7 +16,50 @@ async function loadSmartHomeAutomations() {
     shAutoData = [];
   }
   renderSmartHomeAutomations();
+  loadSmartHomeLiveAutomations();
 }
+
+// ---------- Live-Automationen aus Home Assistant ----------
+async function loadSmartHomeLiveAutomations() {
+  const host = document.getElementById("sh-auto-live");
+  if (!host) return;
+  let rows = [];
+  try { rows = await api("/smarthome/automations/live"); } catch { host.innerHTML = ""; return; }
+  if (!rows.length) { host.innerHTML = `<p class="page-sub">Keine Automationen in Home Assistant.</p>`; return; }
+  host.innerHTML = `<table class="data-table"><thead><tr>
+      <th>Automation</th><th>Zuletzt</th><th></th><th></th></tr></thead><tbody>${
+    rows.map(a => `<tr data-ent="${esc(a.entity_id)}">
+      <td>${esc(a.name)}${a.running ? ` <span class="sh-sub">läuft</span>` : ""}</td>
+      <td>${a.last_triggered ? new Date(a.last_triggered).toLocaleString("de-DE") : "–"}</td>
+      <td><label class="checkbox-label" style="margin:0"><input type="checkbox" data-sh-auto-toggle ${a.enabled ? "checked" : ""}> aktiv</label></td>
+      <td><button type="button" class="btn-ghost btn-sm" data-sh-auto-run>Jetzt ausführen</button></td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+document.getElementById("sh-auto-live").addEventListener("click", async e => {
+  const row = e.target.closest("[data-ent]");
+  if (!row) return;
+  const ent = row.dataset.ent;
+  if (e.target.matches("[data-sh-auto-toggle]")) {
+    try {
+      await api(`/smarthome/automations/live/${encodeURIComponent(ent)}/toggle?enabled=${e.target.checked}`, { method: "POST" });
+    } catch (err) { toast(err.message || "Umschalten fehlgeschlagen."); e.target.checked = !e.target.checked; }
+  } else if (e.target.matches("[data-sh-auto-run]")) {
+    try { await api(`/smarthome/automations/live/${encodeURIComponent(ent)}/run`, { method: "POST" }); toast("Automation ausgeführt."); }
+    catch (err) { toast(err.message || "Ausführen fehlgeschlagen."); }
+  }
+});
+
+document.getElementById("sh-auto-logbook-wrap").addEventListener("toggle", async e => {
+  if (!e.target.open) return;
+  const host = document.getElementById("sh-auto-logbook");
+  host.innerHTML = `<p class="page-sub">Lädt …</p>`;
+  let rows = [];
+  try { rows = await api("/smarthome/automations/logbook?hours=24"); } catch { host.innerHTML = `<p class="page-sub">Verlauf nicht verfügbar.</p>`; return; }
+  host.innerHTML = rows.length
+    ? `<ul class="settings-list">${rows.map(r => `<li><span>${esc(r.name)}</span><span class="page-sub">${r.when ? new Date(r.when).toLocaleString("de-DE") : ""}</span></li>`).join("")}</ul>`
+    : `<p class="page-sub">In den letzten 24 h nichts ausgelöst.</p>`;
+});
 
 function shAutoStatus(msg) {
   document.getElementById("sh-auto-status").textContent = msg || "";

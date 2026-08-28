@@ -485,6 +485,40 @@ def list_scenes(settings) -> list:
     return out
 
 
+def list_automations_status(settings) -> list:
+    """Alle HA-Automationen mit an/aus, letzter Ausloesung und Laufzustand -
+    fuer das Automations-Dashboard."""
+    out = []
+    for st in _get_states(settings):
+        if not st.get("entity_id", "").startswith("automation."):
+            continue
+        attrs = st.get("attributes", {})
+        out.append({
+            "entity_id": st["entity_id"],
+            "name": attrs.get("friendly_name", st["entity_id"]),
+            "enabled": st.get("state") == "on",
+            "last_triggered": attrs.get("last_triggered"),
+            "running": int(attrs.get("current", 0) or 0),
+        })
+    out.sort(key=lambda a: a["name"].lower())
+    return out
+
+
+def automation_logbook(settings, hours: int = 24) -> list:
+    entries = ha_client.get_logbook(settings.homeassistant_url, _token(settings), hours=hours)
+    rows = []
+    for e in entries:
+        ent = e.get("entity_id") or ""
+        if ent.startswith("automation.") or e.get("domain") == "automation":
+            rows.append({
+                "when": e.get("when"),
+                "name": e.get("name") or ent,
+                "message": e.get("message") or "",
+                "entity_id": ent,
+            })
+    return rows[:100]
+
+
 def create_scene_from_current(settings, name: str, entity_ids: list) -> dict:
     """Nimmt die AKTUELLEN Zustaende der gewaehlten Geraete als Szene auf
     (Idee: Raum wie gewuenscht einstellen, dann speichern) und legt sie

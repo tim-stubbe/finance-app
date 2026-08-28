@@ -387,6 +387,54 @@ def list_automations(db: Session = Depends(get_db)):
     return crud.get_automation_drafts(db)
 
 
+@smarthome_router.get("/automations/live")
+def list_live_automations(db: Session = Depends(get_db)):
+    """HA-Automationen mit an/aus + letzter Ausloesung (Automations-Dashboard)."""
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome.list_automations_status(s)
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+
+
+@smarthome_router.get("/automations/logbook")
+def automations_logbook(hours: int = 24, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    try:
+        return smarthome.automation_logbook(s, hours=max(1, min(hours, 168)))
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+
+
+@smarthome_router.post("/automations/live/{entity_id}/toggle")
+def toggle_live_automation(entity_id: str, enabled: bool = True, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not entity_id.startswith("automation."):
+        raise HTTPException(400, "Keine Automation.")
+    try:
+        ha_client.call_service(s.homeassistant_url, smarthome._token(s), "automation",
+                               "turn_on" if enabled else "turn_off", {"entity_id": entity_id})
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+    return {"ok": True, "enabled": enabled}
+
+
+@smarthome_router.post("/automations/live/{entity_id}/run")
+def run_live_automation(entity_id: str, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not entity_id.startswith("automation."):
+        raise HTTPException(400, "Keine Automation.")
+    try:
+        ha_client.call_service(s.homeassistant_url, smarthome._token(s), "automation",
+                               "trigger", {"entity_id": entity_id})
+    except ha_client.HAError as exc:
+        raise HTTPException(502, str(exc))
+    crud.log_smarthome_action(db, text=f"Automation manuell ausgeloest: {entity_id}",
+                              intent="control", domain="automation", service="trigger",
+                              entity_id=entity_id, data={}, ok=True, error=None, source="text")
+    return {"ok": True}
+
+
 @smarthome_router.post("/automations/suggest")
 def suggest_automations(data: schemas.AutomationSuggestRequest, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
