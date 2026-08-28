@@ -1783,6 +1783,12 @@ def _scheduled_morning_briefing():
         for i, space in enumerate(spaces):
             try:
                 text = crud.build_morning_briefing(db, space.id, home_coords=home_coords, ors_api_key=ors_api_key)
+                if i == 0:
+                    from . import smarthome as _sh
+                    _sh_notes = _sh.morning_notes(settings)
+                    if _sh_notes:
+                        header = text or f"☀️ Guten Morgen ({date.today().strftime('%d.%m.%Y')}):"
+                        text = header + "\n\n🏠 Zuhause:\n" + "\n".join(_sh_notes)
                 if news and i == 0:
                     header = text or f"☀️ Guten Morgen ({date.today().strftime('%d.%m.%Y')}):"
                     text = f"{header}\n\n📰 Finanzmärkte (KI-Zusammenfassung, keine Anlageberatung):\n{news}"

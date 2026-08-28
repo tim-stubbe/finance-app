@@ -317,6 +317,35 @@ def test_energy_summary(auth_client, configured_ha, monkeypatch):
     assert any(s["entity_id"] == "sensor.zaehler" and s["kwh"] == 1234.5 for s in e["energy_sensors"])
 
 
+# ---------------- Morgen-Briefing-Notizen (Phase 6) ----------------
+
+def test_morning_notes(monkeypatch):
+    from app import smarthome, ha_client as hac
+    from datetime import datetime, timezone, timedelta
+
+    class _S:
+        homeassistant_url = "http://ha"
+        homeassistant_token_encrypted = "x"
+        secret_key = "k"
+        homeassistant_allowed_domains = None
+        homeassistant_allowed_areas = None
+    monkeypatch.setattr(smarthome, "_token", lambda s: "tok")
+    old = (datetime.now(timezone.utc) - timedelta(hours=9)).isoformat()
+    monkeypatch.setattr(hac, "get_states", lambda u, t: [
+        {"entity_id": "cover.bad", "state": "open", "attributes": {"friendly_name": "Bad Rollladen"}},
+        {"entity_id": "climate.wz", "state": "heat", "attributes": {"friendly_name": "Wohnzimmer", "temperature": 22}},
+        {"entity_id": "light.flur", "state": "on", "attributes": {"friendly_name": "Flur"}, "last_changed": old},
+        {"entity_id": "binary_sensor.tuer", "state": "on",
+         "attributes": {"friendly_name": "Haustür", "device_class": "door"}},
+    ])
+    notes = smarthome.morning_notes(_S())
+    joined = " ".join(notes)
+    assert "Bad Rollladen" in joined
+    assert "Wohnzimmer (22°)" in joined
+    assert "Flur" in joined
+    assert "Haustür" in joined
+
+
 # ---------------- Telegram /haus ----------------
 
 def test_telegram_haus_command(auth_client, configured_ha, monkeypatch):

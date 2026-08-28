@@ -27,6 +27,7 @@ KI-Automationen (smarthome_automations.py) sind eigene Module.
 
 import json
 import re
+from datetime import datetime, timezone
 
 from . import ha_client, ollama_client, smarthome_ws
 
@@ -491,6 +492,57 @@ def _to_watt(value, unit) -> float:
     except (TypeError, ValueError):
         return 0.0
     return v * 1000 if (unit or "").lower().startswith("kw") else v
+
+
+def _ha_dt(s):
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def morning_notes(settings, long_on_hours: int = 6) -> list:
+    """Kurze Auffaelligkeiten fuers Morgen-Briefing (Rollladen offen, Heizung
+    an, Licht seit Stunden an, Fenster/Tuer offen). Leer, wenn HA nicht
+    eingerichtet oder nichts Auffaelliges."""
+    if not (settings.homeassistant_url and _token(settings)):
+        return []
+    try:
+        states = _get_states(settings)
+    except ha_client.HAError:
+        return []
+    now = datetime.utcnow()
+    covers, climate, lights, contacts = [], [], [], []
+    for st in states:
+        ent = st.get("entity_id", "")
+        dom = _entity_domain(ent)
+        state = st.get("state")
+        attrs = st.get("attributes", {})
+        fn = attrs.get("friendly_name", ent)
+        if dom == "cover" and state == "open":
+            covers.append(fn)
+        elif dom == "climate" and state not in (None, "off", "unavailable", "unknown"):
+            t = attrs.get("temperature")
+            climate.append(f"{fn} ({t}°)" if t is not None else fn)
+        elif dom == "light" and state == "on":
+            lc = _ha_dt(st.get("last_changed"))
+            if lc and (now - lc).total_seconds() > long_on_hours * 3600:
+                lights.append(fn)
+        elif dom == "binary_sensor" and state == "on" and attrs.get("device_class") in ("door", "window", "opening"):
+            contacts.append(fn)
+    notes = []
+    if covers:
+        notes.append("🪟 Rollläden offen: " + ", ".join(covers[:6]))
+    if climate:
+        notes.append("🌡️ Heizung/Klima an: " + ", ".join(climate[:6]))
+    if lights:
+        notes.append(f"💡 Licht seit >{long_on_hours} h an: " + ", ".join(lights[:6]))
+    if contacts:
+        notes.append("🚪 Offen: " + ", ".join(contacts[:6]))
+    return notes
 
 
 def energy_summary(settings) -> dict:
