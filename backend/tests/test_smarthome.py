@@ -146,24 +146,34 @@ def test_fastpath_ambiguous_asks_back(auth_client, configured_ha):
     assert configured_ha == []
 
 
-def test_devices_list_filters_non_controllable_by_default(auth_client, configured_ha, monkeypatch):
+def test_devices_list_filters_junk_by_default(auth_client, configured_ha, monkeypatch):
     from app import smarthome
     states = [
         {"entity_id": "light.wohnzimmer", "state": "on", "attributes": {"friendly_name": "WZ"}},
-        {"entity_id": "sensor.temperatur", "state": "21", "attributes": {"friendly_name": "Temp"}},
-        {"entity_id": "device_tracker.tim", "state": "home", "attributes": {}},
+        # nützlicher Sensor (device_class) -> Standardansicht
+        {"entity_id": "sensor.wohnzimmer_temperatur", "state": "21",
+         "attributes": {"friendly_name": "WZ Temp", "device_class": "temperature"}},
+        # nützlicher Kontakt
+        {"entity_id": "binary_sensor.haustuer", "state": "off",
+         "attributes": {"friendly_name": "Haustür", "device_class": "door"}},
+        # Rauschen: Funk-Signalstärke, Diagnose-Kategorie, Telefon-Tracker, sun
+        {"entity_id": "sensor.schalter_linkquality", "state": "89", "attributes": {"friendly_name": "LQI"}},
+        {"entity_id": "sensor.drucker_status", "state": "idle",
+         "attributes": {"friendly_name": "Drucker", "entity_category": "diagnostic"}},
+        {"entity_id": "device_tracker.tim_iphone", "state": "home", "attributes": {}},
+        {"entity_id": "sun.sun", "state": "above_horizon", "attributes": {}},
     ]
     monkeypatch.setattr(smarthome, "_get_states", lambda s: states)
 
-    default = auth_client.get("/api/smarthome/devices").json()
-    assert {d["entity_id"] for d in default} == {"light.wohnzimmer"}
+    default = {d["entity_id"] for d in auth_client.get("/api/smarthome/devices").json()}
+    assert default == {"light.wohnzimmer", "sensor.wohnzimmer_temperatur", "binary_sensor.haustuer"}
 
     all_ents = auth_client.get("/api/smarthome/devices?all=true").json()
-    assert {d["entity_id"] for d in all_ents} == {
-        "light.wohnzimmer", "sensor.temperatur", "device_tracker.tim"}
+    assert len(all_ents) == len(states)
     by_id = {d["entity_id"]: d for d in all_ents}
     assert by_id["light.wohnzimmer"]["controllable"] is True
-    assert by_id["sensor.temperatur"]["controllable"] is False
+    assert by_id["light.wohnzimmer"]["kind"] == "Steuerung"
+    assert by_id["sensor.wohnzimmer_temperatur"]["kind"] == "Sensor"
 
 
 # ---------------- Grundriss (Phase 3) ----------------

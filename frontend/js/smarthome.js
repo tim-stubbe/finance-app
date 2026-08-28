@@ -62,14 +62,13 @@ async function loadSmartHomeHealth() {
   }
 }
 
-// "Alle Entitäten zeigen" ist standardmäßig AN - Home Assistant liefert die
-// meisten Dinge als Sensoren, mit dem harten Domain-Filter blieben oft nur
-// eine Handvoll Geräte übrig. Wer nur Schaltbares sehen will, hakt es ab;
-// die Wahl bleibt lokal gespeichert.
+// Standardansicht zeigt nur "nützliche" Entities (steuerbare Geräte +
+// sinnvolle Sensoren, serverseitig gefiltert). Der Haken blendet zusätzlich
+// den ganzen Diagnose-/Konfig-Kram ein; die Wahl bleibt lokal gespeichert.
 const shDevicesAllBox = document.getElementById("smarthome-devices-all");
 try {
-  shDevicesAllBox.checked = localStorage.getItem("sh-devices-all") !== "0";
-} catch { shDevicesAllBox.checked = true; }
+  shDevicesAllBox.checked = localStorage.getItem("sh-devices-all") === "1";
+} catch { shDevicesAllBox.checked = false; }
 
 async function loadSmartHomeDevices() {
   const tbody = document.getElementById("smarthome-device-list");
@@ -85,7 +84,12 @@ async function loadSmartHomeDevices() {
     tbody.innerHTML = emptyRow(4, "list", "Keine Geräte gefunden. Ist Home Assistant in den Einstellungen verbunden?");
     return;
   }
-  tbody.innerHTML = smartHomeDevices.map(d => `
+  let lastKind = null;
+  tbody.innerHTML = smartHomeDevices.map(d => {
+    const header = d.kind && d.kind !== lastKind
+      ? `<tr class="sh-group-row"><td colspan="4">${esc(d.kind)}</td></tr>` : "";
+    lastKind = d.kind;
+    return `${header}
     <tr>
       <td>${esc(d.name)}<span class="sh-sub">${esc(d.entity_id)}${d.controllable === false ? " · nur Ansicht" : ""}</span></td>
       <td>${d.area ? esc(d.area) : "–"}</td>
@@ -93,7 +97,8 @@ async function loadSmartHomeDevices() {
       <td>${d.toggleable
         ? `<button type="button" class="link-btn" data-sh-toggle="${esc(d.entity_id)}">umschalten</button>`
         : ""}</td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 }
 
 shDevicesAllBox.addEventListener("change", () => {

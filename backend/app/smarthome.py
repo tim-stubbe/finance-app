@@ -49,6 +49,58 @@ DEFAULT_ALLOWED_DOMAINS = [
     "media_player", "scene", "script", "input_boolean",
 ]
 
+# Fuer die Geraeteliste (list_devices): was ist ein "nuetzliches" Geraet, das
+# in die Standardansicht gehoert? Home Assistant liefert ueber /states auch
+# jede Menge Diagnose-/Konfig-Kram (Funk-Signalstaerken, Uptime, Update-
+# Entities, Telefon-Tracker, sun.*, ...). Der bleibt ausgeblendet, bis der
+# Nutzer bewusst "alles anzeigen" waehlt.
+_DEVICE_DOMAINS = {
+    "light", "switch", "climate", "cover", "fan", "media_player",
+    "lock", "vacuum", "humidifier", "valve", "siren", "camera",
+    "scene", "script", "input_boolean", "water_heater", "lawn_mower",
+    "alarm_control_panel", "remote",
+}
+_USEFUL_SENSOR_CLASSES = {
+    "temperature", "humidity", "power", "energy", "current", "voltage",
+    "battery", "illuminance", "pressure", "atmospheric_pressure",
+    "carbon_dioxide", "carbon_monoxide", "pm25", "pm10", "aqi", "gas", "water",
+    "volatile_organic_compounds", "moisture", "wind_speed", "precipitation",
+    "sound_pressure",
+}
+_USEFUL_BINARY_CLASSES = {
+    "door", "window", "garage_door", "opening", "motion", "occupancy",
+    "presence", "moisture", "smoke", "gas", "carbon_monoxide", "problem",
+    "safety", "tamper", "cold", "heat", "sound", "vibration",
+}
+# Entity-ID-Endungen, die praktisch immer nur Diagnose-Rauschen sind.
+_NOISE_SUFFIXES = (
+    "_rssi", "_linkquality", "_link_quality", "_lqi", "_snr", "_signal_strength",
+    "_wifi_signal", "_uptime", "_last_seen", "_last_restart", "_last_boot",
+    "_restart_required", "_update_available", "_firmware", "_bssid", "_ssid",
+    "_ip", "_ip_address", "_mac", "_mac_address", "_identify", "_reset",
+    "_memory", "_memory_use", "_cpu", "_cpu_temperature", "_disk_use",
+    "_free_space", "_next_dawn", "_next_dusk", "_next_midnight", "_next_noon",
+    "_next_rising", "_next_setting",
+)
+
+
+def _is_useful_entity(ent: str, domain: str, attrs: dict) -> bool:
+    """True, wenn die Entity in die Standard-Geraeteliste gehoert (statt nur
+    unter 'alles anzeigen')."""
+    low = ent.lower()
+    if any(low.endswith(s) for s in _NOISE_SUFFIXES):
+        return False
+    if attrs.get("entity_category") in ("diagnostic", "config"):
+        return False
+    if domain in _DEVICE_DOMAINS:
+        return True
+    dc = (attrs.get("device_class") or "").lower()
+    if domain == "sensor":
+        return dc in _USEFUL_SENSOR_CLASSES
+    if domain == "binary_sensor":
+        return dc in _USEFUL_BINARY_CLASSES
+    return False
+
 # (domain, service)-Paare, die ohne weitere Freigabe erlaubt sind. Alles was
 # hier NICHT steht, wird abgelehnt - kein "erlaube alles per Default".
 DEFAULT_ALLOWED_SERVICES = {
@@ -387,12 +439,13 @@ def health(settings) -> dict:
 def list_devices(settings, include_all: bool = False) -> list:
     """Geraeteliste fuer die UI.
 
-    Standard: nur steuerbare Domains (``_allowed_domains``) und ggf. der
-    Bereichs-Filter. Mit ``include_all`` kommt JEDE Entity aus Home Assistant
-    zurueck (auch Sensoren, ``binary_sensor``, ``device_tracker`` usw.) -
-    ``controllable`` markiert dann, welche Kies tatsaechlich schalten darf.
-    Das Schalten selbst bleibt unabhaengig davon durch ``service_allowed``
-    abgesichert.
+    Standard: nur "nuetzliche" Entities - steuerbare Geraete plus Sensoren
+    mit sinnvoller ``device_class`` (Temperatur, Leistung, Tuer/Fenster, ...),
+    gruppiert nach Art. Diagnose-/Konfig-Kram, Funk-Signalstaerken,
+    Update-/Button-Entities, Telefon-Tracker usw. bleiben aussen vor.
+    Mit ``include_all`` kommt JEDE Entity aus Home Assistant zurueck.
+    ``controllable`` markiert, welche Kies tatsaechlich schalten darf - das
+    Schalten selbst bleibt unabhaengig davon durch ``service_allowed`` gesichert.
     """
     states = _get_states(settings)
     areas = ha_client.area_map(settings.homeassistant_url, _token(settings))
@@ -402,24 +455,29 @@ def list_devices(settings, include_all: bool = False) -> list:
     for st in states:
         ent = st.get("entity_id", "")
         domain = _entity_domain(ent)
+        attrs = st.get("attributes", {})
         controllable = domain in allowed
         area = areas.get(ent, "")
         if not include_all:
-            if not controllable:
+            if not _is_useful_entity(ent, domain, attrs):
                 continue
             if areas_filter and area not in areas_filter:
                 continue
-        attrs = st.get("attributes", {})
+        kind = ("Steuerung" if domain in _DEVICE_DOMAINS
+                else "Sensor" if domain in ("sensor", "binary_sensor")
+                else "Sonstiges")
         out.append({
             "entity_id": ent,
             "domain": domain,
             "name": attrs.get("friendly_name", ent),
             "area": area or None,
             "state": st.get("state", ""),
+            "kind": kind,
             "controllable": controllable,
             "toggleable": domain in ("light", "switch", "fan", "input_boolean"),
         })
-    out.sort(key=lambda d: (d["area"] or "zzz", d["name"].lower()))
+    _rank = {"Steuerung": 0, "Sensor": 1, "Sonstiges": 2}
+    out.sort(key=lambda d: (_rank.get(d["kind"], 9), d["area"] or "zzz", d["name"].lower()))
     return out
 
 
