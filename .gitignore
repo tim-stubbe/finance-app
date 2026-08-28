@@ -12,8 +12,16 @@ venv/
 .vscode/
 .DS_Store
 
-# Claude Code lokale Einstellungen (maschinenspezifisch)
-.claude/
+# Claude Code lokale Einstellungen (maschinenspezifisch) - Skills/Agents
+# darunter sind bewusst KEIN lokaler Kram, sondern Projekt-Wissen, das den
+# Klon überleben soll (siehe claude-code-setup-Empfehlung), deshalb per
+# Ausnahme wieder eingeschlossen. settings.local.json und *.local.md
+# (z.B. hookify-Regeln) bleiben wie der Name sagt lokal/ignoriert.
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+!.claude/agents/
+!.claude/agents/**
 
 # Secrets, falls mal welche als .env landen
 .env
