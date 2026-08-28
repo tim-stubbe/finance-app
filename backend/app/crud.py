@@ -95,6 +95,7 @@ from .crud_vehicle import (
 from .crud_smarthome import (
     get_smarthome_aliases, create_smarthome_alias, delete_smarthome_alias,
     log_smarthome_action, get_smarthome_actions,
+    get_floorplan, save_floorplan,
 )
 
 CACHE_TTL = timedelta(hours=24)

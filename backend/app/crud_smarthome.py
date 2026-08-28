@@ -59,6 +59,34 @@ def log_smarthome_action(db: Session, *, text, intent, domain, service, entity_i
     return row
 
 
+# ---------------- Grundriss (Phase 3) ----------------
+def get_floorplan(db: Session) -> dict:
+    row = db.query(models.SmartHomeFloorplan).filter_by(id=1).first()
+    if not row or not row.data_json:
+        return {"rooms": [], "devices": []}
+    try:
+        data = json.loads(row.data_json)
+    except ValueError:
+        return {"rooms": [], "devices": []}
+    data.setdefault("rooms", [])
+    data.setdefault("devices", [])
+    return data
+
+
+def save_floorplan(db: Session, data: dict) -> dict:
+    clean = {
+        "rooms": data.get("rooms", []) or [],
+        "devices": data.get("devices", []) or [],
+    }
+    row = db.query(models.SmartHomeFloorplan).filter_by(id=1).first()
+    if not row:
+        row = models.SmartHomeFloorplan(id=1)
+        db.add(row)
+    row.data_json = json.dumps(clean, ensure_ascii=False)
+    db.commit()
+    return clean
+
+
 def get_smarthome_actions(db: Session, limit: int = 30):
     rows = (
         db.query(models.SmartHomeAction)

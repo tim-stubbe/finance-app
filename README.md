@@ -200,8 +200,10 @@ nach ausdrücklicher Bestätigung.
 - Sprach-Ein-/Ausgabe komplett lokal: `POST /api/smarthome/voice/command`
   (Audio hoch → faster-whisper → Aktion → Antworttext, optional gesprochen per
   Piper). Umschaltbar über `STT_BACKEND`/`TTS_BACKEND` (`stub`/`faster-whisper`/
-  `piper`/`http`), Standard `stub` mit dokumentiertem Offline-Fallback. 3D-
-  Grundriss bleibt Phase 3.
+  `piper`/`http`), Standard `stub` mit dokumentiertem Offline-Fallback.
+- Interaktiver Grundriss: 2D-Editor (Räume/Geräte per Drag platzieren, Größe
+  ziehen) plus 3D-Ansicht (three.js). Geräte zeigen ihren Live-Zustand und
+  sind per Klick schaltbar. Layout liegt als ein JSON-Blob in der DB.
 
 **Sonstiges**
 - Fünf Themes (Dunkel, Hell, Gelb, Alpen, Alpen Desktop mit Top-Navigation für

@@ -1766,6 +1766,23 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .sh-warn { color: #d9534f; font-weight: 600; }
 .sh-sub { display: block; color: var(--muted); font-size: 11.5px; }
 
+.sh-fp-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.sh-fp-spacer { flex: 1; }
+.sh-fp-stage {
+  width: 100%; aspect-ratio: 5 / 4; max-height: 560px;
+  border: 1px solid var(--border, rgba(128,128,128,.25));
+  border-radius: 10px; overflow: hidden; background: var(--panel-2, rgba(128,128,128,.06));
+}
+.sh-fp-stage > svg, .sh-fp-stage > canvas { width: 100%; height: 100%; display: block; }
+.sh-fp-room { fill: var(--accent-wash, rgba(120,140,200,.14)); stroke: var(--accent, #7a8cc8); stroke-width: .03; }
+.sh-fp-room-label { fill: var(--text); font-size: .35px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.sh-fp-dev { stroke: rgba(0,0,0,.35); stroke-width: .02; cursor: pointer; }
+.sh-fp-dev.is-on { fill: var(--accent, #e1ad66); }
+.sh-fp-dev.is-off { fill: var(--muted, #8a8a8a); }
+.sh-fp-dev.is-unknown { fill: #b5651d; }
+.sh-fp-editing .sh-fp-room, .sh-fp-editing .sh-fp-dev { cursor: move; }
+.sh-fp-resize { fill: var(--accent, #7a8cc8); cursor: nwse-resize; }
+
 .danger-zone {
   margin-top: 18px;
   padding: 14px 16px;

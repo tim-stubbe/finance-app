@@ -131,6 +131,31 @@ def delete_alias(alias_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# ---------------- Grundriss (Phase 3) ----------------
+@smarthome_router.get("/floorplan")
+def get_floorplan(db: Session = Depends(get_db)):
+    """Gespeichertes Layout + aktuelle Geraetezustaende zusammengefuehrt, damit
+    das Frontend nicht zwei Aufrufe koordinieren muss. Bei nicht erreichbarem
+    Home Assistant kommt trotzdem das Layout (states leer)."""
+    s = auth.get_or_create_settings(db)
+    plan = crud.get_floorplan(db)
+    states = {}
+    try:
+        for st in smarthome.list_devices(s):
+            states[st["entity_id"]] = {"state": st["state"], "name": st["name"],
+                                       "domain": st["domain"], "toggleable": st["toggleable"]}
+    except Exception:  # noqa: BLE001 - Layout hat Vorrang vor Live-Status
+        states = {}
+    return {"rooms": plan.get("rooms", []), "devices": plan.get("devices", []),
+            "states": states}
+
+
+@smarthome_router.put("/floorplan")
+def put_floorplan(data: schemas.SmartHomeFloorplanIn, db: Session = Depends(get_db)):
+    saved = crud.save_floorplan(db, data.model_dump())
+    return saved
+
+
 # ---------------- Voice (Phase 2) ----------------
 def _voice_soft_error(reply: str) -> dict:
     return {"ok": False, "reply": reply, "intent": "chat", "actions": [],

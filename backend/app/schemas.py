@@ -2462,3 +2462,25 @@ class SmartHomeAliasOut(BaseModel):
     id: int
     phrase: str
     entity_id: str
+
+
+class FloorplanRoom(BaseModel):
+    id: str
+    name: str = ""
+    x: float = 0.0
+    y: float = 0.0
+    w: float = 3.0
+    h: float = 3.0
+    area: Optional[str] = None
+
+
+class FloorplanDevice(BaseModel):
+    entity_id: str
+    x: float = 0.0
+    y: float = 0.0
+    room_id: Optional[str] = None
+
+
+class SmartHomeFloorplanIn(BaseModel):
+    rooms: List[FloorplanRoom] = []
+    devices: List[FloorplanDevice] = []

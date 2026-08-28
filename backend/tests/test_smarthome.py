@@ -137,6 +137,34 @@ def test_fastpath_ambiguous_asks_back(auth_client, configured_ha):
     assert configured_ha == []
 
 
+# ---------------- Grundriss (Phase 3) ----------------
+
+def test_floorplan_defaults_empty(auth_client):
+    r = auth_client.get("/api/smarthome/floorplan")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["rooms"] == [] and body["devices"] == [] and body["states"] == {}
+
+
+def test_floorplan_save_and_reload(auth_client):
+    plan = {
+        "rooms": [{"id": "r1", "name": "Wohnzimmer", "x": 0, "y": 0, "w": 5, "h": 4}],
+        "devices": [{"entity_id": "light.wohnzimmer", "x": 2.5, "y": 2, "room_id": "r1"}],
+    }
+    assert auth_client.put("/api/smarthome/floorplan", json=plan).status_code == 200
+    back = auth_client.get("/api/smarthome/floorplan").json()
+    assert back["rooms"][0]["name"] == "Wohnzimmer"
+    assert back["devices"][0]["entity_id"] == "light.wohnzimmer"
+
+
+def test_floorplan_merges_live_states(auth_client, configured_ha):
+    auth_client.put("/api/smarthome/floorplan", json={
+        "rooms": [], "devices": [{"entity_id": "light.wohnzimmer", "x": 1, "y": 1}],
+    })
+    body = auth_client.get("/api/smarthome/floorplan").json()
+    assert body["states"]["light.wohnzimmer"]["state"] == "on"
+
+
 def test_ha_down_returns_clean_message(auth_client, configured_ha, monkeypatch):
     def boom(url, token):
         raise ha_client.HAError("Home Assistant ist nicht erreichbar unter http://ha.test:8123. Laeuft HA?")

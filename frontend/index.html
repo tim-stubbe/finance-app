@@ -2368,6 +2368,27 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3zM3 9h18M9 21V9"/></svg> Grundriss</h3>
+        <p class="page-sub">Räume und Geräte platzieren; Geräte zeigen ihren Zustand und lassen sich per Klick schalten. 2D-Editor, 3D nur zur Ansicht.</p>
+        <div class="sh-fp-toolbar">
+          <button type="button" id="sh-fp-view-2d" class="btn-ghost btn-sm active">2D</button>
+          <button type="button" id="sh-fp-view-3d" class="btn-ghost btn-sm">3D</button>
+          <span class="sh-fp-spacer"></span>
+          <button type="button" id="sh-fp-edit" class="btn-ghost btn-sm">Bearbeiten</button>
+          <button type="button" id="sh-fp-add-room" class="btn-ghost btn-sm hidden">+ Raum</button>
+          <select id="sh-fp-add-device" class="hidden"><option value="">+ Gerät …</option></select>
+          <button type="button" id="sh-fp-save" class="btn-primary btn-sm hidden">Speichern</button>
+        </div>
+        <div id="sh-fp-2d-wrap" class="sh-fp-stage">
+          <svg id="sh-fp-svg" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div id="sh-fp-3d-wrap" class="sh-fp-stage hidden">
+          <canvas id="sh-fp-3d-canvas"></canvas>
+        </div>
+        <p class="page-sub" id="sh-fp-hint"></p>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Letzte Aktionen</h3>
         <div class="table-wrap">
           <table class="data-table">
@@ -2375,7 +2396,6 @@
             <tbody id="smarthome-history-list"></tbody>
           </table>
         </div>
-        <p class="page-sub">Phase 3: interaktiver 3D-Grundriss der Wohnung an dieser Stelle.</p>
       </div>
     </section>
 
@@ -3506,6 +3526,7 @@
 <script src="js/notizen.js"></script>
 <script src="js/vehicle.js"></script>
 <script src="js/smarthome.js"></script>
+<script src="js/smarthome-floorplan.js"></script>
 <script src="js/settings-smarthome.js"></script>
 <!-- Muss als LETZTES Skript laden - bootAuthGate() am Ende von auth-login.js
      braucht startApp()/init() (core.js/init.js) und alle Tab-Ladefunktionen

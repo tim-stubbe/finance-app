@@ -426,6 +426,23 @@ class SmartHomeAction(Base):
     source = Column(String, nullable=True)  # "text" | "voice" | "hub"
 
 
+class SmartHomeFloorplan(Base):
+    """Interaktiver Grundriss (Phase 3): ein Singleton-Datensatz (Single-User),
+    komplettes Layout als JSON. Bewusst ein Blob statt Raum-/Geraete-Tabellen -
+    es ist reine Anzeige-Geometrie, die nur der Editor im Frontend schreibt und
+    liest, nichts fragt sie einzeln ab. Schema (Koordinaten/Masse in Metern,
+    Draufsicht):
+        {"rooms":   [{"id","name","x","y","w","h","area"?}],
+         "devices": [{"entity_id","x","y","room_id"?}]}
+    """
+
+    __tablename__ = "smarthome_floorplan"
+
+    id = Column(Integer, primary_key=True, default=1)
+    data_json = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class PasskeyCredential(Base):
     """Ein registrierter Passkey (WebAuthn) - 1:n, ein Nutzer kann mehrere
     Geraete hinterlegen (z.B. iPhone + MacBook). Kein user_id-Fremdschluessel

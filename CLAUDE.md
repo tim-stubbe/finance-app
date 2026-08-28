@@ -149,5 +149,6 @@ URL/token/filters live on `Settings` (token Fernet-encrypted like every other
 secret). `voice/` (`stt.py`/`tts.py`, chosen via `STT_BACKEND`/`TTS_BACKEND`
 env — `stub`|`faster-whisper`|`piper`|`http`) does local speech in/out for
 `POST /api/smarthome/voice/command`; heavy deps are opt-in via
-`requirements-voice.txt`, default `stub` returns 501. WebSocket live-state and
-the 3D floor plan are explicitly later phases.
+`requirements-voice.txt`, default `stub` returns 501. `SmartHomeFloorplan` is
+one JSON blob (rooms+devices geometry in metres) driven only by the 2D editor
++ 3D view in `js/smarthome-floorplan.js`. WebSocket live-state is a later phase.
