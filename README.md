@@ -283,12 +283,13 @@ Standard ist `stub` – der **dokumentierte Offline-Fallback**: ohne Konfigurati
 antwortet der Voice-Endpunkt mit 501 und einer Anleitung, die Textsteuerung
 läuft normal weiter.
 
-Für `faster-whisper`/`piper` müssen die (bewusst nicht im Standard-Image
-enthaltenen, ~250 MB) Pakete aus `backend/requirements-voice.txt` mit ins Bild –
-im `Dockerfile` nach der `requirements.txt`-Zeile ein
-`&& pip install --no-cache-dir -r requirements-voice.txt` ergänzen. Wer das
-Image schlank halten will, fährt stattdessen einen eigenen Whisper-/Piper-
-Dienst im Netz und setzt `STT_BACKEND=http` / `TTS_BACKEND=http`.
+`faster-whisper` und `piper` sind im Image enthalten (`requirements-voice.txt`,
+im `Dockerfile` mitinstalliert, ~250 MB) – es genügt, `STT_BACKEND=faster-whisper`
+(und optional `TTS_BACKEND=piper`) zu setzen. Modelle laden dann beim ersten
+Aufruf nach `$DATA_DIR` und überleben Neustarts. Wer das Image schlank halten
+will, kann die eine Zeile im `Dockerfile` entfernen und stattdessen einen
+eigenen Whisper-/Piper-Dienst im Netz betreiben (`STT_BACKEND=http` /
+`TTS_BACKEND=http`).
 
 Nur zwei Umgebungsvariablen gibt es:
 
