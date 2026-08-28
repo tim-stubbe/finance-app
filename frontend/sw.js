@@ -27,7 +27,8 @@
 // HA-Szene speichern), Szenen-Chips zum Aktivieren.
 // v46: Automations-Dashboard (Live-Automationen an/aus + "jetzt ausfuehren"
 // + Verlauf aus dem HA-Logbook).
-const CACHE_NAME = "finanztool-shell-v46";
+// v47: Energie-Panel (HA-Strom-/Energiesensoren + grobe Kostenschaetzung).
+const CACHE_NAME = "finanztool-shell-v47";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

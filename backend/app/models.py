@@ -390,10 +390,11 @@ class Settings(Base):
     homeassistant_require_confirmation = Column(Boolean, nullable=False, default=True)
     # Trockenlauf: nichts wirklich schalten, nur protokollieren/antworten.
     homeassistant_dry_run = Column(Boolean, nullable=False, default=False)
-    # Weckwort fuer die freihaendige Sprachsteuerung (Browser hoert mit, sendet
-    # aber nur Segmente, die mit diesem Wort beginnen; siehe /voice/command
-    # ?wake=1). Leer/None -> "jarvis".
+    # Weckwort-Modell fuer den Freihand-Stream (openWakeWord, siehe
+    # voice/wakeword.py). Leer/None -> "hey_jarvis".
     homeassistant_wake_word = Column(String, nullable=True)
+    # Strompreis in EUR/kWh fuer die grobe Kostenschaetzung im Energie-Panel.
+    homeassistant_electricity_price = Column(Float, nullable=False, default=0.35)
 
 
 class SmartHomeAlias(Base):

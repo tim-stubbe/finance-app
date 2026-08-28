@@ -485,6 +485,56 @@ def list_scenes(settings) -> list:
     return out
 
 
+def _to_watt(value, unit) -> float:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return v * 1000 if (unit or "").lower().startswith("kw") else v
+
+
+def energy_summary(settings) -> dict:
+    """Strom-Sensoren aus HA + grobe Kostenschaetzung.
+
+    power-Sensoren = aktuelle Leistung (W); die Summe hochgerechnet auf 24 h
+    mal Strompreis ergibt die (sehr grobe) Tageskosten-Schaetzung beim
+    aktuellen Verbrauch. energy-Sensoren (kWh) werden nur aufgelistet.
+    """
+    price = float(getattr(settings, "homeassistant_electricity_price", 0.35) or 0.35)
+    power, energy, total_w = [], [], 0.0
+    for st in _get_states(settings):
+        ent = st.get("entity_id", "")
+        if not ent.startswith("sensor."):
+            continue
+        attrs = st.get("attributes", {})
+        dc = (attrs.get("device_class") or "").lower()
+        unit = (attrs.get("unit_of_measurement") or "")
+        name = attrs.get("friendly_name", ent)
+        if dc == "power" or unit.lower() in ("w", "kw"):
+            w = _to_watt(st.get("state"), unit)
+            total_w += w
+            power.append({"entity_id": ent, "name": name, "watt": round(w, 1)})
+        elif dc == "energy" or unit.lower() in ("wh", "kwh"):
+            try:
+                kwh = float(st.get("state"))
+                if unit.lower() == "wh":
+                    kwh /= 1000
+            except (TypeError, ValueError):
+                kwh = None
+            energy.append({"entity_id": ent, "name": name, "kwh": round(kwh, 2) if kwh is not None else None})
+    power.sort(key=lambda p: -p["watt"])
+    energy.sort(key=lambda e: e["name"].lower())
+    daily = total_w / 1000 * 24 * price
+    return {
+        "price_per_kwh": price,
+        "total_power_w": round(total_w, 1),
+        "est_daily_cost": round(daily, 2),
+        "est_monthly_cost": round(daily * 30, 2),
+        "power_sensors": power[:40],
+        "energy_sensors": energy[:40],
+    }
+
+
 def list_automations_status(settings) -> list:
     """Alle HA-Automationen mit an/aus, letzter Ausloesung und Laufzustand -
     fuer das Automations-Dashboard."""

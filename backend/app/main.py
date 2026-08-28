@@ -289,6 +289,7 @@ ensure_columns("settings", {
     "homeassistant_require_confirmation": "BOOLEAN DEFAULT 1",
     "homeassistant_dry_run": "BOOLEAN DEFAULT 0",
     "homeassistant_wake_word": "VARCHAR",
+    "homeassistant_electricity_price": "FLOAT DEFAULT 0.35",
 })
 
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte

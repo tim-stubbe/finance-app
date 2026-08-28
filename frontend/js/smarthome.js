@@ -11,6 +11,22 @@ async function loadSmartHomeTab() {
   loadSmartHomeHistory();
   if (typeof loadSmartHomeFloorplan === "function") loadSmartHomeFloorplan();
   if (typeof loadSmartHomeAutomations === "function") loadSmartHomeAutomations();
+  loadSmartHomeEnergy();
+}
+
+async function loadSmartHomeEnergy() {
+  const panel = document.getElementById("smarthome-energy-panel");
+  let e;
+  try { e = await api("/smarthome/energy"); } catch { panel.hidden = true; return; }
+  if (!e.power_sensors.length && !e.energy_sensors.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  document.getElementById("smarthome-energy-summary").textContent =
+    `Aktuell ${e.total_power_w.toLocaleString("de-DE")} W · geschätzt ${eur(e.est_daily_cost)}/Tag · ${eur(e.est_monthly_cost)}/Monat (${e.price_per_kwh.toFixed(2)} €/kWh)`;
+  const rows = [
+    ...e.power_sensors.map(p => `<tr><td>${esc(p.name)}</td><td>${p.watt.toLocaleString("de-DE")} W</td></tr>`),
+    ...e.energy_sensors.map(x => `<tr><td>${esc(x.name)}</td><td>${x.kwh != null ? x.kwh.toLocaleString("de-DE") + " kWh" : "–"}</td></tr>`),
+  ];
+  document.getElementById("smarthome-energy-list").innerHTML = rows.join("") || emptyRow(2, "list", "–");
 }
 
 async function loadSmartHomeHealth() {
@@ -396,6 +412,7 @@ function smartHomeSetupSSE(haConnected) {
       const tab = document.getElementById("tab-smarthome");
       if (!tab || !tab.classList.contains("active")) return;
       loadSmartHomeDevices();
+      loadSmartHomeEnergy();
       const editing = typeof fpEdit !== "undefined" && (fpEdit || fpDrag);
       if (!editing && typeof loadSmartHomeFloorplan === "function") loadSmartHomeFloorplan();
     }, 1200);

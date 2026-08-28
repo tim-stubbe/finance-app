@@ -2426,6 +2426,17 @@
         <div id="sh-auto-list"></div>
       </div>
 
+      <div class="panel" id="smarthome-energy-panel" hidden>
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg> Energie</h3>
+        <p class="page-sub" id="smarthome-energy-summary"></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Sensor</th><th>Leistung / Zählerstand</th></tr></thead>
+            <tbody id="smarthome-energy-list"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Letzte Aktionen</h3>
         <div class="table-wrap">
@@ -2607,6 +2618,7 @@
               <option value="ok_nabu">Ok Nabu</option>
             </select>
           </label>
+          <label>Strompreis (€/kWh, für die Energie-Schätzung) <input type="number" id="smarthome-cfg-price" step="0.01" min="0" placeholder="0.35"></label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
           </div>

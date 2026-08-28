@@ -296,6 +296,27 @@ def test_toggle_rejects_non_automation(auth_client, configured_ha):
     assert auth_client.post("/api/smarthome/automations/live/light.x/toggle").status_code == 400
 
 
+# ---------------- Energie (Phase 4 der Liste) ----------------
+
+def test_energy_summary(auth_client, configured_ha, monkeypatch):
+    from app import ha_client as hac
+    monkeypatch.setattr(hac, "get_states", lambda u, t: [
+        {"entity_id": "sensor.gesamt", "state": "250",
+         "attributes": {"friendly_name": "Gesamt", "device_class": "power", "unit_of_measurement": "W"}},
+        {"entity_id": "sensor.spuelmaschine", "state": "1.5",
+         "attributes": {"friendly_name": "Spülmaschine", "unit_of_measurement": "kW"}},
+        {"entity_id": "sensor.zaehler", "state": "1234.5",
+         "attributes": {"friendly_name": "Zähler", "device_class": "energy", "unit_of_measurement": "kWh"}},
+    ])
+    # Preis setzen
+    auth_client.put("/api/smarthome/settings", json={"electricity_price": 0.40})
+    e = auth_client.get("/api/smarthome/energy").json()
+    assert e["total_power_w"] == 1750.0          # 250 + 1500
+    assert e["price_per_kwh"] == 0.40
+    assert e["est_daily_cost"] == round(1.75 * 24 * 0.40, 2)
+    assert any(s["entity_id"] == "sensor.zaehler" and s["kwh"] == 1234.5 for s in e["energy_sensors"])
+
+
 # ---------------- Telegram /haus ----------------
 
 def test_telegram_haus_command(auth_client, configured_ha, monkeypatch):
