@@ -144,11 +144,26 @@ document.getElementById("media-list").addEventListener("click", async e => {
 // ---------- Gesundheits-Grunddaten ----------
 let healthChart = null;
 
+const HEALTH_LABELS = { gewicht: "Gewicht (kg)", schlaf: "Schlaf (Std.)", schritte: "Schritte", puls: "Ruhepuls (bpm)" };
+
 async function loadHealthMetrics() {
   const type = document.getElementById("health-metric-type").value;
   const points = await api(`/health-metrics?metric_type=${type}&days=90`);
   const ctx = document.getElementById("chart-health");
-  const label = type === "gewicht" ? "Gewicht (kg)" : "Schlaf (Std.)";
+  const label = HEALTH_LABELS[type] || type;
+  document.getElementById("health-value").step = type === "schritte" ? "1" : "0.1";
+
+  const statsEl = document.getElementById("health-stats");
+  if (points.length) {
+    const last = points[points.length - 1];
+    const recent = points.slice(-7);
+    const avg = recent.reduce((s, p) => s + p.value, 0) / recent.length;
+    const fmt = v => type === "schritte" ? Math.round(v).toLocaleString("de-DE") : v.toFixed(1);
+    statsEl.textContent = `zuletzt ${fmt(last.value)} (${fmtDate(last.date)}) · Ø 7 Tage ${fmt(avg)}`;
+  } else {
+    statsEl.textContent = "noch keine Werte";
+  }
+
   const data = {
     labels: points.map(p => fmtDate(p.date)),
     datasets: [{

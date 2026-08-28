@@ -2090,12 +2090,15 @@
 
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Gesundheits-Grunddaten</h3>
-        <p class="page-sub">Sehr minimal: Gewicht und Schlaf als einfacher Verlauf, ein Wert pro Tag.</p>
+        <p class="page-sub">Ein Wert pro Tag. Für automatische Erfassung: Apple-Health-Import über die native App (geplant).</p>
         <div class="filter-row">
           <label>Anzeige <select id="health-metric-type">
             <option value="gewicht">Gewicht (kg)</option>
             <option value="schlaf">Schlaf (Std.)</option>
+            <option value="schritte">Schritte</option>
+            <option value="puls">Ruhepuls (bpm)</option>
           </select></label>
+          <span class="page-sub" id="health-stats"></span>
         </div>
         <div class="chart-box"><canvas id="chart-health"></canvas></div>
         <form id="health-form" class="form-grid" style="margin-top:14px">

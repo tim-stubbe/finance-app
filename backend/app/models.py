@@ -1478,6 +1478,8 @@ class MediaItem(Base):
 class HealthMetricType(str, enum.Enum):
     gewicht = "gewicht"
     schlaf = "schlaf"
+    schritte = "schritte"
+    puls = "puls"
 
 
 class HealthMetric(Base):

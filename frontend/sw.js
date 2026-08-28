@@ -32,7 +32,8 @@
 // v49: Essen-Tab (js/meals.js) - Wochenplan, Rezepte, KI-Vorschlaege,
 // Einkaufsliste -> Wunschliste/To-do.
 // v50: Jahres-Heatmap (GitHub-Stil) ueber alle Lebensbereiche im Leben-Tab.
-const CACHE_NAME = "finanztool-shell-v50";
+// v51: Gesundheit - Metrik-Typen Schritte + Ruhepuls, "zuletzt / Ø 7 Tage".
+const CACHE_NAME = "finanztool-shell-v51";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
