@@ -72,7 +72,7 @@ def test_health_quick_skips_network_probes(auth_client, monkeypatch):
     monkeypatch.setattr(sh, "health", lambda s: (_ for _ in ()).throw(AssertionError("nicht aufrufen")))
     r = auth_client.get("/api/smarthome/health?quick=1")
     assert r.status_code == 200
-    assert r.json() == {"ha_configured": False, "ollama_configured": False}
+    assert r.json() == {"ha_configured": False, "ollama_configured": False, "live": False}
 
 
 def test_command_without_setup_is_soft_error(auth_client):
@@ -219,12 +219,16 @@ def test_get_states_prefers_ws_cache(monkeypatch):
     assert got[0]["entity_id"] == "light.cached"
 
 
-def test_events_endpoint_streams(auth_client):
-    with auth_client.stream("GET", "/api/smarthome/events") as r:
-        assert r.status_code == 200
-        assert "text/event-stream" in r.headers["content-type"]
-        first = next(r.iter_lines())
-        assert first.startswith(":")  # ": connected" Kommentarzeile
+def test_events_stream_generator_yields_comment_first():
+    # Direkt gegen den Generator (nicht ueber den TestClient-Stream, der sonst
+    # auf das 20s-Timeout des naechsten q.get() warten wuerde).
+    from app import smarthome_ws
+    gen = smarthome_ws.events_stream()
+    try:
+        first = next(gen)
+        assert first.startswith(b":")
+    finally:
+        gen.close()
 
 
 # ---------------- Telegram /haus ----------------

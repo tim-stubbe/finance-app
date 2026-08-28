@@ -10,6 +10,7 @@ der sauber uebersprungen wird, wenn die optionalen Pakete/Modelle fehlen
 import importlib.util
 import io
 import math
+import os
 import struct
 import wave
 
@@ -20,6 +21,10 @@ from app.database import SessionLocal
 
 _HAS_WHISPER = importlib.util.find_spec("faster_whisper") is not None
 _HAS_PIPER = importlib.util.find_spec("piper") is not None
+# Die echten Modell-Tests laden Modelle von HuggingFace (~140 MB) - im CI und
+# in normalen Läufen deshalb übersprungen, damit ein langsames/fehlendes Netz
+# den Lauf nicht hängen lässt. Explizit anschalten: KIES_VOICE_E2E=1 pytest ...
+_E2E = bool(os.environ.get("KIES_VOICE_E2E"))
 
 
 def _sine_wav(seconds=0.4, freq=220, rate=16000):
@@ -156,7 +161,7 @@ def test_voice_command_speaks_reply_when_tts_backend_present(auth_client, monkey
 
 # ---------------- Echte lokale Modelle (uebersprungen wenn nicht da) ----------------
 
-@pytest.mark.skipif(not _HAS_WHISPER, reason="faster-whisper nicht installiert (Offline-Fallback dokumentiert)")
+@pytest.mark.skipif(not (_HAS_WHISPER and _E2E), reason="Echte Modell-Tests nur mit KIES_VOICE_E2E=1 (laden ~140 MB von HuggingFace)")
 def test_faster_whisper_transcribes_without_crashing():
     from app.voice.stt import FasterWhisperSTT
     stt = FasterWhisperSTT(model="tiny")
@@ -167,8 +172,8 @@ def test_faster_whisper_transcribes_without_crashing():
     assert isinstance(text, str)
 
 
-@pytest.mark.skipif(not (_HAS_WHISPER and _HAS_PIPER),
-                    reason="faster-whisper und/oder piper-tts nicht installiert (Offline-Fallback dokumentiert)")
+@pytest.mark.skipif(not (_HAS_WHISPER and _HAS_PIPER and _E2E),
+                    reason="Echte Modell-Tests nur mit KIES_VOICE_E2E=1")
 def test_real_roundtrip_piper_synth_then_whisper_via_endpoint(auth_client, monkeypatch, tmp_path):
     """Piper spricht einen deutschen Befehl -> faster-whisper transkribiert ->
     /api/smarthome/voice/command fuehrt ihn aus. Der eigentliche Ende-zu-Ende-
