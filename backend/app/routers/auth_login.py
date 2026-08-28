@@ -120,6 +120,8 @@ def setup(data: schemas.SetupIn, request: Request, response: Response, db: Sessi
     s.password_hash = auth.hash_password(data.password)
     s.password_set_at = datetime.utcnow()
     s.setup_completed_at = datetime.utcnow()
+    if (data.display_name or "").strip():
+        s.display_name = data.display_name.strip()[:80]
     db.commit()
     _establish_session(request, response)
     return schemas.LoginOut(authenticated=True, totp_required=False)
@@ -207,11 +209,14 @@ def webauthn_login_options(request: Request, db: Session = Depends(get_db)):
     creds = db.query(models.PasskeyCredential).all()
     if not creds:
         raise HTTPException(400, "Keine Passkeys registriert.")
+    # KEIN allow_credentials: das macht die Anmeldung "usernameless" /
+    # auffindbar - der Browser zeigt dann ALLE verfuegbaren Passkey-Quellen
+    # zur Auswahl (Geraet, Bitwarden, Telefon), statt bei einer konkreten
+    # Credential-ID mit internal-Transport direkt Touch ID/Windows Hello
+    # aufzurufen (so machen es auch Google/Amazon). verify_authentication_
+    # response sucht den Passkey ohnehin ueber die zurueckgegebene ID.
     options = webauthn.generate_authentication_options(
         rp_id=rp_id,
-        allow_credentials=[
-            PublicKeyCredentialDescriptor(id=base64url_to_bytes(c.credential_id)) for c in creds
-        ],
         user_verification=UserVerificationRequirement.PREFERRED,
     )
     request.session["webauthn_challenge"] = bytes_to_base64url(options.challenge)
@@ -344,7 +349,16 @@ def webauthn_register_options(request: Request, db: Session = Depends(get_db)):
         rp_id=rp_id, rp_name="Kies", user_id=_WEBAUTHN_USER_ID, user_name=_WEBAUTHN_USER_NAME,
         user_display_name=s.display_name or "Kies",
         authenticator_selection=AuthenticatorSelectionCriteria(
-            resident_key=ResidentKeyRequirement.PREFERRED,
+            # REQUIRED (statt PREFERRED): erzwingt einen *auffindbaren*
+            # (resident) Passkey. Nur dann bieten Passwort-Manager wie
+            # Bitwarden/1Password sich beim Anlegen ueberhaupt an - ein
+            # nicht-auffindbarer Passkey kann nur auf dem Geraet selbst
+            # liegen, weshalb Chrome direkt Touch ID/Windows Hello nimmt.
+            resident_key=ResidentKeyRequirement.REQUIRED,
+            require_resident_key=True,
+            # authenticator_attachment bewusst NICHT gesetzt -> Plattform-
+            # (Geraet) UND Roaming-Authenticator (Bitwarden, Phone, Yubikey)
+            # sind erlaubt.
             user_verification=UserVerificationRequirement.PREFERRED,
         ),
         exclude_credentials=[

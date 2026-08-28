@@ -33,7 +33,9 @@
 // Einkaufsliste -> Wunschliste/To-do.
 // v50: Jahres-Heatmap (GitHub-Stil) ueber alle Lebensbereiche im Leben-Tab.
 // v51: Gesundheit - Metrik-Typen Schritte + Ruhepuls, "zuletzt / Ø 7 Tage".
-const CACHE_NAME = "finanztool-shell-v51";
+// v52: Name bei der Ersteinrichtung; Passkey-Login jetzt "usernameless"
+// (auffindbar) -> Browser bietet auch Bitwarden/Telefon an statt nur Geraet.
+const CACHE_NAME = "finanztool-shell-v52";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.svg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

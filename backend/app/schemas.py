@@ -2267,6 +2267,7 @@ class AuthStatusOut(BaseModel):
 
 class SetupIn(BaseModel):
     password: str
+    display_name: Optional[str] = None
 
 
 class PasswordChangeIn(BaseModel):

@@ -75,7 +75,8 @@
     <h1 class="login-title">Kies</h1>
 
     <form id="setup-form" class="login-form hidden">
-      <p class="login-sub">Ersteinrichtung – lege ein Passwort für diese Instanz fest.</p>
+      <p class="login-sub">Ersteinrichtung – Name und Passwort für diese Instanz festlegen.</p>
+      <label>Dein Name <input type="text" id="setup-name" autocomplete="name" placeholder="z. B. Tim"></label>
       <label>Passwort <input type="password" id="setup-password" required minlength="10" autocomplete="new-password"></label>
       <label>Passwort wiederholen <input type="password" id="setup-password-confirm" required minlength="10" autocomplete="new-password"></label>
       <p id="setup-error" class="login-error hidden"></p>

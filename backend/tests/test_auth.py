@@ -177,3 +177,11 @@ def test_unauthenticated_request_to_protected_endpoint_rejected(client):
         headers={"X-CSRF-Token": "irgendwas"},
     )
     assert r.status_code == 401
+
+
+def test_setup_stores_display_name(client):
+    r = client.post("/api/auth/setup", json={"password": "Sicheres-Passwort-999", "display_name": "Tim"})
+    assert r.status_code == 200
+    client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
+    prof = client.get("/api/auth/profile").json()
+    assert prof["display_name"] == "Tim"

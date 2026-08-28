@@ -83,7 +83,7 @@ document.getElementById("setup-form").addEventListener("submit", async e => {
   try {
     const res = await fetch(API + "/auth/setup", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, display_name: document.getElementById("setup-name").value.trim() || null }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
