@@ -80,30 +80,56 @@ async function loadSmartHomeDevices() {
     tbody.innerHTML = emptyRow(4, "list", "Geräte konnten nicht geladen werden (Home Assistant nicht erreichbar?).");
     return;
   }
+  renderSmartHomeDevices();
+}
+
+// Nach Bereich (Raum) gruppiert - so ist ein großes HA-Setup navigierbar.
+// Innerhalb eines Raums: erst Steuerung, dann Sensoren, dann Rest.
+function renderSmartHomeDevices() {
+  const tbody = document.getElementById("smarthome-device-list");
+  const q = (document.getElementById("smarthome-device-filter").value || "").trim().toLowerCase();
   if (!smartHomeDevices.length) {
     tbody.innerHTML = emptyRow(4, "list", "Keine Geräte gefunden. Ist Home Assistant in den Einstellungen verbunden?");
     return;
   }
-  let lastKind = null;
-  tbody.innerHTML = smartHomeDevices.map(d => {
-    const header = d.kind && d.kind !== lastKind
-      ? `<tr class="sh-group-row"><td colspan="4">${esc(d.kind)}</td></tr>` : "";
-    lastKind = d.kind;
-    return `${header}
-    <tr>
-      <td>${esc(d.name)}<span class="sh-sub">${esc(d.entity_id)}${d.controllable === false ? " · nur Ansicht" : ""}</span></td>
-      <td>${d.area ? esc(d.area) : "–"}</td>
-      <td>${esc(d.state)}</td>
-      <td>${d.toggleable
-        ? `<button type="button" class="link-btn" data-sh-toggle="${esc(d.entity_id)}">umschalten</button>`
-        : ""}</td>
-    </tr>`;
+  const kindRank = { Steuerung: 0, Sensor: 1, Sonstiges: 2 };
+  const list = smartHomeDevices.filter(d => !q
+    || d.name.toLowerCase().includes(q)
+    || d.entity_id.toLowerCase().includes(q)
+    || (d.area || "").toLowerCase().includes(q));
+  if (!list.length) {
+    tbody.innerHTML = emptyRow(4, "list", "Nichts gefunden für „" + esc(q) + "“.");
+    return;
+  }
+  const byArea = {};
+  for (const d of list) (byArea[d.area || "Ohne Bereich"] ||= []).push(d);
+  const areas = Object.keys(byArea).sort((a, b) =>
+    a === "Ohne Bereich" ? 1 : b === "Ohne Bereich" ? -1 : a.localeCompare(b, "de"));
+
+  tbody.innerHTML = areas.map(area => {
+    const rows = byArea[area]
+      .sort((a, b) => (kindRank[a.kind] ?? 9) - (kindRank[b.kind] ?? 9) || a.name.localeCompare(b.name, "de"))
+      .map(d => `
+        <tr>
+          <td>${esc(d.name)}<span class="sh-sub">${esc(d.entity_id)}${d.controllable === false ? " · nur Ansicht" : ""}</span></td>
+          <td>${esc(d.kind || "–")}</td>
+          <td>${esc(d.state)}</td>
+          <td>${d.toggleable
+            ? `<button type="button" class="link-btn" data-sh-toggle="${esc(d.entity_id)}">umschalten</button>`
+            : ""}</td>
+        </tr>`).join("");
+    return `<tr class="sh-group-row"><td colspan="4">${esc(area)} <span class="sh-group-count">${byArea[area].length}</span></td></tr>${rows}`;
   }).join("");
 }
 
 shDevicesAllBox.addEventListener("change", () => {
   try { localStorage.setItem("sh-devices-all", shDevicesAllBox.checked ? "1" : "0"); } catch {}
   loadSmartHomeDevices();
+});
+
+document.getElementById("smarthome-device-filter").addEventListener("input", () => {
+  clearTimeout(window._shDeviceFilterT);
+  window._shDeviceFilterT = setTimeout(renderSmartHomeDevices, 120);
 });
 
 document.getElementById("smarthome-device-list").addEventListener("click", async e => {

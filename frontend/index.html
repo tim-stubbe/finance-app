@@ -2394,12 +2394,13 @@
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg> Geräte</h3>
         <div class="filter-row">
+          <input type="search" id="smarthome-device-filter" placeholder="Suchen (Name, Bereich, entity_id) …" style="flex:1;min-width:200px">
           <button type="button" id="smarthome-devices-refresh" class="btn-ghost btn-sm">Aktualisieren</button>
           <label class="filter-checkbox"><input type="checkbox" id="smarthome-devices-all"> Auch Diagnose-/Konfig-Entitäten zeigen</label>
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Name</th><th>Bereich</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Art</th><th>Status</th><th></th></tr></thead>
             <tbody id="smarthome-device-list"></tbody>
           </table>
         </div>
