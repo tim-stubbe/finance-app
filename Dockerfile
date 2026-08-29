@@ -41,8 +41,14 @@ RUN python -c "import urllib.request; urllib.request.urlretrieve('https://github
  && chmod +x /usr/local/bin/sc \
  && rm -rf /tmp/sc.tar.gz /tmp/sc-v1.0.0-linux-x86_64-gnu
 
+# Unprivilegierter Laufzeit-User (Security-Hardening L-01). Der Container
+# startet weiterhin als root, docker-entrypoint.py chownt /data und laesst
+# dann PERMANENT die Rechte auf diesen User fallen, bevor uvicorn laeuft.
+RUN useradd --system --uid 1000 --create-home --home-dir /home/app app
+
 COPY backend/app ./app
 COPY frontend /frontend
+COPY docker-entrypoint.py /usr/local/bin/docker-entrypoint.py
 
 # Von GitHub Actions befuellt (siehe docker-publish.yml), lokal leer ("dev").
 # Dient nur der Anzeige im Frontend, damit erkennbar ist, ob Watchtower
@@ -68,4 +74,5 @@ ENV XDG_CONFIG_HOME=/data/scalable-cli-home
 VOLUME ["/data"]
 EXPOSE 8000
 
+ENTRYPOINT ["python", "/usr/local/bin/docker-entrypoint.py"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

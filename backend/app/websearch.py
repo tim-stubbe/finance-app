@@ -14,6 +14,8 @@ anhand von Settings.websearch_provider, welche Funktion aufgerufen wird."""
 
 import requests
 
+from . import net_guard
+
 BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
 MAX_RESULTS = 5
 
@@ -38,11 +40,16 @@ def search_brave(api_key: str, query: str) -> list[dict]:
 
 
 def search_searxng(base_url: str, query: str) -> list[dict]:
+    # SSRF-Schutz auch beim Aufruf (nicht nur beim Speichern) + keine
+    # Redirects folgen, damit eine harmlose Instanz nicht per 3xx auf ein
+    # gesperrtes Ziel umleiten kann.
+    net_guard.validate_external_url(base_url)
     resp = requests.get(
         base_url.rstrip("/") + "/search",
         params={"q": query, "format": "json"},
         headers={"Accept": "application/json"},
         timeout=15,
+        allow_redirects=False,
     )
     resp.raise_for_status()
     try:

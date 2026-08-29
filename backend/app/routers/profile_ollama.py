@@ -15,8 +15,18 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import schemas, auth, ollama_client
+from .. import schemas, auth, ollama_client, net_guard
 from ..database import get_db
+
+
+def _safe_ollama_url(raw):
+    """SSRF-Schutz: Ollama-Ziel gegen net_guard pruefen (nur http/https,
+    kein Link-Local/Metadata) - greift beim Speichern der Einstellung UND
+    bei jedem Ad-hoc-`?url=`-Parameter."""
+    try:
+        return net_guard.validate_external_url(raw)
+    except net_guard.UnsafeURLError as e:
+        raise HTTPException(400, str(e))
 
 profile_ollama_router = APIRouter(prefix="/api")
 
@@ -49,7 +59,7 @@ def get_ollama_settings(db: Session = Depends(get_db)):
 @profile_ollama_router.put("/settings/ollama", response_model=schemas.OllamaSettingsOut)
 def update_ollama_settings(data: schemas.OllamaSettingsUpdate, db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
-    settings.ollama_url = data.url
+    settings.ollama_url = _safe_ollama_url(data.url) if data.url else data.url
     settings.ollama_model = data.model
     settings.beleg_chat_model = data.beleg_chat_model
     db.commit()
@@ -62,6 +72,7 @@ def get_ollama_models(url: Optional[str] = None, db: Session = Depends(get_db)):
     target = url or settings.ollama_url
     if not target:
         raise HTTPException(400, "Bitte zuerst eine Ollama-Server-URL angeben")
+    target = _safe_ollama_url(target)
     try:
         return schemas.OllamaModelsOut(models=ollama_client.list_models(target))
     except Exception as e:
@@ -74,6 +85,7 @@ def pull_ollama_model(data: schemas.OllamaPullRequest, db: Session = Depends(get
     target = data.url or settings.ollama_url
     if not target:
         raise HTTPException(400, "Bitte zuerst eine Ollama-Server-URL angeben")
+    target = _safe_ollama_url(target)
     model = data.model.strip()
     if not model:
         raise HTTPException(400, "Bitte einen Modellnamen angeben (z.B. llama3.2:1b)")

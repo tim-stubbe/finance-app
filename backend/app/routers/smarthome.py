@@ -364,6 +364,7 @@ def activate_scene(data: schemas.SceneActivate, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
     if not data.entity_id.startswith("scene."):
         raise HTTPException(400, "Keine Szene.")
+    _require_ha_service(s, "scene", "turn_on")
     try:
         ha_client.call_service(s.homeassistant_url, smarthome._token(s),
                                "scene", "turn_on", {"entity_id": data.entity_id})
@@ -389,6 +390,14 @@ def autolayout_floorplan(db: Session = Depends(get_db)):
 
 
 # ---------------- KI-Automationen (Phase 4) ----------------
+def _require_ha_service(s, domain: str, service: str) -> None:
+    """Jeder direkte HA-Steuerpfad im Router laeuft ueber dieselbe Policy wie
+    die KI-Pipeline (smarthome.service_allowed) - Allowlist + Denylist, plus
+    die vom Nutzer optional freigegebenen Extra-Paare."""
+    if not smarthome.service_allowed(domain, service, smarthome._extra_services(s)):
+        raise HTTPException(403, f"Der Dienst {domain}.{service} ist nicht freigegeben.")
+
+
 def _automation_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ha_client.HAError):
         return HTTPException(502, str(exc))
@@ -426,9 +435,11 @@ def toggle_live_automation(entity_id: str, enabled: bool = True, db: Session = D
     s = auth.get_or_create_settings(db)
     if not entity_id.startswith("automation."):
         raise HTTPException(400, "Keine Automation.")
+    svc = "turn_on" if enabled else "turn_off"
+    _require_ha_service(s, "automation", svc)
     try:
         ha_client.call_service(s.homeassistant_url, smarthome._token(s), "automation",
-                               "turn_on" if enabled else "turn_off", {"entity_id": entity_id})
+                               svc, {"entity_id": entity_id})
     except ha_client.HAError as exc:
         raise HTTPException(502, str(exc))
     return {"ok": True, "enabled": enabled}
@@ -439,6 +450,7 @@ def run_live_automation(entity_id: str, db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)
     if not entity_id.startswith("automation."):
         raise HTTPException(400, "Keine Automation.")
+    _require_ha_service(s, "automation", "trigger")
     try:
         ha_client.call_service(s.homeassistant_url, smarthome._token(s), "automation",
                                "trigger", {"entity_id": entity_id})

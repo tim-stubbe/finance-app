@@ -1,12 +1,18 @@
 import requests
 
+from . import net_guard
+
 
 def _base(url: str) -> str:
+    # SSRF-Schutz: zentral hier, damit jeder Aufrufer (Router, Scheduler,
+    # Smart Home) automatisch abgesichert ist - nur http/https, kein
+    # Link-Local/Cloud-Metadata-Bereich.
+    net_guard.validate_external_url(url)
     return url.rstrip("/")
 
 
 def list_models(url: str) -> list[str]:
-    resp = requests.get(f"{_base(url)}/api/tags", timeout=10)
+    resp = requests.get(f"{_base(url)}/api/tags", timeout=10, allow_redirects=False)
     resp.raise_for_status()
     data = resp.json()
     return [m.get("name") for m in (data.get("models") or []) if m.get("name")]
@@ -17,6 +23,7 @@ def generate(url: str, model: str, prompt: str, timeout: int = 600) -> str:
         f"{_base(url)}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False},
         timeout=timeout,
+        allow_redirects=False,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -35,6 +42,7 @@ def pull_model(url: str, model: str, timeout: int = 1800) -> str:
         f"{_base(url)}/api/pull",
         json={"name": model, "stream": False},
         timeout=timeout,
+        allow_redirects=False,
     )
     if not resp.ok:
         try:
@@ -54,6 +62,7 @@ def chat(url: str, model: str, messages: list[dict], timeout: int = 600) -> str:
         f"{_base(url)}/api/chat",
         json={"model": model, "messages": messages, "stream": False},
         timeout=timeout,
+        allow_redirects=False,
     )
     if not resp.ok:
         # Ollama liefert bei 4xx/5xx oft eine erklärende JSON-Fehlermeldung im Body

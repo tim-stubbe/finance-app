@@ -115,6 +115,10 @@ DEFAULT_ALLOWED_SERVICES = {
     ("media_player", "turn_on"), ("media_player", "turn_off"),
     ("scene", "turn_on"),
     ("script", "turn_on"),
+    # Automations-Dashboard (an/aus + "jetzt ausfuehren") - nicht destruktiv,
+    # aber wie alles andere ueber die Allowlist gefuehrt statt am Router
+    # vorbei direkt call_service().
+    ("automation", "turn_on"), ("automation", "turn_off"), ("automation", "trigger"),
 }
 
 # Nie erlaubt, auch nicht ueber die erweiterbare Allowlist - potenziell

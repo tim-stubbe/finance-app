@@ -31,6 +31,11 @@ def test_service_allowed_and_blocked():
     assert not smarthome.service_allowed("lock", "unlock", ["lock.unlock"])
     # Zusatz-Freigabe greift fuer nicht-gesperrte Services:
     assert smarthome.service_allowed("vacuum", "start", ["vacuum.start"])
+    # Automations-Dashboard: an/aus + trigger laufen jetzt ueber dieselbe
+    # Allowlist wie die KI-Pipeline (Router-Endpunkte greifen darauf zu).
+    assert smarthome.service_allowed("automation", "turn_on")
+    assert smarthome.service_allowed("automation", "trigger")
+    assert not smarthome.service_allowed("automation", "reload")
 
 
 def test_parse_json_lenient_handles_fences_and_prose():

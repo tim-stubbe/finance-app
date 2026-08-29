@@ -33,7 +33,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync
+from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard
 from ..database import get_db
 from .ai_assistant import websearch_configured
 
@@ -111,7 +111,13 @@ def update_websearch_provider(data: schemas.WebSearchProviderUpdate, db: Session
     settings = auth.get_or_create_settings(db)
     settings.websearch_provider = data.provider
     if data.provider == "searxng":
-        settings.searxng_url = (data.searxng_url or "").strip() or None
+        url = (data.searxng_url or "").strip() or None
+        if url:
+            try:
+                net_guard.validate_external_url(url)  # SSRF-Schutz (nur http/https, kein Link-Local/Metadata)
+            except net_guard.UnsafeURLError as e:
+                raise HTTPException(400, str(e))
+        settings.searxng_url = url
     db.commit()
     return _websearch_settings_out(settings)
 
