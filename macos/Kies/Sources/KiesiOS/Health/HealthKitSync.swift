@@ -59,7 +59,11 @@ public final class HealthKitSync: ObservableObject {
         }
     }
 
-    public func syncNow(days: Int = 30) async {
+    /// `fullHistory` (Voll-Import per Knopf / beim Aktivieren) holt ~3 Jahre,
+    /// der automatische Lauf beim App-Start nur die letzten Wochen (schnell,
+    /// schliesst Luecken). Backend upsert't je (Typ, Tag), also idempotent.
+    public func syncNow(fullHistory: Bool = false) async {
+        let days = fullHistory ? 1200 : 60
         guard enabled, isAvailable else { return }
         let pairing = PairingStore.shared
         guard pairing.isPaired else { return }

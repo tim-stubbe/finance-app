@@ -31,10 +31,10 @@ struct SettingsView: View {
                     Toggle("Apple Health synchronisieren", isOn: $health.enabled)
                     if health.enabled {
                         Button {
-                            Task { await health.syncNow() }
+                            Task { await health.syncNow(fullHistory: true) }
                         } label: {
                             HStack {
-                                Text("Jetzt synchronisieren")
+                                Text("Gesamten Verlauf synchronisieren")
                                 if health.isSyncing { Spacer(); ProgressView() }
                             }
                         }
@@ -48,7 +48,7 @@ struct SettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("Übernimmt Schritte, Ruhepuls, Gewicht und Schlaf der letzten 30 Tage in deinen Gesundheits-Verlauf (ein Wert pro Tag). Läuft zusätzlich beim App-Start. Freigabe erteilst du im Health-Dialog von iOS.")
+                    Text("Übernimmt Schritte, Ruhepuls, Gewicht und Schlaf in deinen Gesundheits-Verlauf (ein Wert pro Tag). Beim Aktivieren und über den Knopf werden ~3 Jahre importiert; beim App-Start danach nur die letzten Wochen. Freigabe erteilst du im Health-Dialog von iOS.")
                 }
             }
             Section("Verbindung") {
@@ -66,7 +66,7 @@ struct SettingsView: View {
             if enabled { Task { await notifications.requestAuthorization() } }
         }
         .onChange(of: health.enabled) { _, enabled in
-            if enabled { Task { await health.requestAuthorization(); await health.syncNow() } }
+            if enabled { Task { await health.requestAuthorization(); await health.syncNow(fullHistory: true) } }
         }
     }
 }

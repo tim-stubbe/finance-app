@@ -148,7 +148,8 @@ const HEALTH_LABELS = { gewicht: "Gewicht (kg)", schlaf: "Schlaf (Std.)", schrit
 
 async function loadHealthMetrics() {
   const type = document.getElementById("health-metric-type").value;
-  const points = await api(`/health-metrics?metric_type=${type}&days=90`);
+  const days = document.getElementById("health-range")?.value || "90";
+  const points = await api(`/health-metrics?metric_type=${type}&days=${days}`);
   const ctx = document.getElementById("chart-health");
   const label = HEALTH_LABELS[type] || type;
   document.getElementById("health-value").step = type === "schritte" ? "1" : "0.1";
@@ -180,6 +181,7 @@ async function loadHealthMetrics() {
 }
 
 document.getElementById("health-metric-type").addEventListener("change", loadHealthMetrics);
+document.getElementById("health-range").addEventListener("change", loadHealthMetrics);
 
 document.getElementById("health-form").addEventListener("submit", async e => {
   e.preventDefault();

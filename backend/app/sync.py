@@ -234,16 +234,28 @@ def sync_health(
     x_sync_secret: Optional[str] = Header(None),
 ):
     _verify_secret(db, x_sync_secret)
-    from . import crud, schemas as _schemas, models as _models
+    from . import models as _models
 
+    # Upsert je (Typ, Tag), aber - anders als crud.create_health_metric - mit
+    # EINEM Commit am Ende: ein Voll-Import schickt schnell mal ein paar
+    # tausend Tageswerte, ein Commit pro Zeile waere unnoetig langsam.
+    existing = {
+        (row.metric_type, row.date): row
+        for row in db.query(_models.HealthMetric).all()
+    }
     saved = 0
     for m in body.metrics:
-        if m.value < 0 or m.value != m.value:  # negativ / NaN aussortieren
+        if not (m.value == m.value) or m.value < 0:  # NaN / negativ aussortieren
             continue
-        crud.create_health_metric(db, _schemas.HealthMetricCreate(
-            metric_type=_models.HealthMetricType(m.metric_type),
-            date=m.date,
-            value=round(m.value, 3),
-        ))
+        mt = _models.HealthMetricType(m.metric_type)
+        val = round(m.value, 3)
+        cur = existing.get((mt, m.date))
+        if cur is not None:
+            cur.value = val
+        else:
+            row = _models.HealthMetric(metric_type=mt, date=m.date, value=val)
+            db.add(row)
+            existing[(mt, m.date)] = row
         saved += 1
+    db.commit()
     return {"ok": True, "saved": saved}

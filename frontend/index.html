@@ -2097,13 +2097,19 @@
 
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Gesundheits-Grunddaten</h3>
-        <p class="page-sub">Ein Wert pro Tag. Für automatische Erfassung: Apple-Health-Import über die native App (geplant).</p>
+        <p class="page-sub">Ein Wert pro Tag. Automatische Erfassung: Apple-Health-Import über die iOS-App (Einstellungen → „Apple Health synchronisieren“).</p>
         <div class="filter-row">
           <label>Anzeige <select id="health-metric-type">
             <option value="gewicht">Gewicht (kg)</option>
             <option value="schlaf">Schlaf (Std.)</option>
             <option value="schritte">Schritte</option>
             <option value="puls">Ruhepuls (bpm)</option>
+          </select></label>
+          <label>Zeitraum <select id="health-range">
+            <option value="30">30 Tage</option>
+            <option value="90" selected>90 Tage</option>
+            <option value="365">1 Jahr</option>
+            <option value="3650">Alles</option>
           </select></label>
           <span class="page-sub" id="health-stats"></span>
         </div>
