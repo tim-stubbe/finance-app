@@ -301,16 +301,19 @@ class Settings(Base):
     morning_briefing_hour = Column(Integer, nullable=False, default=7)
     morning_briefing_minute = Column(Integer, nullable=False, default=30)
     morning_briefing_send_empty = Column(Boolean, nullable=False, default=False)
-    # --- Proaktiver KI-Assistent: schaut mehrmals täglich über einen breiten
-    # Lebens-Snapshot (Finanzen/Todos/Kalender/Ziele/Lebensbereiche/Fristen)
-    # und meldet sich per Telegram NUR, wenn die KI eine wirklich nützliche,
-    # nicht offensichtliche Beobachtung/Erinnerung hat (siehe proactive.py).
-    # Default False: langfristiges Ziel, aber bewusst opt-in. min_gap_hours
-    # ist der Mindestabstand zwischen zwei proaktiven Meldungen.
+    # --- Proaktiver KI-Assistent: prüft alle 10 Minuten einen breiten Lebens-
+    # Snapshot (Finanzen/Todos/Kalender/Ziele/Fristen) und meldet sich per
+    # Telegram, wenn die lokale KI genau eine wirklich nützliche, nicht
+    # offensichtliche Sache sieht (siehe proactive.py). Default False (opt-in).
+    # Die KI wird nur befragt, wenn sich der Snapshot seit dem letzten Lauf
+    # geändert hat (last_snapshot_hash); last_hash dedupliziert identische
+    # Meldungen; min_gap_hours ist historisch (feste 8-Minuten-Untergrenze in
+    # proactive.py) und wird nicht mehr ausgewertet.
     proactive_assistant_enabled = Column(Boolean, nullable=False, default=False)
     proactive_assistant_min_gap_hours = Column(Integer, nullable=False, default=4)
     proactive_assistant_last_sent_at = Column(DateTime, nullable=True)
     proactive_assistant_last_hash = Column(String, nullable=True)
+    proactive_assistant_last_snapshot_hash = Column(String, nullable=True)
     # --- Quiet Mode (Ruhezeiten) - zentral in notifications.notify() geprüft,
     # siehe dort. quiet_until ist die manuelle "Ruhe bis HH:MM"-Überschreibung
     # (App + Telegram /ruhe), unabhängig von den festen Ruhezeiten.

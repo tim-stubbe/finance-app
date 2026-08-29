@@ -277,6 +277,7 @@ ensure_columns("settings", {
     "proactive_assistant_min_gap_hours": "INTEGER DEFAULT 4",
     "proactive_assistant_last_sent_at": "DATETIME",
     "proactive_assistant_last_hash": "VARCHAR",
+    "proactive_assistant_last_snapshot_hash": "VARCHAR",
     "quiet_hours_enabled": "BOOLEAN DEFAULT 0",
     "quiet_hours_start_hour": "INTEGER DEFAULT 22",
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",
@@ -1939,12 +1940,14 @@ def _scheduled_proactive_assistant():
     try:
         settings = auth.get_or_create_settings(db)
         result = proactive.generate(db, settings)
-        if not result:
-            return
-        text, digest = result
-        notifications.notify(settings, "🤖 " + text)
-        settings.proactive_assistant_last_sent_at = datetime.utcnow()
-        settings.proactive_assistant_last_hash = digest
+        if result:
+            text, digest = result
+            notifications.notify(settings, "🤖 " + text)
+            settings.proactive_assistant_last_sent_at = datetime.utcnow()
+            settings.proactive_assistant_last_hash = digest
+        # Immer committen: generate() schreibt auch ohne Meldung den
+        # Snapshot-Hash fort (siehe dort), damit die KI beim 10-Minuten-Takt
+        # nur bei echten Aenderungen befragt wird.
         db.commit()
     finally:
         db.close()
@@ -2303,8 +2306,8 @@ scheduler.add_job(
     id="smarthome_automation_suggestions", misfire_grace_time=3600,
 )
 scheduler.add_job(
-    _scheduled_proactive_assistant, CronTrigger(hour="9,12,15,18,21", minute=40),
-    id="proactive_assistant", misfire_grace_time=1800,
+    _scheduled_proactive_assistant, CronTrigger(minute="*/10"),
+    id="proactive_assistant", misfire_grace_time=300, max_instances=1, coalesce=True,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es

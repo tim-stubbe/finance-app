@@ -3102,7 +3102,7 @@
           </label>
           <label class="checkbox-label wide">
             <input type="checkbox" id="proactive-assistant-enabled">
-            <span>Proaktiver KI-Assistent – meldet sich mehrmals täglich per Telegram, wenn die lokale KI im Lebens-Überblick (Finanzen, Termine, Todos, Ziele, Fristen) etwas Nützliches sieht. Braucht Ollama; hält Mindestabstand ein, respektiert Ruhezeiten.</span>
+            <span>Proaktiver KI-Assistent – prüft alle 10 Minuten den Lebens-Überblick (Finanzen, Termine, Todos, Ziele, Fristen) und meldet sich per Telegram, sobald die lokale KI etwas wirklich Nützliches sieht. Die KI wird nur befragt, wenn sich etwas geändert hat; identische Meldungen werden unterdrückt, Ruhezeiten gelten. Braucht Ollama.</span>
           </label>
           <label>Bot-Token <input type="password" id="telegram-bot-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
           <label>Chat-ID <input type="text" id="telegram-chat-id" placeholder="z.B. 123456789"></label>

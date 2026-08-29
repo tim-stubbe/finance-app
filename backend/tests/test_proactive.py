@@ -1,24 +1,32 @@
 """Proaktiver KI-Assistent (proactive.py): opt-in, Ollama-Pflicht,
-Mindestabstand und Dedup gegen die letzte Meldung."""
-from datetime import datetime, timedelta
+8-Minuten-Untergrenze und Dedup gegen die letzte Meldung."""
+import uuid
+from datetime import date, datetime, timedelta
 
-from app import auth, proactive, ollama_client
+from app import auth, models, proactive, ollama_client
 from app.database import SessionLocal
 
 
-def _settings(**over):
+def _add_overdue_todo(db):
+    db.add(models.Todo(uid=uuid.uuid4().hex, title="Steuererklärung", done=False,
+                       due_date=date.today() - timedelta(days=10)))
+    db.commit()
+
+
+def _settings(with_content=True, **over):
     db = SessionLocal()
     s = auth.get_or_create_settings(db)
     s.notifications_enabled = True
     s.ollama_url = "http://o"
     s.ollama_model = "m"
     s.proactive_assistant_enabled = True
-    s.proactive_assistant_min_gap_hours = 4
     s.proactive_assistant_last_sent_at = None
     s.proactive_assistant_last_hash = None
     for k, v in over.items():
         setattr(s, k, v)
     db.commit()
+    if with_content:
+        _add_overdue_todo(db)  # sonst greift der "leerer Snapshot"-Kurzschluss
     return db, s
 
 
@@ -59,15 +67,19 @@ def test_real_suggestion_then_cooldown_and_dedup(client, monkeypatch):
         text, digest = res
         assert "Budget" in text and len(digest) == 16
 
-        # Mindestabstand: gerade gesendet -> nichts Neues
+        # 8-Minuten-Untergrenze: gerade gesendet -> noch nichts Neues
         s.proactive_assistant_last_sent_at = datetime.utcnow()
         s.proactive_assistant_last_hash = digest
         db.commit()
         assert proactive.generate(db, s) is None
 
-        # Abstand vorbei, aber identische Antwort -> Dedup greift
-        s.proactive_assistant_last_sent_at = datetime.utcnow() - timedelta(hours=5)
+        # Untergrenze vorbei, Snapshot unverändert -> KI wird gar nicht befragt
+        s.proactive_assistant_last_sent_at = datetime.utcnow() - timedelta(minutes=20)
         db.commit()
+        assert proactive.generate(db, s) is None
+
+        # Snapshot ändert sich, aber die KI liefert denselben Text -> Reply-Dedup
+        _add_overdue_todo(db)
         assert proactive.generate(db, s) is None
     finally:
         db.close()
