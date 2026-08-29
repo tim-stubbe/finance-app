@@ -1,123 +1,134 @@
 import SwiftUI
+import Charts
 import KiesCore
 import GRDB
 
-/// Einfache Tagesübersicht - fällige Todos, die nächsten Termine (falls
-/// bereits synchronisiert) und eine grobe Tagesbilanz aus den heutigen
-/// Buchungen. Bewusst nur eine Zusammenfassung, kein eigenes Bearbeiten hier
-/// (dafür gibt es die Konten-/Buchungen-/Todos-Tabs).
+/// Tagesübersicht als Karten-Screen: Monats-Cashflow (Kacheln + 6-Monats-
+/// Balken), dann fällige Todos, nächste Termine, Ziele, Fristen und offene
+/// Check-ins als kompakte Abschnitts-Karten. Kein Bearbeiten hier - dafür
+/// die jeweiligen Tabs.
 struct TodayView: View {
     @ObservedObject var engine = SyncEngine.shared
     @StateObject private var dueTodos = Box<[Todo]>([])
     @StateObject private var upcomingEvents = Box<[CalendarEvent]>([])
-    @StateObject private var income = Box(0.0)
-    @StateObject private var expense = Box(0.0)
+    @StateObject private var monthIncome = Box(0.0)
+    @StateObject private var monthExpense = Box(0.0)
+    @StateObject private var cashflow = Box<[Queries.MonthFlow]>([])
     @StateObject private var nearGoals = Box<[Goal]>([])
     @StateObject private var uncheckedAreas = Box<[LifeArea]>([])
     @StateObject private var deadlines = Box<[String]>([])
 
+    private var monthNet: Double { monthIncome.value - monthExpense.value }
+
     var body: some View {
-        List {
+        KScreen {
+            header
+
             if !engine.conflicts.isEmpty {
-                Section {
-                    NavigationLink {
-                        ConflictsView()
-                    } label: {
+                NavigationLink { ConflictsView() } label: {
+                    HStack {
                         Label(
                             engine.conflicts.count == 1 ? "1 Sync-Konflikt" : "\(engine.conflicts.count) Sync-Konflikte",
                             systemImage: "exclamationmark.triangle.fill"
                         )
-                        .foregroundStyle(.orange)
+                        .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption)
                     }
+                    .foregroundStyle(.orange)
+                    .kCard()
                 }
+                .buttonStyle(.plain)
             }
 
-            Section("Tagesbilanz") {
-                HStack {
-                    Label("Einnahmen", systemImage: "arrow.down.circle")
-                        .foregroundStyle(.green)
-                    Spacer()
-                    Text(income.value, format: .currency(code: "EUR"))
-                }
-                HStack {
-                    Label("Ausgaben", systemImage: "arrow.up.circle")
-                        .foregroundStyle(.red)
-                    Spacer()
-                    Text(abs(expense.value), format: .currency(code: "EUR"))
+            HStack(spacing: KTheme.gap) {
+                KStatTile(label: "Einnahmen", value: kEUR(monthIncome.value), tint: KTheme.positive)
+                KStatTile(label: "Ausgaben", value: kEUR(monthExpense.value), tint: KTheme.negative)
+                KStatTile(label: "Netto", value: kEUR(monthNet),
+                          tint: monthNet < 0 ? KTheme.negative : .primary)
+            }
+
+            if cashflow.value.contains(where: { $0.income > 0 || $0.expense > 0 }) {
+                KSection(title: "Cashflow 6 Monate", systemImage: "chart.bar") {
+                    Chart {
+                        ForEach(cashflow.value) { m in
+                            BarMark(x: .value("Monat", m.label),
+                                    y: .value("Betrag", m.income))
+                                .position(by: .value("Art", "Einnahmen"))
+                                .foregroundStyle(by: .value("Art", "Einnahmen"))
+                            BarMark(x: .value("Monat", m.label),
+                                    y: .value("Betrag", m.expense))
+                                .position(by: .value("Art", "Ausgaben"))
+                                .foregroundStyle(by: .value("Art", "Ausgaben"))
+                        }
+                    }
+                    .chartForegroundStyleScale(["Einnahmen": KTheme.positive, "Ausgaben": KTheme.negative])
+                    .chartLegend(position: .bottom, spacing: 8)
+                    .frame(height: 150)
                 }
             }
 
             if !upcomingEvents.value.isEmpty {
-                Section("Nächste Termine") {
-                    ForEach(upcomingEvents.value) { event in
-                        VStack(alignment: .leading) {
-                            Text(event.title).font(.body)
-                            Text(eventSubtitle(event)).font(.caption).foregroundStyle(.secondary)
+                KSection(title: "Nächste Termine", systemImage: "calendar") {
+                    VStack(spacing: 10) {
+                        ForEach(upcomingEvents.value) { event in
+                            KRow(title: event.title, subtitle: eventSubtitle(event))
                         }
                     }
                 }
             }
 
-            Section("Fällige Todos") {
+            KSection(title: "Fällige Todos", systemImage: "checklist") {
                 if dueTodos.value.isEmpty {
-                    Text("Nichts fällig.").foregroundStyle(.secondary)
+                    Text("Nichts fällig 🎉").font(.callout).foregroundStyle(.secondary)
                 } else {
-                    ForEach(dueTodos.value) { todo in
-                        HStack {
-                            Text(todo.title)
-                            Spacer()
-                            if let due = todo.due_date {
-                                let overdue = due < DateFormatter.isoDate.string(from: Date())
-                                Text(due).font(.caption).foregroundStyle(overdue ? .red : .secondary)
-                            }
+                    VStack(spacing: 10) {
+                        ForEach(dueTodos.value) { todo in
+                            let overdue = (todo.due_date ?? "") < DateFormatter.isoDate.string(from: Date()) && todo.due_date != nil
+                            KRow(title: todo.title,
+                                 trailing: todo.due_date,
+                                 trailingTint: overdue ? KTheme.negative : .secondary)
                         }
                     }
                 }
             }
 
             if !nearGoals.value.isEmpty {
-                Section("Ziele in Reichweite") {
-                    ForEach(nearGoals.value) { goal in
-                        HStack {
-                            Text(goal.title)
-                            Spacer()
-                            if let targetDate = goal.target_date {
-                                Text(targetDate).font(.caption).foregroundStyle(.secondary)
-                            }
+                KSection(title: "Ziele in Reichweite", systemImage: "target") {
+                    VStack(spacing: 10) {
+                        ForEach(nearGoals.value) { goal in
+                            KRow(title: goal.title, trailing: goal.target_date)
                         }
                     }
                 }
             }
 
             if !deadlines.value.isEmpty {
-                Section("Fristen") {
-                    ForEach(deadlines.value, id: \.self) { text in
-                        Text(text)
+                KSection(title: "Fristen", systemImage: "clock.badge.exclamationmark") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(deadlines.value, id: \.self) { text in
+                            Text(text).font(.callout)
+                        }
                     }
                 }
             }
 
             if !uncheckedAreas.value.isEmpty {
-                Section("Ohne Check-in heute") {
-                    ForEach(uncheckedAreas.value) { area in
-                        Text(area.name)
-                    }
+                KSection(title: "Ohne Check-in heute", systemImage: "heart.text.square") {
+                    Text(uncheckedAreas.value.map(\.name).joined(separator: " · "))
+                        .font(.callout).foregroundStyle(.secondary)
                 }
             }
 
-            Section {
-                SyncStatusFooter()
-            }
+            SyncStatusFooter()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
         }
         .navigationTitle("Heute")
         .toolbar {
             SyncStatusToolbarItem()
             ToolbarItem(placement: .topBarLeading) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
+                NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }
             }
         }
         .task { reload() }
@@ -125,11 +136,24 @@ struct TodayView: View {
         .refreshable { await engine.run() }
     }
 
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(greeting).font(.title2.weight(.bold))
+            Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<11: return "Guten Morgen"
+        case 11..<18: return "Guten Tag"
+        default: return "Guten Abend"
+        }
+    }
+
     private func eventSubtitle(_ event: CalendarEvent) -> String {
-        // event.start kommt roh als Server-ISO-String an ("2026-08-27T14:00:00")
-        // - unformatiert anzuzeigen sah wie ein Bug aus. Lässt sich das Datum
-        // ausnahmsweise nicht parsen (unerwartetes Format), notfalls den rohen
-        // String zeigen statt gar nichts anzuzeigen.
         let startDisplay: String
         if event.all_day {
             startDisplay = "ganztägig"
@@ -158,13 +182,12 @@ struct TodayView: View {
                 .limit(5)
                 .fetchAll(db)
         }) ?? []
-        let balance = (try? db.read { db in try Queries.todayBalance(db) }) ?? (income: 0, expense: 0)
-        income.value = balance.income
-        expense.value = balance.expense
 
-        // "In Reichweite" heißt hier: nahes Zieldatum (kein numerischer
-        // Fortschritt lokal verfügbar, siehe Models.swift-Kommentar zu Goal) -
-        // nur die nächsten 60 Tage, damit die Heute-Ansicht ein Digest bleibt.
+        let flow = (try? db.read { db in try Queries.currentMonthCashflow(db) }) ?? (income: 0, expense: 0)
+        monthIncome.value = flow.income
+        monthExpense.value = flow.expense
+        cashflow.value = (try? db.read { db in try Queries.monthlyCashflow(db, months: 6) }) ?? []
+
         let cutoff = DateFormatter.isoDate.string(from: Date().addingTimeInterval(60 * 24 * 60 * 60))
         nearGoals.value = ((try? db.read { db in try Queries.goalsNearTarget(db, limit: 20) }) ?? [])
             .filter { ($0.target_date ?? "") <= cutoff && $0.target_date != nil }

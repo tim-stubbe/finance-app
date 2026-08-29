@@ -55,7 +55,7 @@ struct KiesAskIntent: AppIntent {
                 return .result(dialog: "Kies hat den Zugriff abgelehnt – Kopplung prüfen.")
             }
             if http.statusCode != 200 {
-                return .result(dialog: (obj?["detail"] as? String) ?? "Kies konnte das nicht verarbeiten.")
+                return .result(dialog: IntentDialog(stringLiteral: (obj?["detail"] as? String) ?? "Kies konnte das nicht verarbeiten."))
             }
             let reply = (obj?["reply"] as? String) ?? "Erledigt."
             return .result(dialog: IntentDialog(stringLiteral: reply))
@@ -70,10 +70,13 @@ struct KiesShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: KiesAskIntent(),
+            // Freitext-Parameter (String) dürfen NICHT in die Phrasen
+            // interpoliert werden (nur AppEntity/AppEnum) - Siri fragt den
+            // Befehl nach dem Auslösen der Phrase ab (parameterSummary oben).
             phrases: [
-                "Sag \(.applicationName) \(\.$text)",
-                "Frag \(.applicationName) \(\.$text)",
-                "\(.applicationName) \(\.$text)",
+                "Sag \(.applicationName) etwas",
+                "Frag \(.applicationName)",
+                "\(.applicationName) fragen",
             ],
             shortTitle: "Kies fragen",
             systemImageName: "house.fill"

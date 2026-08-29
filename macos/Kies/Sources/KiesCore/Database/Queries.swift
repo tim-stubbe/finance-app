@@ -77,6 +77,138 @@ public enum Queries {
         try Holding.order(Column("name")).fetchAll(db)
     }
 
+    // MARK: - Kennzahlen / Diagramm-Daten (iOS-Übersicht)
+
+    public struct DayValue: Identifiable {
+        public var id: Date { date }
+        public let date: Date
+        public let value: Double
+    }
+
+    public struct MonthFlow: Identifiable {
+        public var id: Date { month }
+        public let month: Date
+        public let label: String
+        public let income: Double
+        public let expense: Double
+        public var net: Double { income - expense }
+    }
+
+    public struct AllocationSlice: Identifiable {
+        public var id: String { label }
+        public let label: String
+        public let value: Double
+    }
+
+    public struct InvestmentTotals {
+        public let value: Double
+        public let cost: Double
+        public init(value: Double, cost: Double) { self.value = value; self.cost = cost }
+        public var gain: Double { value - cost }
+        public var gainPct: Double { cost > 0 ? (value - cost) / cost * 100 : 0 }
+    }
+
+    /// Nettovermögen = Summe aller Kontosalden (Startsaldo + alle Buchungen).
+    public static func netWorth(_ db: Database) throws -> Double {
+        let initials = try Double.fetchOne(db, sql: "SELECT COALESCE(SUM(initial_balance), 0) FROM accounts") ?? 0
+        let moves = try Double.fetchOne(db, sql: "SELECT COALESCE(SUM(amount), 0) FROM transactions") ?? 0
+        return initials + moves
+    }
+
+    /// Nettovermögens-Verlauf der letzten `days` Tage - vom aktuellen Stand
+    /// aus rückwärts gerechnet (Tagessummen der Buchungen abziehen). Rein
+    /// lokal, ohne net_worth_snapshots (die werden nicht synchronisiert).
+    public static func netWorthSeries(_ db: Database, days: Int = 90) throws -> [DayValue] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var running = try netWorth(db)
+
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT date AS d, COALESCE(SUM(amount), 0) AS s
+            FROM transactions GROUP BY date
+            """)
+        var deltaByDay: [String: Double] = [:]
+        for r in rows { deltaByDay[r["d"] as String] = r["s"] as Double }
+
+        var out: [DayValue] = []
+        for i in 0...max(1, days) {
+            guard let day = cal.date(byAdding: .day, value: -i, to: today) else { break }
+            out.append(DayValue(date: day, value: running))
+            running -= deltaByDay[DateFormatter.isoDate.string(from: day)] ?? 0
+        }
+        return out.reversed()
+    }
+
+    /// Einnahmen/Ausgaben je Kalendermonat (ohne Umbuchungen), die letzten
+    /// `months` Monate inkl. laufendem - fehlende Monate mit 0 aufgefüllt.
+    public static func monthlyCashflow(_ db: Database, months: Int = 6) throws -> [MonthFlow] {
+        let cal = Calendar.current
+        let now = Date()
+        let startMonth = cal.date(byAdding: .month, value: -(months - 1),
+                                  to: cal.date(from: cal.dateComponents([.year, .month], from: now))!)!
+        let startKey = String(DateFormatter.isoDate.string(from: startMonth).prefix(7))
+
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT substr(date, 1, 7) AS ym,
+                   COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS inc,
+                   COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) AS exp
+            FROM transactions
+            WHERE is_transfer = 0 AND substr(date, 1, 7) >= ?
+            GROUP BY ym
+            """, arguments: [startKey])
+        var byMonth: [String: (Double, Double)] = [:]
+        for r in rows { byMonth[r["ym"] as String] = (r["inc"] as Double, r["exp"] as Double) }
+
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "de_DE")
+        fmt.dateFormat = "MMM"
+
+        var out: [MonthFlow] = []
+        for i in 0..<months {
+            guard let m = cal.date(byAdding: .month, value: i, to: startMonth) else { continue }
+            let key = String(DateFormatter.isoDate.string(from: m).prefix(7))
+            let (inc, exp) = byMonth[key] ?? (0, 0)
+            out.append(MonthFlow(month: m, label: fmt.string(from: m), income: inc, expense: exp))
+        }
+        return out
+    }
+
+    /// Aktueller Cashflow des laufenden Monats (ohne Umbuchungen).
+    public static func currentMonthCashflow(_ db: Database) throws -> (income: Double, expense: Double) {
+        let key = String(DateFormatter.isoDate.string(from: Date()).prefix(7))
+        let inc = try Double.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(amount), 0) FROM transactions
+            WHERE is_transfer = 0 AND amount > 0 AND substr(date, 1, 7) = ?
+            """, arguments: [key]) ?? 0
+        let exp = try Double.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(-amount), 0) FROM transactions
+            WHERE is_transfer = 0 AND amount < 0 AND substr(date, 1, 7) = ?
+            """, arguments: [key]) ?? 0
+        return (inc, exp)
+    }
+
+    /// Depot-Aufteilung nach Anlageart (aktueller Wert = Menge × akt. Kurs,
+    /// ersatzweise Kaufkurs).
+    public static func holdingsAllocation(_ db: Database) throws -> [AllocationSlice] {
+        try allHoldings(db)
+            .reduce(into: [String: Double]()) { acc, h in
+                acc[h.asset_type, default: 0] += (h.current_price ?? h.purchase_price) * h.quantity
+            }
+            .filter { $0.value > 0.01 }
+            .map { AllocationSlice(label: $0.key, value: $0.value) }
+            .sorted { $0.value > $1.value }
+    }
+
+    /// Depotwert vs. Einstandswert.
+    public static func investmentTotals(_ db: Database) throws -> InvestmentTotals {
+        var value = 0.0, cost = 0.0
+        for h in try allHoldings(db) {
+            value += (h.current_price ?? h.purchase_price) * h.quantity
+            cost += h.purchase_price * h.quantity
+        }
+        return InvestmentTotals(value: value, cost: cost)
+    }
+
     /// Aktive, noch nicht gekaufte Wünsche.
     public static func openWishlistItems(_ db: Database) throws -> [WishlistItem] {
         try WishlistItem
