@@ -56,6 +56,11 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.app.kies
+        # Apple-Health-Import (Sources/KiesiOS/Health/HealthKitSync.swift) -
+        # nur Lesen (Schritte/Ruhepuls/Gewicht/Schlaf), kein Clinical-Records-
+        # Zugriff, daher .access leer.
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.kies.KiesiOS

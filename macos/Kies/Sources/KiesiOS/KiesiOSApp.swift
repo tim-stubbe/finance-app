@@ -59,6 +59,9 @@ struct RootView: View {
                 if engine.lastError == nil {
                     WidgetCenter.shared.reloadAllTimelines()
                 }
+                // Apple-Health-Werte (falls aktiviert) gleich mitziehen -
+                // eigener Endpunkt, unabhaengig vom Entity-Sync oben.
+                await HealthKitSync.shared.syncNow()
             }
             .onAppear { lock.lockIfEnabled() }
             .onOpenURL { url in

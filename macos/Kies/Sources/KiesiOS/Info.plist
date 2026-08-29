@@ -38,6 +38,8 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Entsperrt die Kies-App mit Face ID statt mit dem Geräte-Code.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Kies liest Schritte, Ruhepuls, Gewicht und Schlaf aus Apple Health, um sie in deinen Gesundheits-Verlauf zu übernehmen.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

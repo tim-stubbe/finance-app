@@ -145,3 +145,35 @@ def test_native_command_routes_via_hub(client, monkeypatch):
                     headers={"X-Sync-Secret": SECRET})
     assert r.status_code == 200
     assert r.json()["domain"] == "todo"
+
+
+# --- Apple-Health-Import (/api/sync/health) ---
+def test_health_sync_needs_secret(client):
+    _enable_native_sync()
+    assert client.post("/api/sync/health", json={"metrics": []}).status_code == 403
+
+
+def test_health_sync_upserts_per_type_and_day(client):
+    _enable_native_sync()
+    headers = {"X-Sync-Secret": SECRET}
+    body = {"metrics": [
+        {"metric_type": "schritte", "date": "2026-08-28", "value": 8123.0},
+        {"metric_type": "puls", "date": "2026-08-28", "value": 54.2},
+        {"metric_type": "schritte", "date": "2026-08-28", "value": 9000.0},  # ueberschreibt
+        {"metric_type": "gewicht", "date": "2026-08-28", "value": -1.0},     # verworfen
+    ]}
+    r = client.post("/api/sync/health", json=body, headers=headers)
+    assert r.status_code == 200
+    assert r.json()["saved"] == 3
+
+    from app.database import SessionLocal
+    from app import models
+    db = SessionLocal()
+    try:
+        rows = db.query(models.HealthMetric).all()
+        by = {(x.metric_type.value, str(x.date)): x.value for x in rows}
+        assert by[("schritte", "2026-08-28")] == 9000.0  # letzter Wert gewinnt
+        assert by[("puls", "2026-08-28")] == 54.2
+        assert ("gewicht", "2026-08-28") not in by
+    finally:
+        db.close()

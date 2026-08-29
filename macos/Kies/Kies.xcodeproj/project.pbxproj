@@ -18,6 +18,7 @@
 		3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */; };
 		58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */; };
 		6AE7088E2703106A3753482B /* ConflictsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F087B937238D319A6DEBE69 /* ConflictsView.swift */; };
+		6F28ADB272378ECD13AD8FB4 /* HealthKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B680F6717ADE402F1BF17A0 /* HealthKitSync.swift */; };
 		73EEE66A7C60EAC7ABB62CDD /* SyncStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688EF710F5CAC80ACBAD0D85 /* SyncStatusBar.swift */; };
 		761FB9FD89FC2A446959E6B7 /* Box.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BFEBBA631B1F700D31671F /* Box.swift */; };
 		77A8121258C229BD13A889F2 /* AppLockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C2FAFA9FA014943AD1D181 /* AppLockView.swift */; };
@@ -81,6 +82,7 @@
 		1C96DEEF5122EF2D08A40156 /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
 		269859CF78204993C6524A99 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		3329E7178B1F2338F8D33732 /* KiesWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KiesWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B680F6717ADE402F1BF17A0 /* HealthKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSync.swift; sourceTree = "<group>"; };
 		4BB383E45F1D2E267830E6E5 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		5358C2F69A3B288B580B3AD8 /* KiesShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesShare.entitlements; sourceTree = "<group>"; };
 		5E7FBB02C92E905A937C99DD /* DesignKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignKit.swift; sourceTree = "<group>"; };
@@ -179,6 +181,14 @@
 			path = KiesShare;
 			sourceTree = "<group>";
 		};
+		9BE38C2CE70B21C2095B04E9 /* Health */ = {
+			isa = PBXGroup;
+			children = (
+				4B680F6717ADE402F1BF17A0 /* HealthKitSync.swift */,
+			);
+			path = Health;
+			sourceTree = "<group>";
+		};
 		AFC3670357A52D117DF2290F /* KiesWidget */ = {
 			isa = PBXGroup;
 			children = (
@@ -200,6 +210,7 @@
 				003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */,
 				72EB950D2FFE4CA505B7AFCF /* TabRouter.swift */,
 				30438CFC92D36BE4CBFCB041 /* AppLock */,
+				9BE38C2CE70B21C2095B04E9 /* Health */,
 				F1952CB3CC8AF9F3A6D83801 /* Views */,
 			);
 			path = KiesiOS;
@@ -388,6 +399,7 @@
 				6AE7088E2703106A3753482B /* ConflictsView.swift in Sources */,
 				807B16A7ED8092320C57D7A9 /* DesignKit.swift in Sources */,
 				990146C5809F4FA34F5EA3BC /* GoalsView.swift in Sources */,
+				6F28ADB272378ECD13AD8FB4 /* HealthKitSync.swift in Sources */,
 				077886866D9A8E05D4BB7600 /* InvestmentsView.swift in Sources */,
 				CD92EC1BA139315BC97F3DCB /* KiesAskIntent.swift in Sources */,
 				A400936DEEE7E1471D4D07E4 /* KiesiOSApp.swift in Sources */,

@@ -210,3 +210,40 @@ def native_command(
     spaces = crud.get_spaces(db)
     space_id = spaces[0].id if spaces else 1
     return hub_command.route(db, settings, body.text, space_id, confirm=body.confirm)
+
+
+# --- Apple-Health-Import vom iPhone (HealthKit -> health_metrics). Eigener
+# schlanker Endpunkt statt HealthMetric ins generische Sync-Registry zu heben
+# (die Tabelle hat kein updated_at/space_id). Upsert je (Typ, Tag) wie im
+# Web-Formular (crud.create_health_metric), damit die Verlaufskurve nicht
+# durch mehrere Tageswerte verzerrt wird. Auth: dasselbe X-Sync-Secret.
+class HealthMetricIn(BaseModel):
+    metric_type: Literal["gewicht", "schlaf", "schritte", "puls"]
+    date: date
+    value: float
+
+
+class HealthSyncRequest(BaseModel):
+    metrics: list[HealthMetricIn]
+
+
+@sync_router.post("/health")
+def sync_health(
+    body: HealthSyncRequest,
+    db: Session = Depends(get_db),
+    x_sync_secret: Optional[str] = Header(None),
+):
+    _verify_secret(db, x_sync_secret)
+    from . import crud, schemas as _schemas, models as _models
+
+    saved = 0
+    for m in body.metrics:
+        if m.value < 0 or m.value != m.value:  # negativ / NaN aussortieren
+            continue
+        crud.create_health_metric(db, _schemas.HealthMetricCreate(
+            metric_type=_models.HealthMetricType(m.metric_type),
+            date=m.date,
+            value=round(m.value, 3),
+        ))
+        saved += 1
+    return {"ok": True, "saved": saved}
