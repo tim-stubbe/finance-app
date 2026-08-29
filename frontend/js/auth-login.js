@@ -113,7 +113,10 @@ document.getElementById("setup-form").addEventListener("submit", async e => {
 document.getElementById("login-form").addEventListener("submit", async e => {
   e.preventDefault();
   const password = document.getElementById("login-password").value;
-  const name = document.getElementById("login-name").value.trim();
+  // ?. - eine (aus dem Cache) veraltete index.html kennt das Namensfeld
+  // evtl. noch nicht; ohne Guard wuerde .value hier werfen und faelschlich
+  // als "Server nicht erreichbar" im catch landen.
+  const name = (document.getElementById("login-name")?.value || "").trim();
   setFormError("login-error", null);
   try {
     const res = await fetch(API + "/auth/login", {
@@ -132,7 +135,9 @@ document.getElementById("login-form").addEventListener("submit", async e => {
     document.getElementById("login-screen").classList.add("hidden");
     startApp();
   } catch (e) {
-    setFormError("login-error", "Server nicht erreichbar.");
+    setFormError("login-error", e instanceof TypeError && !/fetch|network|load failed/i.test(e.message)
+      ? "App-Version veraltet – bitte Seite neu laden (ggf. Cache leeren)."
+      : "Server nicht erreichbar.");
   }
 });
 
