@@ -38,6 +38,7 @@ struct LifeAreasView: View {
                     }
                     .buttonStyle(.borderless)
                 }
+                .kListRow()
                 .swipeActions(edge: .trailing) {
                     Button {
                         quickCheckin(area)
@@ -48,6 +49,8 @@ struct LifeAreasView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Leben")
         .toolbar { SyncStatusToolbarItem() }
         .task { reload() }

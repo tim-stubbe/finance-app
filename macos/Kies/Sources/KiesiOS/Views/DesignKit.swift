@@ -31,6 +31,22 @@ extension View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(KTheme.card, in: RoundedRectangle(cornerRadius: KTheme.corner, style: .continuous))
     }
+
+    /// Einheitlicher Hintergrund fuer die Screens, die weiter `List` nutzen
+    /// (Todos/Ziele/Wuensche/... - dort haengen die Swipe-Aktionen dran).
+    /// Zusammen mit `.listRowBackground(KTheme.card)` + versteckten Trennern
+    /// ergibt das denselben Karten-Look wie die KScreen-Seiten.
+    func kListChrome() -> some View {
+        self
+            .scrollContentBackground(.hidden)
+            .background(KTheme.background.ignoresSafeArea())
+    }
+
+    func kListRow() -> some View {
+        self
+            .listRowBackground(KTheme.card)
+            .listRowSeparator(.hidden)
+    }
 }
 
 /// Scrollbarer Bildschirm mit einheitlichem Hintergrund + Rändern. Ersetzt

@@ -43,6 +43,7 @@ struct TodosView: View {
                         }
                         Spacer()
                     }
+                    .kListRow()
                     .swipeActions(edge: .trailing) {
                         Button {
                             toggle(todo)
@@ -61,8 +62,11 @@ struct TodosView: View {
                     Button("Hinzufügen") { addTodo() }
                         .disabled(newTitle.value.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+                .kListRow()
             }
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Todos")
         .toolbar { SyncStatusToolbarItem() }
         .task { reload() }

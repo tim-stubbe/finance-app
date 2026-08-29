@@ -4,7 +4,18 @@ import Foundation
 /// Strings, damit ein Tab-Ziel von überall her (Such-Ergebnis antippen,
 /// Widget-Deep-Link) eindeutig benannt werden kann.
 public enum AppTab: String, CaseIterable {
-    case today, accounts, transactions, todos, goals, life, wishlist, categories, investments, search
+    case today, accounts, transactions, todos, more
+    // Nebenschauplaetze - eigene Tags fuer Deep-Links/Suche, aber kein
+    // eigener Tab mehr (siehe RootTabView / MoreView). jump(to:) leitet sie
+    // auf den "Mehr"-Tab um.
+    case goals, life, wishlist, categories, investments, search
+
+    var primaryTab: AppTab {
+        switch self {
+        case .today, .accounts, .transactions, .todos: return self
+        default: return .more
+        }
+    }
 }
 
 /// Zentrale Stelle, um programmatisch den aktiven Tab zu wechseln - genutzt
@@ -22,6 +33,6 @@ public final class TabRouter: ObservableObject {
     private init() {}
 
     public func jump(to tab: AppTab) {
-        selection = tab
+        selection = tab.primaryTab
     }
 }

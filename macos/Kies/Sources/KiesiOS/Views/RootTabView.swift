@@ -12,6 +12,10 @@ struct RootTabView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
+            // Bewusst nur fuenf Tabs - ab sechs kippt iOS sie in ein eigenes,
+            // ungestyltes "Mehr"-Menue. Die Nebenschauplaetze (Ziele, Leben,
+            // Wuensche, Investments, Kategorien, Suche) liegen im MoreView-
+            // Kartenraster.
             TabView(selection: $router.selection) {
                 NavigationStack { TodayView() }
                     .tabItem { Label("Heute", systemImage: "sun.max") }
@@ -25,24 +29,9 @@ struct RootTabView: View {
                 NavigationStack { TodosView() }
                     .tabItem { Label("Todos", systemImage: "checklist") }
                     .tag(AppTab.todos)
-                NavigationStack { GoalsView() }
-                    .tabItem { Label("Ziele", systemImage: "target") }
-                    .tag(AppTab.goals)
-                NavigationStack { LifeAreasView() }
-                    .tabItem { Label("Leben", systemImage: "heart.text.square") }
-                    .tag(AppTab.life)
-                NavigationStack { WishlistView() }
-                    .tabItem { Label("Wünsche", systemImage: "heart") }
-                    .tag(AppTab.wishlist)
-                NavigationStack { CategoriesView() }
-                    .tabItem { Label("Kategorien", systemImage: "tag") }
-                    .tag(AppTab.categories)
-                NavigationStack { InvestmentsView() }
-                    .tabItem { Label("Investments", systemImage: "chart.line.uptrend.xyaxis") }
-                    .tag(AppTab.investments)
-                NavigationStack { SearchView() }
-                    .tabItem { Label("Suche", systemImage: "magnifyingglass") }
-                    .tag(AppTab.search)
+                NavigationStack { MoreView() }
+                    .tabItem { Label("Mehr", systemImage: "square.grid.2x2") }
+                    .tag(AppTab.more)
             }
 
             Button {

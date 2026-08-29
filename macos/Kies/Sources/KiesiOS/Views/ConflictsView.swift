@@ -43,6 +43,7 @@ struct ConflictsView: View {
                 }
             }
         }
+        .kListChrome()
         .navigationTitle("Konflikte")
         .task { await engine.loadConflicts() }
         .refreshable { await engine.loadConflicts() }

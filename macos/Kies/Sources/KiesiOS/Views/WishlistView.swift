@@ -26,6 +26,7 @@ struct WishlistView: View {
                         Text(price, format: .currency(code: "EUR")).font(.subheadline)
                     }
                 }
+                .kListRow()
                 .swipeActions(edge: .trailing) {
                     Button {
                         markPurchased(item)
@@ -37,6 +38,8 @@ struct WishlistView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Wunschliste")
         .toolbar { SyncStatusToolbarItem() }
         .task { reload() }

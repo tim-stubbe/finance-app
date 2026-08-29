@@ -27,6 +27,7 @@ struct GoalsView: View {
                         Text("Ziel: \(targetDate)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                .kListRow()
                 .swipeActions(edge: .trailing) {
                     Button {
                         markCompleted(goal)
@@ -38,6 +39,8 @@ struct GoalsView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Ziele")
         .toolbar { SyncStatusToolbarItem() }
         .task { reload() }

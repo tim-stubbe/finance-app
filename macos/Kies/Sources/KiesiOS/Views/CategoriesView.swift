@@ -24,6 +24,7 @@ struct CategoriesView: View {
                     Spacer()
                     Text(category.type).font(.caption).foregroundStyle(.secondary)
                 }
+                .kListRow()
                 .swipeActions(edge: .trailing) {
                     Button {
                         editingCategory = category
@@ -35,6 +36,8 @@ struct CategoriesView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Kategorien")
         .toolbar { SyncStatusToolbarItem() }
         .task { reload() }

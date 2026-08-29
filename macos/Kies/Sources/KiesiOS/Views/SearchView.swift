@@ -49,11 +49,14 @@ struct SearchView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .kListRow()
                         }
                     }
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Suche")
         .searchable(text: query.binding, prompt: "Suchen…")
         .onChange(of: query.value) { _, _ in search() }

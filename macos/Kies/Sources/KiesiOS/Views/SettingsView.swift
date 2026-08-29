@@ -58,6 +58,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .kListChrome()
         .navigationTitle("Einstellungen")
         .onChange(of: lock.enabled) { _, enabled in
             if enabled { lock.lockIfEnabled() }
