@@ -6,7 +6,7 @@ import KiesCore
 /// Wünschen selbst - dafür bleibt die Web-App der Ort, siehe ROADMAP.md).
 struct WishlistView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var items = Box<[WishlistItem]>([])
+    @StateObject private var items = Box<[WishlistItem]>([])
 
     var body: some View {
         List {

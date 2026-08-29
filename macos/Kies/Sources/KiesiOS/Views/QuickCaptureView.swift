@@ -18,7 +18,7 @@ struct QuickCaptureView: View {
     @State private var kind: Kind = .transaction
 
     // Buchung
-    @ObservedObject private var accounts = Box<[Account]>([])
+    @StateObject private var accounts = Box<[Account]>([])
     @State private var accountID: Int64?
     @State private var amountText = ""
     @State private var txDescription = ""
@@ -29,7 +29,7 @@ struct QuickCaptureView: View {
     @State private var dueDate = Date()
 
     // Check-in
-    @ObservedObject private var lifeAreas = Box<[LifeArea]>([])
+    @StateObject private var lifeAreas = Box<[LifeArea]>([])
     @State private var checkinAreaID: Int64?
     @State private var checkinNote = ""
 

@@ -8,7 +8,7 @@ import GRDB
 /// naheliegendste erste Blick ist.
 struct AccountsView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var rows = Box<[(account: Account, balance: Double)]>([])
+    @StateObject private var rows = Box<[(account: Account, balance: Double)]>([])
 
     var body: some View {
         List(rows.value, id: \.account.id) { row in

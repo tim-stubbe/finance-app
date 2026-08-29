@@ -7,7 +7,7 @@ import KiesCore
 /// Kauf-/Verkauf-Buchführung ist zu komplex für diese Runde).
 struct InvestmentsView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var holdings = Box<[Holding]>([])
+    @StateObject private var holdings = Box<[Holding]>([])
 
     var body: some View {
         List {

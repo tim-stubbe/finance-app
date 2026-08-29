@@ -10,7 +10,7 @@ import KiesCore
 /// Models.swift-Kommentar zu Goal).
 struct GoalsView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var goals = Box<[Goal]>([])
+    @StateObject private var goals = Box<[Goal]>([])
 
     var body: some View {
         List {

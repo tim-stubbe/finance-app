@@ -9,8 +9,8 @@ import GRDB
 /// nicht und wäre für diese erste Scheibe unnötige Komplexität.
 struct TodosView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var todos = Box<[Todo]>([])
-    @ObservedObject private var newTitle = Box("")
+    @StateObject private var todos = Box<[Todo]>([])
+    @StateObject private var newTitle = Box("")
 
     var body: some View {
         List {

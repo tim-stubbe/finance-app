@@ -9,8 +9,8 @@ import KiesCore
 /// lokal aus life_checkins abgeleitet (siehe Queries.lifeAreasWithoutCheckinToday).
 struct LifeAreasView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var allAreas = Box<[LifeArea]>([])
-    @ObservedObject private var openAreaIDs = Box<Set<Int64>>([])
+    @StateObject private var allAreas = Box<[LifeArea]>([])
+    @StateObject private var openAreaIDs = Box<Set<Int64>>([])
     @State private var checkinArea: LifeArea?
     @State private var checkinNote = ""
 

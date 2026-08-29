@@ -12,8 +12,8 @@ import GRDB
 /// App hat aktuell keine Detail-Screens für einzelne Zeilen (nur Listen),
 /// "richtigen Tab öffnen" ist der bestehende Detailgrad überall sonst.
 struct SearchView: View {
-    @ObservedObject private var query = Box("")
-    @ObservedObject private var results = Box<[Queries.SearchResult]>([])
+    @StateObject private var query = Box("")
+    @StateObject private var results = Box<[Queries.SearchResult]>([])
     @ObservedObject private var router = TabRouter.shared
 
     var body: some View {

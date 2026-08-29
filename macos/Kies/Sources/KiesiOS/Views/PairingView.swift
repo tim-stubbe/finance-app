@@ -8,10 +8,10 @@ import KiesCore
 struct PairingView: View {
     @ObservedObject var pairing = PairingStore.shared
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var urlInput = Box("")
-    @ObservedObject private var secretInput = Box("")
-    @ObservedObject private var testing = Box(false)
-    @ObservedObject private var testResult = Box<String?>(nil)
+    @StateObject private var urlInput = Box("")
+    @StateObject private var secretInput = Box("")
+    @StateObject private var testing = Box(false)
+    @StateObject private var testResult = Box<String?>(nil)
 
     var body: some View {
         NavigationStack {

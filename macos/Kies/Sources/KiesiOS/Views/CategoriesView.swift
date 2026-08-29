@@ -9,7 +9,7 @@ import KiesCore
 /// macOS nicht sichtbar war - dort compilierte derselbe Typname anstandslos).
 struct CategoriesView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var categories = Box<[KiesCore.Category]>([])
+    @StateObject private var categories = Box<[KiesCore.Category]>([])
     @State private var editingCategory: KiesCore.Category?
     @State private var editedName = ""
 

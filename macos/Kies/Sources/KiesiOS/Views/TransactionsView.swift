@@ -7,11 +7,11 @@ import GRDB
 /// erste iOS-Scheibe bewusst zu viel (siehe ROADMAP.md).
 struct TransactionsView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var transactions = Box<[TransactionRecord]>([])
-    @ObservedObject private var accountsByID = Box<[Int64: Account]>([:])
-    @ObservedObject private var accountFilter = Box<Int64?>(nil)
-    @ObservedObject private var onlyLast30Days = Box(false)
-    @ObservedObject private var showNewSheet = Box(false)
+    @StateObject private var transactions = Box<[TransactionRecord]>([])
+    @StateObject private var accountsByID = Box<[Int64: Account]>([:])
+    @StateObject private var accountFilter = Box<Int64?>(nil)
+    @StateObject private var onlyLast30Days = Box(false)
+    @StateObject private var showNewSheet = Box(false)
     @State private var editingTransaction: TransactionRecord?
 
     var body: some View {
@@ -109,9 +109,9 @@ struct NewTransactionSheet: View {
     let accounts: [Account]
     let onSaved: () -> Void
 
-    @ObservedObject private var accountID = Box<Int64?>(nil)
-    @ObservedObject private var amountText = Box("")
-    @ObservedObject private var description = Box("")
+    @StateObject private var accountID = Box<Int64?>(nil)
+    @StateObject private var amountText = Box("")
+    @StateObject private var description = Box("")
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

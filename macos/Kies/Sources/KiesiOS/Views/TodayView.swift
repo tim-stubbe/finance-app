@@ -8,13 +8,13 @@ import GRDB
 /// (dafür gibt es die Konten-/Buchungen-/Todos-Tabs).
 struct TodayView: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var dueTodos = Box<[Todo]>([])
-    @ObservedObject private var upcomingEvents = Box<[CalendarEvent]>([])
-    @ObservedObject private var income = Box(0.0)
-    @ObservedObject private var expense = Box(0.0)
-    @ObservedObject private var nearGoals = Box<[Goal]>([])
-    @ObservedObject private var uncheckedAreas = Box<[LifeArea]>([])
-    @ObservedObject private var deadlines = Box<[String]>([])
+    @StateObject private var dueTodos = Box<[Todo]>([])
+    @StateObject private var upcomingEvents = Box<[CalendarEvent]>([])
+    @StateObject private var income = Box(0.0)
+    @StateObject private var expense = Box(0.0)
+    @StateObject private var nearGoals = Box<[Goal]>([])
+    @StateObject private var uncheckedAreas = Box<[LifeArea]>([])
+    @StateObject private var deadlines = Box<[String]>([])
 
     var body: some View {
         List {

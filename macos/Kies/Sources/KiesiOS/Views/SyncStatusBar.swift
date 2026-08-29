@@ -33,7 +33,7 @@ struct SyncStatusToolbarItem: ToolbarContent {
 /// nur ein Hinweistext, kein Abbruch/Crash-Dialog.
 struct SyncStatusFooter: View {
     @ObservedObject var engine = SyncEngine.shared
-    @ObservedObject private var pendingCount = Box(0)
+    @StateObject private var pendingCount = Box(0)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
