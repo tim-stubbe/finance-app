@@ -137,12 +137,12 @@ struct TodayView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(greeting).font(.title2.weight(.bold))
-            Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                .font(.subheadline).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            KKicker(text: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+            Text(greeting).font(.kSerif(.largeTitle)).foregroundStyle(KTheme.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
     }
 
     private var greeting: String {

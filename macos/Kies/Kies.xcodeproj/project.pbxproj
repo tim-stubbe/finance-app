@@ -11,6 +11,7 @@
 		08518DE87B20ACB6118F5523 /* ShareComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F9F33F1FD689F6223BF5A0 /* ShareComposeView.swift */; };
 		13C8EB9492779EA87C304DC1 /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 65BF779BF24FCE8A842FCB93 /* KiesCore */; };
 		17E2FB83B1FA148965C2D5D8 /* LifeAreasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67BDE07271DA65961F2A88CB /* LifeAreasView.swift */; };
+		21D1BF72568D488C08239C68 /* KiesAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAF7F13B45D24949F8E83877 /* KiesAppearance.swift */; };
 		24620312A0728058A1235360 /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = D8690335D4F34894C7985659 /* KiesCore */; };
 		2793BCA37DC0162FE03AE6D8 /* TodosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85F5ED97A93ECD9BC83743D /* TodosView.swift */; };
 		28B336A146960054E6B7890D /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C557578D4B70FD785495CC8 /* CategoriesView.swift */; };
@@ -104,6 +105,7 @@
 		B3F9F33F1FD689F6223BF5A0 /* ShareComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposeView.swift; sourceTree = "<group>"; };
 		B8BFEBBA631B1F700D31671F /* Box.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Box.swift; sourceTree = "<group>"; };
 		B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesTodayWidget.swift; sourceTree = "<group>"; };
+		BAF7F13B45D24949F8E83877 /* KiesAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesAppearance.swift; sourceTree = "<group>"; };
 		C44C034838E984EFE80BB21E /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		CB7A1C1E633670BAFEAB10C3 /* Kies */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Kies; path = .; sourceTree = SOURCE_ROOT; };
 		D085F7AB71F06EA7FFDA2B4A /* WishlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishlistView.swift; sourceTree = "<group>"; };
@@ -246,6 +248,7 @@
 				5E7FBB02C92E905A937C99DD /* DesignKit.swift */,
 				1C96DEEF5122EF2D08A40156 /* GoalsView.swift */,
 				D5F9895247D0E91EACDAB4F0 /* InvestmentsView.swift */,
+				BAF7F13B45D24949F8E83877 /* KiesAppearance.swift */,
 				67BDE07271DA65961F2A88CB /* LifeAreasView.swift */,
 				5357355D6AA09CC225075155 /* MoreView.swift */,
 				4BB383E45F1D2E267830E6E5 /* PairingView.swift */,
@@ -404,6 +407,7 @@
 				990146C5809F4FA34F5EA3BC /* GoalsView.swift in Sources */,
 				6F28ADB272378ECD13AD8FB4 /* HealthKitSync.swift in Sources */,
 				077886866D9A8E05D4BB7600 /* InvestmentsView.swift in Sources */,
+				21D1BF72568D488C08239C68 /* KiesAppearance.swift in Sources */,
 				CD92EC1BA139315BC97F3DCB /* KiesAskIntent.swift in Sources */,
 				A400936DEEE7E1471D4D07E4 /* KiesiOSApp.swift in Sources */,
 				17E2FB83B1FA148965C2D5D8 /* LifeAreasView.swift in Sources */,

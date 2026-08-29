@@ -19,9 +19,13 @@ struct KiesiOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var lock = AppLockStore.shared
 
+    init() { KiesAppearance.apply() }
+
     var body: some Scene {
         WindowGroup {
             RootView()
+                .tint(KTheme.gold)
+                .preferredColorScheme(.dark)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -41,6 +45,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
+            AlpenBackdrop()
             Group {
                 if !pairing.isPaired {
                     PairingView()

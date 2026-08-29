@@ -13,7 +13,7 @@ struct AppLockView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.secondary)
             Text("Kies ist gesperrt")
-                .font(.title2.bold())
+                .font(.kSerif(.title, weight: .medium)).foregroundStyle(KTheme.text)
             if let message = lock.lastErrorMessage {
                 Text(message)
                     .font(.footnote)
@@ -30,7 +30,7 @@ struct AppLockView: View {
             .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial)
+        .background(AlpenBackdrop())
         .task { await lock.authenticate() }
     }
 }

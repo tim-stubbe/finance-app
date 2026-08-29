@@ -17,12 +17,12 @@ struct MoreView: View {
 
     private var entries: [Entry] {
         [
-            Entry(title: "Ziele", icon: "target", tint: .pink, dest: AnyView(GoalsView())),
-            Entry(title: "Leben", icon: "heart.text.square", tint: .red, dest: AnyView(LifeAreasView())),
-            Entry(title: "Wünsche", icon: "sparkles", tint: .purple, dest: AnyView(WishlistView())),
-            Entry(title: "Investments", icon: "chart.line.uptrend.xyaxis", tint: .green, dest: AnyView(InvestmentsView())),
-            Entry(title: "Kategorien", icon: "tag", tint: .orange, dest: AnyView(CategoriesView())),
-            Entry(title: "Suche", icon: "magnifyingglass", tint: .blue, dest: AnyView(SearchView())),
+            Entry(title: "Ziele", icon: "target", tint: KTheme.gold, dest: AnyView(GoalsView())),
+            Entry(title: "Leben", icon: "heart.text.square", tint: KTheme.gold, dest: AnyView(LifeAreasView())),
+            Entry(title: "Wünsche", icon: "sparkles", tint: KTheme.gold, dest: AnyView(WishlistView())),
+            Entry(title: "Investments", icon: "chart.line.uptrend.xyaxis", tint: KTheme.gold, dest: AnyView(InvestmentsView())),
+            Entry(title: "Kategorien", icon: "tag", tint: KTheme.gold, dest: AnyView(CategoriesView())),
+            Entry(title: "Suche", icon: "magnifyingglass", tint: KTheme.gold, dest: AnyView(SearchView())),
         ]
     }
 
@@ -75,7 +75,7 @@ struct MoreView: View {
                 .foregroundStyle(e.tint)
                 .frame(width: 44, height: 44)
                 .background(e.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text(e.title).font(.callout.weight(.semibold))
+            Text(e.title).font(.kSerif(.headline, weight: .medium)).foregroundStyle(KTheme.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .kCard()

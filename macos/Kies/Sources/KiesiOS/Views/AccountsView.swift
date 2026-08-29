@@ -42,12 +42,12 @@ struct AccountsView: View {
 
     private var netWorthCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("NETTOVERMÖGEN")
-                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            KKicker(text: "Nettovermögen")
             Text(kEUR(netWorth))
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(netWorth < 0 ? KTheme.negative : .primary)
-                .minimumScaleFactor(0.6).lineLimit(1)
+                .font(.system(size: 36, design: .serif))
+                .foregroundStyle(netWorth < 0 ? KTheme.negative : KTheme.text)
+                .monospacedDigit()
+                .minimumScaleFactor(0.55).lineLimit(1)
 
             if netSeries.value.count > 1 {
                 Chart(netSeries.value) { point in

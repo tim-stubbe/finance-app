@@ -51,6 +51,8 @@ struct PairingView: View {
                               || secretInput.value.isEmpty || testing.value)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(AlpenBackdrop())
             .navigationTitle("Mit Kies koppeln")
             .onAppear {
                 urlInput.value = pairing.baseURLString
