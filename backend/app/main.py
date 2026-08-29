@@ -16,6 +16,7 @@ import threading
 
 from . import models, schemas, crud, auth, bank_sync, radicale_sync, ollama_client, document_extract, goals, websearch, notifications, telegram_bot, calls, immich, travel_time, weather
 from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
+from . import proactive
 from .sync import sync_router
 from .routers.investments import investments_router
 from .routers.tax_endpoints import tax_router
@@ -272,6 +273,10 @@ ensure_columns("settings", {
     "morning_briefing_hour": "INTEGER DEFAULT 7",
     "morning_briefing_minute": "INTEGER DEFAULT 30",
     "morning_briefing_send_empty": "BOOLEAN DEFAULT 0",
+    "proactive_assistant_enabled": "BOOLEAN DEFAULT 0",
+    "proactive_assistant_min_gap_hours": "INTEGER DEFAULT 4",
+    "proactive_assistant_last_sent_at": "DATETIME",
+    "proactive_assistant_last_hash": "VARCHAR",
     "quiet_hours_enabled": "BOOLEAN DEFAULT 0",
     "quiet_hours_start_hour": "INTEGER DEFAULT 22",
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",
@@ -1924,6 +1929,27 @@ def _scheduled_smarthome_automation_suggestions():
         db.close()
 
 
+def _scheduled_proactive_assistant():
+    """Mehrmals täglich: lässt die lokale KI über einen breiten Lebens-
+    Snapshot schauen und meldet sich per Telegram NUR, wenn dabei genau eine
+    wirklich nützliche, nicht offensichtliche Anregung/Erinnerung herauskommt
+    (siehe proactive.py). Opt-in (proactive_assistant_enabled), mit
+    Mindestabstand + Dedup abgesichert; Ruhezeiten greifen über notify()."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        result = proactive.generate(db, settings)
+        if not result:
+            return
+        text, digest = result
+        notifications.notify(settings, "🤖 " + text)
+        settings.proactive_assistant_last_sent_at = datetime.utcnow()
+        settings.proactive_assistant_last_hash = digest
+        db.commit()
+    finally:
+        db.close()
+
+
 def _scheduled_routines():
     """Alle 15 Minuten: prüft, ob eine Routine (Spezifikation Abschnitt G)
     jetzt fällig ist (siehe crud.get_due_routines) und schickt die Checkliste
@@ -2275,6 +2301,10 @@ scheduler.add_job(
     _scheduled_smarthome_automation_suggestions,
     CronTrigger(day_of_week="sun", hour=18, minute=0),
     id="smarthome_automation_suggestions", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_proactive_assistant, CronTrigger(hour="9,12,15,18,21", minute=40),
+    id="proactive_assistant", misfire_grace_time=1800,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es

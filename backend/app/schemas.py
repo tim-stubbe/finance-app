@@ -1589,6 +1589,7 @@ class BirthYearUpdate(BaseModel):
 class NotificationSettingsOut(BaseModel):
     enabled: bool
     telegram_configured: bool
+    proactive_assistant_enabled: bool = False
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -1596,6 +1597,7 @@ class NotificationSettingsUpdate(BaseModel):
     # None = jeweils unverändert lassen (Feld nicht neu gesendet)
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    proactive_assistant_enabled: Optional[bool] = None
 
 
 class NotificationTestResult(BaseModel):

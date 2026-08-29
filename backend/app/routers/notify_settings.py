@@ -27,6 +27,7 @@ def get_notification_settings(db: Session = Depends(get_db)):
     return schemas.NotificationSettingsOut(
         enabled=settings.notifications_enabled,
         telegram_configured=bool(settings.telegram_bot_token_encrypted and settings.telegram_chat_id),
+        proactive_assistant_enabled=bool(settings.proactive_assistant_enabled),
     )
 
 
@@ -38,10 +39,13 @@ def update_notification_settings(data: schemas.NotificationSettingsUpdate, db: S
         settings.telegram_bot_token_encrypted = bank_sync.encrypt_secret(settings.secret_key, data.telegram_bot_token)
     if data.telegram_chat_id:
         settings.telegram_chat_id = data.telegram_chat_id.strip()
+    if data.proactive_assistant_enabled is not None:
+        settings.proactive_assistant_enabled = data.proactive_assistant_enabled
     db.commit()
     return schemas.NotificationSettingsOut(
         enabled=settings.notifications_enabled,
         telegram_configured=bool(settings.telegram_bot_token_encrypted and settings.telegram_chat_id),
+        proactive_assistant_enabled=bool(settings.proactive_assistant_enabled),
     )
 
 

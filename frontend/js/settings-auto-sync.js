@@ -97,6 +97,7 @@ document.getElementById("searxng-settings-form").addEventListener("submit", asyn
 async function loadNotificationSettings() {
   const s = await api("/settings/notifications");
   document.getElementById("notifications-enabled").checked = s.enabled;
+  document.getElementById("proactive-assistant-enabled").checked = !!s.proactive_assistant_enabled;
   document.getElementById("telegram-remove").classList.toggle("hidden", !s.telegram_configured);
   document.getElementById("telegram-bot-token").placeholder = s.telegram_configured
     ? "gespeichert – zum Ändern neuen Token eingeben" : "wird verschlüsselt gespeichert";
@@ -110,6 +111,7 @@ document.getElementById("notifications-settings-form").addEventListener("submit"
   const chatIdInput = document.getElementById("telegram-chat-id");
   const payload = {
     enabled: document.getElementById("notifications-enabled").checked,
+    proactive_assistant_enabled: document.getElementById("proactive-assistant-enabled").checked,
     telegram_bot_token: tokenInput.value.trim() || null,
     telegram_chat_id: chatIdInput.value.trim() || null,
   };
