@@ -12,11 +12,22 @@
 // ---------- Boot-Gate ----------
 async function bootAuthGate() {
   let status;
-  try {
-    status = await fetch(API + "/auth/status").then(r => r.json());
-  } catch (e) {
-    showLoginScreen({ error: "Server nicht erreichbar. Bitte Seite neu laden." });
-    return;
+  // Ein Versuch, dann nach kurzer Pause noch einer - deckt den Fall ab, dass
+  // die (Tailscale-)Verbindung beim Kaltstart der PWA noch nicht steht.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(API + "/auth/status", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      status = await res.json();
+      break;
+    } catch (e) {
+      if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
+      showLoginScreen({
+        error: "Server nicht erreichbar. Ist die Verbindung (Tailscale) aktiv? "
+          + "Prüfen: " + API + "/auth/status im Browser öffnen. Dann Seite neu laden.",
+      });
+      return;
+    }
   }
   if (status.setup_required) {
     showSetupScreen();

@@ -67,8 +67,8 @@ async function loadSmartHomeHealth() {
 // den ganzen Diagnose-/Konfig-Kram ein; die Wahl bleibt lokal gespeichert.
 const shDevicesAllBox = document.getElementById("smarthome-devices-all");
 try {
-  shDevicesAllBox.checked = localStorage.getItem("sh-devices-all") === "1";
-} catch { shDevicesAllBox.checked = false; }
+  if (shDevicesAllBox) shDevicesAllBox.checked = localStorage.getItem("sh-devices-all") === "1";
+} catch { if (shDevicesAllBox) shDevicesAllBox.checked = false; }
 
 async function loadSmartHomeDevices() {
   const tbody = document.getElementById("smarthome-device-list");
@@ -122,12 +122,12 @@ function renderSmartHomeDevices() {
   }).join("");
 }
 
-shDevicesAllBox.addEventListener("change", () => {
+shDevicesAllBox?.addEventListener("change", () => {
   try { localStorage.setItem("sh-devices-all", shDevicesAllBox.checked ? "1" : "0"); } catch {}
   loadSmartHomeDevices();
 });
 
-document.getElementById("smarthome-device-filter").addEventListener("input", () => {
+document.getElementById("smarthome-device-filter")?.addEventListener("input", () => {
   clearTimeout(window._shDeviceFilterT);
   window._shDeviceFilterT = setTimeout(renderSmartHomeDevices, 120);
 });
