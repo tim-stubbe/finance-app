@@ -2,14 +2,29 @@ import Foundation
 import HealthKit
 import KiesCore
 
-/// Liest Schritte, Ruhepuls, Gewicht und Schlaf aus Apple Health und schickt
-/// sie tageweise an Kies (`POST /api/sync/health`, Auth per X-Sync-Secret wie
-/// pull/push). Bewusst schlank: eine Aggregation pro Tag und Kennzahl, kein
-/// HKObserverQuery/Background-Delivery in v1 - Sync laeuft beim App-Start
-/// (nach dem normalen Datensync) und auf Knopfdruck in den Einstellungen.
+/// Ein Tageswert einer Gesundheits-Kennzahl (fuer Diagramme + Upload).
+public struct HealthPoint: Identifiable {
+    public let id = UUID()
+    public let day: Date
+    public let value: Double
+}
+
+/// Die vier Kennzahlen als Tagesreihen - fuer HealthView.
+public struct HealthSeries {
+    public var steps: [HealthPoint] = []
+    public var pulse: [HealthPoint] = []
+    public var weight: [HealthPoint] = []
+    public var sleep: [HealthPoint] = []
+
+    public var isEmpty: Bool { steps.isEmpty && pulse.isEmpty && weight.isEmpty && sleep.isEmpty }
+}
+
+/// Liest Schritte, Ruhepuls, Gewicht und Schlaf aus Apple Health - schickt sie
+/// tageweise an Kies (`POST /api/sync/health`, Auth per X-Sync-Secret) UND
+/// liefert sie fuer die lokale Anzeige (HealthView). Bewusst schlank: eine
+/// Aggregation pro Tag und Kennzahl, kein HKObserverQuery/Background-Delivery.
 ///
-/// HealthKit ist iOS-only, deshalb liegt diese Datei im KiesiOS-Target und
-/// nicht im plattformneutralen KiesCore.
+/// HealthKit ist iOS-only, deshalb liegt diese Datei im KiesiOS-Target.
 @MainActor
 public final class HealthKitSync: ObservableObject {
     public static let shared = HealthKitSync()
@@ -34,15 +49,13 @@ public final class HealthKitSync: ObservableObject {
         lastSync = ts > 0 ? Date(timeIntervalSince1970: ts) : nil
     }
 
-    // Die vier gelesenen HealthKit-Typen -> Kies-metric_type.
     private var stepType: HKQuantityType { HKQuantityType(.stepCount) }
     private var restingHRType: HKQuantityType { HKQuantityType(.restingHeartRate) }
     private var bodyMassType: HKQuantityType { HKQuantityType(.bodyMass) }
     private var sleepType: HKCategoryType { HKCategoryType(.sleepAnalysis) }
+    private var bpmUnit: HKUnit { HKUnit.count().unitDivided(by: .minute()) }
 
-    private var readTypes: Set<HKObjectType> {
-        [stepType, restingHRType, bodyMassType, sleepType]
-    }
+    private var readTypes: Set<HKObjectType> { [stepType, restingHRType, bodyMassType, sleepType] }
 
     /// Fragt die Lese-Berechtigung an. HealthKit verraet aus Datenschutz-
     /// gruenden NICHT, ob der Nutzer zugestimmt hat - `true` heisst nur, dass
@@ -74,16 +87,13 @@ public final class HealthKitSync: ObservableObject {
 
         do {
             await requestAuthorization()
-            var payload: [[String: Any]] = []
-            payload += try await dailySum(stepType, unit: .count(), type: "schritte", days: days)
-            payload += try await dailyAverage(restingHRType, unit: HKUnit.count().unitDivided(by: .minute()), type: "puls", days: days)
-            payload += try await dailyAverage(bodyMassType, unit: .gramUnit(with: .kilo), type: "gewicht", days: days)
-            payload += try await dailySleepHours(days: days)
-
-            if payload.isEmpty {
-                markSynced()
-                return
-            }
+            let s = try await series(days: days)
+            let payload =
+                s.steps.map  { row("schritte", $0) } +
+                s.pulse.map  { row("puls", $0) } +
+                s.weight.map { row("gewicht", $0) } +
+                s.sleep.map  { row("schlaf", $0) }
+            if payload.isEmpty { markSynced(); return }
             try await upload(metrics: payload, pairing: pairing)
             markSynced()
         } catch {
@@ -91,27 +101,43 @@ public final class HealthKitSync: ObservableObject {
         }
     }
 
+    /// Tagesreihen der vier Kennzahlen fuer die letzten `days` Tage - direkt
+    /// aus HealthKit, ohne Server (HealthView zeigt das offline an).
+    public func series(days: Int) async throws -> HealthSeries {
+        guard isAvailable else { return HealthSeries() }
+        await requestAuthorization()
+        var out = HealthSeries()
+        out.steps  = try await daily(stepType, unit: .count(), options: .cumulativeSum, days: days)
+        out.pulse  = try await daily(restingHRType, unit: bpmUnit, options: .discreteAverage, days: days)
+        out.weight = try await daily(bodyMassType, unit: .gramUnit(with: .kilo), options: .discreteAverage, days: days)
+        out.sleep  = try await dailySleepHours(days: days)
+        return out
+    }
+
     // MARK: - Aggregationen
 
-    private func dayString(_ date: Date) -> String {
-        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    private func row(_ type: String, _ p: HealthPoint) -> [String: Any] {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: p.day)
+        return [
+            "metric_type": type,
+            "date": String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0),
+            "value": p.value,
+        ]
     }
 
-    private func window(days: Int) -> (start: Date, anchor: Date) {
+    private func window(days: Int) -> Date {
         let cal = Calendar.current
-        let startOfToday = cal.startOfDay(for: Date())
-        let start = cal.date(byAdding: .day, value: -max(1, days), to: startOfToday) ?? startOfToday
-        return (start, start)
+        return cal.date(byAdding: .day, value: -max(1, days), to: cal.startOfDay(for: Date()))
+            ?? cal.startOfDay(for: Date())
     }
 
-    private func statistics(_ type: HKQuantityType, options: HKStatisticsOptions, days: Int) async throws -> HKStatisticsCollection {
-        let (start, anchor) = window(days: days)
+    private func daily(_ type: HKQuantityType, unit: HKUnit, options: HKStatisticsOptions, days: Int) async throws -> [HealthPoint] {
+        let start = window(days: days)
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
-        return try await withCheckedThrowingContinuation { cont in
+        let coll: HKStatisticsCollection = try await withCheckedThrowingContinuation { cont in
             let q = HKStatisticsCollectionQuery(
                 quantityType: type, quantitySamplePredicate: predicate,
-                options: options, anchorDate: anchor,
+                options: options, anchorDate: start,
                 intervalComponents: DateComponents(day: 1)
             )
             q.initialResultsHandler = { _, result, error in
@@ -120,36 +146,20 @@ public final class HealthKitSync: ObservableObject {
             }
             store.execute(q)
         }
-    }
-
-    private func dailySum(_ type: HKQuantityType, unit: HKUnit, type metricType: String, days: Int) async throws -> [[String: Any]] {
-        let (start, _) = window(days: days)
-        let coll = try await statistics(type, options: .cumulativeSum, days: days)
-        var out: [[String: Any]] = []
+        var out: [HealthPoint] = []
         coll.enumerateStatistics(from: start, to: Date()) { stat, _ in
-            guard let q = stat.sumQuantity() else { return }
+            let q = options == .cumulativeSum ? stat.sumQuantity() : stat.averageQuantity()
+            guard let q else { return }
             let v = q.doubleValue(for: unit)
-            if v > 0 { out.append(["metric_type": metricType, "date": self.dayString(stat.startDate), "value": v]) }
+            if v > 0 { out.append(HealthPoint(day: stat.startDate, value: v)) }
         }
         return out
     }
 
-    private func dailyAverage(_ type: HKQuantityType, unit: HKUnit, type metricType: String, days: Int) async throws -> [[String: Any]] {
-        let (start, _) = window(days: days)
-        let coll = try await statistics(type, options: .discreteAverage, days: days)
-        var out: [[String: Any]] = []
-        coll.enumerateStatistics(from: start, to: Date()) { stat, _ in
-            guard let q = stat.averageQuantity() else { return }
-            let v = q.doubleValue(for: unit)
-            if v > 0 { out.append(["metric_type": metricType, "date": self.dayString(stat.startDate), "value": v]) }
-        }
-        return out
-    }
-
-    private func dailySleepHours(days: Int) async throws -> [[String: Any]] {
-        let (start, _) = window(days: days)
+    private func dailySleepHours(days: Int) async throws -> [HealthPoint] {
+        let start = window(days: days)
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
-        let asleepValues: Set<Int> = [
+        let asleep: Set<Int> = [
             HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
             HKCategoryValueSleepAnalysis.asleepCore.rawValue,
             HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
@@ -162,15 +172,16 @@ public final class HealthKitSync: ObservableObject {
             }
             store.execute(q)
         }
-        // Schlaf dem Tag zuordnen, an dem die Schlafphase ENDET (Aufwachen).
-        var hoursByDay: [String: Double] = [:]
-        for s in samples where asleepValues.contains(s.value) {
-            let key = dayString(s.endDate)
+        let cal = Calendar.current
+        var hoursByDay: [Date: Double] = [:]
+        for s in samples where asleep.contains(s.value) {
+            let key = cal.startOfDay(for: s.endDate)  // dem Aufwach-Tag zuordnen
             hoursByDay[key, default: 0] += s.endDate.timeIntervalSince(s.startDate) / 3600
         }
-        return hoursByDay.compactMap { key, hours in
-            hours > 0 ? ["metric_type": "schlaf", "date": key, "value": hours] : nil
-        }
+        return hoursByDay
+            .filter { $0.value > 0 }
+            .map { HealthPoint(day: $0.key, value: $0.value) }
+            .sorted { $0.day < $1.day }
     }
 
     // MARK: - Upload

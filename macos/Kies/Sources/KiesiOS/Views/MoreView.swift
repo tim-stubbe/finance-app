@@ -16,14 +16,20 @@ struct MoreView: View {
     }
 
     private var entries: [Entry] {
-        [
+        var list: [Entry] = [
             Entry(title: "Ziele", icon: "target", tint: KTheme.gold, dest: AnyView(GoalsView())),
             Entry(title: "Leben", icon: "heart.text.square", tint: KTheme.gold, dest: AnyView(LifeAreasView())),
+        ]
+        if HealthKitSync.shared.isAvailable {
+            list.append(Entry(title: "Gesundheit", icon: "heart.circle", tint: KTheme.gold, dest: AnyView(HealthView())))
+        }
+        list += [
             Entry(title: "Wünsche", icon: "sparkles", tint: KTheme.gold, dest: AnyView(WishlistView())),
             Entry(title: "Investments", icon: "chart.line.uptrend.xyaxis", tint: KTheme.gold, dest: AnyView(InvestmentsView())),
             Entry(title: "Kategorien", icon: "tag", tint: KTheme.gold, dest: AnyView(CategoriesView())),
             Entry(title: "Suche", icon: "magnifyingglass", tint: KTheme.gold, dest: AnyView(SearchView())),
         ]
+        return list
     }
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
