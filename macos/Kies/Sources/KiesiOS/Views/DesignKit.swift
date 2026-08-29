@@ -83,23 +83,30 @@ extension View {
 
 /// Warmer Grundton + Matterhorn-Foto oben, nach unten ausgeblendet - das
 /// gemeinsame Hintergrundbild aller Screens (wie body::before im Web-Theme).
+///
+/// WICHTIG: `Color` als Basis (fuellt den verfuegbaren Platz) + das Bild als
+/// `.overlay` mit `maxWidth:.infinity` + `.clipped()`. `scaledToFill()` ohne
+/// begrenzten Rahmen und Clip laesst das 2400px-Bild horizontal ueberlaufen
+/// und weitete den umschliessenden ZStack - dadurch war die ganze Oberflaeche
+/// zu breit und nach links abgeschnitten.
 struct AlpenBackdrop: View {
     var body: some View {
-        ZStack(alignment: .top) {
-            KTheme.background
-            Image("AlpenBackground")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: 420)
-                .opacity(0.30)
-                .mask(
-                    LinearGradient(colors: [.black, .black.opacity(0.7), .clear],
-                                   startPoint: .top, endPoint: .bottom)
-                )
-                .allowsHitTesting(false)
-        }
-        .ignoresSafeArea()
+        KTheme.background
+            .overlay(alignment: .top) {
+                Image("AlpenBackground")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 360)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .opacity(0.28)
+                    .mask(
+                        LinearGradient(colors: [.black, .black.opacity(0.65), .clear],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
+                    .allowsHitTesting(false)
+            }
+            .ignoresSafeArea()
     }
 }
 
@@ -139,10 +146,10 @@ struct KStatTile: View {
         VStack(alignment: .leading, spacing: 4) {
             KKicker(text: label)
             Text(value)
-                .font(.kSerif(.title2))
+                .font(.kSerif(.title3))
                 .foregroundStyle(tint)
                 .lineLimit(1)
-                .minimumScaleFactor(0.55)
+                .minimumScaleFactor(0.5)
                 .monospacedDigit()
             if let caption {
                 Text(caption).font(.caption2).foregroundStyle(KTheme.muted)

@@ -44,9 +44,9 @@ struct TodayView: View {
             HStack(spacing: KTheme.gap) {
                 KStatTile(label: "Einnahmen", value: kEUR(monthIncome.value), tint: KTheme.positive)
                 KStatTile(label: "Ausgaben", value: kEUR(monthExpense.value), tint: KTheme.negative)
-                KStatTile(label: "Netto", value: kEUR(monthNet),
-                          tint: monthNet < 0 ? KTheme.negative : .primary)
             }
+            KStatTile(label: "Netto (Monat)", value: kEUR(monthNet),
+                      tint: monthNet < 0 ? KTheme.negative : KTheme.text)
 
             if cashflow.value.contains(where: { $0.income > 0 || $0.expense > 0 }) {
                 KSection(title: "Cashflow 6 Monate", systemImage: "chart.bar") {
