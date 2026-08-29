@@ -46,7 +46,7 @@ struct KiesAskIntent: AppIntent {
         req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text])
 
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await KiesHTTP.session.data(for: req)
             guard let http = resp as? HTTPURLResponse else {
                 return .result(dialog: "Keine Antwort vom Kies-Server.")
             }

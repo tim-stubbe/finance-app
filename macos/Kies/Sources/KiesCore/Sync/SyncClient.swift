@@ -106,24 +106,11 @@ enum SyncClientError: Error {
 }
 
 /// Spricht mit den Phase-1-Endpunkten (backend/app/sync.py) - X-Sync-Secret
-/// statt Session-Cookie (kein Login-System, siehe sync.py-Docstring). Ein
-/// permissiver URLSessionDelegate akzeptiert das selbstsignierte TrueNAS-
-/// Zertifikat, analog zu den bestehenden `curl -k`-Aufrufen fürs Deployment.
-final class SyncClient: NSObject, URLSessionDelegate {
-    private lazy var session: URLSession = URLSession(
-        configuration: .default, delegate: self, delegateQueue: nil
-    )
-
-    func urlSession(
-        _ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if let trust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: trust))
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
+/// statt Session-Cookie (kein Login-System, siehe sync.py-Docstring). Die
+/// selbstsignierte-Zertifikat-Behandlung liegt jetzt zentral in KiesHTTP,
+/// damit Apple-Health-Sync und Siri-Intent dieselbe Session nutzen.
+final class SyncClient {
+    private var session: URLSession { KiesHTTP.session }
 
     private func request(path: String, query: [String: String] = [:]) throws -> URLRequest {
         let pairing = PairingStore.shared

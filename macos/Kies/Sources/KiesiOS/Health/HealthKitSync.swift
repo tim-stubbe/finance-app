@@ -184,7 +184,7 @@ public final class HealthKitSync: ObservableObject {
         req.setValue(pairing.secret, forHTTPHeaderField: "X-Sync-Secret")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["metrics": metrics])
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await KiesHTTP.session.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
             let body = String(data: data, encoding: .utf8) ?? ""
