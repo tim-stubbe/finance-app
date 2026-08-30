@@ -1590,6 +1590,8 @@ class NotificationSettingsOut(BaseModel):
     enabled: bool
     telegram_configured: bool
     proactive_assistant_enabled: bool = False
+    proactive_assistant_snoozed_until: Optional[datetime] = None
+    proactive_assistant_last_text: Optional[str] = None
     ntfy_enabled: bool = False
     ntfy_url: str = "https://ntfy.sh"
     ntfy_topic: Optional[str] = None

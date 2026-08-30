@@ -1177,6 +1177,8 @@ input::placeholder { color: var(--muted); }
 }
 .notif-log-when { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
 .notif-log-muted { color: var(--muted); font-style: italic; }
+.proactive-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proactive-controls #proactive-status { margin: 0; flex: 1 1 auto; }
 .notif-log-rate { margin-left: 6px; white-space: nowrap; }
 .notif-rate-btn {
   border: none; background: none; cursor: pointer; padding: 0 2px;

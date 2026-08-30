@@ -3104,6 +3104,11 @@
             <input type="checkbox" id="proactive-assistant-enabled">
             <span>Proaktiver KI-Assistent – prüft alle 5 Minuten den Lebens-Überblick (Finanzen, Termine, Todos, Ziele, Fristen, Gesundheit) und meldet sich per Telegram, sobald die lokale KI etwas Nützliches sieht. Ohne Drosseln – nur der Schalter hier und „/proaktiv pause“ per Telegram halten ihn zurück. Braucht Ollama.</span>
           </label>
+          <div class="wide proactive-controls">
+            <span id="proactive-status" class="page-sub"></span>
+            <button type="button" id="proactive-pause" class="btn-ghost">6 Std. Ruhe</button>
+            <button type="button" id="proactive-resume" class="btn-ghost hidden">Pause aufheben</button>
+          </div>
           <label>Bot-Token <input type="password" id="telegram-bot-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
           <label>Chat-ID <input type="text" id="telegram-chat-id" placeholder="z.B. 123456789"></label>
           <label class="checkbox-label wide">

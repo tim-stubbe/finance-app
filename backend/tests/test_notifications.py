@@ -79,3 +79,14 @@ def test_proactive_feedback_endpoint(client):
         assert rows[0].text == "Dein Essens-Budget ist fast aufgebraucht."
     finally:
         db.close()
+
+
+def test_proactive_pause_and_resume(client):
+    client.post("/api/auth/setup", json={"password": "Sicheres-Testpasswort-123"})
+    client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
+    r = client.post("/api/notifications/proactive-pause?hours=6")
+    assert r.status_code == 200
+    assert r.json()["proactive_assistant_snoozed_until"] is not None
+    r = client.post("/api/notifications/proactive-resume")
+    assert r.status_code == 200
+    assert r.json()["proactive_assistant_snoozed_until"] is None

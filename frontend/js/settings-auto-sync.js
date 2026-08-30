@@ -98,6 +98,7 @@ async function loadNotificationSettings() {
   const s = await api("/settings/notifications");
   document.getElementById("notifications-enabled").checked = s.enabled;
   document.getElementById("proactive-assistant-enabled").checked = !!s.proactive_assistant_enabled;
+  renderProactiveStatus(s);
   document.getElementById("ntfy-enabled").checked = !!s.ntfy_enabled;
   document.getElementById("ntfy-url").value = s.ntfy_url || "";
   document.getElementById("ntfy-topic").value = s.ntfy_topic || "";
@@ -112,6 +113,40 @@ async function loadNotificationSettings() {
     ? "gespeichert" : "z.B. 123456789";
   loadNotificationLog();
 }
+
+function renderProactiveStatus(s) {
+  const el = document.getElementById("proactive-status");
+  const resumeBtn = document.getElementById("proactive-resume");
+  if (!el) return;
+  const until = s.proactive_assistant_snoozed_until
+    ? new Date(s.proactive_assistant_snoozed_until + (String(s.proactive_assistant_snoozed_until).endsWith("Z") ? "" : "Z"))
+    : null;
+  const snoozed = until && until > new Date();
+  resumeBtn.classList.toggle("hidden", !snoozed);
+  if (snoozed) {
+    el.textContent = "Pausiert bis " + until.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } else if (s.proactive_assistant_last_text) {
+    el.textContent = "Zuletzt: " + s.proactive_assistant_last_text.slice(0, 80) + (s.proactive_assistant_last_text.length > 80 ? "…" : "");
+  } else {
+    el.textContent = "Noch keine proaktive Meldung.";
+  }
+}
+
+document.getElementById("proactive-pause")?.addEventListener("click", async () => {
+  try {
+    const s = await api("/notifications/proactive-pause?hours=6", { method: "POST" });
+    renderProactiveStatus(s);
+    toast("Proaktiver Assistent pausiert – 6 Stunden Ruhe.");
+  } catch (e) { /* api() zeigt den Fehler */ }
+});
+
+document.getElementById("proactive-resume")?.addEventListener("click", async () => {
+  try {
+    const s = await api("/notifications/proactive-resume", { method: "POST" });
+    renderProactiveStatus(s);
+    toast("Pause aufgehoben.");
+  } catch (e) { /* api() zeigt den Fehler */ }
+});
 
 async function loadNotificationLog() {
   const ul = document.getElementById("notifications-log");

@@ -11,6 +11,8 @@ Test-Verbindung-Domaenen (jeweils Settings speichern + Testendpunkt),
 standen im selben main.py-Abschnitt. Reine Verschiebung ohne
 Verhaltensaenderung."""
 
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,8 @@ def _notification_settings_out(s) -> schemas.NotificationSettingsOut:
         enabled=s.notifications_enabled,
         telegram_configured=bool(s.telegram_bot_token_encrypted and s.telegram_chat_id),
         proactive_assistant_enabled=bool(s.proactive_assistant_enabled),
+        proactive_assistant_snoozed_until=s.proactive_assistant_snoozed_until,
+        proactive_assistant_last_text=s.proactive_assistant_last_text,
         ntfy_enabled=bool(s.ntfy_enabled),
         ntfy_url=s.ntfy_url or "https://ntfy.sh",
         ntfy_topic=s.ntfy_topic,
@@ -163,6 +167,27 @@ def submit_proactive_feedback(data: schemas.ProactiveFeedbackIn, db: Session = D
         ok=True,
         message="Notiert – mehr in die Richtung." if data.useful else "Verstanden – so etwas künftig seltener.",
     )
+
+
+@notify_settings_router.post("/notifications/proactive-pause", response_model=schemas.NotificationSettingsOut)
+def pause_proactive_assistant(hours: int = 6, db: Session = Depends(get_db)):
+    """Legt den proaktiven Assistenten für `hours` Stunden schlafen - dasselbe
+    wie /proaktiv pause N in Telegram (siehe telegram_bot._handle_proactive_command).
+    Andere Benachrichtigungen bleiben unberührt."""
+    settings = auth.get_or_create_settings(db)
+    hours = max(1, min(hours, 72))
+    settings.proactive_assistant_snoozed_until = datetime.utcnow() + timedelta(hours=hours)
+    db.commit()
+    return _notification_settings_out(settings)
+
+
+@notify_settings_router.post("/notifications/proactive-resume", response_model=schemas.NotificationSettingsOut)
+def resume_proactive_assistant(db: Session = Depends(get_db)):
+    """Hebt eine Pause wieder auf (siehe /notifications/proactive-pause)."""
+    settings = auth.get_or_create_settings(db)
+    settings.proactive_assistant_snoozed_until = None
+    db.commit()
+    return _notification_settings_out(settings)
 
 
 @notify_settings_router.get("/notifications/log", response_model=List[schemas.NotificationLogEntry])
