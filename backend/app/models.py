@@ -327,6 +327,14 @@ class Settings(Base):
     # Auf eine per Telegram geschickte Sprachnachricht auch gesprochen
     # antworten (Piper-TTS, siehe voice/tts.py + TTS_BACKEND-Env).
     telegram_voice_replies = Column(Boolean, nullable=False, default=False)
+    # Dringende Meldungen zusätzlich auf einem Home-Assistant-Lautsprecher
+    # ansagen ("Jarvis spricht im Haus"). service = frei wählbares
+    # domain.service (z.B. tts.google_translate_say oder notify.wohnzimmer),
+    # target = entity_id (Media-Player), wird bei tts.*-Diensten als
+    # entity_id mitgeschickt.
+    ha_announce_enabled = Column(Boolean, nullable=False, default=False)
+    ha_announce_service = Column(String, nullable=True)
+    ha_announce_target = Column(String, nullable=True)
     # --- Quiet Mode (Ruhezeiten) - zentral in notifications.notify() geprüft,
     # siehe dort. quiet_until ist die manuelle "Ruhe bis HH:MM"-Überschreibung
     # (App + Telegram /ruhe), unabhängig von den festen Ruhezeiten.

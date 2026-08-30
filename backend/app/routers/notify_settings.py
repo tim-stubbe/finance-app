@@ -32,6 +32,9 @@ def _notification_settings_out(s) -> schemas.NotificationSettingsOut:
         ntfy_url=s.ntfy_url or "https://ntfy.sh",
         ntfy_topic=s.ntfy_topic,
         telegram_voice_replies=bool(s.telegram_voice_replies),
+        ha_announce_enabled=bool(s.ha_announce_enabled),
+        ha_announce_service=s.ha_announce_service,
+        ha_announce_target=s.ha_announce_target,
     )
 
 
@@ -58,6 +61,12 @@ def update_notification_settings(data: schemas.NotificationSettingsUpdate, db: S
         settings.ntfy_topic = data.ntfy_topic.strip() or None
     if data.telegram_voice_replies is not None:
         settings.telegram_voice_replies = data.telegram_voice_replies
+    if data.ha_announce_enabled is not None:
+        settings.ha_announce_enabled = data.ha_announce_enabled
+    if data.ha_announce_service is not None:
+        settings.ha_announce_service = data.ha_announce_service.strip() or None
+    if data.ha_announce_target is not None:
+        settings.ha_announce_target = data.ha_announce_target.strip() or None
     db.commit()
     return _notification_settings_out(settings)
 
@@ -117,6 +126,20 @@ def send_test_proactive_notification(db: Session = Depends(get_db)):
         urgent=True,  # Testknopf -> auch in Ruhezeiten durchlassen
     )
     return schemas.NotificationTestResult(ok=True, message="Proaktive Testmeldung gesendet - schau in Telegram nach.")
+
+
+@notify_settings_router.post("/notifications/test-ha-announce", response_model=schemas.NotificationTestResult)
+def send_test_ha_announce(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    if not (settings.ha_announce_enabled and settings.ha_announce_service):
+        return schemas.NotificationTestResult(ok=False, message="Zuerst Ansage aktivieren und einen Dienst (z.B. tts.google_translate_say) angeben.")
+    if not (settings.homeassistant_url and settings.homeassistant_token_encrypted):
+        return schemas.NotificationTestResult(ok=False, message="Home Assistant ist in Kies noch nicht verbunden.")
+    try:
+        notifications._ha_announce(settings, "Testansage von Kies über den Lautsprecher.")
+    except Exception as e:  # noqa: BLE001
+        return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
+    return schemas.NotificationTestResult(ok=True, message="Ansage ausgelöst – hör auf deinen Lautsprecher.")
 
 
 @notify_settings_router.get("/notifications/log", response_model=List[schemas.NotificationLogEntry])

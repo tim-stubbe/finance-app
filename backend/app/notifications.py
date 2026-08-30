@@ -71,6 +71,28 @@ def send_ntfy(base_url: str, topic: str, text: str, urgent: bool) -> None:
     resp.raise_for_status()
 
 
+def _ha_announce(settings, text: str) -> None:
+    """Dringende Meldung auf einem Home-Assistant-Lautsprecher ansagen. Nutzt
+    den frei konfigurierten domain.service + entity_id (siehe Settings.
+    ha_announce_*). Best-effort, wirft nie."""
+    service = (getattr(settings, "ha_announce_service", None) or "").strip()
+    if "." not in service:
+        return
+    if not (settings.homeassistant_url and settings.homeassistant_token_encrypted):
+        return
+    try:
+        from . import ha_client
+        token = bank_sync.decrypt_secret(settings.secret_key, settings.homeassistant_token_encrypted)
+        domain, svc = service.split(".", 1)
+        data: dict = {"message": text}
+        target = (getattr(settings, "ha_announce_target", None) or "").strip()
+        if target and not domain == "notify":
+            data["entity_id"] = target
+        ha_client.call_service(settings.homeassistant_url, token, domain, svc, data)
+    except Exception:
+        pass
+
+
 def _in_quiet_hours(settings, now: datetime) -> bool:
     """True, wenn `now` (LOKALE Zeit, siehe notify() - bewusst NICHT UTC wie
     sonst in der App üblich, da der Nutzer "22-7" als Wanduhrzeit meint, nicht
@@ -124,6 +146,10 @@ def notify(settings, text: str, urgent: bool = False) -> None:
             send_ntfy(settings.ntfy_url or "https://ntfy.sh", settings.ntfy_topic, text, urgent)
         except Exception:
             pass
+
+    # Dringende Meldungen zusätzlich auf einem HA-Lautsprecher ansagen.
+    if urgent and getattr(settings, "ha_announce_enabled", False):
+        _ha_announce(settings, text)
 
     if not settings.telegram_bot_token_encrypted or not settings.telegram_chat_id:
         _log(text, urgent, sent=bool(getattr(settings, "ntfy_enabled", False) and settings.ntfy_topic))

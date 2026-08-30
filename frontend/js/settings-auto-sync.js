@@ -102,6 +102,9 @@ async function loadNotificationSettings() {
   document.getElementById("ntfy-url").value = s.ntfy_url || "";
   document.getElementById("ntfy-topic").value = s.ntfy_topic || "";
   document.getElementById("telegram-voice-replies").checked = !!s.telegram_voice_replies;
+  document.getElementById("ha-announce-enabled").checked = !!s.ha_announce_enabled;
+  document.getElementById("ha-announce-service").value = s.ha_announce_service || "";
+  document.getElementById("ha-announce-target").value = s.ha_announce_target || "";
   document.getElementById("telegram-remove").classList.toggle("hidden", !s.telegram_configured);
   document.getElementById("telegram-bot-token").placeholder = s.telegram_configured
     ? "gespeichert – zum Ändern neuen Token eingeben" : "wird verschlüsselt gespeichert";
@@ -137,6 +140,9 @@ document.getElementById("notifications-settings-form").addEventListener("submit"
     ntfy_url: document.getElementById("ntfy-url").value.trim() || null,
     ntfy_topic: document.getElementById("ntfy-topic").value.trim() || null,
     telegram_voice_replies: document.getElementById("telegram-voice-replies").checked,
+    ha_announce_enabled: document.getElementById("ha-announce-enabled").checked,
+    ha_announce_service: document.getElementById("ha-announce-service").value.trim() || null,
+    ha_announce_target: document.getElementById("ha-announce-target").value.trim() || null,
   };
   await api("/settings/notifications", { method: "PUT", body: JSON.stringify(payload) });
   tokenInput.value = "";
@@ -173,6 +179,15 @@ document.getElementById("notifications-test-ntfy").addEventListener("click", asy
   statusEl.textContent = "Sende ntfy-Testalarm …";
   try {
     const r = await api("/notifications/test-ntfy", { method: "POST" });
+    statusEl.textContent = r.message;
+  } catch (e) { /* api() zeigt Fehler */ }
+});
+
+document.getElementById("notifications-test-ha").addEventListener("click", async () => {
+  const statusEl = document.getElementById("notifications-status");
+  statusEl.textContent = "Löse HA-Testansage aus …";
+  try {
+    const r = await api("/notifications/test-ha-announce", { method: "POST" });
     statusEl.textContent = r.message;
   } catch (e) { /* api() zeigt Fehler */ }
 });

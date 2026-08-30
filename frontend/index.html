@@ -3116,11 +3116,18 @@
             <input type="checkbox" id="telegram-voice-replies">
             <span>Auf Sprachnachrichten auch gesprochen antworten (Piper-TTS). Braucht TTS_BACKEND=piper (eigenes Image) oder =http mit PIPER_HTTP_URL.</span>
           </label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="ha-announce-enabled">
+            <span>Dringende Meldungen auf einem Home-Assistant-Lautsprecher ansagen.</span>
+          </label>
+          <label>HA-Ansage-Dienst <input type="text" id="ha-announce-service" placeholder="z.B. tts.google_translate_say oder notify.wohnzimmer"></label>
+          <label>HA-Ansage-Ziel (Media-Player) <input type="text" id="ha-announce-target" placeholder="z.B. media_player.wohnzimmer"></label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="notifications-test" class="btn-ghost">Testnachricht senden</button>
             <button type="button" id="notifications-test-proactive" class="btn-ghost">Proaktiv-Testmeldung</button>
             <button type="button" id="notifications-test-ntfy" class="btn-ghost">ntfy-Testalarm</button>
+            <button type="button" id="notifications-test-ha" class="btn-ghost">HA-Testansage</button>
             <button type="button" id="telegram-remove" class="btn-ghost hidden">Telegram entfernen</button>
           </div>
         </form>

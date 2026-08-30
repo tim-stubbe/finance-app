@@ -1594,6 +1594,9 @@ class NotificationSettingsOut(BaseModel):
     ntfy_url: str = "https://ntfy.sh"
     ntfy_topic: Optional[str] = None
     telegram_voice_replies: bool = False
+    ha_announce_enabled: bool = False
+    ha_announce_service: Optional[str] = None
+    ha_announce_target: Optional[str] = None
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -1606,6 +1609,9 @@ class NotificationSettingsUpdate(BaseModel):
     ntfy_url: Optional[str] = None
     ntfy_topic: Optional[str] = None
     telegram_voice_replies: Optional[bool] = None
+    ha_announce_enabled: Optional[bool] = None
+    ha_announce_service: Optional[str] = None
+    ha_announce_target: Optional[str] = None
 
 
 class NotificationTestResult(BaseModel):
