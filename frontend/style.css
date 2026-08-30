@@ -4040,3 +4040,8 @@ body.cockpit-active { overflow: hidden; }
 @media (max-width: 900px) {
   #cockpit-root { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; font-size: 16px; }
 }
+#cockpit-root .ck-vhead { font-weight: 600; margin-bottom: 6px; }
+#cockpit-root .ck-vrow { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
+#cockpit-root .ck-vrow em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+#cockpit-root .ck-fp-card #ck-floorplan-slot .panel { border: none; padding: 0; margin: 0; background: none; }
+#cockpit-root .ck-fp-card .sh-fp-stage { max-height: 260px; }

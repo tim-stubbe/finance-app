@@ -39,7 +39,9 @@
       <div class="ck-side">
         <section class="ck-card"><h3>Heute</h3><div id="ck-today">…</div></section>
         <section class="ck-card"><h3>Was hängt?</h3><div id="ck-hanging">…</div></section>
+        <section class="ck-card" id="ck-vehicle-card" hidden><h3>Fahrzeug</h3><div id="ck-vehicle">…</div></section>
         <section class="ck-card ck-charts-card"><h3>Verläufe</h3><div id="ck-charts">…</div></section>
+        <section class="ck-card ck-fp-card" id="ck-floorplan"><h3>Grundriss</h3><div id="ck-floorplan-slot"></div></section>
       </div>`;
     document.body.appendChild(root);
 
@@ -49,14 +51,32 @@
     return root;
   }
 
+  // Den bestehenden Grundriss-Panel (Smart-Home-Tab) ins Cockpit umhängen und
+  // beim Verlassen zurück - nichts neu bauen, dieselbe smarthome-floorplan.js.
+  let fpHome = null; // { parent, next }
+  function borrowFloorplan() {
+    const panel = document.getElementById("sh-floorplan-panel");
+    const slot = document.getElementById("ck-floorplan-slot");
+    if (!panel || !slot || panel.parentElement === slot) return;
+    fpHome = { parent: panel.parentElement, next: panel.nextElementSibling };
+    slot.appendChild(panel);
+    if (typeof loadSmartHomeFloorplan === "function") { try { loadSmartHomeFloorplan(); } catch {} }
+  }
+  function returnFloorplan() {
+    const panel = document.getElementById("sh-floorplan-panel");
+    if (!panel || !fpHome) return;
+    fpHome.parent.insertBefore(panel, fpHome.next);
+    fpHome = null;
+  }
+
   function setCockpit(on) {
     ensureRoot().hidden = !on;
     document.body.classList.toggle("cockpit-active", on);
     const url = new URL(location.href);
     if (on) { url.searchParams.set("cockpit", "1"); } else { url.searchParams.delete("cockpit"); }
     history.replaceState(null, "", url);
-    if (on) { startPolling(); refreshAll(); }
-    else { stopPolling(); stopMic(); }
+    if (on) { borrowFloorplan(); startPolling(); refreshAll(); }
+    else { stopPolling(); stopMic(); returnFloorplan(); }
   }
   window.setCockpit = setCockpit;
   window.toggleCockpit = () => setCockpit(ensureRoot().hidden);
@@ -77,7 +97,23 @@
     if (c) c.textContent = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
   }
 
-  function refreshAll() { refreshHouse(); refreshToday(); refreshHanging(); refreshCharts(); }
+  function refreshAll() { refreshHouse(); refreshToday(); refreshHanging(); refreshCharts(); refreshVehicle(); }
+
+  async function refreshVehicle() {
+    const card = document.getElementById("ck-vehicle-card");
+    try {
+      const [v, s] = await Promise.all([api("/vehicle"), api("/vehicle/fuel-summary")]);
+      const rows = [];
+      if (s.last_odometer_km != null) rows.push(["Kilometerstand", s.last_odometer_km.toLocaleString("de-DE") + " km"]);
+      if (s.avg_consumption_l_per_100km != null) rows.push(["Ø Verbrauch", s.avg_consumption_l_per_100km.toFixed(1) + " l/100 km"]);
+      if (s.avg_cost_per_km != null) rows.push(["Ø Kosten", s.avg_cost_per_km.toFixed(3) + " €/km"]);
+      if (!rows.length) { card.hidden = true; return; }
+      document.getElementById("ck-vehicle").innerHTML =
+        `<div class="ck-vhead">${esc(v.name || "Fahrzeug")}</div>` +
+        rows.map(([k, val]) => `<div class="ck-vrow"><span>${esc(k)}</span><em>${esc(val)}</em></div>`).join("");
+      card.hidden = false;
+    } catch { card.hidden = true; }   // kein Fahrzeug eingerichtet -> Karte weg
+  }
 
   async function refreshHouse() {
     try {

@@ -329,13 +329,20 @@ Standard ist `stub` – der **dokumentierte Offline-Fallback**: ohne Konfigurati
 antwortet der Voice-Endpunkt mit 501 und einer Anleitung, die Textsteuerung
 läuft normal weiter.
 
-`faster-whisper` und `piper` sind im Image enthalten (`requirements-voice.txt`,
-im `Dockerfile` mitinstalliert, ~250 MB) – es genügt, `STT_BACKEND=faster-whisper`
-(und optional `TTS_BACKEND=piper`) zu setzen. Modelle laden dann beim ersten
-Aufruf nach `$DATA_DIR` und überleben Neustarts. Wer das Image schlank halten
-will, kann die eine Zeile im `Dockerfile` entfernen und stattdessen einen
-eigenen Whisper-/Piper-Dienst im Netz betreiben (`STT_BACKEND=http` /
-`TTS_BACKEND=http`).
+`faster-whisper`, `piper` und `openwakeword` sind **nicht** im Standard-Image
+(sie brechen den schlanken CI-Build auf Python 3.14) – sie stehen in
+`requirements-voice.txt` und sind opt-in. Zwei Wege:
+
+1. **Eigenes Image:** `requirements-voice.txt` im `Dockerfile` mitinstallieren
+   (eine Zeile), dann `STT_BACKEND=faster-whisper` / `TTS_BACKEND=piper` setzen.
+   Modelle laden beim ersten Aufruf nach `$DATA_DIR` und überleben Neustarts.
+2. **Externer Dienst (kein Image-Umbau):** einen eigenen Whisper-/Piper-HTTP-
+   Dienst im Netz betreiben (z. B. `onerahmet/openai-whisper-asr-webservice`)
+   und `STT_BACKEND=http` + `WHISPER_HTTP_URL` bzw. `TTS_BACKEND=http` +
+   `PIPER_HTTP_URL` setzen.
+
+Ohne eines von beidem bleibt Sprache im `stub`-Modus (Text-Steuerung läuft
+normal, der Voice-Endpunkt antwortet 501 mit Anleitung).
 
 Nur zwei Umgebungsvariablen gibt es:
 
