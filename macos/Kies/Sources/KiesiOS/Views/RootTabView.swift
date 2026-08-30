@@ -8,12 +8,9 @@ struct RootTabView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $router.selection) {
-                NavigationStack {
-                    TodayView()
-                        .navigationBarTitleDisplayMode(.inline)
-                }
-                .tabItem { Label("Übersicht", systemImage: "sparkles") }
-                .tag(AppTab.today)
+                NavigationStack { TodayView().navigationBarTitleDisplayMode(.inline) }
+                    .tabItem { Label("Übersicht", systemImage: "house") }
+                    .tag(AppTab.today)
 
                 NavigationStack { AccountsView() }
                     .tabItem { Label("Konten", systemImage: "creditcard") }
@@ -33,25 +30,25 @@ struct RootTabView: View {
             }
             .tint(KColor.accentStrong)
 
-            // Floating quick action: the single bold neon interaction in the shell.
             Button {
                 showQuickCapture = true
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(KColor.accent)
-                        .frame(width: 60, height: 60)
-                    Image(systemName: "plus")
-                        .font(.system(size: 23, weight: .bold))
-                        .foregroundStyle(KColor.accentInk)
-                }
-                .shadow(color: KColor.accentStrong.opacity(0.25), radius: 16, x: 0, y: 8)
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(KColor.accentInk)
+                    .frame(width: 52, height: 52)
+                    .background(KColor.accent, in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 3))
+                    .shadow(color: KColor.accentStrong.opacity(0.20), radius: 12, x: 0, y: 6)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Schnell erfassen")
-            .padding(.bottom, 54)
+            .padding(.bottom, 67)
         }
         .sheet(isPresented: $showQuickCapture) {
             QuickCaptureView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 }
