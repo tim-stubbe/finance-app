@@ -29,6 +29,68 @@ class TaxAskIn(BaseModel):
     year: Optional[int] = None
 
 
+class TaxProfileIn(BaseModel):
+    church_tax_rate: Optional[float] = None      # 0.0 / 0.08 / 0.09
+    marginal_tax_rate: Optional[float] = None    # 0.0 .. 0.45
+    filing_married: Optional[bool] = None
+    sparerpauschbetrag: Optional[float] = None
+
+
+class TaxTipStatusIn(BaseModel):
+    year: int
+    status: str  # "done" | "not_relevant" | "open"
+
+
+@tax_router.get("/tax/profile")
+def get_tax_profile(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return {
+        "church_tax_rate": s.church_tax_rate or 0.0,
+        "marginal_tax_rate": s.marginal_tax_rate or 0.0,
+        "filing_married": bool(s.filing_married),
+        "sparerpauschbetrag": s.sparerpauschbetrag,
+        "country": s.residence_country,
+    }
+
+
+@tax_router.put("/tax/profile")
+def update_tax_profile(data: TaxProfileIn, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if data.church_tax_rate is not None:
+        s.church_tax_rate = min(0.09, max(0.0, data.church_tax_rate))
+    if data.marginal_tax_rate is not None:
+        s.marginal_tax_rate = min(0.45, max(0.0, data.marginal_tax_rate))
+    if data.filing_married is not None:
+        s.filing_married = data.filing_married
+    if data.sparerpauschbetrag is not None:
+        s.sparerpauschbetrag = max(0.0, data.sparerpauschbetrag)
+    db.commit()
+    return get_tax_profile(db)
+
+
+@tax_router.post("/tax/tips/{tip_id}/status")
+def set_tax_tip_status(tip_id: str, data: TaxTipStatusIn, db: Session = Depends(get_db)):
+    """Markiert einen Spar-Tipp für ein Jahr als erledigt / nicht relevant
+    (oder setzt ihn mit "open" zurück). Der Steuern-Tab, /steuer und die
+    Jahresend-Erinnerung blenden erledigte Tipps dann aus."""
+    row = (db.query(models.TaxTipStatus)
+           .filter(models.TaxTipStatus.year == data.year,
+                   models.TaxTipStatus.tip_id == tip_id).first())
+    if data.status == "open":
+        if row:
+            db.delete(row)
+            db.commit()
+        return {"ok": True, "status": "open"}
+    if data.status not in ("done", "not_relevant"):
+        raise HTTPException(400, "status muss done, not_relevant oder open sein")
+    if row:
+        row.status = data.status
+    else:
+        db.add(models.TaxTipStatus(year=data.year, tip_id=tip_id, status=data.status))
+    db.commit()
+    return {"ok": True, "status": data.status}
+
+
 @tax_router.get("/tax/tips")
 def get_tax_tips(year: Optional[int] = None, db: Session = Depends(get_db),
                  space_id: int = Depends(auth.get_active_space_id)):

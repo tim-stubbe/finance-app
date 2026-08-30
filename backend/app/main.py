@@ -280,6 +280,10 @@ ensure_columns("settings", {
     "proactive_assistant_last_hash": "VARCHAR",
     "proactive_assistant_last_snapshot_hash": "VARCHAR",
     "proactive_assistant_last_text": "VARCHAR",
+    # Steuer-Profil für die personalisierten Spar-Tipps (tax_advice.py)
+    "church_tax_rate": "FLOAT DEFAULT 0",
+    "marginal_tax_rate": "FLOAT DEFAULT 0",
+    "filing_married": "BOOLEAN DEFAULT 0",
     "proactive_assistant_snoozed_until": "DATETIME",
     "ntfy_enabled": "BOOLEAN DEFAULT 0",
     "ntfy_url": "VARCHAR DEFAULT 'https://ntfy.sh'",

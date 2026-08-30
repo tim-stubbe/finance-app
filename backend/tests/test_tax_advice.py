@@ -95,3 +95,27 @@ def test_telegram_steuer_command(auth_client, monkeypatch):
     finally:
         db.close()
     assert sent and "Steuern sparen" in sent[0] and "keine Steuerberatung" in sent[0]
+
+
+def test_tax_profile_personalizes_and_church_tax(auth_client):
+    _set_country("DE")
+    auth_client.put("/api/tax/profile", json={"church_tax_rate": 0.09, "marginal_tax_rate": 0.42})
+    p = auth_client.get("/api/tax/profile").json()
+    assert p["church_tax_rate"] == 0.09 and p["marginal_tax_rate"] == 0.42
+    facts = auth_client.get("/api/tax/tips").json()["facts"]
+    assert facts["kap_eff"] > 0.2637  # Abgeltung+Soli+Kirche > 26,375 %
+    tips = auth_client.get("/api/tax/tips").json()["tips"]
+    ho = next(t for t in tips if t["id"] == "homeoffice")
+    assert "42 %" in ho["detail"]  # Grenzsteuersatz-Hinweis eingespielt
+
+
+def test_tax_tip_status_dismiss_and_reset(auth_client):
+    _set_country("DE")
+    year = 2026
+    r = auth_client.post(f"/api/tax/tips/homeoffice/status", json={"year": year, "status": "not_relevant"})
+    assert r.json()["ok"] is True
+    data = auth_client.get(f"/api/tax/tips?year={year}").json()
+    assert all(t["id"] != "homeoffice" for t in data["tips"])
+    assert any(t["id"] == "homeoffice" and t["status"] == "not_relevant" for t in data["dismissed"])
+    auth_client.post(f"/api/tax/tips/homeoffice/status", json={"year": year, "status": "open"})
+    assert any(t["id"] == "homeoffice" for t in auth_client.get(f"/api/tax/tips?year={year}").json()["tips"])

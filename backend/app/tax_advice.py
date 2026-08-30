@@ -23,6 +23,13 @@ ABGELTUNGSTEUER = 0.25
 SOLI = 0.055                       # auf die Abgeltungsteuer
 KAP_TAX_EFF = ABGELTUNGSTEUER * (1 + SOLI)   # 26,375 % ohne Kirchensteuer
 SPARERPAUSCHBETRAG_DEFAULT = 1000.0
+
+
+def kap_eff(church_rate: float = 0.0) -> float:
+    """Effektive Belastung auf Kapitalerträge über dem Freibetrag: Abgeltung-
+    steuer + Soli + ggf. Kirchensteuer. Näherung (die Kirchensteuer mindert
+    die Bemessungsgrundlage der KapSt geringfügig - hier vernachlässigt)."""
+    return ABGELTUNGSTEUER * (1 + SOLI) + ABGELTUNGSTEUER * max(0.0, church_rate)
 HANDWERKER_MAX_ABZUG = 1200.0     # §35a: 20 % der Lohnkosten, max. 1.200 €/Jahr
 HAUSHALTSNAHE_MAX_ABZUG = 4000.0  # §35a: 20 %, max. 4.000 €/Jahr
 HOMEOFFICE_MAX = 1260.0           # 6 €/Tag, max. 210 Tage
@@ -98,6 +105,12 @@ def collect_facts(db, settings, space_id: int, year: int) -> dict:
     facts["freibetrag_rest"] = round(max(0.0, freibetrag - kap_income), 2)
     facts["kap_ueber_freibetrag"] = round(max(0.0, kap_income - freibetrag), 2)
 
+    # Steuer-Profil (personalisiert die Betragsschätzungen)
+    facts["church_tax_rate"] = float(getattr(settings, "church_tax_rate", 0.0) or 0.0)
+    facts["marginal_tax_rate"] = float(getattr(settings, "marginal_tax_rate", 0.0) or 0.0)
+    facts["filing_married"] = bool(getattr(settings, "filing_married", False))
+    facts["kap_eff"] = round(kap_eff(facts["church_tax_rate"]), 5)
+
     # Ausgabenkategorien des Jahres (für §35a / Werbungskosten / 3a-Hinweise)
     facts["kategorie_summen"] = _category_sums(db, space_id, year)
 
@@ -139,15 +152,34 @@ def _cat_total(sums: dict, *needles) -> float:
 # --------------------------------------------------------------------------
 # Tipps
 # --------------------------------------------------------------------------
+def _dismissals(db, year: int) -> dict:
+    try:
+        from . import models as m
+        rows = db.query(m.TaxTipStatus).filter(m.TaxTipStatus.year == year).all()
+        return {r.tip_id: r.status for r in rows}
+    except Exception:
+        return {}
+
+
 def generate_tips(db, settings, space_id: int, year: int) -> dict:
     facts = collect_facts(db, settings, space_id, year)
     country = facts["country"]
-    tips: list = []
-    (_tips_kapital_de if country != "CH" else _tips_kapital_ch)(facts, tips)
-    (_tips_finanzen_de if country != "CH" else _tips_finanzen_ch)(facts, tips)
+    all_tips: list = []
+    (_tips_kapital_de if country != "CH" else _tips_kapital_ch)(facts, all_tips)
+    (_tips_finanzen_de if country != "CH" else _tips_finanzen_ch)(facts, all_tips)
     order = {"hoch": 0, "mittel": 1, "info": 2}
-    tips.sort(key=lambda t: order.get(t["severity"], 3))
-    return {"year": year, "country": country, "facts": facts, "tips": tips}
+    all_tips.sort(key=lambda t: order.get(t["severity"], 3))
+
+    dismissed = _dismissals(db, year)
+    active, erledigt = [], []
+    for t in all_tips:
+        st = dismissed.get(t["id"])
+        if st:
+            erledigt.append({**t, "status": st})
+        else:
+            active.append(t)
+    return {"year": year, "country": country, "facts": facts,
+            "tips": active, "dismissed": erledigt}
 
 
 def _tips_kapital_de(f, tips):
@@ -165,11 +197,14 @@ def _tips_kapital_de(f, tips):
                          f"von {_eur(f['sparerpauschbetrag'])}. Wer Gewinne gezielt realisiert (z. B. "
                          "Verkauf + sofortiger Rückkauf), hebt die Anschaffungskosten steuerfrei an "
                          "('Freibetrag ausschöpfen')."))
+    eff = f.get("kap_eff", KAP_TAX_EFF)
+    eff_pct = f"{eff * 100:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+    kirche = " inkl. Kirchensteuer" if f.get("church_tax_rate") else ""
     if ueber > 0:
-        spar = ueber * KAP_TAX_EFF
+        spar = ueber * eff
         tips.append(_tip("freibetrag-voll", "kapital", "hoch",
                          f"Freibetrag ausgeschöpft – {_eur(ueber)} über der Grenze",
-                         f"Darauf fallen ~{_eur(spar)} Abgeltungsteuer (26,375 %) an. Freistellungs"
+                         f"Darauf fallen ~{_eur(spar)} Steuer ({eff_pct} %{kirche}) an. Freistellungs"
                          "aufträge auf die Banken verteilen, in denen die Erträge anfallen; ggf. Gewinne "
                          "ins nächste Jahr verschieben."))
     if f["depot_verlierer"] and (f["realisierte_gewinne"] > 0 or ueber > 0):
@@ -179,7 +214,7 @@ def _tips_kapital_de(f, tips):
                          "Verluste gegen Gewinne gegenrechnen (Tax-Loss-Harvesting)",
                          f"{worst['name']} liegt {_eur(worst['gain_abs'])} im Minus. Ein Verkauf noch "
                          f"in {f['year']} senkt die steuerpflichtigen Gewinne um bis zu {_eur(pot)} "
-                         f"(~{_eur(pot * KAP_TAX_EFF)} weniger Steuer). Rückkauf danach möglich – "
+                         f"(~{_eur(pot * eff)} weniger Steuer). Rückkauf danach möglich – "
                          "keine deutsche Sperrfrist, aber Spesen/Spread beachten."))
     if f["depot_gewinner"] and f["realisierte_gewinne"] < 0:
         tips.append(_tip("verlusttopf-nutzen", "kapital", "mittel",
@@ -211,8 +246,19 @@ def _tips_kapital_ch(f, tips):
                          "trotzdem als zugeflossen."))
 
 
+def _mtr_hint(f, betrag: float) -> str:
+    """"…bei deinem Grenzsteuersatz X % ≈ Y € weniger Steuer" - nur wenn der
+    Satz im Profil hinterlegt ist."""
+    mtr = f.get("marginal_tax_rate", 0.0)
+    if not mtr or betrag <= 0:
+        return ""
+    pct = f"{mtr * 100:.0f}"
+    return f" Bei deinem Grenzsteuersatz ({pct} %) sind das grob {_eur(betrag * mtr)} weniger Steuer."
+
+
 def _tips_finanzen_de(f, tips):
     s = f["kategorie_summen"]
+    married = f.get("filing_married")
     handw = _cat_total(s, "handwerk", "reparatur", "sanierung")
     if handw > 0:
         abzug = min(handw * 0.20, HANDWERKER_MAX_ABZUG)
@@ -238,17 +284,20 @@ def _tips_finanzen_de(f, tips):
         tips.append(_tip("werbungskosten", "finanzen", "info",
                          "Fortbildung als Werbungskosten",
                          f"~{_eur(fortb)} – beruflich veranlasste Fortbildung, Fachliteratur, "
-                         "Arbeitsmittel zählen über den Pauschbetrag (1.230 €) hinaus als Werbungskosten."))
+                         "Arbeitsmittel zählen über den Pauschbetrag (1.230 €) hinaus als Werbungskosten."
+                         + _mtr_hint(f, max(0.0, fortb - 1230))))
     tips.append(_tip("homeoffice", "finanzen", "info",
                      "Homeoffice-Pauschale nicht vergessen",
                      f"6 €/Arbeitstag, bis {_eur(HOMEOFFICE_MAX)}/Jahr – auch ohne separates "
-                     "Arbeitszimmer. In der Anlage N eintragen."))
+                     "Arbeitszimmer. In der Anlage N eintragen." + _mtr_hint(f, HOMEOFFICE_MAX)))
     if not any("altersvorsorge" in k or "rürup" in k or "riester" in k for k in s):
+        hoechst = "~58.688 € (zusammen veranlagt)" if married else "~29.344 €"
         tips.append(_tip("altersvorsorge", "finanzen", "info",
                          "Altersvorsorge senkt das zu versteuernde Einkommen",
-                         "Rürup-(Basisrente-)Beiträge sind zu ~100 % als Sonderausgaben abziehbar "
-                         "(Höchstbetrag 2025 ~29.344 € / 58.688 € zusammen). Für Angestellte oft "
-                         "auch betriebliche Altersvorsorge per Entgeltumwandlung interessant."))
+                         f"Rürup-(Basisrente-)Beiträge sind zu ~100 % als Sonderausgaben abziehbar "
+                         f"(Höchstbetrag 2025 {hoechst}). Für Angestellte oft auch betriebliche "
+                         "Altersvorsorge per Entgeltumwandlung interessant."
+                         + _mtr_hint(f, 6000)))
 
 
 def _tips_finanzen_ch(f, tips):
@@ -257,13 +306,15 @@ def _tips_finanzen_ch(f, tips):
     dritte_a = _cat_total(s, "3a", "säule", "saeule", "vorsorge")
     if dritte_a < SAEULE_3A_MAX_MIT_PK - 100:
         rest = round(SAEULE_3A_MAX_MIT_PK - dritte_a, 0)
+        mtr = f.get("marginal_tax_rate", 0.0) or 0.30
+        pct = f"{mtr * 100:.0f}"
         tips.append(_tip("ch-saeule-3a", "finanzen", "hoch",
                          "Säule 3a bis zum Maximum einzahlen",
                          f"{'Bisher ~' + _eur(dritte_a) + ' erkannt. ' if has_3a else ''}"
                          f"Erwerbstätige mit Pensionskasse dürfen {year_str(f)} bis "
                          f"~{SAEULE_3A_MAX_MIT_PK:,.0f} CHF einzahlen (jährlich prüfen). Der Betrag geht "
-                         f"direkt vom steuerbaren Einkommen ab – bei Grenzsteuersatz 30 % sind das "
-                         f"grob {_eur(rest * 0.30)} weniger Steuer. Einzahlung bis 31.12."))
+                         f"direkt vom steuerbaren Einkommen ab – bei Grenzsteuersatz {pct} % sind das "
+                         f"grob {_eur(rest * mtr)} weniger Steuer. Einzahlung bis 31.12."))
     tips.append(_tip("ch-3a-gestaffelt", "finanzen", "info",
                      "3a-Konten gestaffelt beziehen",
                      "Mehrere 3a-Konten (2–5) und über verschiedene Steuerjahre gestaffelt beziehen "

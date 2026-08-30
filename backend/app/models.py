@@ -202,6 +202,15 @@ class Settings(Base):
     backup_hour = Column(Integer, nullable=False, default=2)
     backup_retention = Column(Integer, nullable=False, default=14)
     sparerpauschbetrag = Column(Float, nullable=False, default=1000.0)
+    # Steuer-Profil für die personalisierten Spar-Tipps (tax_advice.py) -
+    # rein für die Näherungsrechnung, keine Steuerberatung.
+    # Kirchensteuer auf die Abgeltungsteuer: 0.0 / 0.08 (BY, BW) / 0.09 (Rest).
+    church_tax_rate = Column(Float, nullable=False, default=0.0)
+    # Geschätzter persönlicher Grenzsteuersatz (Einkommensteuer), 0..0.45 -
+    # für "Rürup/3a/Werbungskosten bringen ~Betrag × Satz".
+    marginal_tax_rate = Column(Float, nullable=False, default=0.0)
+    # Zusammenveranlagung (verdoppelt Sparerpauschbetrag-/Rürup-Hinweise).
+    filing_married = Column(Boolean, nullable=False, default=False)
     auto_categorize_enabled = Column(Boolean, nullable=False, default=True)
     brave_search_api_key_encrypted = Column(String, nullable=True)
     # "brave" (bezahlte API, braucht Key) oder "searxng" (selbst gehostete
@@ -1703,6 +1712,23 @@ class ProactiveFeedback(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     text = Column(String, nullable=False)
     useful = Column(Boolean, nullable=False)
+
+
+class TaxTipStatus(Base):
+    """Merkt sich pro Steuerjahr, welche Spar-Tipps (tax_advice.generate_tips)
+    der Nutzer als erledigt oder nicht relevant markiert hat - damit der
+    Steuern-Tab, der `/steuer`-Befehl und die Jahresend-Erinnerung sie nicht
+    weiter anzeigen. `tip_id` ist die stabile ID aus tax_advice (z.B.
+    "tax-loss-harvest")."""
+
+    __tablename__ = "tax_tip_status"
+    __table_args__ = (UniqueConstraint("year", "tip_id", name="uq_tax_tip_year"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    year = Column(Integer, nullable=False, index=True)
+    tip_id = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # "done" | "not_relevant"
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class NotificationLog(Base):
