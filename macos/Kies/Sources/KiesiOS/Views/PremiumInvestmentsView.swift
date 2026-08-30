@@ -3,23 +3,19 @@ import Charts
 import GRDB
 import KiesCore
 
-/// Premium portfolio screen: a focused wealth header, interactive allocation,
-/// compact performance controls and an uncluttered positions feed.
+/// Premium portfolio screen: focused wealth header, interactive allocation,
+/// and an uncluttered positions feed using the data already available locally.
 struct PremiumInvestmentsView: View {
     @ObservedObject private var engine = SyncEngine.shared
     @StateObject private var holdings = Box<[Holding]>([])
     @StateObject private var allocation = Box<[Queries.AllocationSlice]>([])
     @StateObject private var totals = Box(Queries.InvestmentTotals(value: 0, cost: 0))
     @State private var selectedAllocation: String?
-    @State private var selectedPeriod = "1M"
-
-    private let periods = ["1W", "1M", "3M", "1J"]
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
                 portfolioHeader
-                performancePlaceholder
                 allocationSection
                 positionsSection
             }
@@ -37,7 +33,7 @@ struct PremiumInvestmentsView: View {
     }
 
     private var portfolioHeader: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("PORTFOLIO")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.3)
@@ -60,40 +56,6 @@ struct PremiumInvestmentsView: View {
             }
             .font(.subheadline.weight(.medium))
             .foregroundStyle(totals.value.gain >= 0 ? KColor.positive : KColor.negative)
-        }
-    }
-
-    private var performancePlaceholder: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Entwicklung")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(KColor.primary)
-                Spacer()
-                HStack(spacing: 3) {
-                    ForEach(periods, id: \.self) { period in
-                        Button(period) { withAnimation(.easeOut(duration: 0.18)) { selectedPeriod = period } }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(selectedPeriod == period ? .white : KColor.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(selectedPeriod == period ? KColor.accent : KColor.surfaceSecondary, in: Capsule())
-                    }
-                }
-            }
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(KColor.surfaceSecondary.opacity(0.55))
-                .frame(height: 92)
-                .overlay(alignment: .center) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                        Text("Performance-Daten werden mit dem gewählten Zeitraum synchronisiert")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(KColor.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                }
         }
     }
 
@@ -147,7 +109,9 @@ struct PremiumInvestmentsView: View {
                     VStack(alignment: .leading, spacing: 11) {
                         ForEach(Array(allocation.value.enumerated()), id: \.element.id) { index, slice in
                             Button {
-                                withAnimation(.easeOut(duration: 0.18)) { selectedAllocation = selectedAllocation == slice.label ? nil : slice.label }
+                                withAnimation(.easeOut(duration: 0.18)) {
+                                    selectedAllocation = selectedAllocation == slice.label ? nil : slice.label
+                                }
                             } label: {
                                 HStack(spacing: 8) {
                                     Circle()
