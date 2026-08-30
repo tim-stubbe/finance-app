@@ -47,20 +47,32 @@ def get_or_create_settings(db: Session) -> models.Settings:
 
 
 def get_active_space_id(request: Request, db: Session = Depends(get_db)) -> int:
+    # Multi-User Phase 2: nur Bereiche berücksichtigen, die dem angemeldeten
+    # Nutzer gehören (owner_id == user.id) oder noch nicht migriert sind
+    # (owner_id NULL). So kann die Session nie auf einen fremden Bereich
+    # zeigen und der Auto-Pick unten wählt keinen fremden aus.
+    user = get_user(db, request.session.get("user_id"))
+    owned_q = db.query(models.Space)
+    if user is not None:
+        owned_q = owned_q.filter(
+            (models.Space.owner_id == user.id) | (models.Space.owner_id.is_(None))
+        )
     space_id = request.session.get("space_id")
-    if not space_id:
-        # Gibt es nur einen Bereich, automatisch übernehmen statt eine
-        # Bereichsauswahl anzuzeigen - die App hat keine UI mehr dafür, weil ein
-        # einzelner Nutzer (hier: Einzelunternehmer) ohnehin nur einen Bereich
-        # braucht. Bei mehreren Bereichen (z.B. nach manuellem Anlegen über die
-        # API) bleibt die alte Fehlermeldung als Sicherheitsnetz bestehen.
-        spaces = db.query(models.Space).all()
-        if len(spaces) == 1:
-            space_id = spaces[0].id
-            request.session["space_id"] = space_id
+    if space_id:
+        if owned_q.filter(models.Space.id == space_id).first() is not None:
             return space_id
-        raise HTTPException(status_code=400, detail="Kein Bereich ausgewählt")
-    return space_id
+        # Session zeigt auf einen Bereich, der dem Nutzer nicht (mehr) gehört.
+        request.session.pop("space_id", None)
+        space_id = None
+    # Gibt es genau einen (eigenen) Bereich, automatisch übernehmen statt eine
+    # Bereichsauswahl anzuzeigen - die App hat keine UI mehr dafür. Bei mehreren
+    # bleibt die alte Fehlermeldung als Sicherheitsnetz bestehen.
+    spaces = owned_q.all()
+    if len(spaces) == 1:
+        space_id = spaces[0].id
+        request.session["space_id"] = space_id
+        return space_id
+    raise HTTPException(status_code=400, detail="Kein Bereich ausgewählt")
 
 
 # ---------- Web-Login (Passwort/TOTP/Passkeys) ----------

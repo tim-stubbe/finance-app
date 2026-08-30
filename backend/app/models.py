@@ -42,6 +42,13 @@ class Space(Base):
     # gegen den taeglichen NetWorthSnapshot zu vergleichen (der Digest laeuft
     # mehrmals taeglich, ein Tages-Snapshot waere fuer diesen Vergleich zu grob).
     last_digest_net_worth = Column(Float, nullable=True)
+    # Multi-User Phase 2 (Modell "ein Besitzer pro Bereich"): der Bereich - und
+    # damit alles, was per space_id daranhängt (Konten, Buchungen, Ziele ...) -
+    # gehört genau einem Nutzer. NULL nur bei Altbestand vor der Migration bzw.
+    # solange kein User existiert; ownership.py behandelt NULL als "gehört dem
+    # einzigen/ersten Nutzer" (main.py-Bootstrap füllt es auf). Kein Teilen,
+    # kein Rollensystem - bewusst, siehe models.User-Docstring.
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     accounts = relationship("Account", back_populates="space", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="space", cascade="all, delete-orphan")

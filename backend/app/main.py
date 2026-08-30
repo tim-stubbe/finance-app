@@ -313,6 +313,11 @@ ensure_columns("settings", {
 # weiter unten migriert bestehende Zeilen).
 ensure_columns("passkey_credentials", {"user_id": "INTEGER"})
 
+# Multi-User (Phase 2, Modell "ein Besitzer pro Bereich"): jeder Space gehört
+# genau einem Nutzer (siehe ownership.py). Backfill weiter unten setzt owner_id
+# für bestehende Bereiche auf den ersten Nutzer.
+ensure_columns("spaces", {"owner_id": "INTEGER"})
+
 # updated_at fuer den Offline-Sync des nativen Clients (siehe sync.py) - fehlte
 # bisher auf fast allen Tabellen ausser todos/calendar_events, ohne die Spalte
 # ist kein Diff-Sync ("was hat sich seit dem letzten Pull geaendert") moeglich.
@@ -367,6 +372,15 @@ if _bootstrap_db.query(models.User).count() == 0 and _settings.password_hash:
     _bootstrap_db.query(models.PasskeyCredential).filter(
         models.PasskeyCredential.user_id.is_(None)
     ).update({"user_id": _u.id})
+    _bootstrap_db.commit()
+
+# Multi-User (Phase 2): jeder Bereich ohne Besitzer geht an den ersten Nutzer
+# (heute der einzige). Idempotent - greift nur, solange owner_id NULL ist.
+_first_user = _bootstrap_db.query(models.User).order_by(models.User.id).first()
+if _first_user is not None:
+    _bootstrap_db.query(models.Space).filter(
+        models.Space.owner_id.is_(None)
+    ).update({"owner_id": _first_user.id})
     _bootstrap_db.commit()
 
 # Basiszins-Werte (BMF-Veröffentlichung) für die Vorabpauschale-Berechnung - einmalig
