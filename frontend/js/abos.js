@@ -219,7 +219,10 @@ async function loadRecurringTab() {
     const tr = document.createElement("tr");
     if (reminder && reminder.due) tr.classList.add("row-warning");
     tr.innerHTML = `
-      <td>${it.description || "–"}</td>
+      <td><button type="button" class="link-btn" data-rec-history
+        data-rec-account="${it.account_id}" data-rec-key="${esc(it.description_key)}"
+        data-rec-label="${esc(it.description || "–")}" data-rec-freq="${it.frequency}"
+        title="Buchungsverlauf dieses Abos">${esc(it.description || "–")}</button></td>
       <td>${it.account_name || "–"}</td>
       <td>${it.category_name || "–"}</td>
       <td>${RECURRING_FREQ_LABELS[it.frequency] || it.frequency}</td>
@@ -254,6 +257,13 @@ async function loadRecurringTab() {
     });
   });
   bindIgnoreButtons(tbody);
+
+  tbody.querySelectorAll("[data-rec-history]").forEach(btn => {
+    btn.addEventListener("click", () => openRecurringHistory(
+      parseInt(btn.dataset.recAccount, 10), btn.dataset.recKey,
+      btn.dataset.recLabel, btn.dataset.recFreq,
+    ));
+  });
 
   document.getElementById("recurring-summary-cards").innerHTML = `
     <div class="card">
@@ -457,3 +467,42 @@ window.deleteTransaction = async id => {
   loadAccounts();
 };
 
+
+// ---------- Buchungsverlauf eines erkannten Abos ----------
+function closeRecurringHistory() {
+  document.getElementById("recurring-history-modal").classList.add("hidden");
+}
+document.getElementById("recurring-history-modal-close").addEventListener("click", closeRecurringHistory);
+document.getElementById("recurring-history-modal").addEventListener("click", e => {
+  if (e.target.id === "recurring-history-modal") closeRecurringHistory();
+});
+
+async function openRecurringHistory(accountId, descriptionKey, label, freq) {
+  const modal = document.getElementById("recurring-history-modal");
+  const body = document.getElementById("recurring-history-body");
+  document.getElementById("recurring-history-title").textContent = label || "Buchungsverlauf";
+  document.getElementById("recurring-history-sub").textContent =
+    (RECURRING_FREQ_LABELS[freq] || freq || "") + " · lädt …";
+  body.innerHTML = `<tr><td colspan="4" class="page-sub">Lädt …</td></tr>`;
+  modal.classList.remove("hidden");
+
+  let rows = [];
+  try {
+    rows = await api(`/transactions/recurring/occurrences?account_id=${accountId}&description_key=${encodeURIComponent(descriptionKey)}`);
+  } catch {
+    body.innerHTML = `<tr><td colspan="4" class="page-sub">Konnte den Verlauf nicht laden.</td></tr>`;
+    return;
+  }
+  const sum = rows.reduce((s, r) => s + r.amount, 0);
+  document.getElementById("recurring-history-sub").textContent =
+    `${RECURRING_FREQ_LABELS[freq] || freq || ""} · ${rows.length} Buchung${rows.length === 1 ? "" : "en"} · Summe ${eur(sum)}`;
+  body.innerHTML = rows.length
+    ? rows.map(r => `<tr>
+        <td>${fmtDate(r.date)}</td>
+        <td>${esc(r.description || "–")}</td>
+        <td>${esc(r.category_name || "–")}</td>
+        <td class="num ${r.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(r.amount)}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="page-sub">Keine Einzelbuchungen gefunden.</td></tr>`;
+}
+window.openRecurringHistory = openRecurringHistory;

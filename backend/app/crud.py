@@ -736,6 +736,35 @@ def delete_ignored_recurring_payment(db: Session, ignore_id: int, space_id: int)
     return True
 
 
+def recurring_occurrences(db: Session, space_id: int, account_id: int, description_key: str) -> list[dict]:
+    """Alle einzelnen Buchungen, die zu einer erkannten wiederkehrenden Zahlung
+    gehören - dieselbe Gruppierung wie detect_recurring_transactions
+    ((account_id, _normalize_description(description))). Für den
+    "Buchungsverlauf" eines Abos. Neueste zuerst."""
+    key = (description_key or "").strip().lower()
+    txs = (
+        db.query(models.Transaction)
+        .join(models.Account)
+        .filter(models.Account.space_id == space_id,
+                models.Transaction.account_id == account_id)
+        .order_by(models.Transaction.date.desc())
+        .all()
+    )
+    categories = {c.id: c.name for c in db.query(models.Category).all()}
+    out = []
+    for tx in txs:
+        if _normalize_description(tx.description) != key:
+            continue
+        out.append({
+            "id": tx.id,
+            "date": tx.date,
+            "amount": round(tx.amount, 2),
+            "description": tx.description,
+            "category_name": categories.get(tx.category_id) if tx.category_id else None,
+        })
+    return out
+
+
 def detect_recurring_transactions(db: Session, space_id: int) -> list[dict]:
     """Gruppiert Buchungen je Konto nach (normalisierter) Bezeichnung und erkennt
     Gruppen mit regelmäßigem zeitlichem Abstand und ähnlichem Betrag als

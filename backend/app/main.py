@@ -514,6 +514,15 @@ def get_recurring_transactions(db: Session = Depends(get_db), space_id: int = De
     return crud.detect_recurring_transactions(db, space_id)
 
 
+@api_router.get("/transactions/recurring/occurrences")
+def get_recurring_occurrences(
+    account_id: int, description_key: str,
+    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
+):
+    """Buchungsverlauf eines erkannten Abos - alle Einzelbuchungen der Gruppe."""
+    return crud.recurring_occurrences(db, space_id, account_id, description_key)
+
+
 @api_router.get("/transactions/price-increases", response_model=List[schemas.PriceIncreaseOut])
 def get_price_increases(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
     return crud.detect_price_increases(db, space_id)

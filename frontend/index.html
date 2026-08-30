@@ -981,6 +981,22 @@
       </div>
     </div>
 
+    <div id="recurring-history-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <button type="button" id="recurring-history-modal-close" class="modal-close" aria-label="Schließen">&times;</button>
+        <div class="modal-header">
+          <h2 id="recurring-history-title">Buchungsverlauf</h2>
+          <p class="page-sub" id="recurring-history-sub"></p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th>Beschreibung</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead>
+            <tbody id="recurring-history-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- CATEGORIES -->
     <section id="tab-categories" class="tab-content">
       <header class="page-head">
