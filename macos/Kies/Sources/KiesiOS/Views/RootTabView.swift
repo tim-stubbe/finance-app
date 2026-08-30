@@ -1,52 +1,57 @@
 import SwiftUI
 import KiesCore
 
-/// Bereiche der iOS-App (siehe KiesiOSApp.swift-Kopfkommentar) - TabView statt
-/// der NavigationSplitView der macOS-App, das ist auf dem iPhone der übliche
-/// Ort für eine feste, kleine Anzahl Bereiche. Ziele/Leben kamen später dazu
-/// (iOS ab jetzt mehr als reines MVP) - bewusst KEINE Feature-Parität mit der
-/// Web-App, siehe die jeweiligen View-Kommentare für das, was fehlt.
+/// Premium iOS root navigation. The five primary areas stay native to iOS;
+/// secondary features live in Mehr. The dashboard owns its visible heading, so
+/// the navigation bar does not duplicate "Übersicht".
 struct RootTabView: View {
     @State private var showQuickCapture = false
     @ObservedObject private var router = TabRouter.shared
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // Bewusst nur fuenf Tabs - ab sechs kippt iOS sie in ein eigenes,
-            // ungestyltes "Mehr"-Menue. Die Nebenschauplaetze (Ziele, Leben,
-            // Wuensche, Investments, Kategorien, Suche) liegen im MoreView-
-            // Kartenraster.
             TabView(selection: $router.selection) {
-                NavigationStack { TodayView() }
-                    .tabItem { Label("Übersicht", systemImage: "square.grid.2x2") }
-                    .tag(AppTab.today)
+                NavigationStack {
+                    TodayView()
+                        .navigationTitle("")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                .tabItem { Label("Übersicht", systemImage: "house.fill") }
+                .tag(AppTab.today)
+
                 NavigationStack { AccountsView() }
-                    .tabItem { Label("Konten", systemImage: "creditcard") }
+                    .tabItem { Label("Konten", systemImage: "creditcard.fill") }
                     .tag(AppTab.accounts)
+
                 NavigationStack { TransactionsView() }
-                    .tabItem { Label("Transaktionen", systemImage: "list.bullet") }
+                    .tabItem { Label("Transaktionen", systemImage: "arrow.left.arrow.right") }
                     .tag(AppTab.transactions)
+
                 NavigationStack { TodosView() }
-                    .tabItem { Label("Aufgaben", systemImage: "checklist") }
+                    .tabItem { Label("Aufgaben", systemImage: "checkmark.circle") }
                     .tag(AppTab.todos)
+
                 NavigationStack { MoreView() }
-                    .tabItem { Label("Mehr", systemImage: "ellipsis.circle") }
+                    .tabItem { Label("Mehr", systemImage: "ellipsis") }
                     .tag(AppTab.more)
             }
+            .tint(KColor.accent)
 
+            // The action button is deliberately anchored to the safe-area
+            // edge instead of the content, so it never covers list rows.
             Button {
                 showQuickCapture = true
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Circle().fill(KColor.accent))
-                    .shadow(color: KColor.accent.opacity(0.4), radius: 10, x: 0, y: 5)
+                    .frame(width: 54, height: 54)
+                    .background(KColor.accent, in: Circle())
+                    .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 6)
             }
             .accessibilityLabel("Schnell erfassen")
-            .padding(.trailing, KSpacing.lg)
-            .padding(.bottom, 70)  // über der Tab-Leiste schweben lassen
+            .padding(.trailing, 20)
+            .padding(.bottom, 76)
         }
         .sheet(isPresented: $showQuickCapture) {
             QuickCaptureView()
