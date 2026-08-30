@@ -2482,6 +2482,7 @@ class SmartHomeSettingsOut(BaseModel):
     dry_run: bool = False
     wake_word: Optional[str] = None
     electricity_price: float = 0.35
+    history_entities: Optional[str] = None
 
 
 class SmartHomeSettingsUpdate(BaseModel):
@@ -2495,6 +2496,7 @@ class SmartHomeSettingsUpdate(BaseModel):
     dry_run: Optional[bool] = None
     wake_word: Optional[str] = None
     electricity_price: Optional[float] = None
+    history_entities: Optional[str] = None
 
 
 class SmartHomeCommand(BaseModel):

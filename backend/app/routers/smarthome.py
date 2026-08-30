@@ -44,6 +44,7 @@ def get_smarthome_settings(db: Session = Depends(get_db)):
         dry_run=s.homeassistant_dry_run,
         wake_word=s.homeassistant_wake_word or "hey_jarvis",
         electricity_price=s.homeassistant_electricity_price or 0.35,
+        history_entities=getattr(s, 'homeassistant_history_entities', None),
     )
 
 
@@ -73,6 +74,8 @@ def update_smarthome_settings(data: schemas.SmartHomeSettingsUpdate, db: Session
         s.homeassistant_wake_word = data.wake_word.strip().lower() or None
     if data.electricity_price is not None:
         s.homeassistant_electricity_price = max(0.0, data.electricity_price)
+    if data.history_entities is not None:
+        s.homeassistant_history_entities = data.history_entities.strip() or None
     db.commit()
     return get_smarthome_settings(db)
 

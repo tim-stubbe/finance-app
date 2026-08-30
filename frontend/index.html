@@ -2361,8 +2361,9 @@
       <header class="page-head">
         <div>
           <h1>Smart Home</h1>
-          <p class="page-sub">Haus per Text steuern und Zustände abfragen — komplett lokal über Home&nbsp;Assistant + deinen Ollama-Server, nichts verlässt dein Netzwerk. Sprache (Whisper/Piper) und ein 3D-Grundriss folgen als spätere Phasen.</p>
+          <p class="page-sub">Haus per Text oder Sprache steuern und Zustände abfragen — komplett lokal über Home&nbsp;Assistant + deinen Ollama-Server, nichts verlässt dein Netzwerk.</p>
         </div>
+        <button type="button" id="cockpit-open-btn" class="btn-ghost" title="Vollbild-Cockpit für Tablet/Wand">🖥️ Cockpit</button>
       </header>
 
       <div id="smarthome-setup-hint" class="panel hidden">
@@ -2735,6 +2736,12 @@
             </select>
           </label>
           <label>Strompreis (€/kWh, für die Energie-Schätzung) <input type="number" id="smarthome-cfg-price" step="0.01" min="0" placeholder="0.35"></label>
+          <label>Verlaufs-Charts: entity_ids (kommagetrennt, fürs Cockpit)
+            <input type="text" id="smarthome-cfg-history" placeholder="sensor.wohnzimmer_temperatur, sensor.stromverbrauch"></label>
+          <p class="page-sub">Sprache läuft komplett lokal. Empfohlen für Produktion:
+            <code>STT_BACKEND=faster-whisper</code>, <code>WHISPER_MODEL=base</code>,
+            <code>TTS_BACKEND=piper</code> (Details siehe README → „Sprache").
+            Ohne diese Variablen bleibt Sprache im Stub-Modus (Text-only).</p>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
           </div>
@@ -3735,6 +3742,7 @@
 <script src="js/vehicle.js"></script>
 <script src="js/meals.js"></script>
 <script src="js/smarthome.js"></script>
+<script src="js/cockpit.js"></script>
 <script src="js/smarthome-floorplan.js"></script>
 <script src="js/smarthome-automations.js"></script>
 <script src="js/settings-smarthome.js"></script>

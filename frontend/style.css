@@ -3986,3 +3986,57 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   font-size: 42px;
   line-height: 1.1;
 }
+
+/* ================= COCKPIT-MODUS (js/cockpit.js) ================= */
+body.cockpit-active { overflow: hidden; }
+#cockpit-root {
+  position: fixed; inset: 0; z-index: 4000;
+  background: var(--bg); color: var(--text);
+  display: grid; grid-template-columns: 1fr 360px; grid-template-rows: auto 1fr;
+  gap: 18px; padding: 22px;
+  font-size: 18px;
+}
+#cockpit-root .ck-topbar {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 18px;
+  border-bottom: 1px solid var(--border); padding-bottom: 12px;
+}
+#cockpit-root .ck-clock { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#cockpit-root .ck-status { flex: 1; font-size: 19px; color: var(--text-secondary); }
+#cockpit-root .ck-exit {
+  border: 1px solid var(--border-strong); background: none; color: var(--text);
+  font-size: 20px; width: 44px; height: 44px; border-radius: 10px; cursor: pointer;
+}
+#cockpit-root .ck-main { display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+#cockpit-root .ck-say {
+  font-size: clamp(24px, 3.4vw, 44px); line-height: 1.25; min-height: 2.6em;
+  display: flex; align-items: center;
+}
+#cockpit-root .ck-say.is-error { color: var(--negative, #e5484d); }
+#cockpit-root .ck-input { display: flex; gap: 12px; align-items: stretch; }
+#cockpit-root .ck-input input {
+  flex: 1; font-size: 22px; padding: 16px 18px; border-radius: 14px;
+  border: 1px solid var(--border-strong); background: var(--card, rgba(255,255,255,0.04)); color: var(--text);
+}
+#cockpit-root .ck-mic, #cockpit-root .ck-send {
+  font-size: 24px; width: 64px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--accent-wash); color: var(--text);
+}
+#cockpit-root .ck-mic.is-recording { background: var(--negative, #e5484d); color: #fff; animation: ck-pulse 1s infinite; }
+@keyframes ck-pulse { 50% { opacity: 0.55; } }
+#cockpit-root .ck-side { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+#cockpit-root .ck-card {
+  border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+  background: var(--card, rgba(255,255,255,0.03));
+}
+#cockpit-root .ck-card h3 { margin: 0 0 8px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+#cockpit-root .ck-card ul { margin: 0; padding-left: 18px; }
+#cockpit-root .ck-card li { margin: 3px 0; }
+#cockpit-root .ck-due li { color: var(--negative, #e5484d); }
+#cockpit-root .ck-muted { color: var(--muted); }
+#cockpit-root .ck-spark { display: grid; grid-template-columns: 1fr 220px auto; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
+#cockpit-root .ck-spark svg { width: 220px; height: 34px; }
+#cockpit-root .ck-spark path { fill: none; stroke: var(--accent-strong); stroke-width: 1.6; }
+#cockpit-root .ck-spark em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+@media (max-width: 900px) {
+  #cockpit-root { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; font-size: 16px; }
+}

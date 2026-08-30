@@ -185,10 +185,34 @@ nach ausdrücklicher Bestätigung.
   Quick-Capture-Button für Buchung/To-Do/Check-in in einem Sheet
 - macOS-App mit denselben Kernbereichen, gleiche Sync-Basis
 
-**Smart Home (Home Assistant, komplett lokal)**
+**Smart Home & Jarvis-OS (Home Assistant, komplett lokal)**
 - Tab „Smart Home": Haus per Text steuern und Zustände abfragen – Brücke
   zwischen der Home-Assistant-REST-API und der lokalen Ollama-Instanz, keine
   Cloud-KI. Erster Schritt weg vom reinen Finanz-Tool hin zum „Life OS"-Hub.
+- **Einheitliche Jarvis-Intent-Schicht** (`backend/app/jarvis.py`): ein
+  Einstieg für Text und Sprache – `jarvis.handle()` → `{ok, reply, actions,
+  domain}`. Regel-Schnellpfade ohne Ollama sortieren vor (Haus per Alias/
+  Anzeigename, Alltag per Regex: „was hängt", „Termine heute", „todo: …",
+  „… abhaken", Finanzen **nur lesend**: „Saldo"); erst der Rest geht an die
+  lokale KI. Dieselbe Logik nutzen `POST /api/jarvis/command`, die
+  Web-Kommandozeile, der Voice-Pfad und Telegram (`/haus` + freier Bot).
+- **Kurzzeitgedächtnis:** „mach das wieder aus", „und dimmen auf 30%" beziehen
+  sich auf das zuletzt gesteuerte Gerät. Timeout einstellbar
+  (`settings.jarvis_memory_minutes`, Standard 10 min), `GET`/`DELETE
+  /api/jarvis/memory`.
+- **Cockpit-Modus** (`?cockpit=1` oder Knopf im Smart-Home-Tab): reduzierter
+  Vollbild-Screen für Tablet/Wand – großer Haus-Status (Lichter an, Klima,
+  offene Fenster/Türen, aktuelle Leistung), Sprach-/Text-Steuerung im Zentrum,
+  „Heute" + „Was hängt?" kompakt, HA-Verlaufs-Sparklines. Pausiert Polling,
+  wenn der Tab unsichtbar ist. Für echten Kiosk-Betrieb den Browser im
+  Vollbild/Kiosk starten (`chromium --kiosk <url>?cockpit=1`).
+- **Sensor-Verläufe:** `GET /api/smarthome/entity-history` (HA `/history/period`)
+  für die im Smart-Home-Tab hinterlegten `entity_id`s (24 h/7 d), im Cockpit
+  als Sparklines.
+- **Proaktives Haus:** ableitbare Auffälligkeiten (Fenster lange offen bei
+  Kälte, Licht seit Stunden an, Verbrauchs-Spitze vs. Median) fließen
+  **gebündelt** in den proaktiven Assistenten – gleiche Quiet-/Bestätigungs-
+  Regeln, keine automatische Gerätesteuerung.
 - Schneller Pfad ohne KI für bekannte Befehle: Alias-Liste (Sprich-Name →
   `entity_id`) und Stichwort-Erkennung schalten direkt; Ollama nur bei
   unklaren oder freien Anfragen. Bei mehreren möglichen Geräten wird
@@ -292,6 +316,14 @@ Antworttext (optional zusätzlich als gesprochenes WAV, base64 in
 
 Das **Weckwort** für die freihändige Steuerung wird in *Einstellungen → Smart
 Home* gesetzt (Standard „jarvis").
+
+**Empfohlen für den Produktivbetrieb** (rein lokal, kein Cloud-Fallback):
+`STT_BACKEND=faster-whisper`, `WHISPER_MODEL=base` (oder `tiny` für schwache
+Hardware), `TTS_BACKEND=piper`, `PIPER_VOICE=de_DE-thorsten-medium`. Latenz:
+Alias/Stichwort greifen **vor** STT-Nachbearbeitung und **vor** dem LLM, das
+Intent-JSON ist klein – Ollama läuft nur bei wirklich unklaren Sätzen. Im
+Web-UI: großer 🎤-Push-to-Talk-Knopf (Cockpit und Smart-Home-Tab) sowie der
+👂-Weckwort-Modus; „Mikrofon blockiert" wird als klarer Hinweis angezeigt.
 
 Standard ist `stub` – der **dokumentierte Offline-Fallback**: ohne Konfiguration
 antwortet der Voice-Endpunkt mit 501 und einer Anleitung, die Textsteuerung
