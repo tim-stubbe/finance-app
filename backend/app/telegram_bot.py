@@ -284,6 +284,30 @@ def _context_facts(db, space_id: int) -> str:
     return "\n".join(lines)
 
 
+# Pro eingehender Nachricht gesetzt (siehe _poll_once): wenn der Nutzer eine
+# SPRACHnachricht geschickt hat UND settings.telegram_voice_replies an ist,
+# steht hier das TTS-Objekt - _send() hängt dann an längere Antworten eine
+# gesprochene Version (Telegram-Voice-Note) an.
+_VOICE_REPLY: dict = {"tts": None}
+_VOICE_ECHO_PREFIX = "🎤 verstanden:"
+
+
+def _send_audio(token: str, chat_id: str, audio: bytes) -> None:
+    """Antwort als Audio (Piper-WAV) - Telegram sendVoice will OGG/OPUS, für
+    WAV nehmen wir sendAudio (spielt trotzdem im Chat ab)."""
+    is_ogg = audio[:4] == b"OggS"
+    method = "sendVoice" if is_ogg else "sendAudio"
+    field = "voice" if is_ogg else "audio"
+    fname = "antwort.ogg" if is_ogg else "antwort.wav"
+    resp = requests.post(
+        f"{TELEGRAM_API.format(token=token)}/{method}",
+        data={"chat_id": chat_id},
+        files={field: (fname, audio, "audio/ogg" if is_ogg else "audio/wav")},
+        timeout=30,
+    )
+    resp.raise_for_status()
+
+
 def _send(token: str, chat_id: str, text: str) -> None:
     resp = requests.post(
         f"{TELEGRAM_API.format(token=token)}/sendMessage",
@@ -291,6 +315,17 @@ def _send(token: str, chat_id: str, text: str) -> None:
         timeout=15,
     )
     resp.raise_for_status()
+
+    tts = _VOICE_REPLY["tts"]
+    # Nur die eigentliche Antwort vertonen, nicht kurze Bestätigungen ("✓ …")
+    # oder das "🎤 verstanden: …"-Echo.
+    if tts and len(text.strip()) >= 40 and not text.lstrip().startswith(_VOICE_ECHO_PREFIX):
+        try:
+            audio = tts.speak(text)
+            if audio:
+                _send_audio(token, chat_id, audio)
+        except Exception:
+            pass
 
 
 def _handle_balance_command(db, token: str, chat_id: str, text: str) -> bool:
@@ -986,9 +1021,11 @@ def _poll_once(db) -> None:
 
         # Sprachnachricht (oder gesendete Audiodatei / Video-Notiz) -> lokal
         # zu Text machen und dann wie eine getippte Nachricht behandeln.
+        was_voice = False
         if not text and incoming_chat_id == configured_chat_id:
             media = msg.get("voice") or msg.get("audio") or msg.get("video_note")
             if media and media.get("file_id"):
+                was_voice = True
                 try:
                     text = _transcribe_voice(token, media["file_id"])
                 except NotImplementedError:
@@ -999,7 +1036,16 @@ def _poll_once(db) -> None:
                 except Exception as e:  # noqa: BLE001
                     _send(token, configured_chat_id, f"Sprachnachricht konnte nicht verarbeitet werden: {e}")
                 if text:
-                    _send(token, configured_chat_id, f"🎤 verstanden: „{text}“")
+                    _send(token, configured_chat_id, f"{_VOICE_ECHO_PREFIX} „{text}“")
+
+        # Auf eine Sprachnachricht ggf. auch gesprochen antworten
+        if was_voice and text and getattr(settings, "telegram_voice_replies", False):
+            try:
+                _VOICE_REPLY["tts"] = voice.get_tts()
+            except Exception:
+                _VOICE_REPLY["tts"] = None
+        else:
+            _VOICE_REPLY["tts"] = None
 
         if text and incoming_chat_id == configured_chat_id:
             try:

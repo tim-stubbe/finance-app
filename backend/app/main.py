@@ -282,6 +282,7 @@ ensure_columns("settings", {
     "ntfy_enabled": "BOOLEAN DEFAULT 0",
     "ntfy_url": "VARCHAR DEFAULT 'https://ntfy.sh'",
     "ntfy_topic": "VARCHAR",
+    "telegram_voice_replies": "BOOLEAN DEFAULT 0",
     "quiet_hours_enabled": "BOOLEAN DEFAULT 0",
     "quiet_hours_start_hour": "INTEGER DEFAULT 22",
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",

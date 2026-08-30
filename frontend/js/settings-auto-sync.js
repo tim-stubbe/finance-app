@@ -101,6 +101,7 @@ async function loadNotificationSettings() {
   document.getElementById("ntfy-enabled").checked = !!s.ntfy_enabled;
   document.getElementById("ntfy-url").value = s.ntfy_url || "";
   document.getElementById("ntfy-topic").value = s.ntfy_topic || "";
+  document.getElementById("telegram-voice-replies").checked = !!s.telegram_voice_replies;
   document.getElementById("telegram-remove").classList.toggle("hidden", !s.telegram_configured);
   document.getElementById("telegram-bot-token").placeholder = s.telegram_configured
     ? "gespeichert – zum Ändern neuen Token eingeben" : "wird verschlüsselt gespeichert";
@@ -135,6 +136,7 @@ document.getElementById("notifications-settings-form").addEventListener("submit"
     ntfy_enabled: document.getElementById("ntfy-enabled").checked,
     ntfy_url: document.getElementById("ntfy-url").value.trim() || null,
     ntfy_topic: document.getElementById("ntfy-topic").value.trim() || null,
+    telegram_voice_replies: document.getElementById("telegram-voice-replies").checked,
   };
   await api("/settings/notifications", { method: "PUT", body: JSON.stringify(payload) });
   tokenInput.value = "";

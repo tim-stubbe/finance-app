@@ -324,6 +324,9 @@ class Settings(Base):
     ntfy_enabled = Column(Boolean, nullable=False, default=False)
     ntfy_url = Column(String, nullable=False, default="https://ntfy.sh")
     ntfy_topic = Column(String, nullable=True)
+    # Auf eine per Telegram geschickte Sprachnachricht auch gesprochen
+    # antworten (Piper-TTS, siehe voice/tts.py + TTS_BACKEND-Env).
+    telegram_voice_replies = Column(Boolean, nullable=False, default=False)
     # --- Quiet Mode (Ruhezeiten) - zentral in notifications.notify() geprüft,
     # siehe dort. quiet_until ist die manuelle "Ruhe bis HH:MM"-Überschreibung
     # (App + Telegram /ruhe), unabhängig von den festen Ruhezeiten.

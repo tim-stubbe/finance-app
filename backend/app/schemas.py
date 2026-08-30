@@ -1593,6 +1593,7 @@ class NotificationSettingsOut(BaseModel):
     ntfy_enabled: bool = False
     ntfy_url: str = "https://ntfy.sh"
     ntfy_topic: Optional[str] = None
+    telegram_voice_replies: bool = False
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -1604,6 +1605,7 @@ class NotificationSettingsUpdate(BaseModel):
     ntfy_enabled: Optional[bool] = None
     ntfy_url: Optional[str] = None
     ntfy_topic: Optional[str] = None
+    telegram_voice_replies: Optional[bool] = None
 
 
 class NotificationTestResult(BaseModel):

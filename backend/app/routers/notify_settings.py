@@ -31,6 +31,7 @@ def _notification_settings_out(s) -> schemas.NotificationSettingsOut:
         ntfy_enabled=bool(s.ntfy_enabled),
         ntfy_url=s.ntfy_url or "https://ntfy.sh",
         ntfy_topic=s.ntfy_topic,
+        telegram_voice_replies=bool(s.telegram_voice_replies),
     )
 
 
@@ -55,6 +56,8 @@ def update_notification_settings(data: schemas.NotificationSettingsUpdate, db: S
         settings.ntfy_url = data.ntfy_url.strip() or "https://ntfy.sh"
     if data.ntfy_topic is not None:
         settings.ntfy_topic = data.ntfy_topic.strip() or None
+    if data.telegram_voice_replies is not None:
+        settings.telegram_voice_replies = data.telegram_voice_replies
     db.commit()
     return _notification_settings_out(settings)
 

@@ -3112,6 +3112,10 @@
           </label>
           <label>ntfy-Server <input type="text" id="ntfy-url" placeholder="https://ntfy.sh"></label>
           <label>ntfy-Thema (geheim halten) <input type="text" id="ntfy-topic" placeholder="z.B. kies-a7f3k9x2"></label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="telegram-voice-replies">
+            <span>Auf Sprachnachrichten auch gesprochen antworten (Piper-TTS). Braucht TTS_BACKEND=piper (eigenes Image) oder =http mit PIPER_HTTP_URL.</span>
+          </label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="notifications-test" class="btn-ghost">Testnachricht senden</button>
