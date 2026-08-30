@@ -23,14 +23,20 @@ notify_settings_router = APIRouter(prefix="/api")
 
 
 # ---------------- Benachrichtigungen (Telegram) ----------------
+def _notification_settings_out(s) -> schemas.NotificationSettingsOut:
+    return schemas.NotificationSettingsOut(
+        enabled=s.notifications_enabled,
+        telegram_configured=bool(s.telegram_bot_token_encrypted and s.telegram_chat_id),
+        proactive_assistant_enabled=bool(s.proactive_assistant_enabled),
+        ntfy_enabled=bool(s.ntfy_enabled),
+        ntfy_url=s.ntfy_url or "https://ntfy.sh",
+        ntfy_topic=s.ntfy_topic,
+    )
+
+
 @notify_settings_router.get("/settings/notifications", response_model=schemas.NotificationSettingsOut)
 def get_notification_settings(db: Session = Depends(get_db)):
-    settings = auth.get_or_create_settings(db)
-    return schemas.NotificationSettingsOut(
-        enabled=settings.notifications_enabled,
-        telegram_configured=bool(settings.telegram_bot_token_encrypted and settings.telegram_chat_id),
-        proactive_assistant_enabled=bool(settings.proactive_assistant_enabled),
-    )
+    return _notification_settings_out(auth.get_or_create_settings(db))
 
 
 @notify_settings_router.put("/settings/notifications", response_model=schemas.NotificationSettingsOut)
@@ -43,12 +49,27 @@ def update_notification_settings(data: schemas.NotificationSettingsUpdate, db: S
         settings.telegram_chat_id = data.telegram_chat_id.strip()
     if data.proactive_assistant_enabled is not None:
         settings.proactive_assistant_enabled = data.proactive_assistant_enabled
+    if data.ntfy_enabled is not None:
+        settings.ntfy_enabled = data.ntfy_enabled
+    if data.ntfy_url is not None:
+        settings.ntfy_url = data.ntfy_url.strip() or "https://ntfy.sh"
+    if data.ntfy_topic is not None:
+        settings.ntfy_topic = data.ntfy_topic.strip() or None
     db.commit()
-    return schemas.NotificationSettingsOut(
-        enabled=settings.notifications_enabled,
-        telegram_configured=bool(settings.telegram_bot_token_encrypted and settings.telegram_chat_id),
-        proactive_assistant_enabled=bool(settings.proactive_assistant_enabled),
-    )
+    return _notification_settings_out(settings)
+
+
+@notify_settings_router.post("/notifications/test-ntfy", response_model=schemas.NotificationTestResult)
+def send_test_ntfy(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    if not (settings.ntfy_enabled and settings.ntfy_topic):
+        return schemas.NotificationTestResult(ok=False, message="ntfy zuerst aktivieren und ein Thema (Topic) angeben.")
+    try:
+        notifications.send_ntfy(settings.ntfy_url or "https://ntfy.sh", settings.ntfy_topic,
+                                "Testalarm von Kies – so klingelt es bei einer dringenden Meldung.", urgent=True)
+    except Exception as e:  # noqa: BLE001
+        return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
+    return schemas.NotificationTestResult(ok=True, message="Gesendet – dein Handy sollte laut klingeln.")
 
 
 @notify_settings_router.delete("/settings/notifications/telegram", response_model=schemas.NotificationSettingsOut)

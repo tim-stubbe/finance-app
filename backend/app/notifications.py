@@ -49,6 +49,28 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
     resp.raise_for_status()
 
 
+def send_ntfy(base_url: str, topic: str, text: str, urgent: bool) -> None:
+    """ntfy.sh (oder eine selbst gehostete Instanz): laute Push-Meldung.
+    Bei `urgent` mit Höchstpriorität (5) - klingelt auf dem Handy auch im
+    Stumm-Modus, die kostenlose Alternative zu einem echten Anruf."""
+    from . import net_guard
+    net_guard.validate_external_url(base_url)
+    headers = {
+        "Title": "Kies" if not urgent else "Kies – dringend",
+        "Priority": "5" if urgent else "3",
+    }
+    if urgent:
+        headers["Tags"] = "rotating_light"
+    resp = requests.post(
+        base_url.rstrip("/") + "/" + topic.strip().lstrip("/"),
+        data=text.encode("utf-8"),
+        headers=headers,
+        timeout=10,
+        allow_redirects=False,
+    )
+    resp.raise_for_status()
+
+
 def _in_quiet_hours(settings, now: datetime) -> bool:
     """True, wenn `now` (LOKALE Zeit, siehe notify() - bewusst NICHT UTC wie
     sonst in der App üblich, da der Nutzer "22-7" als Wanduhrzeit meint, nicht
@@ -93,7 +115,18 @@ def notify(settings, text: str, urgent: bool = False) -> None:
     if not urgent and _in_quiet_hours(settings, datetime.now()):
         _log(text, urgent, sent=False)  # im Verlauf zeigen, aber nicht verschicken
         return
+
+    # ntfy (kostenlose "laute" Push-Meldung, klingelt auch stumm) - besonders
+    # für urgent gedacht, läuft aber parallel zu Telegram und unabhängig davon,
+    # ob Telegram überhaupt konfiguriert ist.
+    if getattr(settings, "ntfy_enabled", False) and getattr(settings, "ntfy_topic", None):
+        try:
+            send_ntfy(settings.ntfy_url or "https://ntfy.sh", settings.ntfy_topic, text, urgent)
+        except Exception:
+            pass
+
     if not settings.telegram_bot_token_encrypted or not settings.telegram_chat_id:
+        _log(text, urgent, sent=bool(getattr(settings, "ntfy_enabled", False) and settings.ntfy_topic))
         return
     delivered = True
     try:

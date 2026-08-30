@@ -279,6 +279,9 @@ ensure_columns("settings", {
     "proactive_assistant_last_hash": "VARCHAR",
     "proactive_assistant_last_snapshot_hash": "VARCHAR",
     "proactive_assistant_snoozed_until": "DATETIME",
+    "ntfy_enabled": "BOOLEAN DEFAULT 0",
+    "ntfy_url": "VARCHAR DEFAULT 'https://ntfy.sh'",
+    "ntfy_topic": "VARCHAR",
     "quiet_hours_enabled": "BOOLEAN DEFAULT 0",
     "quiet_hours_start_hour": "INTEGER DEFAULT 22",
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",
@@ -1932,26 +1935,25 @@ def _scheduled_smarthome_automation_suggestions():
 
 
 def _scheduled_proactive_assistant():
-    """Mehrmals täglich: lässt die lokale KI über einen breiten Lebens-
-    Snapshot schauen und meldet sich per Telegram NUR, wenn dabei genau eine
-    wirklich nützliche, nicht offensichtliche Anregung/Erinnerung herauskommt
-    (siehe proactive.py). Opt-in (proactive_assistant_enabled), mit
-    Mindestabstand + Dedup abgesichert; Ruhezeiten greifen über notify()."""
+    """Alle paar Minuten: lässt die lokale KI über einen breiten Lebens-
+    Snapshot schauen und meldet sich per Telegram, wenn dabei eine nützliche
+    Anregung/Erinnerung herauskommt (siehe proactive.py). Bewusst ohne
+    Drosseln (Nutzerwunsch) - es bleiben nur der An/Aus-Schalter und die
+    manuelle "/proaktiv pause". Sendet urgent, also auch in Ruhezeiten."""
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
         result = proactive.generate(db, settings)
-        if result:
-            text, digest = result
-            notifications.notify(
-                settings,
-                "🤖 " + text + "\n\n(/proaktiv pause 6 für Ruhe · /proaktiv aus zum Abschalten)",
-            )
-            settings.proactive_assistant_last_sent_at = datetime.utcnow()
-            settings.proactive_assistant_last_hash = digest
-        # Immer committen: generate() schreibt auch ohne Meldung den
-        # Snapshot-Hash fort (siehe dort), damit die KI beim 10-Minuten-Takt
-        # nur bei echten Aenderungen befragt wird.
+        if not result:
+            return
+        text, digest = result
+        notifications.notify(
+            settings,
+            "🤖 " + text + "\n\n(/proaktiv pause 6 für Ruhe · /proaktiv aus zum Abschalten)",
+            urgent=True,
+        )
+        settings.proactive_assistant_last_sent_at = datetime.utcnow()
+        settings.proactive_assistant_last_hash = digest
         db.commit()
     finally:
         db.close()
@@ -2310,7 +2312,7 @@ scheduler.add_job(
     id="smarthome_automation_suggestions", misfire_grace_time=3600,
 )
 scheduler.add_job(
-    _scheduled_proactive_assistant, CronTrigger(minute="*/10"),
+    _scheduled_proactive_assistant, CronTrigger(minute="*/5"),
     id="proactive_assistant", misfire_grace_time=300, max_instances=1, coalesce=True,
 )
 scheduler.start()

@@ -317,6 +317,13 @@ class Settings(Base):
     # Nur den proaktiven Assistenten pausieren (per Telegram "/proaktiv pause N"),
     # ohne alle Benachrichtigungen stumm zu schalten wie quiet_until.
     proactive_assistant_snoozed_until = Column(DateTime, nullable=True)
+    # ntfy.sh (kostenlos, selbst hostbar): laute, "anruf-artige" Push-Meldung
+    # mit Höchstpriorität für DRINGENDE Meldungen (urgent=True) - klingelt auf
+    # dem Handy auch im Stumm-Modus, ohne Twilio-Kosten. topic ist der frei
+    # gewählte, geheim zu haltende Kanalname (jeder mit dem Namen kann posten).
+    ntfy_enabled = Column(Boolean, nullable=False, default=False)
+    ntfy_url = Column(String, nullable=False, default="https://ntfy.sh")
+    ntfy_topic = Column(String, nullable=True)
     # --- Quiet Mode (Ruhezeiten) - zentral in notifications.notify() geprüft,
     # siehe dort. quiet_until ist die manuelle "Ruhe bis HH:MM"-Überschreibung
     # (App + Telegram /ruhe), unabhängig von den festen Ruhezeiten.

@@ -98,6 +98,9 @@ async function loadNotificationSettings() {
   const s = await api("/settings/notifications");
   document.getElementById("notifications-enabled").checked = s.enabled;
   document.getElementById("proactive-assistant-enabled").checked = !!s.proactive_assistant_enabled;
+  document.getElementById("ntfy-enabled").checked = !!s.ntfy_enabled;
+  document.getElementById("ntfy-url").value = s.ntfy_url || "";
+  document.getElementById("ntfy-topic").value = s.ntfy_topic || "";
   document.getElementById("telegram-remove").classList.toggle("hidden", !s.telegram_configured);
   document.getElementById("telegram-bot-token").placeholder = s.telegram_configured
     ? "gespeichert – zum Ändern neuen Token eingeben" : "wird verschlüsselt gespeichert";
@@ -129,6 +132,9 @@ document.getElementById("notifications-settings-form").addEventListener("submit"
     proactive_assistant_enabled: document.getElementById("proactive-assistant-enabled").checked,
     telegram_bot_token: tokenInput.value.trim() || null,
     telegram_chat_id: chatIdInput.value.trim() || null,
+    ntfy_enabled: document.getElementById("ntfy-enabled").checked,
+    ntfy_url: document.getElementById("ntfy-url").value.trim() || null,
+    ntfy_topic: document.getElementById("ntfy-topic").value.trim() || null,
   };
   await api("/settings/notifications", { method: "PUT", body: JSON.stringify(payload) });
   tokenInput.value = "";
@@ -158,6 +164,15 @@ document.getElementById("notifications-test-proactive").addEventListener("click"
   } catch (e) {
     // api() zeigt den Fehler bereits per alert() an
   }
+});
+
+document.getElementById("notifications-test-ntfy").addEventListener("click", async () => {
+  const statusEl = document.getElementById("notifications-status");
+  statusEl.textContent = "Sende ntfy-Testalarm …";
+  try {
+    const r = await api("/notifications/test-ntfy", { method: "POST" });
+    statusEl.textContent = r.message;
+  } catch (e) { /* api() zeigt Fehler */ }
 });
 
 document.getElementById("telegram-remove").addEventListener("click", async () => {

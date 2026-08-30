@@ -3102,14 +3102,21 @@
           </label>
           <label class="checkbox-label wide">
             <input type="checkbox" id="proactive-assistant-enabled">
-            <span>Proaktiver KI-Assistent – prüft alle 10 Minuten den Lebens-Überblick (Finanzen, Termine, Todos, Ziele, Fristen) und meldet sich per Telegram, sobald die lokale KI etwas wirklich Nützliches sieht. Die KI wird nur befragt, wenn sich etwas geändert hat; identische Meldungen werden unterdrückt, Ruhezeiten gelten. Braucht Ollama.</span>
+            <span>Proaktiver KI-Assistent – prüft alle 5 Minuten den Lebens-Überblick (Finanzen, Termine, Todos, Ziele, Fristen, Gesundheit) und meldet sich per Telegram, sobald die lokale KI etwas Nützliches sieht. Ohne Drosseln – nur der Schalter hier und „/proaktiv pause“ per Telegram halten ihn zurück. Braucht Ollama.</span>
           </label>
           <label>Bot-Token <input type="password" id="telegram-bot-token" placeholder="wird verschlüsselt gespeichert" autocomplete="off"></label>
           <label>Chat-ID <input type="text" id="telegram-chat-id" placeholder="z.B. 123456789"></label>
+          <label class="checkbox-label wide">
+            <input type="checkbox" id="ntfy-enabled">
+            <span>Lauter Alarm per ntfy bei dringenden Meldungen – kostenlose „Anruf"-Alternative. Installiere die ntfy-App, abonniere dein Thema, dann klingelt das Handy auch im Stumm-Modus.</span>
+          </label>
+          <label>ntfy-Server <input type="text" id="ntfy-url" placeholder="https://ntfy.sh"></label>
+          <label>ntfy-Thema (geheim halten) <input type="text" id="ntfy-topic" placeholder="z.B. kies-a7f3k9x2"></label>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="notifications-test" class="btn-ghost">Testnachricht senden</button>
             <button type="button" id="notifications-test-proactive" class="btn-ghost">Proaktiv-Testmeldung</button>
+            <button type="button" id="notifications-test-ntfy" class="btn-ghost">ntfy-Testalarm</button>
             <button type="button" id="telegram-remove" class="btn-ghost hidden">Telegram entfernen</button>
           </div>
         </form>

@@ -188,13 +188,6 @@ def _chat_model(settings) -> str | None:
     return settings.ollama_model or settings.beleg_chat_model or None
 
 
-# Harte Untergrenze zwischen zwei Meldungen, egal wie der Job getaktet ist -
-# verhindert nur, dass sich zwei ueberlappende/nachgeholte Laeufe doppeln.
-# Ansonsten darf sich der Assistent so oft melden, wie er wirklich etwas Neues
-# hat (Wunsch des Nutzers) - der Dedup-Hash haelt Wiederholungen raus.
-_MIN_GAP_SECONDS = 8 * 60
-
-
 def _hash(text: str) -> str:
     return hashlib.sha256(" ".join(text.lower().split()).encode("utf-8")).hexdigest()[:16]
 
@@ -203,11 +196,11 @@ def generate(db, settings) -> tuple[str, str] | None:
     """Gibt (text, reply_hash) zurück, wenn die KI eine proaktive Meldung hat -
     sonst None.
 
-    Nebeneffekt: schreibt `settings.proactive_assistant_last_snapshot_hash`
-    fort, sobald ein Snapshot ausgewertet wurde (auch wenn die KI "NICHTS"
-    sagt) - der Aufrufer muss danach committen. Dadurch wird die KI beim
-    10-Minuten-Takt nur befragt, wenn sich am Lebens-Snapshot wirklich etwas
-    geändert hat, statt bei jedem Lauf.
+    Bewusst OHNE Drosseln (Nutzerwunsch: "nimm alle Limits raus - der soll mir
+    das schicken können, wann er will"). Es bleiben nur: der An/Aus-Schalter,
+    die manuelle "/proaktiv pause", eine konfigurierte Telegram-/Ollama-
+    Verbindung, und die Entscheidung der KI selbst ("NICHTS", wenn nichts
+    anliegt). Kein Mindestabstand, kein Snapshot-/Antwort-Dedup mehr.
     """
     if not (settings.proactive_assistant_enabled and settings.notifications_enabled):
         return None
@@ -219,20 +212,9 @@ def generate(db, settings) -> tuple[str, str] | None:
     if snoozed and datetime.utcnow() < snoozed:
         return None
 
-    last = settings.proactive_assistant_last_sent_at
-    if last and (datetime.utcnow() - last).total_seconds() < _MIN_GAP_SECONDS:
-        return None
-
     spaces = crud.get_spaces(db)
     space_id = spaces[0].id if spaces else 1
     snapshot = build_snapshot(db, settings, space_id)
-
-    # Nichts Substanzielles (nur Datum + evtl. Nettovermögen) ODER unveränderter
-    # Snapshot seit dem letzten Lauf -> gar nicht erst die KI bemühen.
-    snap_hash = _hash(snapshot)
-    if len(snapshot.splitlines()) <= 2 or snap_hash == (settings.proactive_assistant_last_snapshot_hash or ""):
-        return None
-    settings.proactive_assistant_last_snapshot_hash = snap_hash
 
     try:
         reply = ollama_client.chat(
@@ -248,10 +230,7 @@ def generate(db, settings) -> tuple[str, str] | None:
     if len(reply.strip()) < 12 or any(compact.startswith(tok) for tok in _NOTHING_TOKENS):
         return None
 
-    h = _hash(reply)
-    if h == (settings.proactive_assistant_last_hash or ""):
-        return None
-    return reply, h
+    return reply, _hash(reply)
 
 
 def preview(db, settings) -> str:

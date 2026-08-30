@@ -102,29 +102,21 @@ def test_telegram_proaktiv_command(client, monkeypatch):
         db.close()
 
 
-def test_real_suggestion_then_cooldown_and_dedup(client, monkeypatch):
+def test_no_throttle_repeats_allowed(client, monkeypatch):
+    """Nach "nimm alle Limits raus": keine Cooldown-/Dedup-Sperre mehr - was
+    zaehlt ist nur, ob die KI etwas sagt (statt "NICHTS")."""
     monkeypatch.setattr(ollama_client, "chat",
                         lambda *a, **k: "Dein Budget für Essen ist zu 90 % ausgeschöpft, noch 8 Tage im Monat.")
     db, s = _settings()
     try:
-        res = proactive.generate(db, s)
-        assert res is not None
-        text, digest = res
-        assert "Budget" in text and len(digest) == 16
+        first = proactive.generate(db, s)
+        assert first is not None and "Budget" in first[0]
 
-        # 8-Minuten-Untergrenze: gerade gesendet -> noch nichts Neues
+        # gerade eben gesendet + identischer Hash gespeichert -> trotzdem wieder
         s.proactive_assistant_last_sent_at = datetime.utcnow()
-        s.proactive_assistant_last_hash = digest
+        s.proactive_assistant_last_hash = first[1]
         db.commit()
-        assert proactive.generate(db, s) is None
-
-        # Untergrenze vorbei, Snapshot unverändert -> KI wird gar nicht befragt
-        s.proactive_assistant_last_sent_at = datetime.utcnow() - timedelta(minutes=20)
-        db.commit()
-        assert proactive.generate(db, s) is None
-
-        # Snapshot ändert sich, aber die KI liefert denselben Text -> Reply-Dedup
-        _add_overdue_todo(db)
-        assert proactive.generate(db, s) is None
+        again = proactive.generate(db, s)
+        assert again is not None and again[0] == first[0]
     finally:
         db.close()

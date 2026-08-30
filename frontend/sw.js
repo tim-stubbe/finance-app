@@ -37,7 +37,7 @@
 // (auffindbar) -> Browser bietet auch Bitwarden/Telefon an statt nur Geraet.
 // v53: Multi-User Phase 1 - User-Tabelle, Login mit Name, Personen-Verwaltung
 // in den Einstellungen. Auth haengt jetzt an models.User statt am Settings-Singleton.
-const CACHE_NAME = "finanztool-shell-v65";
+const CACHE_NAME = "finanztool-shell-v66";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.jpg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

@@ -1590,6 +1590,9 @@ class NotificationSettingsOut(BaseModel):
     enabled: bool
     telegram_configured: bool
     proactive_assistant_enabled: bool = False
+    ntfy_enabled: bool = False
+    ntfy_url: str = "https://ntfy.sh"
+    ntfy_topic: Optional[str] = None
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -1598,6 +1601,9 @@ class NotificationSettingsUpdate(BaseModel):
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
     proactive_assistant_enabled: Optional[bool] = None
+    ntfy_enabled: Optional[bool] = None
+    ntfy_url: Optional[str] = None
+    ntfy_topic: Optional[str] = None
 
 
 class NotificationTestResult(BaseModel):
