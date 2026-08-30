@@ -138,6 +138,18 @@ def build_snapshot(db, settings, space_id: int) -> str:
     except Exception:
         pass
 
+    # Proaktives Haus (E): nur ableitbare Auffälligkeiten aus HA-States
+    # (Fenster lange offen bei Kälte, Licht ewig an, Verbrauchs-Spitze).
+    # Gebündelt in EINE Zeile - die KI entscheidet dann wie beim Rest, ob es
+    # einen Ping wert ist; keine automatische Gerätesteuerung.
+    try:
+        from . import smarthome
+        notes = smarthome.house_anomalies(settings)
+        if notes:
+            lines.append("Haus: " + " | ".join(notes[:4]))
+    except Exception:
+        pass
+
     return "\n".join(lines)
 
 

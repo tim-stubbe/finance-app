@@ -618,6 +618,141 @@ def morning_notes(settings, long_on_hours: int = 6) -> list:
     return notes
 
 
+def house_summary(settings) -> dict:
+    """Kompakter Haus-Status fürs Cockpit: wie viele Lichter an, Klima kurz,
+    offene Fenster/Türen, aktuelle Gesamtleistung. Leere/`ha_configured=False`-
+    Antwort, wenn HA nicht eingerichtet oder nicht erreichbar."""
+    if not (getattr(settings, "homeassistant_url", None) and _token(settings)):
+        return {"ha_configured": False}
+    try:
+        states = _get_states(settings)
+    except ha_client.HAError as exc:
+        return {"ha_configured": True, "ha_connected": False, "error": str(exc)}
+
+    lights_on = lights_total = 0
+    covers_open, contacts_open, climate_on = [], [], []
+    total_w = 0.0
+    for st in states:
+        ent = st.get("entity_id", "")
+        dom = _entity_domain(ent)
+        state = st.get("state")
+        attrs = st.get("attributes", {})
+        fn = attrs.get("friendly_name", ent)
+        if dom == "light":
+            lights_total += 1
+            if state == "on":
+                lights_on += 1
+        elif dom == "cover" and state == "open":
+            covers_open.append(fn)
+        elif dom == "climate" and state not in (None, "off", "unavailable", "unknown"):
+            t = attrs.get("temperature")
+            climate_on.append(f"{fn} {t}°" if t is not None else fn)
+        elif dom == "binary_sensor" and state == "on" and attrs.get("device_class") in ("door", "window", "opening", "garage_door"):
+            contacts_open.append(fn)
+        elif dom == "sensor" and (attrs.get("device_class") == "power"
+                                  or (attrs.get("unit_of_measurement") or "").lower() in ("w", "kw")):
+            total_w += _to_watt(state, attrs.get("unit_of_measurement"))
+
+    return {
+        "ha_configured": True,
+        "ha_connected": True,
+        "lights_on": lights_on,
+        "lights_total": lights_total,
+        "covers_open": covers_open[:8],
+        "contacts_open": contacts_open[:8],
+        "climate_on": climate_on[:8],
+        "total_power_w": round(total_w, 0),
+    }
+
+
+def house_anomalies(settings, outside_cold_c: float = 12.0, light_idle_hours: int = 3) -> list:
+    """Ableitbare Auffälligkeiten fürs proaktive Haus (E). Nur was klar aus den
+    States folgt - keine erfundene Telemetrie. Rückgabe: Liste kurzer deutscher
+    Hinweistexte (max. gebündelt vom Aufrufer). Leer, wenn HA fehlt/aus."""
+    if not (getattr(settings, "homeassistant_url", None) and _token(settings)):
+        return []
+    try:
+        states = _get_states(settings)
+    except ha_client.HAError:
+        return []
+
+    now = datetime.utcnow()
+    outside_temp = None
+    for st in states:
+        a = st.get("attributes", {})
+        ent = st.get("entity_id", "")
+        if ent.startswith("sensor.") and a.get("device_class") == "temperature":
+            low = ent.lower()
+            if any(w in low for w in ("outdoor", "outside", "aussen", "außen", "garden", "balkon")):
+                try:
+                    outside_temp = float(st.get("state"))
+                except (TypeError, ValueError):
+                    pass
+
+    open_contacts, idle_lights, heating_rooms = [], [], []
+    power_vals = []
+    for st in states:
+        ent = st.get("entity_id", "")
+        dom = _entity_domain(ent)
+        state = st.get("state")
+        a = st.get("attributes", {})
+        fn = a.get("friendly_name", ent)
+        if dom == "binary_sensor" and state == "on" and a.get("device_class") in ("door", "window", "opening"):
+            lc = _ha_dt(st.get("last_changed"))
+            mins = (now - lc).total_seconds() / 60 if lc else 0
+            if mins >= 20:
+                open_contacts.append((fn, int(mins)))
+        elif dom == "light" and state == "on":
+            lc = _ha_dt(st.get("last_changed"))
+            if lc and (now - lc).total_seconds() > light_idle_hours * 3600:
+                idle_lights.append(fn)
+        elif dom == "climate" and state == "heat":
+            heating_rooms.append(fn)
+        elif dom == "sensor" and (a.get("device_class") == "power"
+                                  or (a.get("unit_of_measurement") or "").lower() in ("w", "kw")):
+            w = _to_watt(state, a.get("unit_of_measurement"))
+            if w > 0:
+                power_vals.append((fn, w))
+
+    notes = []
+    if open_contacts and (outside_temp is None or outside_temp < outside_cold_c):
+        cold = f" bei {outside_temp:.0f}° draußen" if outside_temp is not None else ""
+        worst = sorted(open_contacts, key=lambda x: -x[1])[:4]
+        notes.append("Länger offen" + cold + ": "
+                     + ", ".join(f"{fn} (~{m} min)" for fn, m in worst))
+    if idle_lights:
+        notes.append(f"Licht seit über {light_idle_hours} h an, ohne dass sich was ändert: "
+                     + ", ".join(idle_lights[:5]))
+    if power_vals:
+        vals = sorted(w for _, w in power_vals)
+        median = vals[len(vals) // 2]
+        spikes = [f"{fn} ({int(w)} W)" for fn, w in power_vals if median > 0 and w > max(median * 4, 800)]
+        if spikes:
+            notes.append("Ungewöhnlich hoher Verbrauch: " + ", ".join(spikes[:4]))
+    return notes
+
+
+def entity_history(settings, entity_ids: list, hours: int = 24) -> dict:
+    """Dünner Wrapper um ha_client.get_history - für die History-Charts (D).
+    Numerische Serien werden als Zahlen zurückgegeben, alles andere als Text."""
+    if not (getattr(settings, "homeassistant_url", None) and _token(settings)):
+        return {"ha_configured": False, "series": {}}
+    raw = ha_client.get_history(settings.homeassistant_url, _token(settings),
+                                [e for e in entity_ids if e], hours=hours)
+    series = {}
+    for ent, points in raw.items():
+        cleaned = []
+        for p in points:
+            v = p["v"]
+            try:
+                v = float(v)
+            except (TypeError, ValueError):
+                pass
+            cleaned.append({"t": p["t"], "v": v})
+        series[ent] = cleaned
+    return {"ha_configured": True, "hours": hours, "series": series}
+
+
 def energy_summary(settings) -> dict:
     """Strom-Sensoren aus HA + grobe Kostenschaetzung.
 

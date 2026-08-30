@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import auth, hub_command, schemas
+from .. import auth, jarvis, schemas
 from ..database import get_db
 
 hub_router = APIRouter(prefix="/api")
@@ -15,5 +15,8 @@ def hub_command_endpoint(
     db: Session = Depends(get_db),
     space_id: int = Depends(auth.get_active_space_id),
 ):
+    # Geht seit der Jarvis-Vereinheitlichung über jarvis.handle (Schnellpfade
+    # + Kurzzeitgedächtnis), das intern weiter hub_command.route als
+    # Ollama-Fallback nutzt.
     settings = auth.get_or_create_settings(db)
-    return hub_command.route(db, settings, data.text, space_id, confirm=data.confirm)
+    return jarvis.handle(db, settings, data.text, space_id, source="hub", confirm=data.confirm)

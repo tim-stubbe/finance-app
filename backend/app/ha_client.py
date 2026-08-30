@@ -162,6 +162,34 @@ def get_logbook(url: str, token: str, hours: int = 24, entity=None) -> list:
         return []
 
 
+def get_history(url: str, token: str, entity_ids: list, hours: int = 24) -> dict:
+    """Verlauf (Zustandswechsel) der letzten `hours` Stunden je entity_id, über
+    den REST-Endpunkt /history/period. Rückgabe: {entity_id: [{"t": iso,
+    "v": state}, ...]}. Fehlschlag -> leeres Dict (UI zeigt Leerzustand)."""
+    from datetime import datetime, timedelta
+    if not entity_ids:
+        return {}
+    start = (datetime.utcnow() - timedelta(hours=max(1, hours))).strftime("%Y-%m-%dT%H:%M:%S")
+    filt = ",".join(entity_ids)
+    path = f"/history/period/{start}?filter_entity_id={filt}&minimal_response&significant_changes_only"
+    try:
+        raw = _request("GET", url, token, path).json()
+    except HAError:
+        return {}
+    out: dict = {}
+    for series in raw or []:
+        if not series:
+            continue
+        ent = series[0].get("entity_id")
+        if not ent:
+            continue
+        out[ent] = [
+            {"t": row.get("last_changed") or row.get("last_updated"), "v": row.get("state")}
+            for row in series if row.get("state") not in (None, "unknown", "unavailable")
+        ]
+    return out
+
+
 def area_map(url: str, token: str) -> dict:
     """Entity-ID -> Bereichsname, ueber den Template-Endpunkt (Area-Registry
     ist per REST sonst nicht zugaenglich). Fehlschlag ist unkritisch - dann

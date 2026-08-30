@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSock
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from .. import schemas, auth, bank_sync, crud, smarthome, ha_client, voice
+from .. import schemas, auth, bank_sync, crud, smarthome, ha_client, voice, jarvis
 from .. import smarthome_automations, smarthome_ws
 from ..database import get_db, SessionLocal
 
@@ -210,7 +210,7 @@ async def smarthome_voice_stream(ws: WebSocket):
                 continue
             settings = auth.get_or_create_settings(db)
             result = await asyncio.to_thread(
-                smarthome.process_command, db, settings, transcript, False, "voice")
+                jarvis.handle, db, settings, transcript, 0, "voice", False)
             result["type"] = "result"
             result["transcript"] = transcript
             try:
@@ -228,6 +228,16 @@ async def smarthome_voice_stream(ws: WebSocket):
         pass
     finally:
         db.close()
+
+
+@smarthome_router.get("/entity-history")
+def smarthome_entity_history(entity_ids: str = "", hours: int = 24, db: Session = Depends(get_db)):
+    """Verlauf gewählter HA-Entities für die History-Charts (D). `entity_ids`
+    kommagetrennt; ohne Angabe die in den Smart-Home-Settings hinterlegte Liste
+    (`homeassistant_history_entities`)."""
+    s = auth.get_or_create_settings(db)
+    ids = [e.strip() for e in (entity_ids or getattr(s, "homeassistant_history_entities", "") or "").split(",") if e.strip()]
+    return smarthome.entity_history(s, ids, hours=max(1, min(hours, 168)))
 
 
 @smarthome_router.get("/energy")
@@ -569,7 +579,7 @@ async def smarthome_voice_command(
                     "intent": "chat", "actions": [], "needs_confirmation": False, "candidates": []}
         transcript = rest
 
-    result = smarthome.process_command(db, s, transcript, source="voice")
+    result = jarvis.handle(db, s, transcript, 0, source="voice")
     result["transcript"] = transcript
 
     if speak:

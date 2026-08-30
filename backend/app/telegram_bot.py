@@ -713,8 +713,8 @@ def _handle_home_command(db, settings, token: str, chat_id: str, text: str) -> b
     if not (settings.homeassistant_url and settings.homeassistant_token_encrypted):
         _send(token, chat_id, "Smart Home ist in der App noch nicht eingerichtet (Einstellungen -> Smart Home).")
         return True
-    from . import smarthome
-    res = smarthome.process_command(db, settings, m.group(1).strip(), source="telegram")
+    from . import jarvis
+    res = jarvis.handle(db, settings, m.group(1).strip(), 0, source="telegram")
     reply = res.get("reply") or ("Erledigt." if res.get("ok") else "Das hat nicht geklappt.")
     if res.get("needs_confirmation"):
         reply += "\n\nZum Bestaetigen: /haus ja"
@@ -952,6 +952,18 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
         return
     if _handle_expense_command(db, settings, token, chat_id, text):
         return
+
+    # Freier Text, der klar das Haus meint ("mach das licht im bad aus") -
+    # ohne vorangestelltes /haus durch dieselbe Jarvis-Schicht schicken.
+    if settings.homeassistant_url and settings.homeassistant_token_encrypted:
+        from . import jarvis
+        if jarvis._is_house_command(db, settings, text):
+            res = jarvis.handle(db, settings, text, 0, source="telegram")
+            reply = res.get("reply") or ("Erledigt." if res.get("ok") else "Das hat nicht geklappt.")
+            if res.get("needs_confirmation"):
+                reply += "\n\nZum Bestaetigen: /haus ja"
+            _send(token, chat_id, reply)
+            return
 
     chat_model = settings.ollama_model or settings.beleg_chat_model
     if not settings.ollama_url or not chat_model:

@@ -439,6 +439,10 @@ class Settings(Base):
     homeassistant_wake_word = Column(String, nullable=True)
     # Strompreis in EUR/kWh fuer die grobe Kostenschaetzung im Energie-Panel.
     homeassistant_electricity_price = Column(Float, nullable=False, default=0.35)
+    # Kommagetrennte entity_ids fuer die Verlaufs-Charts (D, Smart-Home-Settings).
+    homeassistant_history_entities = Column(String, nullable=True)
+    # Timeout des Jarvis-Kurzzeitgedaechtnisses in Minuten (F, jarvis.py).
+    jarvis_memory_minutes = Column(Integer, nullable=False, default=10)
 
 
 class SmartHomeAlias(Base):
