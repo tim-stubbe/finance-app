@@ -1,54 +1,54 @@
 import SwiftUI
 import KiesCore
 
-/// Premium iOS root navigation. The five primary areas stay native to iOS;
-/// secondary features live in Mehr.
 struct RootTabView: View {
     @State private var showQuickCapture = false
     @ObservedObject private var router = TabRouter.shared
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottom) {
             TabView(selection: $router.selection) {
                 NavigationStack {
-                    PremiumTodayView()
-                        .navigationTitle("")
+                    TodayView()
                         .navigationBarTitleDisplayMode(.inline)
                 }
-                .tabItem { Label("Übersicht", systemImage: "house.fill") }
+                .tabItem { Label("Übersicht", systemImage: "sparkles") }
                 .tag(AppTab.today)
 
                 NavigationStack { AccountsView() }
-                    .tabItem { Label("Konten", systemImage: "creditcard.fill") }
+                    .tabItem { Label("Konten", systemImage: "creditcard") }
                     .tag(AppTab.accounts)
 
                 NavigationStack { TransactionsView() }
-                    .tabItem { Label("Transaktionen", systemImage: "arrow.left.arrow.right") }
+                    .tabItem { Label("Buchungen", systemImage: "arrow.left.arrow.right") }
                     .tag(AppTab.transactions)
 
                 NavigationStack { TodosView() }
-                    .tabItem { Label("Aufgaben", systemImage: "checkmark.circle") }
+                    .tabItem { Label("Aufgaben", systemImage: "checklist") }
                     .tag(AppTab.todos)
 
                 NavigationStack { MoreView() }
-                    .tabItem { Label("Mehr", systemImage: "ellipsis") }
+                    .tabItem { Label("Mehr", systemImage: "square.grid.2x2") }
                     .tag(AppTab.more)
             }
-            .tint(KColor.accent)
+            .tint(KColor.accentStrong)
 
+            // Floating quick action: the single bold neon interaction in the shell.
             Button {
                 showQuickCapture = true
             } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 54, height: 54)
-                    .background(KColor.accent, in: Circle())
-                    .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 6)
+                ZStack {
+                    Circle()
+                        .fill(KColor.accent)
+                        .frame(width: 60, height: 60)
+                    Image(systemName: "plus")
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundStyle(KColor.accentInk)
+                }
+                .shadow(color: KColor.accentStrong.opacity(0.25), radius: 16, x: 0, y: 8)
             }
             .accessibilityLabel("Schnell erfassen")
-            .padding(.trailing, 20)
-            .padding(.bottom, 76)
+            .padding(.bottom, 54)
         }
         .sheet(isPresented: $showQuickCapture) {
             QuickCaptureView()
