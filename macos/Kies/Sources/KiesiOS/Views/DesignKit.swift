@@ -1,57 +1,47 @@
 import SwiftUI
 
-// MARK: - Design-System
+// MARK: - Kies 2026 / Neon-inspired Light Design System
 //
-// Zentrales visuelles Vokabular der iOS-App. Light Mode ist der Standard
-// (sehr helles Off-White, weiße Flächen, Blau als Interaktionsfarbe), Dark
-// Mode wird über dynamische Farben vollständig unterstützt. KEIN globales
-// Fotohintergrundbild mehr - die App wirkt ruhig und clean.
-//
-// Views verwenden ausschließlich diese Tokens/Komponenten, keine hart
-// codierten Farben. `KTheme` / `Font.kSerif` / `AlpenBackdrop` bleiben als
-// dünne Kompatibilitäts-Aliase erhalten, damit bestehende Views ohne
-// Sammel-Umbau weiterlaufen.
-
-// MARK: Farben
+// The iOS app intentionally has ONE appearance: light mode.
+// Visual direction: premium Swiss mobile banking, inspired by the clarity,
+// friendliness and bold accent language of neon — without copying neon's UI.
+// The existing Alpine image remains a signature element of Kies.
 
 enum KColor {
-    /// Baut eine dynamische Farbe (light/dark) aus zwei Hex-Werten.
-    private static func dyn(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
-    }
+    static let background = Color(hex: 0xF7F9F4)
+    static let surface = Color.white
+    static let surfaceSoft = Color(hex: 0xEEF2EA)
+    static let surfaceTint = Color(hex: 0xF1F7E8)
+    static let primary = Color(hex: 0x111411)
+    static let secondary = Color(hex: 0x68706A)
+    static let tertiary = Color(hex: 0x98A09A)
+    static let divider = Color(hex: 0xE2E7E0)
 
-    static let background        = dyn(0xF7F7F8, 0x111214)
-    static let surface           = dyn(0xFFFFFF, 0x1A1C1F)
-    static let surfaceSecondary  = dyn(0xF1F2F4, 0x24272B)
-    static let primary           = dyn(0x15171A, 0xF5F5F7)   // Primärtext
-    static let secondary         = dyn(0x73777D, 0x9B9FA6)   // Sekundärtext
-    static let divider           = dyn(0xE5E6E8, 0x303338)
+    // Neon-inspired electric lime as the main brand accent.
+    static let accent = Color(hex: 0xB7F34A)
+    static let accentStrong = Color(hex: 0x8BCF00)
+    static let accentInk = Color(hex: 0x182000)
+    static let cyan = Color(hex: 0x18C7D9)
+    static let violet = Color(hex: 0x8D63FF)
+    static let positive = Color(hex: 0x159447)
+    static let negative = Color(hex: 0xE14B4B)
+    static let warning = Color(hex: 0xC77A00)
 
-    static let accent            = dyn(0x0A84FF, 0x0A84FF)   // iOS-Blau
-    static let positive          = dyn(0x1DA860, 0x30D97A)
-    static let negative          = dyn(0xE0393B, 0xFF5A5F)
-    static let warning           = dyn(0xF5A623, 0xFFB43A)
-
-    /// Kategorie-/Chart-Palette (blau-zentriert, keine Gold-Dominanz mehr).
     static let chartPalette: [Color] = [
-        dyn(0x0A84FF, 0x0A84FF), dyn(0x30B0C7, 0x40C8E0), dyn(0x1DA860, 0x30D97A),
-        dyn(0xF5A623, 0xFFB43A), dyn(0xAF52DE, 0xBF5AF2), dyn(0xFF6482, 0xFF7E9B),
-        dyn(0x5E5CE6, 0x7D7BFF), dyn(0x8E8E93, 0xA8A8AE),
+        accentStrong, cyan, violet, Color(hex: 0xFF8A5B),
+        Color(hex: 0x2DAF7A), Color(hex: 0xF0C44A), Color(hex: 0x6C7CFF)
     ]
 }
 
-extension UIColor {
-    fileprivate convenience init(hex: UInt32) {
+extension Color {
+    fileprivate init(hex: UInt32) {
         self.init(
-            red:   CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue:  CGFloat(hex & 0xFF) / 255,
-            alpha: 1
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
         )
     }
 }
-
-// MARK: Abstände / Radien / Schatten
 
 enum KSpacing {
     static let xs: CGFloat = 4
@@ -59,60 +49,49 @@ enum KSpacing {
     static let md: CGFloat = 16
     static let lg: CGFloat = 24
     static let xl: CGFloat = 32
+    static let xxl: CGFloat = 44
 }
 
 enum KRadius {
-    static let sm: CGFloat = 10
-    static let md: CGFloat = 16
-    static let lg: CGFloat = 22
+    static let sm: CGFloat = 12
+    static let md: CGFloat = 18
+    static let lg: CGFloat = 26
+    static let pill: CGFloat = 999
 }
-
-struct KShadow: ViewModifier {
-    func body(content: Content) -> some View {
-        content.shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
-    }
-}
-
-// MARK: Typografie
 
 enum KFont {
-    /// Große monetäre Werte: SF Rounded, halbfett, monospaced digits.
     static func number(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight, design: .rounded).monospacedDigit()
     }
-    static let hero      = number(38, weight: .bold)
-    static let metric    = number(24)
-    static let title      = Font.system(.largeTitle, design: .default).weight(.bold)
-    static let sectionH   = Font.system(.subheadline, design: .default).weight(.semibold)
-    static let row        = Font.system(.body)
-    static let rowSub     = Font.system(.footnote)
-    static let caption    = Font.system(.caption)
+    static let hero = number(42, weight: .bold)
+    static let metric = number(25, weight: .bold)
+    static let title = Font.system(size: 34, weight: .bold, design: .rounded)
+    static let sectionH = Font.system(size: 17, weight: .bold, design: .rounded)
+    static let row = Font.system(size: 16, weight: .medium)
+    static let rowSub = Font.system(size: 13, weight: .regular)
 }
 
-/// Währung ohne Nachkommastellen bei Summary-Werten, mit bei Detailbeträgen.
 func kEUR(_ value: Double, fraction: Int = 0) -> String {
     value.formatted(.currency(code: "EUR").precision(.fractionLength(fraction)))
 }
 
-/// Kompat-Alias: früher Serifen-Titel, jetzt System-Font (SF Pro).
 extension Font {
     static func kSerif(_ style: Font.TextStyle, weight: Font.Weight = .semibold) -> Font {
-        .system(style, design: .default).weight(weight)
+        .system(style, design: .rounded).weight(weight)
     }
 }
 
-// MARK: Kompatibilitäts-Shim für bestehende Views
-
+// Compatibility aliases used by older views.
 enum KTheme {
     static let corner: CGFloat = KRadius.md
     static let gap: CGFloat = KSpacing.md
     static let background = KColor.background
     static let card = KColor.surface
     static let hairline = KColor.divider
-    static let accent = KColor.accent
-    static let gold = KColor.accent        // Gold ist nicht mehr die Akzentfarbe
-    static let goldStrong = KColor.accent
-    static let goldDeep = KColor.accent
+    static let accent = KColor.accentStrong
+    static let gold = KColor.accentStrong
+    static let goldStrong = KColor.accentStrong
+    static let goldDeep = KColor.accentStrong
     static let text = KColor.primary
     static let textSecondary = KColor.secondary
     static let muted = KColor.secondary
@@ -121,69 +100,109 @@ enum KTheme {
     static let chartPalette = KColor.chartPalette
 }
 
-/// Früher das Matterhorn-Foto - jetzt nur noch die ruhige Hintergrundfläche.
-struct AlpenBackdrop: View {
-    var body: some View { KColor.background.ignoresSafeArea() }
+// MARK: Alpine signature
+
+/// Keeps the original Kies Alpine/Matterhorn asset, but treats it as a subtle
+/// brand layer instead of a full-screen dark photo background.
+struct NeonBackdrop: View {
+    var opacity: Double = 0.18
+    var body: some View {
+        ZStack {
+            KColor.background
+            Image("AlpenBackground")
+                .resizable()
+                .scaledToFill()
+                .opacity(opacity)
+                .blur(radius: 0.2)
+            LinearGradient(
+                colors: [
+                    KColor.background.opacity(0.76),
+                    KColor.background.opacity(0.90),
+                    KColor.background.opacity(0.98)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .ignoresSafeArea()
+    }
 }
 
-// MARK: Container
+struct AlpenBackdrop: View {
+    var body: some View { NeonBackdrop(opacity: 0.18) }
+}
 
-/// Scrollbarer Standard-Screen (Übersicht / Konten / Analyse / Mehr).
+// MARK: Containers
+
 struct KScreen<Content: View>: View {
     var spacing: CGFloat = KSpacing.lg
     @ViewBuilder var content: Content
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: spacing) { content }
-                .padding(.horizontal, KSpacing.md)
-                .padding(.top, KSpacing.sm)
-                .padding(.bottom, KSpacing.xl + 24)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ZStack {
+            NeonBackdrop(opacity: 0.12)
+            ScrollView {
+                VStack(alignment: .leading, spacing: spacing) { content }
+                    .padding(.horizontal, KSpacing.md)
+                    .padding(.top, KSpacing.sm)
+                    .padding(.bottom, 110)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollDismissesKeyboard(.interactively)
         }
-        .background(KColor.background.ignoresSafeArea())
-        .scrollDismissesKeyboard(.interactively)
+    }
+}
+
+struct KSurface<Content: View>: View {
+    let padding: CGFloat
+    @ViewBuilder var content: Content
+    init(_ padding: CGFloat = KSpacing.md, @ViewBuilder content: () -> Content) {
+        self.padding = padding
+        self.content = content()
+    }
+    var body: some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(KColor.surface.opacity(0.96), in: RoundedRectangle(cornerRadius: KRadius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: KRadius.md, style: .continuous).stroke(KColor.divider, lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.045), radius: 18, x: 0, y: 8)
     }
 }
 
 extension View {
-    /// Karten-Look: weiße Fläche, sanfter Schatten (keine harte Border),
-    /// 16 pt Radius, großzügiges Padding. Karten nur für Summary-Gruppen.
     func kCard(_ padding: CGFloat = KSpacing.md) -> some View {
         self
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(KColor.surface, in: RoundedRectangle(cornerRadius: KRadius.md, style: .continuous))
-            .modifier(KShadow())
+            .background(KColor.surface.opacity(0.96), in: RoundedRectangle(cornerRadius: KRadius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: KRadius.md, style: .continuous).stroke(KColor.divider, lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.045), radius: 18, x: 0, y: 8)
     }
 
-    /// Für Screens, die native `List` nutzen (Swipe-Aktionen).
     func kListChrome() -> some View {
         self
             .scrollContentBackground(.hidden)
-            .background(KColor.background.ignoresSafeArea())
+            .background(NeonBackdrop(opacity: 0.10))
     }
 
     func kListRow() -> some View {
         self
-            .listRowBackground(KColor.surface)
+            .listRowBackground(KColor.surface.opacity(0.97))
             .listRowSeparatorTint(KColor.divider)
     }
 }
 
-// MARK: Bausteine
-
-/// Kleine, weit gesperrte Sekundär-Zeile über einem Titel.
 struct KKicker: View {
     let text: String
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .semibold))
-            .tracking(0.8)
+            .font(.system(size: 11, weight: .bold))
+            .tracking(1.0)
             .foregroundStyle(KColor.secondary)
     }
 }
 
-/// Abschnitts-Überschrift im Screen-Fluss (kein Karten-Rahmen).
 struct KSectionHeader: View {
     let title: String
     var action: (title: String, run: () -> Void)? = nil
@@ -193,14 +212,13 @@ struct KSectionHeader: View {
             Spacer()
             if let action {
                 Button(action.title, action: action.run)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(KColor.accent)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(KColor.accentStrong)
             }
         }
     }
 }
 
-/// Eine Kennzahl-Kachel (Einnahmen / Ausgaben / Netto …).
 struct KStatTile: View {
     let label: String
     let value: String
@@ -208,9 +226,8 @@ struct KStatTile: View {
     var caption: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: KSpacing.xs) {
-            Text(label).font(.footnote).foregroundStyle(KColor.secondary)
-            Text(value).font(KFont.metric).foregroundStyle(tint)
-                .lineLimit(1).minimumScaleFactor(0.5)
+            Text(label).font(.footnote.weight(.medium)).foregroundStyle(KColor.secondary)
+            Text(value).font(KFont.metric).foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.5)
             if let caption { Text(caption).font(.caption2).foregroundStyle(KColor.secondary) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,7 +237,6 @@ struct KStatTile: View {
 
 typealias KMetricCard = KStatTile
 
-/// Gruppierende Karte mit Titel (für Summary-Bereiche).
 struct KSection<Content: View>: View {
     let title: String
     var systemImage: String? = nil
@@ -230,7 +246,7 @@ struct KSection<Content: View>: View {
         VStack(alignment: .leading, spacing: KSpacing.md) {
             HStack(spacing: KSpacing.sm) {
                 if let systemImage {
-                    Image(systemName: systemImage).font(.footnote).foregroundStyle(KColor.accent)
+                    Image(systemName: systemImage).font(.footnote.weight(.bold)).foregroundStyle(KColor.accentStrong)
                 }
                 Text(title).font(KFont.sectionH).foregroundStyle(KColor.primary)
                 Spacer()
@@ -242,31 +258,26 @@ struct KSection<Content: View>: View {
     }
 }
 
-/// Schlichte Zeile (Titel / Untertitel / Betrag rechts).
 struct KRow: View {
     let title: String
     var subtitle: String? = nil
     var trailing: String? = nil
     var trailingTint: Color = KColor.primary
     var body: some View {
-        HStack(alignment: .center, spacing: KSpacing.sm) {
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: KSpacing.md) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(KFont.row).foregroundStyle(KColor.primary)
-                if let subtitle {
-                    Text(subtitle).font(KFont.rowSub).foregroundStyle(KColor.secondary)
-                }
+                if let subtitle { Text(subtitle).font(KFont.rowSub).foregroundStyle(KColor.secondary) }
             }
             Spacer(minLength: KSpacing.sm)
             if let trailing {
-                Text(trailing).font(KFont.row.weight(.medium))
-                    .foregroundStyle(trailingTint).monospacedDigit()
+                Text(trailing).font(KFont.row.weight(.semibold)).foregroundStyle(trailingTint).monospacedDigit()
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, KSpacing.xs)
     }
 }
 
-/// Konto-Zeile: SF-Symbol, Name, Typ, Betrag, Chevron.
 struct KAccountRow: View {
     let icon: String
     let name: String
@@ -275,64 +286,64 @@ struct KAccountRow: View {
     var body: some View {
         HStack(spacing: KSpacing.md) {
             Image(systemName: icon)
-                .font(.callout).foregroundStyle(KColor.accent)
-                .frame(width: 30, height: 30)
-                .background(KColor.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: KRadius.sm, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
+                .font(.callout.weight(.bold)).foregroundStyle(KColor.accentInk)
+                .frame(width: 38, height: 38)
+                .background(KColor.accent, in: RoundedRectangle(cornerRadius: KRadius.sm, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
                 Text(name).font(KFont.row).foregroundStyle(KColor.primary)
                 Text(subtitle).font(KFont.rowSub).foregroundStyle(KColor.secondary)
             }
             Spacer(minLength: KSpacing.sm)
             Text(kEUR(amount, fraction: 2))
-                .font(KFont.row.weight(.semibold)).monospacedDigit()
+                .font(.system(size: 16, weight: .bold, design: .rounded)).monospacedDigit()
                 .foregroundStyle(amount < 0 ? KColor.negative : KColor.primary)
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(KColor.secondary.opacity(0.6))
+            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(KColor.tertiary)
         }
         .padding(.vertical, KSpacing.xs)
         .contentShape(Rectangle())
     }
 }
 
-/// Transaktions-Zeile: Merchant-Icon, Beschreibung, Kategorie, Betrag.
 struct KTransactionRow: View {
     let title: String
     var subtitle: String? = nil
     let amount: Double
     var pending: Bool = false
+
     private var glyph: String {
         let t = title.lowercased()
-        if t.contains("gehalt") || t.contains("lohn") { return "arrow.down.circle.fill" }
+        if t.contains("gehalt") || t.contains("lohn") { return "arrow.down.left" }
         if t.contains("rewe") || t.contains("edeka") || t.contains("aldi") || t.contains("lidl") || t.contains("markt") { return "cart.fill" }
         if t.contains("amazon") || t.contains("paypal") { return "bag.fill" }
         if t.contains("dm") || t.contains("rossmann") || t.contains("drogerie") { return "cross.case.fill" }
-        if t.contains("tank") || t.contains("shell") || t.contains("aral") { return "fuelpump.fill" }
+        if t.contains("tank") || t.contains("shell") || t.contains("aral") || t.contains("oil") { return "fuelpump.fill" }
         if t.contains("miete") || t.contains("strom") || t.contains("wohn") { return "house.fill" }
         return amount < 0 ? "arrow.up.right" : "arrow.down.left"
     }
+
     var body: some View {
         HStack(spacing: KSpacing.md) {
             Image(systemName: glyph)
-                .font(.footnote).foregroundStyle(KColor.secondary)
-                .frame(width: 30, height: 30)
-                .background(KColor.surfaceSecondary, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
+                .font(.footnote.weight(.bold)).foregroundStyle(amount > 0 ? KColor.positive : KColor.primary)
+                .frame(width: 38, height: 38)
+                .background(amount > 0 ? KColor.surfaceTint : KColor.surfaceSoft, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(KFont.row).foregroundStyle(KColor.primary).lineLimit(1)
                 if pending {
-                    Text("wird synchronisiert…").font(.caption2).foregroundStyle(KColor.warning)
+                    Text("Wird synchronisiert…").font(.caption2).foregroundStyle(KColor.warning)
                 } else if let subtitle {
                     Text(subtitle).font(KFont.rowSub).foregroundStyle(KColor.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: KSpacing.sm)
             Text(kEUR(amount, fraction: 2))
-                .font(KFont.row.weight(.medium)).monospacedDigit()
+                .font(.system(size: 16, weight: .bold, design: .rounded)).monospacedDigit()
                 .foregroundStyle(amount > 0 ? KColor.positive : KColor.primary)
         }
         .padding(.vertical, KSpacing.xs)
     }
 }
 
-/// Kompakte Insight-Karte (Analyse-Hinweis / KI-Vorschlag).
 struct KInsightCard: View {
     var icon: String = "sparkles"
     let title: String
@@ -340,22 +351,24 @@ struct KInsightCard: View {
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: KSpacing.sm) {
-            Label(title, systemImage: icon)
-                .font(.footnote.weight(.semibold)).foregroundStyle(KColor.accent)
-            Text(message).font(.callout).foregroundStyle(KColor.primary).fixedSize(horizontal: false, vertical: true)
-            if let actionTitle, let action {
-                Button(action: action) {
-                    Text(actionTitle + " →").font(.footnote.weight(.medium)).foregroundStyle(KColor.accent)
+        HStack(alignment: .top, spacing: KSpacing.md) {
+            Image(systemName: icon)
+                .font(.headline.weight(.bold)).foregroundStyle(KColor.accentInk)
+                .frame(width: 42, height: 42)
+                .background(KColor.accent, in: Circle())
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.footnote.weight(.bold)).foregroundStyle(KColor.primary)
+                Text(message).font(.callout).foregroundStyle(KColor.primary).fixedSize(horizontal: false, vertical: true)
+                if let actionTitle, let action {
+                    Button(actionTitle + " →", action: action)
+                        .font(.footnote.weight(.bold)).foregroundStyle(KColor.accentStrong)
                 }
-                .padding(.top, 2)
             }
         }
         .kCard()
     }
 }
 
-/// Hochwertiger Leerzustand mit optionaler Aktion.
 struct KEmptyState: View {
     let icon: String
     let title: String
@@ -363,57 +376,32 @@ struct KEmptyState: View {
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
     var body: some View {
-        VStack(spacing: KSpacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 34, weight: .regular))
-                .foregroundStyle(KColor.secondary.opacity(0.7))
-            Text(title).font(.headline).foregroundStyle(KColor.primary)
-            Text(message).font(.subheadline).foregroundStyle(KColor.secondary)
-                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: KSpacing.md) {
+            Image(systemName: icon).font(.system(size: 34, weight: .medium)).foregroundStyle(KColor.accentStrong)
+                .frame(width: 62, height: 62).background(KColor.accent, in: Circle())
+            Text(title).font(.headline.weight(.bold)).foregroundStyle(KColor.primary)
+            Text(message).font(.callout).foregroundStyle(KColor.secondary).multilineTextAlignment(.center)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
-                    .buttonStyle(KPrimaryButtonStyle())
-                    .padding(.top, KSpacing.xs)
+                    .font(.footnote.weight(.bold)).foregroundStyle(KColor.accentInk)
+                    .padding(.horizontal, 18).padding(.vertical, 11)
+                    .background(KColor.accent, in: Capsule())
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, KSpacing.xl)
-        .padding(.horizontal, KSpacing.md)
+        .kCard(KSpacing.lg)
     }
 }
 
-// MARK: Buttons
-
-struct KPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.vertical, 12).padding(.horizontal, KSpacing.lg)
-            .background(KColor.accent, in: RoundedRectangle(cornerRadius: KRadius.sm, style: .continuous))
-            .opacity(configuration.isPressed ? 0.85 : 1)
-    }
-}
-
-struct KSecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(KColor.accent)
-            .padding(.vertical, 12).padding(.horizontal, KSpacing.lg)
-            .background(KColor.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: KRadius.sm, style: .continuous))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
-
-struct KPrimaryButton: View {
+struct NeonPill: View {
     let title: String
-    let action: () -> Void
-    var body: some View { Button(title, action: action).buttonStyle(KPrimaryButtonStyle()) }
-}
-
-struct KSecondaryButton: View {
-    let title: String
-    let action: () -> Void
-    var body: some View { Button(title, action: action).buttonStyle(KSecondaryButtonStyle()) }
+    var active: Bool = false
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(active ? KColor.accentInk : KColor.primary)
+            .padding(.horizontal, 13).padding(.vertical, 8)
+            .background(active ? KColor.accent : KColor.surface, in: Capsule())
+            .overlay(Capsule().stroke(active ? KColor.accent : KColor.divider, lineWidth: 1))
+    }
 }
