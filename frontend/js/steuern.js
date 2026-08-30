@@ -149,6 +149,35 @@ document.getElementById("steuern-ask-form").addEventListener("submit", async e =
   }
 });
 
+document.getElementById("steuern-proj-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const box = document.getElementById("steuern-proj-result");
+  box.classList.remove("hidden");
+  box.textContent = "Rechnet …";
+  const num = id => parseFloat(document.getElementById(id).value) || 0;
+  const payload = {
+    start: num("proj-start"), monthly: num("proj-monthly"),
+    annual_return_pct: num("proj-return"), years: Math.round(num("proj-years")) || 30,
+    ter_pct: num("proj-ter"),
+    church_tax_rate: document.getElementById("proj-church").checked ? undefined : 0,
+  };
+  let r;
+  try {
+    r = await api("/tax/project", { method: "POST", body: JSON.stringify(payload) });
+  } catch { box.textContent = "Konnte nicht rechnen."; return; }
+  const eur = v => Number(v).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const a = r.annahmen;
+  const row = (label, val, strong) =>
+    `<div class="steuern-proj-row${strong ? " is-strong" : ""}"><span>${steuernEsc(label)}</span><em>${eur(val)}</em></div>`;
+  box.innerHTML = `
+    <p class="page-sub">${a.jahre} Jahre · ${a.rendite_pa_pct} % p.a. (nach ${a.ter_pct} % TER) · eingezahlt ${eur(r.eingezahlt)}</p>
+    ${row("Endvermögen brutto (ohne jede Steuer)", r.brutto, true)}
+    ${row("… nach laufender Steuer (Vorabpauschale) – ohne Kirchensteuer", r.ohne_kirchensteuer.netto_laufend)}
+    ${row("… nach Verkauf – ohne Kirchensteuer", r.ohne_kirchensteuer.netto_nach_verkauf, true)}
+    ${a.kirchensteuer_pct ? row("… nach Verkauf – mit Kirchensteuer", r.mit_kirchensteuer.netto_nach_verkauf) : ""}
+    ${a.kirchensteuer_pct ? `<p class="page-sub">Kirchensteuer (${a.kirchensteuer_pct} %) kostet über die Laufzeit rund <strong>${eur(Math.abs(r.kirchensteuer_kostet))}</strong> Endvermögen.</p>` : `<p class="page-sub">Ohne Kirchensteuer gerechnet (Haken setzen, um sie einzubeziehen).</p>`}`;
+});
+
 document.getElementById("steuern-goto-report").addEventListener("click", e => {
   e.preventDefault();
   const btn = document.querySelector('.nav-btn[data-tab="investments"]');

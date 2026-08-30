@@ -41,6 +41,31 @@ class TaxTipStatusIn(BaseModel):
     status: str  # "done" | "not_relevant" | "open"
 
 
+class TaxProjectIn(BaseModel):
+    start: float = 0.0
+    monthly: float = 0.0
+    annual_return_pct: float = 6.0
+    years: int = 30
+    ter_pct: float = 0.0
+    church_tax_rate: Optional[float] = None   # None = aus dem Profil
+    basiszins_pct: float = 2.5
+
+
+@tax_router.post("/tax/project")
+def project_investment(data: TaxProjectIn, db: Session = Depends(get_db)):
+    """Anlage-Hochrechnung: Endvermögen brutto / nach laufender Steuer / nach
+    Verkauf, jeweils mit UND ohne Kirchensteuer (siehe tax_advice.
+    project_investment). Deutsche Besteuerung, Näherung, keine Steuerberatung."""
+    s = auth.get_or_create_settings(db)
+    church = data.church_tax_rate if data.church_tax_rate is not None else (s.church_tax_rate or 0.0)
+    return tax_advice.project_investment(
+        start=data.start, monthly=data.monthly, annual_return_pct=data.annual_return_pct,
+        years=data.years, ter_pct=data.ter_pct, church_tax_rate=church,
+        sparerpauschbetrag=s.sparerpauschbetrag or tax_advice.SPARERPAUSCHBETRAG_DEFAULT,
+        basiszins_pct=data.basiszins_pct,
+    )
+
+
 @tax_router.get("/tax/profile")
 def get_tax_profile(db: Session = Depends(get_db)):
     s = auth.get_or_create_settings(db)

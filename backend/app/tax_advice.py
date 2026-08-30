@@ -23,6 +23,7 @@ ABGELTUNGSTEUER = 0.25
 SOLI = 0.055                       # auf die Abgeltungsteuer
 KAP_TAX_EFF = ABGELTUNGSTEUER * (1 + SOLI)   # 26,375 % ohne Kirchensteuer
 SPARERPAUSCHBETRAG_DEFAULT = 1000.0
+TEILFREISTELLUNG_AKTIENFONDS = 0.30   # pauschal für Aktien-ETF (wie app/tax.py)
 
 
 def kap_eff(church_rate: float = 0.0) -> float:
@@ -123,6 +124,87 @@ def collect_facts(db, settings, space_id: int, year: int) -> dict:
 
 def _country(settings) -> str:
     return (getattr(settings, "residence_country", None) or "DE").upper()
+
+
+# --------------------------------------------------------------------------
+# Anlage-Hochrechnung ("wie viel hätte ich nach X Jahren")
+# --------------------------------------------------------------------------
+def project_investment(
+    *, start: float = 0.0, monthly: float = 0.0, annual_return_pct: float = 6.0,
+    years: int = 30, ter_pct: float = 0.0, teilfreistellung: float = TEILFREISTELLUNG_AKTIENFONDS,
+    church_tax_rate: float = 0.0, sparerpauschbetrag: float = SPARERPAUSCHBETRAG_DEFAULT,
+    basiszins_pct: float = 2.5,
+) -> dict:
+    """Monatliche Aufzinsung + grobe deutsche Besteuerung (Abgeltungsteuer +
+    Soli + optional Kirchensteuer, 30 % Teilfreistellung für Aktien-ETF,
+    jährliche Vorabpauschale näherungsweise, Sparerpauschbetrag pro Jahr).
+
+    Rückgabe u.a. `brutto` (ohne jede Steuer), `netto_laufend` (nach jährlicher
+    Vorabpauschale) und `netto_nach_verkauf` (zusätzlich Steuer auf den
+    Schlussgewinn, mit Anrechnung der schon gezahlten Vorabpauschale) - jeweils
+    MIT und OHNE Kirchensteuer, plus die Differenz. Näherung, keine
+    Steuerberatung."""
+    years = max(1, min(int(years), 80))
+    r_year = annual_return_pct / 100.0 - ter_pct / 100.0
+    r_m = (1 + r_year) ** (1 / 12) - 1
+    basiszins = max(0.0, basiszins_pct) / 100.0
+
+    def run(church: float):
+        value = float(start)
+        invested = float(start)
+        vorab_tax_paid = 0.0
+        eff = kap_eff(church)
+        for _y in range(years):
+            value_start = value
+            for _m in range(12):
+                value = value * (1 + r_m) + monthly
+                invested += monthly
+            gain_year = value - value_start - monthly * 12
+            # Vorabpauschale: Basisertrag = Wert Jahresanfang * Basiszins * 0.7,
+            # gedeckelt auf den Jahres-Wertzuwachs, dann Teilfreistellung.
+            basisertrag = value_start * basiszins * 0.7
+            vorab = max(0.0, min(basisertrag, max(gain_year, 0.0)))
+            steuerpfl = vorab * (1 - teilfreistellung)
+            steuerpfl = max(0.0, steuerpfl - sparerpauschbetrag)
+            tax = steuerpfl * eff
+            value -= tax
+            vorab_tax_paid += tax
+        netto_laufend = value
+        final_gain = value - invested
+        sale_base = max(0.0, final_gain) * (1 - teilfreistellung)
+        sale_base = max(0.0, sale_base - sparerpauschbetrag)
+        sale_tax = max(0.0, sale_base * eff - vorab_tax_paid)
+        return {
+            "netto_laufend": round(netto_laufend, 2),
+            "netto_nach_verkauf": round(netto_laufend - sale_tax, 2),
+            "vorabpauschale_gezahlt": round(vorab_tax_paid, 2),
+            "verkaufssteuer": round(sale_tax, 2),
+            "eingezahlt": round(invested, 2),
+        }
+
+    # Brutto (ohne jede Steuer): monatliche Aufzinsung ohne Abzüge
+    b_value, b_invested = float(start), float(start)
+    for _m in range(years * 12):
+        b_value = b_value * (1 + r_m) + monthly
+        b_invested += monthly
+
+    with_church = run(church_tax_rate)
+    without_church = run(0.0)
+    diff = round(with_church["netto_nach_verkauf"] - without_church["netto_nach_verkauf"], 2) \
+        if church_tax_rate else 0.0
+    return {
+        "annahmen": {
+            "start": start, "monatlich": monthly, "rendite_pa_pct": annual_return_pct,
+            "ter_pct": ter_pct, "jahre": years, "teilfreistellung_pct": teilfreistellung * 100,
+            "kirchensteuer_pct": church_tax_rate * 100, "sparerpauschbetrag": sparerpauschbetrag,
+            "basiszins_pct": basiszins_pct,
+        },
+        "eingezahlt": round(b_invested, 2),
+        "brutto": round(b_value, 2),
+        "mit_kirchensteuer": with_church,
+        "ohne_kirchensteuer": without_church,
+        "kirchensteuer_kostet": diff,
+    }
 
 
 def _category_sums(db, space_id: int, year: int) -> dict:

@@ -119,3 +119,18 @@ def test_tax_tip_status_dismiss_and_reset(auth_client):
     assert any(t["id"] == "homeoffice" and t["status"] == "not_relevant" for t in data["dismissed"])
     auth_client.post(f"/api/tax/tips/homeoffice/status", json={"year": year, "status": "open"})
     assert any(t["id"] == "homeoffice" for t in auth_client.get(f"/api/tax/tips?year={year}").json()["tips"])
+
+
+def test_project_investment_endpoint(auth_client):
+    r = auth_client.post("/api/tax/project", json={
+        "start": 10000, "monthly": 300, "annual_return_pct": 7, "years": 50,
+        "church_tax_rate": 0.09,
+    })
+    assert r.status_code == 200
+    b = r.json()
+    assert b["eingezahlt"] == 190000
+    # Brutto > netto nach laufender Steuer > netto nach Verkauf
+    assert b["brutto"] > b["mit_kirchensteuer"]["netto_laufend"] > b["mit_kirchensteuer"]["netto_nach_verkauf"]
+    # ohne Kirchensteuer bleibt mehr übrig
+    assert b["ohne_kirchensteuer"]["netto_nach_verkauf"] > b["mit_kirchensteuer"]["netto_nach_verkauf"]
+    assert b["kirchensteuer_kostet"] < 0  # mit Kirche weniger Endvermögen

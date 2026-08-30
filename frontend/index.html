@@ -2080,6 +2080,21 @@
       </div>
 
       <div class="panel">
+        <h3 class="panel-title">Was-wäre-wenn: Anlage-Hochrechnung</h3>
+        <p class="page-sub">Monatliche Aufzinsung + grobe deutsche Besteuerung (Abgeltungsteuer + Soli, 30 % Teilfreistellung für Aktien-ETF, jährliche Vorabpauschale, Sparerpauschbetrag). Zeigt das Endvermögen <strong>mit und ohne Kirchensteuer</strong>. Näherung, keine Steuerberatung.</p>
+        <form id="steuern-proj-form" class="form-grid">
+          <label>Startkapital (€) <input type="number" id="proj-start" min="0" step="100" value="10000"></label>
+          <label>Monatliche Sparrate (€) <input type="number" id="proj-monthly" min="0" step="25" value="300"></label>
+          <label>Rendite p.a. (%) <input type="number" id="proj-return" min="0" step="0.5" value="7"></label>
+          <label>Laufzeit (Jahre) <input type="number" id="proj-years" min="1" max="80" step="1" value="30"></label>
+          <label>Fondskosten TER p.a. (%) <input type="number" id="proj-ter" min="0" step="0.05" value="0.2"></label>
+          <label class="checkbox-label"><input type="checkbox" id="proj-church"> Kirchensteuer einrechnen (aus Profil)</label>
+          <div class="form-actions"><button type="submit" class="btn-primary">Rechnen</button></div>
+        </form>
+        <div id="steuern-proj-result" class="hidden"></div>
+      </div>
+
+      <div class="panel">
         <h3 class="panel-title">Steuer-Frage stellen</h3>
         <p class="page-sub">Freitext an die lokale KI – sie kennt deine oben berechneten Zahlen. Kein Cloud-Dienst, keine verbindliche Auskunft.</p>
         <form id="steuern-ask-form" class="chat-input-row">

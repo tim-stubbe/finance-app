@@ -4062,3 +4062,7 @@ body.cockpit-active { overflow: hidden; }
 .steuern-tip-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
 .steuern-tip.is-dismissed { opacity: 0.6; }
 .steuern-tip.is-dismissed p { display: none; }
+.steuern-proj-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.steuern-proj-row em { font-style: normal; font-variant-numeric: tabular-nums; }
+.steuern-proj-row.is-strong { font-weight: 600; font-size: 1.05em; }
+#steuern-proj-result { margin-top: 10px; }
