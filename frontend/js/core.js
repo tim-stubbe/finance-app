@@ -304,21 +304,21 @@ function applyTheme(theme) {
   try { localStorage.setItem("financeAppTheme", theme); } catch (e) {}
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) themeColorMeta.setAttribute("content", THEME_BG[theme] || THEME_BG.dark);
-  document.querySelectorAll(".theme-option").forEach(btn => {
+  document.querySelectorAll("#theme-switch .theme-option").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.themeOption === theme);
   });
   if (document.getElementById("tab-dashboard").classList.contains("active")) loadDashboard();
   if (document.getElementById("tab-investments").classList.contains("active")) loadInvestmentsTab();
 }
 
-document.querySelectorAll(".theme-option").forEach(btn => {
+document.querySelectorAll("#theme-switch .theme-option").forEach(btn => {
   btn.addEventListener("click", () => applyTheme(btn.dataset.themeOption));
 });
 
 function initThemeSwitchUI() {
   let current = "dark";
   try { current = localStorage.getItem("financeAppTheme") || "dark"; } catch (e) {}
-  document.querySelectorAll(".theme-option").forEach(btn => {
+  document.querySelectorAll("#theme-switch .theme-option").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.themeOption === current);
   });
 }

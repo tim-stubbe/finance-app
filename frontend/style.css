@@ -3989,6 +3989,9 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 /* ================= COCKPIT-MODUS (js/cockpit.js) ================= */
 body.cockpit-active { overflow: hidden; }
+/* MUSS vor der display:grid-Regel gewinnen - sonst lässt sich das Cockpit
+   nicht schließen (der ✕-Button setzt nur [hidden]). */
+#cockpit-root[hidden] { display: none !important; }
 #cockpit-root {
   position: fixed; inset: 0; z-index: 4000;
   background: var(--bg); color: var(--text);

@@ -692,6 +692,20 @@ def portfolio_history(db: Session, space_id: int, range_key: str) -> schemas.Por
             partial = True
             no_history_holdings.append(h)
             continue
+        # Plausibilitätscheck: passt der jüngste Kurs aus der Historie
+        # halbwegs zum aktuellen Kurs derselben Position? Wenn nicht (Faktor
+        # >4 oder <1/4), stammt die "Historie" mit hoher Wahrscheinlichkeit
+        # von einem falsch aufgelösten Symbol (ISIN auf falschen Yahoo-Ticker,
+        # falsche Börse/Währung, alter Split) - solche Serien haben live den
+        # ganzen Portfolio-Verlauf verzerrt (riesiger Ausschlag mit tausenden
+        # Prozent Rendite). Dann lieber wie "keine Historie" behandeln: nur
+        # der heutige, geprüfte Stand fließt ein.
+        ref = h.current_price if h.current_price is not None else h.purchase_price
+        latest_hist = points[-1][1] if points else None
+        if ref and latest_hist and (latest_hist > ref * 4 or latest_hist < ref / 4):
+            partial = True
+            no_history_holdings.append(h)
+            continue
         series_by_holding[h.id] = {
             "prices_by_date": dict(points),
             "dates": [p[0] for p in points],
