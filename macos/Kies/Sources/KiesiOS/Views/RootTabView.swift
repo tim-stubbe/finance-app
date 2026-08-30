@@ -2,8 +2,7 @@ import SwiftUI
 import KiesCore
 
 /// Premium iOS root navigation. The five primary areas stay native to iOS;
-/// secondary features live in Mehr. The dashboard owns its visible heading, so
-/// the navigation bar does not duplicate "Übersicht".
+/// secondary features live in Mehr.
 struct RootTabView: View {
     @State private var showQuickCapture = false
     @ObservedObject private var router = TabRouter.shared
@@ -12,7 +11,7 @@ struct RootTabView: View {
         ZStack(alignment: .bottomTrailing) {
             TabView(selection: $router.selection) {
                 NavigationStack {
-                    TodayView()
+                    PremiumTodayView()
                         .navigationTitle("")
                         .navigationBarTitleDisplayMode(.inline)
                 }
@@ -37,8 +36,6 @@ struct RootTabView: View {
             }
             .tint(KColor.accent)
 
-            // The action button is deliberately anchored to the safe-area
-            // edge instead of the content, so it never covers list rows.
             Button {
                 showQuickCapture = true
             } label: {
