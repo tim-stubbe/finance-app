@@ -283,7 +283,13 @@ def create_transaction_from_mail(attachment_id: int, data: schemas.MailCreateTra
         raise HTTPException(404, "Anhang nicht gefunden")
     if a.status != "pending":
         raise HTTPException(400, "Dieser Beleg ist bereits bearbeitet.")
-    konto = db.query(models.Account).filter(models.Account.id == data.account_id).first()
+    # space_id kommt owner-gefiltert aus get_active_space_id - das Konto muss
+    # zum aktiven (eigenen) Bereich gehören, sonst legte man eine Buchung in
+    # einem fremden Bereich an (Multi-User Phase 2, siehe ownership.py).
+    konto = db.query(models.Account).filter(
+        models.Account.id == data.account_id,
+        models.Account.space_id == space_id,
+    ).first()
     if not konto:
         raise HTTPException(404, "Konto nicht gefunden")
 

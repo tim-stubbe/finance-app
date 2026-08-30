@@ -71,7 +71,12 @@ def create_alert_rule(data: schemas.AlertRuleCreate, db: Session = Depends(get_d
     if data.rule_type == schemas.AlertRuleType.goal_progress_above:
         if not data.goal_id:
             raise HTTPException(400, "Diese Regel braucht ein Ziel")
-        goal = db.query(models.Goal).filter(models.Goal.id == data.goal_id).first()
+        # Nur ein Ziel aus dem eigenen Bereich (oder ein bereichsübergreifendes,
+        # space_id NULL) darf referenziert werden - Multi-User Phase 2.
+        goal = db.query(models.Goal).filter(
+            models.Goal.id == data.goal_id,
+            (models.Goal.space_id == space_id) | (models.Goal.space_id.is_(None)),
+        ).first()
         if not goal:
             raise HTTPException(404, "Ziel nicht gefunden")
         # Nur automatisch messbare Ziele haben ueberhaupt einen Fortschritt -
