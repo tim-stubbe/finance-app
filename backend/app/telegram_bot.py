@@ -44,7 +44,7 @@ from datetime import date, datetime, timedelta
 
 import requests
 
-from . import ai_auto, auth, bank_sync, crud, models, ollama_client, radicale_sync, schemas, websearch
+from . import ai_auto, auth, bank_sync, crud, models, ollama_client, radicale_sync, schemas, websearch, voice
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
@@ -943,6 +943,23 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     _send(token, chat_id, reply or "(keine Antwort erhalten)")
 
 
+def _transcribe_voice(token: str, file_id: str) -> str:
+    """Telegram-Sprachnachricht (.oga/Opus) herunterladen und lokal per
+    voice.get_stt() zu Text machen - kein Cloud-STT. Wirft weiter, wenn kein
+    STT-Backend aktiv ist (STT_BACKEND=stub) oder der Download scheitert."""
+    info = requests.get(
+        f"{TELEGRAM_API.format(token=token)}/getFile",
+        params={"file_id": file_id}, timeout=20,
+    )
+    info.raise_for_status()
+    file_path = info.json()["result"]["file_path"]
+    audio = requests.get(
+        f"https://api.telegram.org/file/bot{token}/{file_path}", timeout=60,
+    )
+    audio.raise_for_status()
+    return voice.get_stt().transcribe(audio.content).strip()
+
+
 def _poll_once(db) -> None:
     settings = auth.get_or_create_settings(db)
     if not (settings.notifications_enabled and settings.telegram_bot_token_encrypted and settings.telegram_chat_id):
@@ -966,6 +983,24 @@ def _poll_once(db) -> None:
         msg = upd.get("message") or {}
         incoming_chat_id = str((msg.get("chat") or {}).get("id", ""))
         text = msg.get("text")
+
+        # Sprachnachricht (oder gesendete Audiodatei / Video-Notiz) -> lokal
+        # zu Text machen und dann wie eine getippte Nachricht behandeln.
+        if not text and incoming_chat_id == configured_chat_id:
+            media = msg.get("voice") or msg.get("audio") or msg.get("video_note")
+            if media and media.get("file_id"):
+                try:
+                    text = _transcribe_voice(token, media["file_id"])
+                except NotImplementedError:
+                    _send(token, configured_chat_id,
+                          "Sprachnachrichten brauchen einen Spracherkennungs-Dienst. In der "
+                          "App STT_BACKEND=faster-whisper (eigenes Image) oder STT_BACKEND=http "
+                          "mit WHISPER_HTTP_URL setzen.")
+                except Exception as e:  # noqa: BLE001
+                    _send(token, configured_chat_id, f"Sprachnachricht konnte nicht verarbeitet werden: {e}")
+                if text:
+                    _send(token, configured_chat_id, f"🎤 verstanden: „{text}“")
+
         if text and incoming_chat_id == configured_chat_id:
             try:
                 _handle_message(db, settings, token, configured_chat_id, text)
