@@ -146,7 +146,7 @@ struct TodayView: View {
             }
         }
         .padding(20)
-        .background(
+        .background {
             ZStack(alignment: .trailing) {
                 KColor.surface
                 Image("AlpenBackground")
@@ -156,9 +156,9 @@ struct TodayView: View {
                     .clipped()
                     .opacity(0.055)
                     .mask(LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing))
-            },
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-        )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(KColor.divider, lineWidth: 1))
         .shadow(color: .black.opacity(0.035), radius: 18, x: 0, y: 7)
     }
@@ -341,14 +341,15 @@ struct TodayView: View {
 struct NeonRangeButton: ButtonStyle {
     let active: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+    func makeBody(configuration: ButtonStyle.Configuration) -> some View {
+        let pressed = configuration.isPressed
+        return configuration.label
             .font(.caption.weight(.bold))
             .foregroundStyle(active ? KColor.accentInk : KColor.secondary)
             .padding(.horizontal, 11)
             .padding(.vertical, 7)
             .background(active ? KColor.accent : KColor.surfaceSoft, in: Capsule())
             .overlay(Capsule().stroke(active ? KColor.accent : KColor.divider, lineWidth: 1))
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .scaleEffect(pressed ? 0.96 : 1)
     }
 }
