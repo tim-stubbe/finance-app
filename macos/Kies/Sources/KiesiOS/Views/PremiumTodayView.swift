@@ -3,9 +3,9 @@ import Charts
 import KiesCore
 import GRDB
 
-/// Premium banking-style dashboard. It deliberately avoids a card-per-section
-/// layout: one hero, horizontal account rail, transaction feed and a compact
-/// monthly pulse. The chart is interactive and all navigation remains native.
+/// Premium banking-style dashboard. One strong financial hero, an interactive
+/// wealth chart, horizontal account rail, clean transaction feed and a compact
+/// monthly pulse. Existing data sources and navigation are preserved.
 struct PremiumTodayView: View {
     @ObservedObject private var engine = SyncEngine.shared
     @StateObject private var netWorth = Box(0.0)
@@ -45,9 +45,7 @@ struct PremiumTodayView: View {
         .refreshable { await engine.run() }
         .task { reload() }
         .onChange(of: engine.lastSyncedAt) { _, _ in reload() }
-        .sheet(isPresented: $showQuickCapture) {
-            QuickCaptureView()
-        }
+        .sheet(isPresented: $showQuickCapture) { QuickCaptureView() }
         .sheet(isPresented: $showBalanceDetails) {
             NavigationStack {
                 PremiumBalanceDetailView(series: netSeries.value, current: netWorth.value)
@@ -70,23 +68,26 @@ struct PremiumTodayView: View {
                     .foregroundStyle(KColor.primary)
             }
             Spacer()
-            HStack(spacing: 9) {
-                NavigationLink { SettingsView() } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(KColor.primary)
+            HStack(spacing: 8) {
+                Button {
+                    Task { await engine.run() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(KColor.accent)
                         .frame(width: 40, height: 40)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                Button { showQuickCapture = true } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(KColor.accent, in: Circle())
+                        .background(KColor.accent.opacity(0.10), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Schnell erfassen")
+                .accessibilityLabel("Jetzt synchronisieren")
+
+                NavigationLink { SettingsView() } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(KColor.primary)
+                        .frame(width: 40, height: 40)
+                        .background(KColor.surfaceSecondary, in: Circle())
+                }
             }
         }
     }
@@ -136,19 +137,16 @@ struct PremiumTodayView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(KColor.secondary)
-                .transition(.opacity)
             }
 
             if netSeries.value.count > 1 {
                 Chart(netSeries.value) { point in
                     AreaMark(x: .value("Datum", point.date), y: .value("Vermögen", point.value))
-                        .foregroundStyle(
-                            .linearGradient(
-                                colors: [KColor.accent.opacity(0.28), KColor.accent.opacity(0.015)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .foregroundStyle(.linearGradient(
+                            colors: [KColor.accent.opacity(0.28), KColor.accent.opacity(0.01)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
                         .interpolationMethod(.catmullRom)
                     LineMark(x: .value("Datum", point.date), y: .value("Vermögen", point.value))
                         .foregroundStyle(KColor.accent)
@@ -224,17 +222,22 @@ struct PremiumTodayView: View {
     private var accountsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader("Konten") { TabRouter.shared.selection = .accounts }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(accounts.value.prefix(6), id: \.account.id) { row in
-                        Button { TabRouter.shared.selection = .accounts } label: {
-                            accountCard(row.account, balance: row.balance)
+            if accounts.value.isEmpty {
+                Text("Noch keine Konten synchronisiert.")
+                    .font(.subheadline)
+                    .foregroundStyle(KColor.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(accounts.value.prefix(6), id: \.account.id) { row in
+                            Button { TabRouter.shared.selection = .accounts } label: {
+                                accountCard(row.account, balance: row.balance)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
-            .contentMargins(.trailing, 4, for: .scrollContent)
         }
     }
 
@@ -354,9 +357,7 @@ struct PremiumTodayView: View {
 
     private func sectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
         HStack {
-            Text(title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(KColor.primary)
+            Text(title).font(.headline.weight(.semibold)).foregroundStyle(KColor.primary)
             Spacer()
             Button("Alle", action: action)
                 .font(.caption.weight(.semibold))
