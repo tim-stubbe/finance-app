@@ -42,6 +42,66 @@ function eur(n) {
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
+
+// ---------- Chart.js: einheitliche Defaults für ALLE Charts im System ----------
+// Hover-Tooltip erscheint überall auf der Kurve (nicht nur exakt auf einem
+// Punkt), mit senkrechter Hilfslinie und ausgeschriebenem Datum als Titel.
+// Legenden-Text mit vollem Kontrast (war je nach Theme in Pie-Charts kaum
+// lesbar). Wird bei jedem Theme-Wechsel neu gesetzt (applyTheme ruft es auf),
+// damit die Farben zum aktiven Theme passen.
+function kiesChartDate(label) {
+  if (label == null) return "";
+  const s = String(label);
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
+  const d = new Date(s.slice(0, 10) + "T00:00:00");
+  return isNaN(d) ? s : d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+if (typeof Chart !== "undefined" && !Chart.registry.plugins.get("kiesHoverLine")) {
+  Chart.register({
+    id: "kiesHoverLine",
+    afterDatasetsDraw(chart) {
+      // Nur bei kartesischen Charts (Linie/Balken) - nicht bei Pie/Doughnut.
+      if (!chart.scales || !chart.scales.x || !chart.chartArea) return;
+      const active = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : [];
+      if (!active.length) return;
+      const x = active[0].element.x;
+      const { top, bottom } = chart.chartArea;
+      const c = chart.ctx;
+      c.save();
+      c.beginPath();
+      c.moveTo(x, top);
+      c.lineTo(x, bottom);
+      c.lineWidth = 1;
+      c.strokeStyle = cssVar("--border-strong") || "rgba(255,255,255,0.25)";
+      c.setLineDash([3, 3]);
+      c.stroke();
+      c.restore();
+    },
+  });
+}
+
+function applyChartDefaults() {
+  if (typeof Chart === "undefined") return;
+  const d = Chart.defaults;
+  d.color = cssVar("--text-secondary");
+  d.font.family = getComputedStyle(document.body).fontFamily || d.font.family;
+  d.interaction = { mode: "index", intersect: false };
+  d.plugins.legend.labels.color = cssVar("--text");   // voller Kontrast (Pie-Legenden!)
+  Object.assign(d.plugins.tooltip, {
+    backgroundColor: cssVar("--surface-2"),
+    borderColor: cssVar("--border-strong"),
+    borderWidth: 1,
+    titleColor: cssVar("--text"),
+    bodyColor: cssVar("--text-secondary"),
+    padding: 10,
+    cornerRadius: 8,
+  });
+  // Datum als Tooltip-Titel, wenn das Label wie ein ISO-Datum aussieht.
+  d.plugins.tooltip.callbacks.title = items =>
+    items && items.length ? kiesChartDate(items[0].label) : "";
+}
+applyChartDefaults();
 const LOT_TYPE_LABELS = { kauf: "Kauf", verkauf: "Verkauf", staking: "Staking-Ertrag", dividende: "Dividende" };
 function lotTypeLabel(type) {
   return LOT_TYPE_LABELS[type] || type;
@@ -277,7 +337,7 @@ function renderCategoryPieChart(canvasId, existingInstance, labels, values) {
       plugins: {
         legend: {
           position: "right",
-          labels: { color: cssVar("--text-secondary"), font: { size: 12 }, boxWidth: 12, padding: 10 },
+          labels: { color: cssVar("--text"), font: { size: 12 }, boxWidth: 12, padding: 10 },
         },
         tooltip: {
           backgroundColor: cssVar("--surface-2"),
@@ -304,6 +364,7 @@ function applyTheme(theme) {
   try { localStorage.setItem("financeAppTheme", theme); } catch (e) {}
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) themeColorMeta.setAttribute("content", THEME_BG[theme] || THEME_BG.dark);
+  applyChartDefaults();
   document.querySelectorAll("#theme-switch .theme-option").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.themeOption === theme);
   });

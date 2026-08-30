@@ -225,7 +225,7 @@ function renderDebtBalanceChart(d, payments, scheduleRows) {
     options: {
       responsive: true, maintainAspectRatio: false, spanGaps: false,
       plugins: {
-        legend: { labels: { color: cssVar("--text-secondary"), boxWidth: 12 } },
+        legend: { labels: { color: cssVar("--text"), boxWidth: 12 } },
         tooltip: { callbacks: { label: c => `${c.dataset.label}: ${eur(c.parsed.y)}` } },
       },
       scales: {

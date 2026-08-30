@@ -185,45 +185,11 @@ document.getElementById("refresh-prices-btn").addEventListener("click", async ()
   loadInvestmentsTab();
 });
 
-// ---------- Chart-Hover: senkrechte Linie + Datum als Tooltip-Titel ----------
-// Ein Mal global registriert. Zeigt beim Hovern über einen Verlauf-Chart eine
-// dünne senkrechte Linie am nächstgelegenen Datenpunkt (auch zwischen zwei
-// Punkten, weil interaction.mode = "index").
-if (typeof Chart !== "undefined" && !Chart.registry.plugins.get("kiesHoverLine")) {
-  Chart.register({
-    id: "kiesHoverLine",
-    afterDatasetsDraw(chart) {
-      const active = chart.tooltip?.getActiveElements?.() || [];
-      if (!active.length) return;
-      const x = active[0].element.x;
-      const { top, bottom } = chart.chartArea;
-      const c = chart.ctx;
-      c.save();
-      c.beginPath();
-      c.moveTo(x, top);
-      c.lineTo(x, bottom);
-      c.lineWidth = 1;
-      c.strokeStyle = cssVar("--border-strong") || "rgba(255,255,255,0.25)";
-      c.setLineDash([3, 3]);
-      c.stroke();
-      c.restore();
-    },
-  });
-}
-
-// ISO-Datum -> "Fr, 31.05.2026" (bzw. Jahr weglassen wäre auch ok, aber im
-// Tooltip ist das Jahr hilfreich).
-function kiesChartDate(label) {
-  if (!label || !/^\d{4}-\d{2}-\d{2}/.test(label)) return label || "";
-  const d = new Date(label.slice(0, 10) + "T00:00:00");
-  return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-// Gemeinsame Hover-/Tooltip-Basis für die Verlauf-Charts.
-const KIES_LINE_HOVER = {
-  interaction: { mode: "index", intersect: false },
-  hover: { mode: "index", intersect: false },
-};
+// Chart-Hover (senkrechte Linie, Datum als Tooltip-Titel, index-Modus) läuft
+// seit 2026-08 global über core.js (applyChartDefaults + kiesHoverLine-Plugin).
+// KIES_LINE_HOVER hier nur noch als No-op-Alias, damit bestehende Spreads
+// nicht brechen.
+const KIES_LINE_HOVER = {};
 
 // ---------- Portfolio-Verlauf ----------
 async function loadPortfolioHistoryChart(range) {
@@ -368,7 +334,7 @@ function renderDonut(canvasId, slices) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom", labels: { color: cssVar("--text-secondary"), boxWidth: 11, font: { size: 11.5 }, padding: 10 } },
+        legend: { position: "bottom", labels: { color: cssVar("--text"), boxWidth: 11, font: { size: 11.5 }, padding: 10 } },
         tooltip: {
           backgroundColor: cssVar("--surface-2"), borderColor: cssVar("--border-strong"), borderWidth: 1,
           titleColor: cssVar("--text"), bodyColor: cssVar("--text-secondary"), padding: 10, cornerRadius: 8,
