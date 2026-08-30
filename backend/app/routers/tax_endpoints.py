@@ -16,10 +16,36 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, auth, tax
+from pydantic import BaseModel
+
+from .. import models, schemas, auth, tax, tax_advice
 from ..database import get_db
 
 tax_router = APIRouter(prefix="/api")
+
+
+class TaxAskIn(BaseModel):
+    question: str
+    year: Optional[int] = None
+
+
+@tax_router.get("/tax/tips")
+def get_tax_tips(year: Optional[int] = None, db: Session = Depends(get_db),
+                 space_id: int = Depends(auth.get_active_space_id)):
+    """Regelbasierte Steuer-Spar-Tipps aus den echten Daten (siehe
+    app/tax_advice.py) - für den Steuern-Tab. Keine Steuerberatung."""
+    settings = auth.get_or_create_settings(db)
+    return tax_advice.generate_tips(db, settings, space_id, year or date.today().year)
+
+
+@tax_router.post("/tax/ask")
+def ask_tax_question(data: TaxAskIn, db: Session = Depends(get_db),
+                     space_id: int = Depends(auth.get_active_space_id)):
+    """Freitext-Frage an die lokale KI, mit den berechneten Steuer-Fakten als
+    Kontext. Keine Cloud, mit Haftungshinweis im System-Prompt."""
+    settings = auth.get_or_create_settings(db)
+    return tax_advice.answer_question(db, settings, space_id, data.question,
+                                     data.year or date.today().year)
 
 
 @tax_router.get("/tax/basiszins", response_model=List[schemas.BasiszinsRateOut])
