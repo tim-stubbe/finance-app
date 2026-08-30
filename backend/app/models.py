@@ -314,6 +314,9 @@ class Settings(Base):
     proactive_assistant_last_sent_at = Column(DateTime, nullable=True)
     proactive_assistant_last_hash = Column(String, nullable=True)
     proactive_assistant_last_snapshot_hash = Column(String, nullable=True)
+    # Nur den proaktiven Assistenten pausieren (per Telegram "/proaktiv pause N"),
+    # ohne alle Benachrichtigungen stumm zu schalten wie quiet_until.
+    proactive_assistant_snoozed_until = Column(DateTime, nullable=True)
     # --- Quiet Mode (Ruhezeiten) - zentral in notifications.notify() geprüft,
     # siehe dort. quiet_until ist die manuelle "Ruhe bis HH:MM"-Überschreibung
     # (App + Telegram /ruhe), unabhängig von den festen Ruhezeiten.

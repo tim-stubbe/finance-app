@@ -57,6 +57,36 @@ def test_nichts_is_swallowed(client, monkeypatch):
         db.close()
 
 
+def test_snooze_blocks(client, monkeypatch):
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: "Etwas Nützliches passiert gerade.")
+    db, s = _settings(proactive_assistant_snoozed_until=datetime.utcnow() + timedelta(hours=3))
+    try:
+        assert proactive.generate(db, s) is None
+        # abgelaufene Pause -> wieder aktiv
+        s.proactive_assistant_snoozed_until = datetime.utcnow() - timedelta(minutes=1)
+        db.commit()
+        assert proactive.generate(db, s) is not None
+    finally:
+        db.close()
+
+
+def test_telegram_proaktiv_command(client, monkeypatch):
+    from app import telegram_bot
+    sent = []
+    monkeypatch.setattr(telegram_bot, "_send", lambda tok, cid, msg: sent.append(msg))
+    db, s = _settings()
+    try:
+        assert telegram_bot._handle_proactive_command(db, s, "t", "c", "/proaktiv aus")
+        assert s.proactive_assistant_enabled is False
+        assert telegram_bot._handle_proactive_command(db, s, "t", "c", "/proaktiv an")
+        assert s.proactive_assistant_enabled is True
+        assert telegram_bot._handle_proactive_command(db, s, "t", "c", "/proaktiv pause 5")
+        assert s.proactive_assistant_snoozed_until > datetime.utcnow() + timedelta(hours=4)
+        assert not telegram_bot._handle_proactive_command(db, s, "t", "c", "/etwas anderes")
+    finally:
+        db.close()
+
+
 def test_real_suggestion_then_cooldown_and_dedup(client, monkeypatch):
     monkeypatch.setattr(ollama_client, "chat",
                         lambda *a, **k: "Dein Budget für Essen ist zu 90 % ausgeschöpft, noch 8 Tage im Monat.")

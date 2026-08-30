@@ -103,6 +103,12 @@ _SUGGESTION_LATER_CMD_RE = re.compile(r"^/sp(ä|ae)ter\s*$", re.IGNORECASE)
 _SUGGESTION_DISMISS_CMD_RE = re.compile(r"^/verwerfen\s*$", re.IGNORECASE)
 # Format: /haengt - Zusammenfassung auf Zuruf (siehe crud.get_hanging_items).
 _HANGING_CMD_RE = re.compile(r"^/h(ä|ae)ngt\s*$", re.IGNORECASE)
+# Format: /proaktiv [an|aus|pause [N]] - proaktiven KI-Assistenten steuern
+# (siehe proactive.py / main._scheduled_proactive_assistant). Ohne Argument:
+# Status. "pause" ohne Zahl = 6 Stunden.
+_PROACTIVE_CMD_RE = re.compile(
+    r"^/proaktiv(?:\s+(an|ein|aus|off|on|pause|snooze)(?:\s+(\d{1,3}))?)?\s*$", re.IGNORECASE,
+)
 # Format: /ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
 # Abschnitt D). Bewusst ein FESTES Kommando statt KI-Freitext-Erkennung wie
 # bei Todo/Termin/Projekt/Leben (siehe _execute_action) - bei Geld soll
@@ -568,6 +574,48 @@ def _handle_quiet_command(db, settings, token: str, chat_id: str, text: str) -> 
     return True
 
 
+def _handle_proactive_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/proaktiv steuert den proaktiven KI-Assistenten (siehe proactive.py):
+    ohne Argument Status, "an"/"aus" schaltet ihn um, "pause [N]" legt ihn
+    für N Stunden (Default 6) schlafen, ohne alle Benachrichtigungen stumm
+    zu schalten."""
+    m = _PROACTIVE_CMD_RE.match(text.strip())
+    if not m:
+        return False
+    verb = (m.group(1) or "").lower()
+
+    if verb in ("aus", "off"):
+        settings.proactive_assistant_enabled = False
+        db.commit()
+        _send(token, chat_id, "🤖 Proaktiver Assistent aus. Wieder an mit /proaktiv an.")
+        return True
+    if verb in ("an", "ein", "on"):
+        settings.proactive_assistant_enabled = True
+        settings.proactive_assistant_snoozed_until = None
+        db.commit()
+        _send(token, chat_id, "🤖 Proaktiver Assistent an - meldet sich, sobald es etwas Nützliches gibt.")
+        return True
+    if verb in ("pause", "snooze"):
+        hours = int(m.group(2)) if m.group(2) else 6
+        hours = max(1, min(hours, 72))
+        until = datetime.utcnow() + timedelta(hours=hours)
+        settings.proactive_assistant_snoozed_until = until
+        db.commit()
+        local = datetime.now() + timedelta(hours=hours)
+        _send(token, chat_id, f"🤖 Proaktiver Assistent pausiert bis {local.strftime('%d.%m. %H:%M')}.")
+        return True
+
+    # Nur "/proaktiv" -> Status
+    if not settings.proactive_assistant_enabled:
+        _send(token, chat_id, "🤖 Proaktiver Assistent ist aus. Einschalten: /proaktiv an")
+    elif settings.proactive_assistant_snoozed_until and datetime.utcnow() < settings.proactive_assistant_snoozed_until:
+        local = settings.proactive_assistant_snoozed_until + (datetime.now() - datetime.utcnow())
+        _send(token, chat_id, f"🤖 Proaktiver Assistent an, aber pausiert bis {local.strftime('%d.%m. %H:%M')}.")
+    else:
+        _send(token, chat_id, "🤖 Proaktiver Assistent ist an. /proaktiv pause 6 für eine Pause, /proaktiv aus zum Abschalten.")
+    return True
+
+
 def _handle_suggestion_reply(db, settings, token: str, chat_id: str, text: str) -> bool:
     """/ok, /später (oder /spaeter), /verwerfen - Antwort auf den aktuell
     einzigen offenen Jarvis-Vorschlag (siehe crud.decide_pending_suggestion)."""
@@ -827,6 +875,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_wishlist_add_command(db, settings, token, chat_id, text):
         return
     if _handle_quiet_command(db, settings, token, chat_id, text):
+        return
+    if _handle_proactive_command(db, settings, token, chat_id, text):
         return
     if _handle_suggestion_reply(db, settings, token, chat_id, text):
         return

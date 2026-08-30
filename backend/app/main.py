@@ -278,6 +278,7 @@ ensure_columns("settings", {
     "proactive_assistant_last_sent_at": "DATETIME",
     "proactive_assistant_last_hash": "VARCHAR",
     "proactive_assistant_last_snapshot_hash": "VARCHAR",
+    "proactive_assistant_snoozed_until": "DATETIME",
     "quiet_hours_enabled": "BOOLEAN DEFAULT 0",
     "quiet_hours_start_hour": "INTEGER DEFAULT 22",
     "quiet_hours_end_hour": "INTEGER DEFAULT 7",
@@ -1942,7 +1943,10 @@ def _scheduled_proactive_assistant():
         result = proactive.generate(db, settings)
         if result:
             text, digest = result
-            notifications.notify(settings, "🤖 " + text)
+            notifications.notify(
+                settings,
+                "🤖 " + text + "\n\n(/proaktiv pause 6 für Ruhe · /proaktiv aus zum Abschalten)",
+            )
             settings.proactive_assistant_last_sent_at = datetime.utcnow()
             settings.proactive_assistant_last_hash = digest
         # Immer committen: generate() schreibt auch ohne Meldung den

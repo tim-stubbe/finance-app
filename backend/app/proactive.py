@@ -167,6 +167,10 @@ def generate(db, settings) -> tuple[str, str] | None:
     if not (settings.ollama_url and model):
         return None
 
+    snoozed = getattr(settings, "proactive_assistant_snoozed_until", None)
+    if snoozed and datetime.utcnow() < snoozed:
+        return None
+
     last = settings.proactive_assistant_last_sent_at
     if last and (datetime.utcnow() - last).total_seconds() < _MIN_GAP_SECONDS:
         return None
