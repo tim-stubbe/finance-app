@@ -1,16 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// UIKit-Appearance für Navigations- und Tab-Leiste - bewusst zurückhaltend:
-/// System-Material als Hintergrund (passt sich Light/Dark an), Blau als
-/// Auswahlfarbe, System-Font (SF Pro). Kein warmer Ton, keine Serifen mehr.
 enum KiesAppearance {
     static func apply() {
-        let accent = UIColor(KColor.accent)
+        let accent = UIColor(KColor.accentStrong)
 
         let nav = UINavigationBarAppearance()
         nav.configureWithDefaultBackground()
-        nav.shadowColor = .clear
+        nav.backgroundColor = UIColor(KColor.surface)
+        nav.shadowColor = UIColor(KColor.divider)
         nav.largeTitleTextAttributes = [.foregroundColor: UIColor(KColor.primary)]
         nav.titleTextAttributes = [.foregroundColor: UIColor(KColor.primary)]
         UINavigationBar.appearance().standardAppearance = nav
@@ -20,9 +18,13 @@ enum KiesAppearance {
 
         let tab = UITabBarAppearance()
         tab.configureWithDefaultBackground()
+        tab.backgroundColor = UIColor(KColor.surface)
+        tab.shadowColor = UIColor(KColor.divider)
         for item in [tab.stackedLayoutAppearance, tab.inlineLayoutAppearance, tab.compactInlineLayoutAppearance] {
             item.selected.iconColor = accent
             item.selected.titleTextAttributes = [.foregroundColor: accent]
+            item.normal.iconColor = UIColor(KColor.tertiary)
+            item.normal.titleTextAttributes = [.foregroundColor: UIColor(KColor.secondary)]
         }
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
