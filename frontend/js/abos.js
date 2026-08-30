@@ -191,7 +191,7 @@ async function loadRecurringTab() {
   const tbody = document.getElementById("recurring-list");
   tbody.innerHTML = "";
   if (items.length === 0) {
-    tbody.innerHTML = emptyRow(11, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
+    tbody.innerHTML = emptyRow(12, "repeat", "Noch keine wiederkehrenden Zahlungen erkannt (mindestens 3 ähnliche Buchungen mit regelmäßigem Abstand nötig).");
   }
   let monthlyTotal = 0;
   items.forEach(it => {
@@ -218,11 +218,16 @@ async function loadRecurringTab() {
     }
     const tr = document.createElement("tr");
     if (reminder && reminder.due) tr.classList.add("row-warning");
+    const histBtn = `<button type="button" class="btn-ghost btn-sm" data-rec-history
+        data-rec-account="${it.account_id}" data-rec-key="${esc(it.description_key)}"
+        data-rec-label="${esc(it.description || "–")}" data-rec-freq="${it.frequency}"
+        title="Alle Buchungen dieses Abos – wann was abgerechnet wurde">📜 Verlauf</button>`;
     tr.innerHTML = `
       <td><button type="button" class="link-btn" data-rec-history
         data-rec-account="${it.account_id}" data-rec-key="${esc(it.description_key)}"
         data-rec-label="${esc(it.description || "–")}" data-rec-freq="${it.frequency}"
-        title="Buchungsverlauf dieses Abos">${esc(it.description || "–")}</button></td>
+        title="Buchungsverlauf dieses Abos">${esc(it.description || "–")}</button>
+        <span class="page-sub" style="display:block">${it.occurrences}× · zuletzt ${fmtDate(it.last_date)}</span></td>
       <td>${it.account_name || "–"}</td>
       <td>${it.category_name || "–"}</td>
       <td>${RECURRING_FREQ_LABELS[it.frequency] || it.frequency}</td>
@@ -230,6 +235,7 @@ async function loadRecurringTab() {
       <td>${eur(monthlyCost * 12)}</td>
       <td>${fmtDate(it.next_expected_date)}</td>
       <td>${eur(it.total_amount)}</td>
+      <td>${histBtn}</td>
       <td>${noticeCell}</td>
       <td>${it.avg_amount < 0 ? `<button type="button" class="btn-ghost btn-sm" data-savings-key="${esc(it.description_key)}">💡 Was spare ich?</button>` : ""}</td>
       <td><button type="button" class="btn-ghost btn-sm" data-ignore-account="${it.account_id}" data-ignore-key="${esc(it.description_key)}" data-ignore-label="${esc(it.description || "")}">🚫 Ignorieren</button></td>`;
@@ -497,12 +503,22 @@ async function openRecurringHistory(accountId, descriptionKey, label, freq) {
   document.getElementById("recurring-history-sub").textContent =
     `${RECURRING_FREQ_LABELS[freq] || freq || ""} · ${rows.length} Buchung${rows.length === 1 ? "" : "en"} · Summe ${eur(sum)}`;
   body.innerHTML = rows.length
-    ? rows.map(r => `<tr>
-        <td>${fmtDate(r.date)}</td>
-        <td>${esc(r.description || "–")}</td>
-        <td>${esc(r.category_name || "–")}</td>
-        <td class="num ${r.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(r.amount)}</td>
-      </tr>`).join("")
+    ? rows.map((r, i) => {
+        // rows sind neueste zuerst -> Abstand zur nächst-älteren Buchung
+        const older = rows[i + 1];
+        let gap = "";
+        if (older) {
+          const d1 = new Date(r.date), d0 = new Date(older.date);
+          const days = Math.round((d1 - d0) / 86400000);
+          if (isFinite(days)) gap = `<span class="page-sub"> · +${days} T</span>`;
+        }
+        return `<tr>
+          <td>${fmtDate(r.date)}${gap}</td>
+          <td>${esc(r.description || "–")}</td>
+          <td>${esc(r.category_name || "–")}</td>
+          <td class="num ${r.amount >= 0 ? "row-amount-pos" : "row-amount-neg"}">${eur(r.amount)}</td>
+        </tr>`;
+      }).join("")
     : `<tr><td colspan="4" class="page-sub">Keine Einzelbuchungen gefunden.</td></tr>`;
 }
 window.openRecurringHistory = openRecurringHistory;
