@@ -142,6 +142,29 @@ def send_test_ha_announce(db: Session = Depends(get_db)):
     return schemas.NotificationTestResult(ok=True, message="Ansage ausgelöst – hör auf deinen Lautsprecher.")
 
 
+@notify_settings_router.post("/notifications/proactive-feedback", response_model=schemas.NotificationTestResult)
+def submit_proactive_feedback(data: schemas.ProactiveFeedbackIn, db: Session = Depends(get_db)):
+    """Rückmeldung zu einer proaktiven Meldung direkt aus der Web-App - dasselbe
+    wie /nützlich bzw. /unnötig in Telegram (siehe telegram_bot und
+    proactive._feedback_hint). Der Text kommt vom Client (steht ohnehin schon
+    im Verlauf), das führende "🤖 " und der Kommando-Hinweis werden abgeschnitten."""
+    text = (data.text or "").strip()
+    if text.startswith("🤖"):
+        text = text[1:].strip()
+    for marker in ("\n\n(/nützlich", "\n\n(/proaktiv"):
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx].strip()
+    if not text:
+        return schemas.NotificationTestResult(ok=False, message="Kein Text zum Bewerten.")
+    db.add(models.ProactiveFeedback(text=text[:1000], useful=data.useful))
+    db.commit()
+    return schemas.NotificationTestResult(
+        ok=True,
+        message="Notiert – mehr in die Richtung." if data.useful else "Verstanden – so etwas künftig seltener.",
+    )
+
+
 @notify_settings_router.get("/notifications/log", response_model=List[schemas.NotificationLogEntry])
 def get_notification_log(limit: int = 40, db: Session = Depends(get_db)):
     """Verlauf der zuletzt von Kies verschickten (bzw. wegen Ruhezeiten

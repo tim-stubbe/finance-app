@@ -1177,6 +1177,12 @@ input::placeholder { color: var(--muted); }
 }
 .notif-log-when { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
 .notif-log-muted { color: var(--muted); font-style: italic; }
+.notif-log-rate { margin-left: 6px; white-space: nowrap; }
+.notif-rate-btn {
+  border: none; background: none; cursor: pointer; padding: 0 2px;
+  font-size: 1em; line-height: 1; opacity: 0.65;
+}
+.notif-rate-btn:hover { opacity: 1; }
 
 /* Native Checkboxen sehen je nach Betriebssystem sehr unterschiedlich (und
    ziemlich datiert) aus - accent-color faerbt sie einheitlich im Akzentton

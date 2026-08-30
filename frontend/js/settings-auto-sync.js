@@ -123,8 +123,29 @@ async function loadNotificationLog() {
     const when = new Date(r.created_at + (r.created_at.endsWith("Z") ? "" : "Z"))
       .toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
     const badge = r.sent ? "" : ` <span class="notif-log-muted">(Ruhezeit – nicht gesendet)</span>`;
-    return `<li><span class="notif-log-when">${when}</span> ${esc(r.text)}${badge}</li>`;
+    // Proaktive Meldungen (🤖) lassen sich hier genauso bewerten wie per
+    // /nützlich · /unnötig in Telegram (fließt in proactive._feedback_hint ein).
+    const rateable = r.text.trimStart().startsWith("🤖");
+    const rate = rateable
+      ? ` <span class="notif-log-rate" data-text="${esc(r.text)}">`
+        + `<button type="button" class="notif-rate-btn" data-useful="1" title="nützlich">👍</button>`
+        + `<button type="button" class="notif-rate-btn" data-useful="0" title="unnötig">👎</button></span>`
+      : "";
+    return `<li><span class="notif-log-when">${when}</span> ${esc(r.text)}${badge}${rate}</li>`;
   }).join("");
+  ul.querySelectorAll(".notif-rate-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const wrap = btn.closest(".notif-log-rate");
+      const useful = btn.dataset.useful === "1";
+      try {
+        const res = await api("/notifications/proactive-feedback", {
+          method: "POST",
+          body: JSON.stringify({ text: wrap.dataset.text, useful }),
+        });
+        wrap.innerHTML = `<span class="notif-log-muted">${esc(res.message)}</span>`;
+      } catch (e) { /* api() zeigt den Fehler bereits an */ }
+    });
+  });
 }
 
 document.getElementById("notifications-settings-form").addEventListener("submit", async e => {

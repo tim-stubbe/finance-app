@@ -1628,6 +1628,11 @@ class NotificationLogEntry(BaseModel):
     sent: bool
 
 
+class ProactiveFeedbackIn(BaseModel):
+    text: str
+    useful: bool
+
+
 # ---------- Echte Anrufe (Twilio) ----------
 class CallSettingsOut(BaseModel):
     enabled: bool

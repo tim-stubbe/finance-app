@@ -60,3 +60,22 @@ def test_log_endpoint(client, monkeypatch):
     r = client.get("/api/notifications/log?limit=10")
     assert r.status_code == 200
     assert any(row["text"] == "Endpunkt-Test" for row in r.json())
+
+
+def test_proactive_feedback_endpoint(client):
+    client.post("/api/auth/setup", json={"password": "Sicheres-Testpasswort-123"})
+    client.headers["X-CSRF-Token"] = client.cookies.get("csrf_token")
+    r = client.post("/api/notifications/proactive-feedback", json={
+        "text": "🤖 Dein Essens-Budget ist fast aufgebraucht.\n\n(/nützlich · /unnötig · /proaktiv pause 6)",
+        "useful": False,
+    })
+    assert r.status_code == 200 and r.json()["ok"] is True
+    db = SessionLocal()
+    try:
+        rows = db.query(models.ProactiveFeedback).all()
+        assert len(rows) == 1
+        assert rows[0].useful is False
+        # 🤖-Präfix und Kommando-Hinweis abgeschnitten
+        assert rows[0].text == "Dein Essens-Budget ist fast aufgebraucht."
+    finally:
+        db.close()
