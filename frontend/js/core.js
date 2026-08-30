@@ -355,6 +355,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "debts") loadDebtsTab();
     if (btn.dataset.tab === "goals") loadGoalsTab();
     if (btn.dataset.tab === "schweiz") loadSchweizGoalsTab();
+    if (btn.dataset.tab === "steuern") loadSteuernTab();
     if (btn.dataset.tab === "ai") loadAiTab();
     if (btn.dataset.tab === "trips") loadTrips();
     if (btn.dataset.tab === "projects") loadProjectsTab();

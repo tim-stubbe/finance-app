@@ -1958,6 +1958,43 @@ def _scheduled_smarthome_automation_suggestions():
         db.close()
 
 
+def _scheduled_tax_reminder():
+    """November + Dezember, wöchentlich: die zwei wichtigsten Steuer-Spar-
+    Ansätze (Tax-Loss-Harvesting, Freibetrag/Säule 3a - alles, was noch VOR
+    dem 31.12. passieren muss) als EIN Sammel-Hinweis in die bestehende
+    Vorschlags-Queue. Dedupliziert pro Jahr, kein tägliches Nachfragen."""
+    if date.today().month not in (11, 12):
+        return
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not settings.notifications_enabled:
+            return
+        from . import tax_advice
+        spaces = crud.get_spaces(db)
+        space_id = spaces[0].id if spaces else 1
+        year = date.today().year
+        try:
+            data = tax_advice.generate_tips(db, settings, space_id, year)
+        except Exception:  # noqa: BLE001
+            return
+        actionable = [t for t in data["tips"] if t["severity"] in ("hoch", "mittel")]
+        if not actionable:
+            return
+        top = "; ".join(t["title"] for t in actionable[:3])
+        suggestion = crud.create_suggestion_if_new(
+            db, kind="tax_year_end", ref_id=year,
+            title=f"Vor dem 31.12.: {top} (Steuern-Tab)",
+        )
+        if suggestion:
+            notifications.notify(
+                settings,
+                f"🧾 Vorschlag: {suggestion.title}\nAntworte mit /ok, /später oder /verwerfen.",
+            )
+    finally:
+        db.close()
+
+
 def _scheduled_proactive_assistant():
     """Alle paar Minuten: lässt die lokale KI über einen breiten Lebens-
     Snapshot schauen und meldet sich per Telegram, wenn dabei eine nützliche
@@ -2339,6 +2376,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_proactive_assistant, CronTrigger(minute="*/5"),
     id="proactive_assistant", misfire_grace_time=300, max_instances=1, coalesce=True,
+)
+scheduler.add_job(
+    _scheduled_tax_reminder, CronTrigger(day_of_week="mon", hour=9, minute=0),
+    id="tax_year_end_reminder", misfire_grace_time=3600,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es

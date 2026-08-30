@@ -126,6 +126,9 @@ _EXPENSE_CMD_RE = re.compile(
 # Format: /haus <Befehl> - Smart-Home-Steuerung/Abfrage ueber dieselbe
 # Pipeline wie der Smart-Home-Tab (siehe smarthome.process_command).
 _HOME_CMD_RE = re.compile(r"^/haus\s+(.+)$", re.IGNORECASE | re.DOTALL)
+# Format: /steuer - die wichtigsten Steuer-Spar-Ansaetze auf Zuruf
+# (siehe tax_advice.generate_tips). Ohne Argument.
+_STEUER_CMD_RE = re.compile(r"^/steuer\s*$", re.IGNORECASE)
 
 TELEGRAM_SYSTEM_PROMPT = """Du bist der KI-Assistent von Kies, einem privaten Finanztool, hier per Telegram erreichbar. \
 Antworte immer kurz und freundlich auf Deutsch.
@@ -722,6 +725,28 @@ def _handle_home_command(db, settings, token: str, chat_id: str, text: str) -> b
     return True
 
 
+def _handle_steuer_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/steuer - die wichtigsten Steuer-Spar-Ansaetze auf Zuruf (regelbasiert,
+    siehe tax_advice.generate_tips). Keine Steuerberatung."""
+    if not _STEUER_CMD_RE.match(text.strip()):
+        return False
+    from . import tax_advice
+    space = crud.get_spaces(db)[0]
+    try:
+        data = tax_advice.generate_tips(db, settings, space.id, date.today().year)
+    except Exception as exc:  # noqa: BLE001
+        _send(token, chat_id, f"Konnte die Steuer-Tipps nicht berechnen: {exc}")
+        return True
+    tips = data["tips"][:5]
+    land = "Schweiz" if data["country"] == "CH" else "Deutschland"
+    if not tips:
+        _send(token, chat_id, f"🧾 Steuern ({land}): aktuell keine offensichtlichen Ansatzpunkte.")
+        return True
+    body = "\n\n".join(f"• {t['title']}\n{t['detail']}" for t in tips)
+    _send(token, chat_id, f"🧾 Steuern sparen ({land}) – keine Steuerberatung:\n\n{body}")
+    return True
+
+
 def _handle_expense_command(db, settings, token: str, chat_id: str, text: str) -> bool:
     """/ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
     Abschnitt D). Legt die Buchung sofort an (Betrag als Ausgabe, also negativ,
@@ -951,6 +976,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_home_command(db, settings, token, chat_id, text):
         return
     if _handle_expense_command(db, settings, token, chat_id, text):
+        return
+    if _handle_steuer_command(db, settings, token, chat_id, text):
         return
 
     # Freier Text, der klar das Haus meint ("mach das licht im bad aus") -

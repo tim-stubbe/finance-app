@@ -80,3 +80,18 @@ def test_ask_without_ollama_is_soft_error(auth_client):
     r = auth_client.post("/api/tax/ask", json={"question": "Wie spare ich Steuern?"})
     assert r.status_code == 200
     assert r.json()["ok"] is False
+
+
+def test_telegram_steuer_command(auth_client, monkeypatch):
+    from app import telegram_bot
+    _set_country("DE")
+    sent = []
+    monkeypatch.setattr(telegram_bot, "_send", lambda tok, cid, msg: sent.append(msg))
+    db = SessionLocal()
+    try:
+        s = auth.get_or_create_settings(db)
+        assert telegram_bot._handle_steuer_command(db, s, "t", "c", "/steuer")
+        assert not telegram_bot._handle_steuer_command(db, s, "t", "c", "/anderes")
+    finally:
+        db.close()
+    assert sent and "Steuern sparen" in sent[0] and "keine Steuerberatung" in sent[0]

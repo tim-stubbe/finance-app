@@ -37,7 +37,7 @@
 // (auffindbar) -> Browser bietet auch Bitwarden/Telefon an statt nur Geraet.
 // v53: Multi-User Phase 1 - User-Tabelle, Login mit Name, Personen-Verwaltung
 // in den Einstellungen. Auth haengt jetzt an models.User statt am Settings-Singleton.
-const CACHE_NAME = "finanztool-shell-v74";
+const CACHE_NAME = "finanztool-shell-v75";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.jpg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -55,7 +55,7 @@ const SHELL_ASSETS = [
   "/js/auth-login.js", "/js/settings-assistent.js", "/js/quick-capture.js",
   "/js/settings-search.js", "/js/bottom-nav.js", "/js/vehicle.js",
   "/js/smarthome.js", "/js/smarthome-floorplan.js", "/js/smarthome-automations.js",
-  "/js/settings-smarthome.js", "/js/meals.js", "/js/cockpit.js",
+  "/js/settings-smarthome.js", "/js/meals.js", "/js/cockpit.js", "/js/steuern.js",
 ];
 
 self.addEventListener("install", event => {

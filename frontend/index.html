@@ -174,6 +174,10 @@
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v10M7 12h10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         <span>Schweiz</span>
       </button>
+      <button class="nav-btn" data-tab="steuern">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l5 5v15H6V2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5M9 13h6M9 17h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>Steuern</span>
+      </button>
 
       <span class="nav-section-label">Mehr</span>
       <button class="nav-btn" data-tab="ai">
@@ -2031,6 +2035,38 @@
       </div>
     </div>
 
+    <!-- STEUERN (Spar-Tipps aus den echten Daten – keine Steuerberatung) -->
+    <section id="tab-steuern" class="tab-content">
+      <header class="page-head">
+        <div>
+          <h1>Steuern sparen</h1>
+          <p class="page-sub">Konkrete Ansatzpunkte aus deinen echten Zahlen (Depot, Freibetrag, Ausgaben) – Land richtet sich nach <strong id="steuern-country">Deutschland</strong> (Einstellungen → Land). <strong>Keine Steuerberatung</strong>, nur Orientierung.</p>
+        </div>
+        <div class="page-head-actions">
+          <select id="steuern-year"></select>
+        </div>
+      </header>
+
+      <div class="cards" id="steuern-summary-cards"></div>
+
+      <div class="panel">
+        <h3 class="panel-title">Spar-Ansätze</h3>
+        <div id="steuern-tips"><p class="page-sub">Wird geladen …</p></div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">Steuer-Frage stellen</h3>
+        <p class="page-sub">Freitext an die lokale KI – sie kennt deine oben berechneten Zahlen. Kein Cloud-Dienst, keine verbindliche Auskunft.</p>
+        <form id="steuern-ask-form" class="chat-input-row">
+          <input type="text" id="steuern-ask-input" placeholder="z. B. „Lohnt sich Tax-Loss-Harvesting für mich dieses Jahr?“" autocomplete="off">
+          <button type="submit" class="btn-primary">Fragen</button>
+        </form>
+        <div id="steuern-ask-reply" class="chat-reply hidden"></div>
+      </div>
+
+      <p class="page-sub">Der rückblickende Report (Vorabpauschale-Details, realisierte Gewinne je Verkauf) liegt weiterhin unter <a href="#" id="steuern-goto-report">Investments → Steuer</a>.</p>
+    </section>
+
     <!-- LEBEN (persönliche Lebensbereiche, außerhalb der Finanzen) -->
     <section id="tab-life" class="tab-content">
       <header class="page-head">
@@ -3736,6 +3772,7 @@
 <script src="js/quick-capture.js"></script>
 <script src="js/bottom-nav.js"></script>
 <script src="js/ziele.js"></script>
+<script src="js/steuern.js"></script>
 <script src="js/init.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/jahresrueckblick.js"></script>

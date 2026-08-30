@@ -4045,3 +4045,17 @@ body.cockpit-active { overflow: hidden; }
 #cockpit-root .ck-vrow em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 #cockpit-root .ck-fp-card #ck-floorplan-slot .panel { border: none; padding: 0; margin: 0; background: none; }
 #cockpit-root .ck-fp-card .sh-fp-stage { max-height: 260px; }
+
+/* ================= STEUERN-TAB (js/steuern.js) ================= */
+.steuern-tip { border: 1px solid var(--border); border-left: 3px solid var(--muted); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--card, rgba(255,255,255,0.02)); }
+.steuern-tip.sev-high { border-left-color: var(--negative, #e5484d); }
+.steuern-tip.sev-mid  { border-left-color: var(--accent-strong, #5aa0ee); }
+.steuern-tip.sev-info { border-left-color: var(--muted); }
+.steuern-tip-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.steuern-tip-head strong { font-size: 15px; }
+.steuern-badge { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 999px; background: var(--accent-wash); color: var(--text-secondary); }
+.steuern-tip.sev-high .steuern-badge { background: rgba(229,72,77,0.16); color: var(--negative, #e5484d); }
+.steuern-area { margin-left: auto; font-size: 12px; color: var(--muted); }
+.steuern-tip p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.45; }
+#steuern-ask-reply.chat-reply { margin-top: 10px; white-space: pre-wrap; }
+#steuern-ask-reply.is-error { color: var(--negative, #e5484d); }
