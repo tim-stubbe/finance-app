@@ -57,6 +57,21 @@ def test_nichts_is_swallowed(client, monkeypatch):
         db.close()
 
 
+def test_snapshot_includes_health_trends(client):
+    db = SessionLocal()
+    s = auth.get_or_create_settings(db)
+    try:
+        for i in range(4):
+            db.add(models.HealthMetric(metric_type=models.HealthMetricType.schlaf,
+                                       date=date.today() - timedelta(days=i), value=5.2))
+        db.commit()
+        snap = proactive.build_snapshot(db, s, 1)
+        assert "Schlaf: zuletzt" in snap
+        assert "3 Nächte in Folge unter 6 h" in snap
+    finally:
+        db.close()
+
+
 def test_snooze_blocks(client, monkeypatch):
     monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: "Etwas Nützliches passiert gerade.")
     db, s = _settings(proactive_assistant_snoozed_until=datetime.utcnow() + timedelta(hours=3))

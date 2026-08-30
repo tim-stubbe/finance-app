@@ -133,7 +133,55 @@ def build_snapshot(db, settings, space_id: int) -> str:
     except Exception:
         pass
 
+    try:
+        lines += _health_lines(db)
+    except Exception:
+        pass
+
     return "\n".join(lines)
+
+
+def _avg(vals) -> float | None:
+    vals = [v for v in vals if v is not None]
+    return sum(vals) / len(vals) if vals else None
+
+
+def _health_lines(db) -> list[str]:
+    """Auffällige Gesundheits-Trends aus health_metrics (Apple-Health-Import) -
+    nur was heraussticht, plus je Kennzahl der letzte Wert als Kontext."""
+    out: list[str] = []
+    for mt, label, unit in (
+        (models.HealthMetricType.schlaf, "Schlaf", "h"),
+        (models.HealthMetricType.schritte, "Schritte", ""),
+        (models.HealthMetricType.gewicht, "Gewicht", "kg"),
+        (models.HealthMetricType.puls, "Ruhepuls", "bpm"),
+    ):
+        rows = crud.get_health_metrics(db, mt, days=30)
+        if not rows:
+            continue
+        vals = [r.value for r in rows]
+        last = vals[-1]
+        shown = f"{last:.1f} kg" if mt == models.HealthMetricType.gewicht else \
+                f"{last:.1f} h" if mt == models.HealthMetricType.schlaf else \
+                f"{round(last)}{(' ' + unit) if unit else ''}"
+        note = f"{label}: zuletzt {shown}"
+
+        if mt == models.HealthMetricType.schlaf and len(vals) >= 3 and all(v < 6 for v in vals[-3:]):
+            note += " – 3 Nächte in Folge unter 6 h"
+        elif mt == models.HealthMetricType.schritte and len(vals) >= 10:
+            wk = _avg(vals[-7:]); prev = _avg(vals[-14:-7])
+            if wk and prev and wk < prev * 0.65:
+                note += f" – diese Woche im Schnitt deutlich weniger ({round(wk)} statt {round(prev)})"
+        elif mt == models.HealthMetricType.gewicht and len(vals) >= 2:
+            delta = vals[-1] - vals[0]
+            if abs(delta) >= 2:
+                note += f" – {delta:+.1f} kg in ~{(rows[-1].date - rows[0].date).days} Tagen"
+        elif mt == models.HealthMetricType.puls and len(vals) >= 10:
+            recent = _avg(vals[-7:]); base = _avg(vals[:-7])
+            if recent and base and recent > base + 4:
+                note += f" – zuletzt erhöht (Ø {round(recent)} vs. {round(base)})"
+        out.append(note)
+    return out
 
 
 def _chat_model(settings) -> str | None:
