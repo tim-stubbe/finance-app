@@ -91,6 +91,8 @@ from .crud_vehicle import (
     delete_fuel_entry, fuel_summary,
     get_vehicle_goals, create_vehicle_goal, get_vehicle_goal, update_vehicle_goal,
     delete_vehicle_goal,
+    get_vehicle_trips, vehicle_trip_summary, set_vehicle_trip, delete_vehicle_trip,
+    get_vehicle_trip_track_path, import_vehicle_trips,
 )
 from .crud_smarthome import (
     get_smarthome_aliases, create_smarthome_alias, delete_smarthome_alias,

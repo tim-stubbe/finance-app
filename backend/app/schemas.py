@@ -2465,6 +2465,19 @@ class VehicleGoalUpdate(BaseModel):
     done: Optional[bool] = None
 
 
+class VehicleTripUpdate(BaseModel):
+    purpose: Optional[str] = None   # geschaeftlich | privat | unbekannt
+    note: Optional[str] = None
+
+
+class WebhookVehicleTrips(BaseModel):
+    """n8n-Ingest fürs Fahrtenbuch: entweder das rohe Speedometer-Backup
+    (Schlüssel `speedometer_backup` oder direkt die Backup-Felder), oder eine
+    Liste neutraler Fahrten unter `trips`."""
+    trips: Optional[list] = None
+    speedometer_backup: Optional[dict] = None
+
+
 class VehicleGoalOut(VehicleGoalBase):
     model_config = ConfigDict(from_attributes=True)
     id: int

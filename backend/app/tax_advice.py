@@ -119,6 +119,22 @@ def collect_facts(db, settings, space_id: int, year: int) -> dict:
         facts["nettovermoegen"] = crud.net_worth(db, space_id).total
     except Exception:
         facts["nettovermoegen"] = None
+
+    # Geschäftliche Fahrten aus dem Fahrtenbuch (models.VehicleTrip) - für die
+    # Fahrtkosten-/Berufskosten-Hinweise.
+    facts["business_km_year"] = 0.0
+    try:
+        veh = db.query(models.Vehicle).filter_by(space_id=space_id).first()
+        if veh:
+            rows = (db.query(models.VehicleTrip)
+                    .filter(models.VehicleTrip.vehicle_id == veh.id,
+                            models.VehicleTrip.purpose == "geschaeftlich",
+                            models.VehicleTrip.started_at >= date(year, 1, 1),
+                            models.VehicleTrip.started_at < date(year + 1, 1, 1))
+                    .all())
+            facts["business_km_year"] = round(sum(r.distance_km or 0.0 for r in rows), 0)
+    except Exception:
+        pass
     return facts
 
 
@@ -372,6 +388,16 @@ def _tips_finanzen_de(f, tips):
                      "Homeoffice-Pauschale nicht vergessen",
                      f"6 €/Arbeitstag, bis {_eur(HOMEOFFICE_MAX)}/Jahr – auch ohne separates "
                      "Arbeitszimmer. In der Anlage N eintragen." + _mtr_hint(f, HOMEOFFICE_MAX)))
+    bkm = f.get("business_km_year", 0.0)
+    if bkm > 0:
+        pausch = bkm * 0.30
+        km_str = f"{bkm:,.0f}".replace(",", ".")
+        tips.append(_tip("fahrtkosten", "finanzen", "mittel",
+                         f"{km_str} km geschäftlich im Fahrtenbuch",
+                         f"Grob {_eur(pausch)} als Fahrtkosten/Reisekosten (0,30 €/km; für den "
+                         "Arbeitsweg gilt die Entfernungspauschale, ab dem 21. km 0,38 €). "
+                         "Fahrten im Auto-Tab als geschäftlich markieren, dann stimmt die Summe."
+                         + _mtr_hint(f, pausch)))
     if not any("altersvorsorge" in k or "rürup" in k or "riester" in k for k in s):
         hoechst = "~58.688 € (zusammen veranlagt)" if married else "~29.344 €"
         tips.append(_tip("altersvorsorge", "finanzen", "info",

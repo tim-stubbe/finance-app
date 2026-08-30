@@ -159,3 +159,76 @@ def delete_vehicle_goal(goal_id: int, db: Session = Depends(get_db), space_id: i
         raise HTTPException(404, "Auto-Ziel nicht gefunden")
     crud.delete_vehicle_goal(db, goal)
     return {"ok": True}
+
+
+# ---------------- Fahrtenbuch (models.VehicleTrip) ----------------
+@vehicle_router.get("/vehicle/trips")
+def list_vehicle_trips(
+    purpose: str = None, source_vehicle: str = None, year: int = None, month: int = None,
+    db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id),
+):
+    v = _get_vehicle(db, space_id)
+    return crud.get_vehicle_trips(db, v.id, purpose=purpose, source_vehicle=source_vehicle,
+                                  year=year, month=month)
+
+
+@vehicle_router.get("/vehicle/trips/summary")
+def vehicle_trips_summary(source_vehicle: str = None, db: Session = Depends(get_db),
+                          space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    return crud.vehicle_trip_summary(db, v.id, source_vehicle=source_vehicle)
+
+
+@vehicle_router.patch("/vehicle/trips/{trip_id}")
+def patch_vehicle_trip(trip_id: int, data: schemas.VehicleTripUpdate, db: Session = Depends(get_db),
+                       space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    out = crud.set_vehicle_trip(db, trip_id, v.id, purpose=data.purpose, note=data.note)
+    if not out:
+        raise HTTPException(404, "Fahrt nicht gefunden")
+    return out
+
+
+@vehicle_router.delete("/vehicle/trips/{trip_id}")
+def remove_vehicle_trip(trip_id: int, db: Session = Depends(get_db),
+                        space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    if not crud.delete_vehicle_trip(db, trip_id, v.id):
+        raise HTTPException(404, "Fahrt nicht gefunden")
+    return {"ok": True}
+
+
+@vehicle_router.get("/vehicle/trips/{trip_id}/track")
+def vehicle_trip_track(trip_id: int, db: Session = Depends(get_db),
+                       space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    path = crud.get_vehicle_trip_track_path(db, trip_id, v.id)
+    if not path:
+        raise HTTPException(404, "Kein Track hinterlegt")
+    return FileResponse(path, filename=os.path.basename(path))
+
+
+@vehicle_router.post("/vehicle/trips/import")
+async def import_vehicle_trips_file(
+    file: UploadFile = File(...), db: Session = Depends(get_db),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    """Speedometer-Backup (.speedometer / JSON) hochladen und Fahrten anlegen.
+    Duplikate (gleiche Fahrt-ID) werden übersprungen."""
+    import json
+    from .. import speedometer
+    raw = await file.read()
+    try:
+        payload = json.loads(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Datei ist kein gültiges JSON (Speedometer-Backup).")
+    if speedometer.looks_like_speedometer_backup(payload):
+        trips = speedometer.parse_speedometer_backup(payload)
+    elif isinstance(payload, dict) and isinstance(payload.get("trips"), list):
+        trips = payload["trips"]
+    elif isinstance(payload, list):
+        trips = payload
+    else:
+        raise HTTPException(400, "Kein erkanntes Fahrten-Format.")
+    result = crud.import_vehicle_trips(db, space_id, trips, source="upload")
+    return {"ok": True, **result}

@@ -30,7 +30,110 @@ async function loadVehicleTab() {
 
   renderVehicleFuelList();
   renderVehicleGoalList();
+  loadVehicleTrips();
 }
+
+// ---------- Fahrtenbuch ----------
+const TRIP_PURPOSES = { geschaeftlich: "geschäftlich", privat: "privat", unbekannt: "unbekannt" };
+
+function tripFilterParams() {
+  const p = new URLSearchParams();
+  const v = document.getElementById("trip-filter-vehicle").value;
+  const pu = document.getElementById("trip-filter-purpose").value;
+  const m = document.getElementById("trip-filter-month").value; // "2026-08"
+  if (v) p.set("source_vehicle", v);
+  if (pu) p.set("purpose", pu);
+  if (m) { p.set("year", m.slice(0, 4)); p.set("month", String(parseInt(m.slice(5, 7), 10))); }
+  return p.toString();
+}
+
+async function loadVehicleTrips() {
+  document.getElementById("trip-webhook-url").textContent = location.origin + "/api/webhook/vehicle-trips";
+  let summary, trips;
+  try {
+    [summary, trips] = await Promise.all([
+      api("/vehicle/trips/summary"),
+      api("/vehicle/trips" + (tripFilterParams() ? "?" + tripFilterParams() : "")),
+    ]);
+  } catch { return; }
+
+  // Fahrzeug-Filter befüllen (einmal)
+  const vsel = document.getElementById("trip-filter-vehicle");
+  if (vsel.options.length <= 1 && summary.vehicles.length) {
+    summary.vehicles.forEach(name => {
+      const o = document.createElement("option"); o.value = name; o.textContent = name; vsel.appendChild(o);
+    });
+  }
+
+  const km = n => (n == null ? "–" : n.toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " km");
+  document.getElementById("trip-summary-cards").innerHTML = `
+    <div class="card"><span class="card-label">Fahrten</span><span class="card-value">${summary.trip_count}</span></div>
+    <div class="card"><span class="card-label">Gesamt</span><span class="card-value">${km(summary.total_km)}</span></div>
+    <div class="card"><span class="card-label">geschäftlich</span><span class="card-value">${km(summary.business_km)}</span></div>
+    <div class="card"><span class="card-label">privat</span><span class="card-value">${km(summary.private_km)}</span></div>
+    <div class="card"><span class="card-label">diesen Monat</span><span class="card-value">${km(summary.this_month_km)}</span></div>`;
+
+  const tb = document.getElementById("trip-list");
+  if (!trips.length) { tb.innerHTML = emptyRow(8, "map", "Noch keine Fahrten – Speedometer-Backup importieren oder n8n-Webhook einrichten."); return; }
+  const fmtDur = s => s == null ? "–" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")} min`;
+  tb.innerHTML = trips.map(t => {
+    const d = new Date(t.started_at);
+    const route = [t.start_location, t.end_location].filter(Boolean).join(" → ") || "–";
+    const opts = Object.entries(TRIP_PURPOSES).map(([k, lbl]) =>
+      `<option value="${k}" ${t.purpose === k ? "selected" : ""}>${lbl}</option>`).join("");
+    return `<tr>
+      <td>${d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</td>
+      <td>${esc(route)}${t.note ? ` <span class="page-sub">· ${esc(t.note)}</span>` : ""}</td>
+      <td class="num">${t.distance_km.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+      <td class="num">${fmtDur(t.duration_s)}</td>
+      <td class="num">${t.avg_speed_kmh ?? "–"} / ${t.max_speed_kmh ?? "–"}</td>
+      <td>${esc(t.source_vehicle || "–")}</td>
+      <td><select class="btn-sm" data-trip-purpose="${t.id}">${opts}</select></td>
+      <td style="white-space:nowrap">
+        ${t.has_track ? `<a class="link-btn" href="${API}/vehicle/trips/${t.id}/track" target="_blank">Track</a> ` : ""}
+        <button type="button" class="link-btn" data-trip-del="${t.id}">Löschen</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  tb.querySelectorAll("[data-trip-purpose]").forEach(sel => {
+    sel.addEventListener("change", async () => {
+      await api(`/vehicle/trips/${sel.dataset.tripPurpose}`, { method: "PATCH", body: JSON.stringify({ purpose: sel.value }) });
+      loadVehicleTrips();
+    });
+  });
+  tb.querySelectorAll("[data-trip-del]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Fahrt löschen?")) return;
+      await api(`/vehicle/trips/${btn.dataset.tripDel}`, { method: "DELETE" });
+      loadVehicleTrips();
+    });
+  });
+}
+
+["trip-filter-vehicle", "trip-filter-purpose", "trip-filter-month"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", loadVehicleTrips);
+});
+
+document.getElementById("trip-import-file")?.addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("trip-import-status");
+  status.textContent = "Importiere …";
+  const fd = new FormData();
+  fd.append("file", file);
+  const headers = {};
+  const csrf = typeof getCsrfToken === "function" ? getCsrfToken() : null;
+  if (csrf) headers["X-CSRF-Token"] = csrf;
+  try {
+    const res = await fetch(API + "/vehicle/trips/import", { method: "POST", headers, body: fd });
+    const j = await res.json();
+    if (!res.ok) { status.textContent = "Fehler: " + (j.detail || res.status); return; }
+    status.textContent = `${j.imported} neue Fahrt(en) importiert, ${j.skipped} übersprungen.`;
+    loadVehicleTrips();
+  } catch { status.textContent = "Import fehlgeschlagen."; }
+  e.target.value = "";
+});
 
 // ---------- 3D-Viewer (three.js r128) ----------
 // vehicleThree: { renderer, scene, camera, controls, currentModel, dims, tween }

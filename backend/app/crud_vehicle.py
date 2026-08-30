@@ -153,3 +153,175 @@ def update_vehicle_goal(db: Session, goal: models.VehicleGoal, data: schemas.Veh
 def delete_vehicle_goal(db: Session, goal: models.VehicleGoal) -> None:
     db.delete(goal)
     db.commit()
+
+
+# ---------------- Fahrtenbuch (models.VehicleTrip, Import z.B. aus Speedometer) ----
+import os as _os
+from datetime import date as _date, datetime as _dt
+
+_TRIP_DIR = _os.path.join(_os.environ.get("DATA_DIR", "/data"), "uploads", "vehicle-tracks")
+
+_PURPOSES = ("geschaeftlich", "privat", "unbekannt")
+
+
+def _trip_out(t: models.VehicleTrip) -> dict:
+    return {
+        "id": t.id, "external_id": t.external_id, "source": t.source,
+        "source_vehicle": t.source_vehicle,
+        "started_at": t.started_at.isoformat() if t.started_at else None,
+        "ended_at": t.ended_at.isoformat() if t.ended_at else None,
+        "distance_km": round(t.distance_km or 0.0, 2),
+        "duration_s": t.duration_s,
+        "avg_speed_kmh": t.avg_speed_kmh, "max_speed_kmh": t.max_speed_kmh,
+        "elevation_gain_m": t.elevation_gain_m,
+        "start_location": t.start_location, "end_location": t.end_location,
+        "odometer_start_km": t.odometer_start_km, "odometer_end_km": t.odometer_end_km,
+        "purpose": t.purpose or "unbekannt", "note": t.note,
+        "has_track": bool(t.track_filename),
+    }
+
+
+def get_vehicle_trips(db: Session, vehicle_id: int, *, purpose=None, source_vehicle=None,
+                      year=None, month=None, limit: int = 2000) -> list[dict]:
+    q = db.query(models.VehicleTrip).filter_by(vehicle_id=vehicle_id)
+    if purpose in _PURPOSES:
+        q = q.filter(models.VehicleTrip.purpose == purpose)
+    if source_vehicle:
+        q = q.filter(models.VehicleTrip.source_vehicle == source_vehicle)
+    if year:
+        start = _dt(int(year), int(month or 1), 1)
+        end = _dt(int(year) + (1 if not month else 0), (int(month) + 1) if month and int(month) < 12 else 1, 1) \
+            if month else _dt(int(year) + 1, 1, 1)
+        q = q.filter(models.VehicleTrip.started_at >= start, models.VehicleTrip.started_at < end)
+    rows = q.order_by(models.VehicleTrip.started_at.desc()).limit(limit).all()
+    return [_trip_out(t) for t in rows]
+
+
+def vehicle_trip_summary(db: Session, vehicle_id: int, *, source_vehicle=None) -> dict:
+    q = db.query(models.VehicleTrip).filter_by(vehicle_id=vehicle_id)
+    if source_vehicle:
+        q = q.filter(models.VehicleTrip.source_vehicle == source_vehicle)
+    rows = q.all()
+    if not rows:
+        return {"trip_count": 0, "total_km": 0.0, "business_km": 0.0, "private_km": 0.0,
+                "unknown_km": 0.0, "this_month_km": 0.0, "vehicles": [], "first_date": None, "last_date": None}
+    today = _date.today()
+    by_purpose = {"geschaeftlich": 0.0, "privat": 0.0, "unbekannt": 0.0}
+    this_month = 0.0
+    for t in rows:
+        km = t.distance_km or 0.0
+        by_purpose[t.purpose if t.purpose in by_purpose else "unbekannt"] += km
+        if t.started_at and t.started_at.year == today.year and t.started_at.month == today.month:
+            this_month += km
+    dates = [t.started_at for t in rows if t.started_at]
+    return {
+        "trip_count": len(rows),
+        "total_km": round(sum(t.distance_km or 0.0 for t in rows), 1),
+        "business_km": round(by_purpose["geschaeftlich"], 1),
+        "private_km": round(by_purpose["privat"], 1),
+        "unknown_km": round(by_purpose["unbekannt"], 1),
+        "this_month_km": round(this_month, 1),
+        "vehicles": sorted({t.source_vehicle for t in rows if t.source_vehicle}),
+        "first_date": min(dates).date().isoformat() if dates else None,
+        "last_date": max(dates).date().isoformat() if dates else None,
+    }
+
+
+def set_vehicle_trip(db: Session, trip_id: int, vehicle_id: int, *, purpose=None, note=None):
+    t = db.query(models.VehicleTrip).filter_by(id=trip_id, vehicle_id=vehicle_id).first()
+    if not t:
+        return None
+    if purpose is not None and purpose in _PURPOSES:
+        t.purpose = purpose
+    if note is not None:
+        t.note = note.strip() or None
+    db.commit()
+    return _trip_out(t)
+
+
+def delete_vehicle_trip(db: Session, trip_id: int, vehicle_id: int) -> bool:
+    t = db.query(models.VehicleTrip).filter_by(id=trip_id, vehicle_id=vehicle_id).first()
+    if not t:
+        return False
+    if t.track_filename:
+        try:
+            _os.remove(_os.path.join(_TRIP_DIR, t.track_filename))
+        except OSError:
+            pass
+    db.delete(t)
+    db.commit()
+    return True
+
+
+def get_vehicle_trip_track_path(db: Session, trip_id: int, vehicle_id: int):
+    t = db.query(models.VehicleTrip).filter_by(id=trip_id, vehicle_id=vehicle_id).first()
+    if not t or not t.track_filename:
+        return None
+    p = _os.path.join(_TRIP_DIR, t.track_filename)
+    return p if _os.path.exists(p) else None
+
+
+def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, source: str = "webhook") -> dict:
+    """Neutrale Fahrten-Dicts (siehe speedometer.parse_speedometer_backup)
+    -> models.VehicleTrip. Dedup über (vehicle_id, external_id); vorhandene
+    Fahrten werden NICHT überschrieben (die geschäftlich/privat-Einordnung des
+    Nutzers bleibt). Rückgabe: {imported, skipped}."""
+    vehicle = get_or_create_vehicle(db, space_id)
+    _os.makedirs(_TRIP_DIR, exist_ok=True)
+    existing = {
+        e for (e,) in db.query(models.VehicleTrip.external_id)
+        .filter(models.VehicleTrip.vehicle_id == vehicle.id,
+                models.VehicleTrip.external_id.isnot(None)).all()
+    }
+    imported = skipped = 0
+    for raw in trips or []:
+        ext = raw.get("external_id")
+        started = raw.get("started_at")
+        if isinstance(started, str):
+            try:
+                started = _dt.fromisoformat(started)
+            except ValueError:
+                started = None
+        if started is None:
+            skipped += 1
+            continue
+        if ext and ext in existing:
+            skipped += 1
+            continue
+        track_name = None
+        tb = raw.get("track_bytes")
+        if tb and ext:
+            track_name = f"{ext}.{raw.get('track_ext', 'bin')}"
+            try:
+                with open(_os.path.join(_TRIP_DIR, track_name), "wb") as fh:
+                    fh.write(tb)
+            except OSError:
+                track_name = None
+        ended = raw.get("ended_at")
+        if isinstance(ended, str):
+            try:
+                ended = _dt.fromisoformat(ended)
+            except ValueError:
+                ended = None
+        purpose = raw.get("purpose")
+        db.add(models.VehicleTrip(
+            vehicle_id=vehicle.id, external_id=ext,
+            source=raw.get("source") or source,
+            source_vehicle=raw.get("source_vehicle"),
+            started_at=started, ended_at=ended,
+            distance_km=float(raw.get("distance_km") or 0.0),
+            duration_s=raw.get("duration_s"),
+            avg_speed_kmh=raw.get("avg_speed_kmh"), max_speed_kmh=raw.get("max_speed_kmh"),
+            elevation_gain_m=raw.get("elevation_gain_m"),
+            start_location=raw.get("start_location"), end_location=raw.get("end_location"),
+            start_lat=raw.get("start_lat"), start_lon=raw.get("start_lon"),
+            end_lat=raw.get("end_lat"), end_lon=raw.get("end_lon"),
+            odometer_start_km=raw.get("odometer_start_km"), odometer_end_km=raw.get("odometer_end_km"),
+            purpose=purpose if purpose in _PURPOSES else "unbekannt",
+            note=raw.get("note"), track_filename=track_name,
+        ))
+        if ext:
+            existing.add(ext)
+        imported += 1
+    db.commit()
+    return {"imported": imported, "skipped": skipped}

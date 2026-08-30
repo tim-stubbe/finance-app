@@ -30,7 +30,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard
@@ -250,6 +250,53 @@ def webhook_create_business_issue(
     issue = crud.create_business_issue(db, project.id, data.title, data.notes)
     notifications.notify(s, f"📧 Neue Meldung bei „{project.name}“: {data.title}")
     return issue
+
+
+def _check_webhook_secret(db, x_webhook_secret):
+    s = auth.get_or_create_settings(db)
+    if not s.n8n_webhook_secret_encrypted:
+        raise HTTPException(403, "Webhook ist noch nicht eingerichtet (Einstellungen → Weitere Verbindungen).")
+    expected = bank_sync.decrypt_secret(s.secret_key, s.n8n_webhook_secret_encrypted)
+    if not x_webhook_secret or not secrets.compare_digest(x_webhook_secret, expected):
+        raise HTTPException(403, "Ungültiges Secret.")
+    return s
+
+
+@webhook_public_router.post("/webhook/vehicle-trips")
+async def webhook_vehicle_trips(request: Request, db: Session = Depends(get_db),
+                                x_webhook_secret: Optional[str] = Header(None)):
+    """Fahrtenbuch-Import (z.B. n8n schickt einen Speedometer-Backup-Export).
+    Akzeptiert: das rohe Speedometer-Backup-JSON, `{speedometer_backup: {...}}`,
+    `{trips: [...]}` (neutrales Schema) oder direkt eine Fahrten-Liste.
+    Dedup über die Fahrt-ID, vorhandene Fahrten bleiben unangetastet."""
+    s = _check_webhook_secret(db, x_webhook_secret)
+    from .. import speedometer
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        raise HTTPException(400, "Body ist kein gültiges JSON.")
+
+    backup = None
+    if isinstance(body, dict) and isinstance(body.get("speedometer_backup"), dict):
+        backup = body["speedometer_backup"]
+    elif speedometer.looks_like_speedometer_backup(body):
+        backup = body
+
+    if backup is not None:
+        trips = speedometer.parse_speedometer_backup(backup)
+    elif isinstance(body, dict) and isinstance(body.get("trips"), list):
+        trips = body["trips"]
+    elif isinstance(body, list):
+        trips = body
+    else:
+        raise HTTPException(400, "Kein erkanntes Fahrten-Format (erwarte Speedometer-Backup oder {trips:[...]}).")
+
+    spaces = crud.get_spaces(db)
+    space_id = spaces[0].id if spaces else 1
+    result = crud.import_vehicle_trips(db, space_id, trips, source="webhook")
+    if result["imported"]:
+        notifications.notify(s, f"🚗 Fahrtenbuch: {result['imported']} neue Fahrt(en) importiert.")
+    return {"ok": True, **result}
 
 
 # Ergebnis kurz zwischenspeichern - dieser Endpunkt wird bei jedem Seitenaufruf

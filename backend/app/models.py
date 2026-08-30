@@ -1918,6 +1918,53 @@ class VehicleFuelEntry(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class VehicleTrip(Base):
+    """Eine gefahrene Strecke - das Fahrtenbuch. Import aus einer Fahrten-App
+    (hier "Speedometer°", iOS-Backup v4), meist über den n8n-Webhook
+    (POST /api/webhook/vehicle-trips), siehe crud.import_vehicle_trips /
+    speedometer.parse_speedometer_backup.
+
+    Bewusst getrennt von VehicleFuelEntry: eine Fahrt hat Route/Dauer/
+    Geschwindigkeit und eine geschäftlich/privat-Einordnung (fürs Fahrtenbuch
+    und die Fahrtkosten im Steuern-Tab), ein Tankvorgang nicht.
+
+    Dedup über (vehicle_id, external_id) - die ID aus der Quell-App. Der
+    GPS-Track wird roh unter DATA_DIR/uploads/vehicle-tracks abgelegt
+    (track_filename), Speedometers eigenes gepacktes Format, nicht ausgewertet.
+    `source_vehicle` merkt sich, für welches Auto der App die Fahrt war (die
+    App kennt mehrere, Kies führt ein Fahrzeug pro Bereich)."""
+
+    __tablename__ = "vehicle_trips"
+    __table_args__ = (UniqueConstraint("vehicle_id", "external_id", name="uq_vehicle_trip_external"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False, index=True)
+    external_id = Column(String, nullable=True)
+    source = Column(String, nullable=True)          # "speedometer" | "webhook" | "upload"
+    source_vehicle = Column(String, nullable=True)  # Fahrzeugname aus der Quell-App
+    started_at = Column(DateTime, nullable=False, index=True)
+    ended_at = Column(DateTime, nullable=True)
+    distance_km = Column(Float, nullable=False, default=0.0)
+    duration_s = Column(Integer, nullable=True)
+    avg_speed_kmh = Column(Float, nullable=True)
+    max_speed_kmh = Column(Float, nullable=True)
+    elevation_gain_m = Column(Float, nullable=True)
+    start_location = Column(String, nullable=True)
+    end_location = Column(String, nullable=True)
+    start_lat = Column(Float, nullable=True)
+    start_lon = Column(Float, nullable=True)
+    end_lat = Column(Float, nullable=True)
+    end_lon = Column(Float, nullable=True)
+    odometer_start_km = Column(Float, nullable=True)
+    odometer_end_km = Column(Float, nullable=True)
+    # "geschaeftlich" | "privat" | "unbekannt" - von der Quell-App meist
+    # unbekannt, der Nutzer ordnet im Fahrtenbuch zu.
+    purpose = Column(String, nullable=False, default="unbekannt")
+    note = Column(String, nullable=True)
+    track_filename = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class VehicleGoal(Base):
     """Eigenständige Auto-Ziele-Liste (Tim-Wunsch: bewusst NICHT das normale
     Ziele-System wiederverwenden, sondern getrennt) - z.B. neue

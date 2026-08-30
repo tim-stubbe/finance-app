@@ -2376,6 +2376,40 @@
           <div id="vehicle-goal-list"></div>
         </div>
       </div>
+
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/></svg> Fahrtenbuch</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <select id="trip-filter-vehicle" class="btn-sm"><option value="">Alle Fahrzeuge</option></select>
+            <select id="trip-filter-purpose" class="btn-sm">
+              <option value="">Zweck: alle</option>
+              <option value="geschaeftlich">geschäftlich</option>
+              <option value="privat">privat</option>
+              <option value="unbekannt">unbekannt</option>
+            </select>
+            <input type="month" id="trip-filter-month" class="btn-sm">
+            <label class="btn-ghost btn-sm" style="cursor:pointer;margin:0">
+              Speedometer-Backup importieren
+              <input type="file" id="trip-import-file" hidden>
+            </label>
+          </div>
+        </div>
+        <div class="cards" id="trip-summary-cards" style="margin:10px 0"></div>
+        <p class="page-sub" id="trip-import-status"></p>
+        <details class="panel" style="box-shadow:none;border:1px solid var(--border)">
+          <summary class="page-sub">Automatischer Import per n8n einrichten</summary>
+          <p class="page-sub">n8n schickt den Speedometer-Backup-Export (oder <code>{"trips":[…]}</code>) per <strong>POST</strong> an
+            <code id="trip-webhook-url">…/api/webhook/vehicle-trips</code> mit dem Header
+            <code>X-Webhook-Secret: &lt;dein Secret&gt;</code> (Einstellungen → Weitere Verbindungen). Vorhandene Fahrten werden per Fahrt-ID erkannt und nicht doppelt angelegt.</p>
+        </details>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th>Strecke</th><th class="num">km</th><th class="num">Dauer</th><th class="num">Ø / Max</th><th>Fahrzeug</th><th>Zweck</th><th></th></tr></thead>
+            <tbody id="trip-list"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- Modal: Tankvorgang anlegen -->
