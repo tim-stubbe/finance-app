@@ -86,3 +86,25 @@ def test_upload_import_dedups_and_summary_and_purpose(auth_client):
 def test_webhook_needs_secret(auth_client):
     r = auth_client.post("/api/webhook/vehicle-trips", json=_BACKUP)
     assert r.status_code == 403
+
+
+def test_path_traversal_external_id_is_neutralised(auth_client):
+    """Eine Fahrt mit bösartiger ID darf keine Datei außerhalb des Track-
+    Ordners schreiben (Path Traversal über den Manifest-Dateinamen)."""
+    evil = {
+        "version": 4, "vehicles": [{"id": "V1", "name": "X"}],
+        "trips": [{
+            "id": "../../../../tmp/kies-pwned", "vehicleId": "V1", "statusRaw": "completed",
+            "startDate": _START, "totalDistance": 1000.0, "duration": 60.0,
+            "routeDataBase64": "cHduZWQ=",
+        }],
+    }
+    import io, json, os
+    fd = {"file": ("b.speedometer", io.BytesIO(json.dumps(evil).encode()), "application/json")}
+    r = auth_client.post("/api/vehicle/trips/import", files=fd)
+    assert r.status_code == 200 and r.json()["imported"] == 1
+    assert not os.path.exists("/tmp/kies-pwned")
+    assert not os.path.exists("/tmp/kies-pwned.spdtrack")
+    # Track ist trotzdem korrekt (unter sicherem Namen) abgelegt und abrufbar
+    tid = auth_client.get("/api/vehicle/trips").json()[0]["id"]
+    assert auth_client.get(f"/api/vehicle/trips/{tid}/track").status_code == 200

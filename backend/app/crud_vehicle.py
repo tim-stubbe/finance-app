@@ -156,12 +156,27 @@ def delete_vehicle_goal(db: Session, goal: models.VehicleGoal) -> None:
 
 
 # ---------------- Fahrtenbuch (models.VehicleTrip, Import z.B. aus Speedometer) ----
+import hashlib as _hashlib
 import os as _os
+import re as _re
 from datetime import date as _date, datetime as _dt
 
 _TRIP_DIR = _os.path.join(_os.environ.get("DATA_DIR", "/data"), "uploads", "vehicle-tracks")
 
 _PURPOSES = ("geschaeftlich", "privat", "unbekannt")
+
+
+def _safe_track_path(track_filename: str) -> str | None:
+    """Absoluter Pfad einer Track-Datei - NUR wenn er wirklich innerhalb von
+    _TRIP_DIR liegt (Schutz gegen vergiftete track_filename-Werte / Path
+    Traversal). Sonst None."""
+    if not track_filename or "/" in track_filename or "\\" in track_filename or track_filename in (".", ".."):
+        return None
+    base = _os.path.realpath(_TRIP_DIR)
+    full = _os.path.realpath(_os.path.join(base, track_filename))
+    if full == base or not full.startswith(base + _os.sep):
+        return None
+    return full
 
 
 def _trip_out(t: models.VehicleTrip) -> dict:
@@ -243,9 +258,10 @@ def delete_vehicle_trip(db: Session, trip_id: int, vehicle_id: int) -> bool:
     t = db.query(models.VehicleTrip).filter_by(id=trip_id, vehicle_id=vehicle_id).first()
     if not t:
         return False
-    if t.track_filename:
+    p = _safe_track_path(t.track_filename)
+    if p:
         try:
-            _os.remove(_os.path.join(_TRIP_DIR, t.track_filename))
+            _os.remove(p)
         except OSError:
             pass
     db.delete(t)
@@ -257,8 +273,8 @@ def get_vehicle_trip_track_path(db: Session, trip_id: int, vehicle_id: int):
     t = db.query(models.VehicleTrip).filter_by(id=trip_id, vehicle_id=vehicle_id).first()
     if not t or not t.track_filename:
         return None
-    p = _os.path.join(_TRIP_DIR, t.track_filename)
-    return p if _os.path.exists(p) else None
+    p = _safe_track_path(t.track_filename)
+    return p if (p and _os.path.exists(p)) else None
 
 
 def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, source: str = "webhook") -> dict:
@@ -290,13 +306,21 @@ def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, sourc
             continue
         track_name = None
         tb = raw.get("track_bytes")
-        if tb and ext:
-            track_name = f"{ext}.{raw.get('track_ext', 'bin')}"
-            try:
-                with open(_os.path.join(_TRIP_DIR, track_name), "wb") as fh:
-                    fh.write(tb)
-            except OSError:
-                track_name = None
+        if tb:
+            # Dateinamen IMMER serverseitig ableiten - nie aus dem Manifest
+            # (Path Traversal). Hash über external_id bzw. Startzeit+Distanz.
+            safe_ext = _re.sub(r"[^a-z0-9]", "", str(raw.get("track_ext", "bin")).lower())[:8] or "bin"
+            seed = str(ext) if ext else f"{started.isoformat()}|{raw.get('distance_km')}"
+            digest = _hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
+            candidate = f"{digest}.{safe_ext}"
+            full = _safe_track_path(candidate)
+            if full:
+                try:
+                    with open(full, "wb") as fh:
+                        fh.write(tb)
+                    track_name = candidate
+                except OSError:
+                    track_name = None
         ended = raw.get("ended_at")
         if isinstance(ended, str):
             try:
