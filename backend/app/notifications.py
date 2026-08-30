@@ -11,6 +11,34 @@ from . import bank_sync
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 
+_LOG_KEEP = 500
+
+
+def _log(text: str, urgent: bool, sent: bool) -> None:
+    """Jede notify()-Meldung in models.NotificationLog schreiben (auch die per
+    Ruhezeiten unterdrückten, dann sent=False) - eigener Session, best-effort,
+    darf notify() nie sprengen. Beschneidet die Tabelle auf die letzten
+    _LOG_KEEP Einträge."""
+    try:
+        from .database import SessionLocal
+        from . import models
+        db = SessionLocal()
+        try:
+            db.add(models.NotificationLog(text=text[:4000], urgent=urgent, sent=sent))
+            db.commit()
+            cutoff = (
+                db.query(models.NotificationLog.id)
+                .order_by(models.NotificationLog.id.desc())
+                .offset(_LOG_KEEP).limit(1).scalar()
+            )
+            if cutoff:
+                db.query(models.NotificationLog).filter(models.NotificationLog.id <= cutoff).delete()
+                db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
+
 
 def send_telegram(token: str, chat_id: str, text: str) -> None:
     resp = requests.post(
@@ -63,11 +91,14 @@ def notify(settings, text: str, urgent: bool = False) -> None:
     # gemeint (siehe _in_quiet_hours-Docstring), genau wie die CronTrigger-
     # Stunden des Schedulers selbst (APScheduler nutzt die System-Zeitzone).
     if not urgent and _in_quiet_hours(settings, datetime.now()):
+        _log(text, urgent, sent=False)  # im Verlauf zeigen, aber nicht verschicken
         return
     if not settings.telegram_bot_token_encrypted or not settings.telegram_chat_id:
         return
+    delivered = True
     try:
         token = bank_sync.decrypt_secret(settings.secret_key, settings.telegram_bot_token_encrypted)
         send_telegram(token, settings.telegram_chat_id, text)
     except Exception:
-        pass
+        delivered = False
+    _log(text, urgent, sent=delivered)

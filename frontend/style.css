@@ -1154,6 +1154,30 @@ select {
 
 input::placeholder { color: var(--muted); }
 
+.notif-log-details { margin-top: 14px; }
+.notif-log-details > summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+.notif-log {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.notif-log li {
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+}
+.notif-log-when { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.notif-log-muted { color: var(--muted); font-style: italic; }
+
 /* Native Checkboxen sehen je nach Betriebssystem sehr unterschiedlich (und
    ziemlich datiert) aus - accent-color faerbt sie einheitlich im Akzentton
    des aktiven Themes ein, ohne dass wir die komplette Box selbst nachbauen

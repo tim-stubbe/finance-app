@@ -1659,6 +1659,24 @@ class AssistantSuggestion(Base):
     snoozed_until = Column(Date, nullable=True)
 
 
+class NotificationLog(Base):
+    """Verlauf ALLER ausgehenden Telegram-Meldungen (der proaktive Assistent,
+    Digest, Anomalie-Check, Ziel erreicht, ...) - notifications.notify() ist
+    der eine Choke-Point, also wird hier zentral protokolliert. Damit sieht
+    man in der Web-App, was Kies gemeldet hat, auch wenn man Telegram gerade
+    nicht offen hatte. `sent=False` = wegen Ruhezeiten unterdrückt (der
+    Verlauf zeigt sie trotzdem). Wird auf die letzten ~500 Einträge begrenzt
+    (Pruning direkt beim Schreiben)."""
+
+    __tablename__ = "notification_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    text = Column(String, nullable=False)
+    urgent = Column(Boolean, nullable=False, default=False)
+    sent = Column(Boolean, nullable=False, default=True)
+
+
 class Routine(Base):
     """Wiederkehrende Jarvis-Checkliste (Spezifikation Abschnitt G) - bewusst
     schlank: nur Wochentage + eine feste Uhrzeit, keine vollen Kalender-RRULEs

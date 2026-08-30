@@ -103,6 +103,21 @@ async function loadNotificationSettings() {
     ? "gespeichert – zum Ändern neuen Token eingeben" : "wird verschlüsselt gespeichert";
   document.getElementById("telegram-chat-id").placeholder = s.telegram_configured
     ? "gespeichert" : "z.B. 123456789";
+  loadNotificationLog();
+}
+
+async function loadNotificationLog() {
+  const ul = document.getElementById("notifications-log");
+  if (!ul) return;
+  let rows = [];
+  try { rows = await api("/notifications/log?limit=40"); } catch { return; }
+  if (!rows.length) { ul.innerHTML = `<li class="page-sub">Noch nichts gemeldet.</li>`; return; }
+  ul.innerHTML = rows.map(r => {
+    const when = new Date(r.created_at + (r.created_at.endsWith("Z") ? "" : "Z"))
+      .toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const badge = r.sent ? "" : ` <span class="notif-log-muted">(Ruhezeit – nicht gesendet)</span>`;
+    return `<li><span class="notif-log-when">${when}</span> ${esc(r.text)}${badge}</li>`;
+  }).join("");
 }
 
 document.getElementById("notifications-settings-form").addEventListener("submit", async e => {

@@ -1605,6 +1605,15 @@ class NotificationTestResult(BaseModel):
     message: str
 
 
+class NotificationLogEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    created_at: datetime
+    text: str
+    urgent: bool
+    sent: bool
+
+
 # ---------- Echte Anrufe (Twilio) ----------
 class CallSettingsOut(BaseModel):
     enabled: bool

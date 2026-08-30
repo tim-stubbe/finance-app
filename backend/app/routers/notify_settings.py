@@ -14,7 +14,9 @@ Verhaltensaenderung."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import schemas, auth, bank_sync, notifications, calls, radicale_sync, travel_time
+from typing import List
+
+from .. import schemas, auth, bank_sync, notifications, calls, radicale_sync, travel_time, models
 from ..database import get_db
 
 notify_settings_router = APIRouter(prefix="/api")
@@ -69,6 +71,18 @@ def send_test_notification(db: Session = Depends(get_db)):
     except Exception as e:
         return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
     return schemas.NotificationTestResult(ok=True, message="Gesendet - schau in Telegram nach.")
+
+
+@notify_settings_router.get("/notifications/log", response_model=List[schemas.NotificationLogEntry])
+def get_notification_log(limit: int = 40, db: Session = Depends(get_db)):
+    """Verlauf der zuletzt von Kies verschickten (bzw. wegen Ruhezeiten
+    unterdrückten) Telegram-Meldungen - siehe models.NotificationLog."""
+    return (
+        db.query(models.NotificationLog)
+        .order_by(models.NotificationLog.id.desc())
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
 
 
 # ---------------- Echte Anrufe (Twilio) für akute Fälle ----------------
