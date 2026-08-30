@@ -277,6 +277,79 @@ def get_vehicle_trip_track_path(db: Session, trip_id: int, vehicle_id: int):
     return p if (p and _os.path.exists(p)) else None
 
 
+# ---------------- Fahrten-Regeln (Auto-Einordnung geschäftlich/privat) ----------
+def _rule_out(r: models.VehicleTripRule) -> dict:
+    return {"id": r.id, "pattern": r.pattern, "match_field": r.match_field,
+            "purpose": r.purpose, "priority": r.priority}
+
+
+def get_trip_rules(db: Session, vehicle_id: int) -> list[models.VehicleTripRule]:
+    return (db.query(models.VehicleTripRule)
+            .filter_by(vehicle_id=vehicle_id)
+            .order_by(models.VehicleTripRule.priority, models.VehicleTripRule.id)
+            .all())
+
+
+def create_trip_rule(db: Session, vehicle_id: int, *, pattern: str, match_field: str,
+                     purpose: str, priority: int = 100) -> dict:
+    pattern = (pattern or "").strip()
+    if not pattern:
+        raise ValueError("Muster darf nicht leer sein.")
+    if purpose not in ("geschaeftlich", "privat"):
+        raise ValueError("Zweck muss geschaeftlich oder privat sein.")
+    if match_field not in ("start", "end", "any"):
+        match_field = "any"
+    r = models.VehicleTripRule(vehicle_id=vehicle_id, pattern=pattern,
+                               match_field=match_field, purpose=purpose,
+                               priority=int(priority))
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return _rule_out(r)
+
+
+def delete_trip_rule(db: Session, rule_id: int, vehicle_id: int) -> bool:
+    r = db.query(models.VehicleTripRule).filter_by(id=rule_id, vehicle_id=vehicle_id).first()
+    if not r:
+        return False
+    db.delete(r)
+    db.commit()
+    return True
+
+
+def _match_trip_rules(rules, start_location, end_location) -> str | None:
+    """Erste passende Regel (bereits nach priority sortiert) -> ihr `purpose`."""
+    s = (start_location or "").lower()
+    e = (end_location or "").lower()
+    for r in rules:
+        p = r.pattern.lower()
+        hit = ((r.match_field in ("start", "any") and p in s)
+               or (r.match_field in ("end", "any") and p in e))
+        if hit:
+            return r.purpose
+    return None
+
+
+def apply_trip_rules(db: Session, vehicle_id: int, *, only_unknown: bool = True) -> dict:
+    """Wendet alle Regeln auf vorhandene Fahrten an. `only_unknown` schützt die
+    manuelle Einordnung des Nutzers - ohne die Option werden ALLE Fahrten neu
+    bewertet. Rückgabe: {changed}."""
+    rules = get_trip_rules(db, vehicle_id)
+    if not rules:
+        return {"changed": 0}
+    q = db.query(models.VehicleTrip).filter_by(vehicle_id=vehicle_id)
+    if only_unknown:
+        q = q.filter(models.VehicleTrip.purpose == "unbekannt")
+    changed = 0
+    for t in q.all():
+        m = _match_trip_rules(rules, t.start_location, t.end_location)
+        if m and m != t.purpose:
+            t.purpose = m
+            changed += 1
+    db.commit()
+    return {"changed": changed}
+
+
 def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, source: str = "webhook") -> dict:
     """Neutrale Fahrten-Dicts (siehe speedometer.parse_speedometer_backup)
     -> models.VehicleTrip. Dedup über (vehicle_id, external_id); vorhandene
@@ -284,6 +357,7 @@ def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, sourc
     Nutzers bleibt). Rückgabe: {imported, skipped}."""
     vehicle = get_or_create_vehicle(db, space_id)
     _os.makedirs(_TRIP_DIR, exist_ok=True)
+    rules = get_trip_rules(db, vehicle.id)
     existing = {
         e for (e,) in db.query(models.VehicleTrip.external_id)
         .filter(models.VehicleTrip.vehicle_id == vehicle.id,
@@ -328,6 +402,11 @@ def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, sourc
             except ValueError:
                 ended = None
         purpose = raw.get("purpose")
+        purpose = purpose if purpose in _PURPOSES else "unbekannt"
+        if purpose == "unbekannt":
+            matched = _match_trip_rules(rules, raw.get("start_location"), raw.get("end_location"))
+            if matched:
+                purpose = matched
         db.add(models.VehicleTrip(
             vehicle_id=vehicle.id, external_id=ext,
             source=raw.get("source") or source,
@@ -341,7 +420,7 @@ def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, sourc
             start_lat=raw.get("start_lat"), start_lon=raw.get("start_lon"),
             end_lat=raw.get("end_lat"), end_lon=raw.get("end_lon"),
             odometer_start_km=raw.get("odometer_start_km"), odometer_end_km=raw.get("odometer_end_km"),
-            purpose=purpose if purpose in _PURPOSES else "unbekannt",
+            purpose=purpose,
             note=raw.get("note"), track_filename=track_name,
         ))
         if ext:

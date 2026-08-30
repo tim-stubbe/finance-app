@@ -2470,6 +2470,13 @@ class VehicleTripUpdate(BaseModel):
     note: Optional[str] = None
 
 
+class VehicleTripRuleIn(BaseModel):
+    pattern: str
+    match_field: str = "any"        # start | end | any
+    purpose: str                    # geschaeftlich | privat
+    priority: int = 100
+
+
 class WebhookVehicleTrips(BaseModel):
     """n8n-Ingest fürs Fahrtenbuch: entweder das rohe Speedometer-Backup
     (Schlüssel `speedometer_backup` oder direkt die Backup-Felder), oder eine

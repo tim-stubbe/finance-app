@@ -2403,6 +2403,26 @@
             <code id="trip-webhook-url">…/api/webhook/vehicle-trips</code> mit dem Header
             <code>X-Webhook-Secret: &lt;dein Secret&gt;</code> (Einstellungen → Weitere Verbindungen). Vorhandene Fahrten werden per Fahrt-ID erkannt und nicht doppelt angelegt.</p>
         </details>
+        <details class="panel" style="box-shadow:none;border:1px solid var(--border)">
+          <summary class="page-sub">Fahrten-Regeln (geschäftlich/privat automatisch)</summary>
+          <p class="page-sub">Passt ein Muster auf Start- oder Zielort, wird der Zweck beim Import automatisch gesetzt.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
+            <input id="trip-rule-pattern" class="btn-sm" placeholder="Muster, z. B. Büro" style="min-width:160px">
+            <select id="trip-rule-field" class="btn-sm">
+              <option value="any">Start oder Ziel</option>
+              <option value="start">nur Start</option>
+              <option value="end">nur Ziel</option>
+            </select>
+            <select id="trip-rule-purpose" class="btn-sm">
+              <option value="geschaeftlich">geschäftlich</option>
+              <option value="privat">privat</option>
+            </select>
+            <button type="button" id="trip-rule-add" class="btn-ghost btn-sm">Regel hinzufügen</button>
+            <button type="button" id="trip-rules-apply" class="btn-ghost btn-sm">Alle Fahrten neu klassifizieren</button>
+          </div>
+          <p class="page-sub" id="trip-rules-status"></p>
+          <ul id="trip-rules-list" class="page-sub" style="list-style:none;padding:0;margin:0"></ul>
+        </details>
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>Datum</th><th>Strecke</th><th class="num">km</th><th class="num">Dauer</th><th class="num">Ø / Max</th><th>Fahrzeug</th><th>Zweck</th><th></th></tr></thead>

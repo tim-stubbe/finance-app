@@ -232,3 +232,45 @@ async def import_vehicle_trips_file(
         raise HTTPException(400, "Kein erkanntes Fahrten-Format.")
     result = crud.import_vehicle_trips(db, space_id, trips, source="upload")
     return {"ok": True, **result}
+
+
+# ---------------- Fahrten-Regeln (Auto-Einordnung geschäftlich/privat) --------
+@vehicle_router.get("/vehicle/trip-rules")
+def list_trip_rules(db: Session = Depends(get_db), space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    return [{"id": r.id, "pattern": r.pattern, "match_field": r.match_field,
+             "purpose": r.purpose, "priority": r.priority} for r in crud.get_trip_rules(db, v.id)]
+
+
+@vehicle_router.post("/vehicle/trip-rules")
+def add_trip_rule(data: schemas.VehicleTripRuleIn, db: Session = Depends(get_db),
+                  space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    try:
+        rule = crud.create_trip_rule(db, v.id, pattern=data.pattern, match_field=data.match_field,
+                                     purpose=data.purpose, priority=data.priority)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    # Neue Regel gleich auf offene Fahrten anwenden - sonst wirkt sie nur auf
+    # künftige Importe und der Nutzer wundert sich.
+    applied = crud.apply_trip_rules(db, v.id, only_unknown=True)
+    return {"rule": rule, **applied}
+
+
+@vehicle_router.delete("/vehicle/trip-rules/{rule_id}")
+def remove_trip_rule(rule_id: int, db: Session = Depends(get_db),
+                     space_id: int = Depends(auth.get_active_space_id)):
+    v = _get_vehicle(db, space_id)
+    if not crud.delete_trip_rule(db, rule_id, v.id):
+        raise HTTPException(404, "Regel nicht gefunden")
+    return {"ok": True}
+
+
+@vehicle_router.post("/vehicle/trips/apply-rules")
+def apply_trip_rules_now(all_trips: bool = False, db: Session = Depends(get_db),
+                         space_id: int = Depends(auth.get_active_space_id)):
+    """Regeln auf vorhandene Fahrten anwenden. Standard: nur noch nicht
+    zugeordnete (`unbekannt`); mit ?all_trips=1 werden ALLE neu bewertet
+    (überschreibt auch manuelle Einordnungen)."""
+    v = _get_vehicle(db, space_id)
+    return crud.apply_trip_rules(db, v.id, only_unknown=not all_trips)

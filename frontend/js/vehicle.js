@@ -31,6 +31,7 @@ async function loadVehicleTab() {
   renderVehicleFuelList();
   renderVehicleGoalList();
   loadVehicleTrips();
+  loadTripRules();
 }
 
 // ---------- Fahrtenbuch ----------
@@ -113,6 +114,56 @@ async function loadVehicleTrips() {
 
 ["trip-filter-vehicle", "trip-filter-purpose", "trip-filter-month"].forEach(id => {
   document.getElementById(id)?.addEventListener("change", loadVehicleTrips);
+});
+
+// ---------- Fahrten-Regeln ----------
+const TRIP_RULE_FIELDS = { start: "Start", end: "Ziel", any: "Start/Ziel" };
+
+async function loadTripRules() {
+  const list = document.getElementById("trip-rules-list");
+  if (!list) return;
+  let rules;
+  try { rules = await api("/vehicle/trip-rules"); } catch { return; }
+  list.innerHTML = rules.length
+    ? rules.map(r => `<li style="display:flex;gap:8px;align-items:center;padding:3px 0">
+        <strong>${esc(r.pattern)}</strong> in ${TRIP_RULE_FIELDS[r.match_field] || r.match_field}
+        → ${r.purpose === "geschaeftlich" ? "geschäftlich" : "privat"}
+        <button type="button" class="link-btn" data-trip-rule-del="${r.id}">entfernen</button>
+      </li>`).join("")
+    : "<li>Noch keine Regeln.</li>";
+  list.querySelectorAll("[data-trip-rule-del]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await api(`/vehicle/trip-rules/${btn.dataset.tripRuleDel}`, { method: "DELETE" });
+      loadTripRules();
+    });
+  });
+}
+
+document.getElementById("trip-rule-add")?.addEventListener("click", async () => {
+  const pattern = document.getElementById("trip-rule-pattern").value.trim();
+  const status = document.getElementById("trip-rules-status");
+  if (!pattern) { status.textContent = "Muster darf nicht leer sein."; return; }
+  const body = JSON.stringify({
+    pattern,
+    match_field: document.getElementById("trip-rule-field").value,
+    purpose: document.getElementById("trip-rule-purpose").value,
+  });
+  try {
+    const res = await api("/vehicle/trip-rules", { method: "POST", body });
+    document.getElementById("trip-rule-pattern").value = "";
+    status.textContent = `Regel gespeichert – ${res.changed} bestehende Fahrt(en) angepasst.`;
+    loadTripRules();
+    loadVehicleTrips();
+  } catch { status.textContent = "Regel konnte nicht gespeichert werden."; }
+});
+
+document.getElementById("trip-rules-apply")?.addEventListener("click", async () => {
+  const status = document.getElementById("trip-rules-status");
+  try {
+    const res = await api("/vehicle/trips/apply-rules?all_trips=true", { method: "POST" });
+    status.textContent = `${res.changed} Fahrt(en) neu klassifiziert.`;
+    loadVehicleTrips();
+  } catch { status.textContent = "Klassifizierung fehlgeschlagen."; }
 });
 
 document.getElementById("trip-import-file")?.addEventListener("change", async e => {

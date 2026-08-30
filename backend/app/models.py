@@ -1965,6 +1965,24 @@ class VehicleTrip(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class VehicleTripRule(Base):
+    """Regel, die neu importierte Fahrten automatisch als geschäftlich/privat
+    einordnet - damit der Nutzer nicht jede einzelne Fahrt von Hand taggen
+    muss (siehe crud.apply_trip_rules). `pattern` ist ein Teilstring (case-
+    insensitiv), geprüft gegen Start- und/oder Zielort. Regeln mit kleinerer
+    `priority` gewinnen; die erste passende Regel entscheidet."""
+
+    __tablename__ = "vehicle_trip_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False, index=True)
+    pattern = Column(String, nullable=False)
+    match_field = Column(String, nullable=False, default="any")  # "start" | "end" | "any"
+    purpose = Column(String, nullable=False)                     # "geschaeftlich" | "privat"
+    priority = Column(Integer, nullable=False, default=100)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class VehicleGoal(Base):
     """Eigenständige Auto-Ziele-Liste (Tim-Wunsch: bewusst NICHT das normale
     Ziele-System wiederverwenden, sondern getrennt) - z.B. neue

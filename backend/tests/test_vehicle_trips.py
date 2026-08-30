@@ -108,3 +108,37 @@ def test_path_traversal_external_id_is_neutralised(auth_client):
     # Track ist trotzdem korrekt (unter sicherem Namen) abgelegt und abrufbar
     tid = auth_client.get("/api/vehicle/trips").json()[0]["id"]
     assert auth_client.get(f"/api/vehicle/trips/{tid}/track").status_code == 200
+
+
+def _rule_backup(start, end, ext):
+    return {"version": 4, "vehicles": [{"id": "V1", "name": "Peugeot"}],
+            "trips": [{"id": ext, "vehicleId": "V1", "statusRaw": "completed",
+                       "startDate": _START, "totalDistance": 10000.0, "duration": 600.0,
+                       "startLocationName": start, "endLocationName": end}]}
+
+
+def test_trip_rules_classify_on_import_and_retroactively(auth_client):
+    import io, json
+    # 1) Regel: alles mit "Büro" im Ziel -> geschäftlich
+    r = auth_client.post("/api/vehicle/trip-rules", json={
+        "pattern": "Büro", "match_field": "end", "purpose": "geschaeftlich"})
+    assert r.status_code == 200
+
+    # 2) Fahrt, die zur Regel passt -> beim Import gleich geschäftlich
+    fd = {"file": ("b.speedometer", io.BytesIO(json.dumps(_rule_backup("Zuhause", "Büro Mainz", "R1")).encode()), "application/json")}
+    assert auth_client.post("/api/vehicle/trips/import", files=fd).json()["imported"] == 1
+    trips = auth_client.get("/api/vehicle/trips").json()
+    assert next(t for t in trips if t["id"])["purpose"] == "geschaeftlich"
+
+    # 3) Fahrt ohne Match bleibt unbekannt; neue Regel + apply-rules ordnet nach
+    fd = {"file": ("c.speedometer", io.BytesIO(json.dumps(_rule_backup("Zuhause", "Baumarkt", "R2")).encode()), "application/json")}
+    auth_client.post("/api/vehicle/trips/import", files=fd)
+    r2 = auth_client.post("/api/vehicle/trip-rules", json={
+        "pattern": "Baumarkt", "match_field": "any", "purpose": "privat"})
+    assert r2.json()["changed"] == 1
+    baumarkt = next(t for t in auth_client.get("/api/vehicle/trips").json() if (t["end_location"] or "") == "Baumarkt")
+    assert baumarkt["purpose"] == "privat"
+
+    # 4) Regel löschen
+    rid = auth_client.get("/api/vehicle/trip-rules").json()[0]["id"]
+    assert auth_client.delete(f"/api/vehicle/trip-rules/{rid}").status_code == 200
