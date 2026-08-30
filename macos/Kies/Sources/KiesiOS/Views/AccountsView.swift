@@ -56,6 +56,7 @@ struct AccountsView: View {
         .kCard(KSpacing.lg)
     }
 
+    @ViewBuilder
     private var accountList: some View {
         VStack(alignment: .leading, spacing: KSpacing.md) {
             HStack { Text("Deine Konten").font(KFont.sectionH); Spacer(); Text("\(rows.value.count)").font(.caption.weight(.bold)).foregroundStyle(KColor.secondary) }

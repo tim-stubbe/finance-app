@@ -240,13 +240,14 @@ struct TodayView: View {
 
 struct NeonRangeButton: ButtonStyle {
     let active: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+    func makeBody(configuration: ButtonStyle.Configuration) -> some View {
+        let pressed = configuration.isPressed
+        return configuration.label
             .font(.caption.weight(.bold))
             .foregroundStyle(active ? KColor.accentInk : KColor.secondary)
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(active ? KColor.accent : KColor.surfaceSoft, in: Capsule())
             .overlay(Capsule().stroke(active ? KColor.accent : KColor.divider, lineWidth: 1))
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .scaleEffect(pressed ? 0.96 : 1)
     }
 }
