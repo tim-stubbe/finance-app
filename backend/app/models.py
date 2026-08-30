@@ -314,6 +314,9 @@ class Settings(Base):
     proactive_assistant_last_sent_at = Column(DateTime, nullable=True)
     proactive_assistant_last_hash = Column(String, nullable=True)
     proactive_assistant_last_snapshot_hash = Column(String, nullable=True)
+    # Text der zuletzt verschickten proaktiven Meldung - damit "/nützlich" bzw.
+    # "/unnötig" per Telegram weiß, worauf es sich bezieht.
+    proactive_assistant_last_text = Column(String, nullable=True)
     # Nur den proaktiven Assistenten pausieren (per Telegram "/proaktiv pause N"),
     # ohne alle Benachrichtigungen stumm zu schalten wie quiet_until.
     proactive_assistant_snoozed_until = Column(DateTime, nullable=True)
@@ -1675,6 +1678,20 @@ class AssistantSuggestion(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     decided_at = Column(DateTime, nullable=True)
     snoozed_until = Column(Date, nullable=True)
+
+
+class ProactiveFeedback(Base):
+    """Rückmeldung des Nutzers zu einer proaktiven KI-Meldung ("/nützlich" bzw.
+    "/unnötig" per Telegram). Fließt als Lern-Hinweis in den Prompt des
+    proaktiven Assistenten ein (siehe proactive._feedback_hint) - so wird er
+    über die Zeit treffsicherer statt nur häufiger."""
+
+    __tablename__ = "proactive_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    text = Column(String, nullable=False)
+    useful = Column(Boolean, nullable=False)
 
 
 class NotificationLog(Base):

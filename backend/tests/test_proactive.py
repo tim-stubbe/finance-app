@@ -102,6 +102,33 @@ def test_telegram_proaktiv_command(client, monkeypatch):
         db.close()
 
 
+def test_telegram_proaktiv_feedback_command(client, monkeypatch):
+    from app import telegram_bot
+    sent = []
+    monkeypatch.setattr(telegram_bot, "_send", lambda tok, cid, msg: sent.append(msg))
+    db, s = _settings()
+    try:
+        # Ohne letzte Meldung: nur Hinweis, kein Eintrag.
+        s.proactive_assistant_last_text = None
+        assert telegram_bot._handle_proactive_feedback_command(db, s, "t", "c", "/nützlich")
+        assert db.query(models.ProactiveFeedback).count() == 0
+
+        s.proactive_assistant_last_text = "Dein Essens-Budget ist fast aufgebraucht."
+        db.commit()
+        assert telegram_bot._handle_proactive_feedback_command(db, s, "t", "c", "/unnötig")
+        assert telegram_bot._handle_proactive_feedback_command(db, s, "t", "c", "/nützlich")
+        rows = db.query(models.ProactiveFeedback).order_by(models.ProactiveFeedback.id).all()
+        assert [r.useful for r in rows] == [False, True]
+        assert all(r.text == "Dein Essens-Budget ist fast aufgebraucht." for r in rows)
+
+        assert not telegram_bot._handle_proactive_feedback_command(db, s, "t", "c", "/anderes")
+
+        hint = proactive._feedback_hint(db)
+        assert "UNNÖTIG" in hint and "NÜTZLICH" in hint
+    finally:
+        db.close()
+
+
 def test_no_throttle_repeats_allowed(client, monkeypatch):
     """Nach "nimm alle Limits raus": keine Cooldown-/Dedup-Sperre mehr - was
     zaehlt ist nur, ob die KI etwas sagt (statt "NICHTS")."""

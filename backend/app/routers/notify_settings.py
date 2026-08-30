@@ -122,7 +122,7 @@ def send_test_proactive_notification(db: Session = Depends(get_db)):
         return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
     notifications.notify(
         settings,
-        "🤖 " + text + "\n\n(/proaktiv pause 6 für Ruhe · /proaktiv aus zum Abschalten)",
+        "🤖 " + text + "\n\n(/nützlich · /unnötig · /proaktiv pause 6 · /proaktiv aus)",
         urgent=True,  # Testknopf -> auch in Ruhezeiten durchlassen
     )
     return schemas.NotificationTestResult(ok=True, message="Proaktive Testmeldung gesendet - schau in Telegram nach.")

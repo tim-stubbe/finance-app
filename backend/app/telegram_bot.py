@@ -109,6 +109,12 @@ _HANGING_CMD_RE = re.compile(r"^/h(ä|ae)ngt\s*$", re.IGNORECASE)
 _PROACTIVE_CMD_RE = re.compile(
     r"^/proaktiv(?:\s+(an|ein|aus|off|on|pause|snooze)(?:\s+(\d{1,3}))?)?\s*$", re.IGNORECASE,
 )
+# Format: /nützlich bzw. /unnötig - Rückmeldung zur letzten proaktiven Meldung.
+# Der Text wird in models.ProactiveFeedback abgelegt und fließt beim nächsten
+# Lauf über proactive._feedback_hint in den System-Prompt ein.
+_PROACTIVE_FEEDBACK_CMD_RE = re.compile(
+    r"^/(n(?:ü|ue)tzlich|gut|unn(?:ö|oe)tig|schlecht|nervt)\s*$", re.IGNORECASE,
+)
 # Format: /ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
 # Abschnitt D). Bewusst ein FESTES Kommando statt KI-Freitext-Erkennung wie
 # bei Todo/Termin/Projekt/Leben (siehe _execute_action) - bei Geld soll
@@ -651,6 +657,29 @@ def _handle_proactive_command(db, settings, token: str, chat_id: str, text: str)
     return True
 
 
+def _handle_proactive_feedback_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/nützlich bzw. /unnötig - Bewertung der zuletzt gesendeten proaktiven
+    Meldung. Wird als models.ProactiveFeedback gespeichert und beim nächsten
+    Lauf über proactive._feedback_hint in den System-Prompt eingespeist, damit
+    der Assistent seinen Ton nachjustiert."""
+    m = _PROACTIVE_FEEDBACK_CMD_RE.match(text.strip())
+    if not m:
+        return False
+    verb = m.group(1).lower()
+    useful = verb.startswith("n") or verb == "gut"
+    last = (settings.proactive_assistant_last_text or "").strip()
+    if not last:
+        _send(token, chat_id, "🤖 Mir liegt gerade keine letzte proaktive Meldung zum Bewerten vor.")
+        return True
+    db.add(models.ProactiveFeedback(text=last[:1000], useful=useful))
+    db.commit()
+    if useful:
+        _send(token, chat_id, "🤖 Notiert - mehr in die Richtung. Danke!")
+    else:
+        _send(token, chat_id, "🤖 Verstanden - so etwas melde ich künftig seltener.")
+    return True
+
+
 def _handle_suggestion_reply(db, settings, token: str, chat_id: str, text: str) -> bool:
     """/ok, /später (oder /spaeter), /verwerfen - Antwort auf den aktuell
     einzigen offenen Jarvis-Vorschlag (siehe crud.decide_pending_suggestion)."""
@@ -912,6 +941,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_quiet_command(db, settings, token, chat_id, text):
         return
     if _handle_proactive_command(db, settings, token, chat_id, text):
+        return
+    if _handle_proactive_feedback_command(db, settings, token, chat_id, text):
         return
     if _handle_suggestion_reply(db, settings, token, chat_id, text):
         return

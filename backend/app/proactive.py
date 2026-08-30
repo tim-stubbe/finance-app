@@ -188,6 +188,25 @@ def _chat_model(settings) -> str | None:
     return settings.ollama_model or settings.beleg_chat_model or None
 
 
+def _feedback_hint(db) -> str:
+    """Lern-Hinweis aus den letzten /nützlich- bzw. /unnötig-Rückmeldungen
+    (models.ProactiveFeedback) - wird dem System-Prompt vorangestellt, damit
+    der Assistent sich an dem orientiert, was der Nutzer schätzt."""
+    rows = (db.query(models.ProactiveFeedback)
+            .order_by(models.ProactiveFeedback.id.desc()).limit(20).all())
+    if not rows:
+        return ""
+    good = [r.text for r in rows if r.useful][:5]
+    bad = [r.text for r in rows if not r.useful][:5]
+    parts = []
+    if bad:
+        parts.append("Der Nutzer fand diese früheren Meldungen UNNÖTIG - vermeide Ähnliches:\n- "
+                     + "\n- ".join(bad))
+    if good:
+        parts.append("Diese fand er NÜTZLICH - mehr in die Richtung:\n- " + "\n- ".join(good))
+    return ("\n\n".join(parts) + "\n\n") if parts else ""
+
+
 def _hash(text: str) -> str:
     return hashlib.sha256(" ".join(text.lower().split()).encode("utf-8")).hexdigest()[:16]
 
@@ -219,7 +238,7 @@ def generate(db, settings) -> tuple[str, str] | None:
     try:
         reply = ollama_client.chat(
             settings.ollama_url, model,
-            [{"role": "system", "content": _SYSTEM},
+            [{"role": "system", "content": _feedback_hint(db) + _SYSTEM},
              {"role": "user", "content": "Snapshot:\n" + snapshot}],
             timeout=90,
         ).strip()

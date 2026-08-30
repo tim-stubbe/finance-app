@@ -278,6 +278,7 @@ ensure_columns("settings", {
     "proactive_assistant_last_sent_at": "DATETIME",
     "proactive_assistant_last_hash": "VARCHAR",
     "proactive_assistant_last_snapshot_hash": "VARCHAR",
+    "proactive_assistant_last_text": "VARCHAR",
     "proactive_assistant_snoozed_until": "DATETIME",
     "ntfy_enabled": "BOOLEAN DEFAULT 0",
     "ntfy_url": "VARCHAR DEFAULT 'https://ntfy.sh'",
@@ -1953,11 +1954,12 @@ def _scheduled_proactive_assistant():
         text, digest = result
         notifications.notify(
             settings,
-            "🤖 " + text + "\n\n(/proaktiv pause 6 für Ruhe · /proaktiv aus zum Abschalten)",
+            "🤖 " + text + "\n\n(/nützlich · /unnötig · /proaktiv pause 6 · /proaktiv aus)",
             urgent=True,
         )
         settings.proactive_assistant_last_sent_at = datetime.utcnow()
         settings.proactive_assistant_last_hash = digest
+        settings.proactive_assistant_last_text = text[:1000]
         db.commit()
     finally:
         db.close()
