@@ -25,13 +25,27 @@ function updateCurrencyToggleUI() {
 // Wohnsitzland - unabhaengig von der Anzeige-Waehrung (EUR/CHF oben), blendet
 // nur landesspezifische Anbindungs-Panels in den Einstellungen ein/aus (siehe
 // [data-country-only] in index.html, z.B. FinTS ist deutschlandspezifisch).
+const COUNTRY_NAMES = { DE: "Deutschland", CH: "Schweiz" };
+
 function applyCountryVisibility(country) {
+  const hidden = [];
   document.querySelectorAll("[data-country-only]").forEach(panel => {
-    panel.classList.toggle("hidden", panel.dataset.countryOnly !== country);
+    const off = panel.dataset.countryOnly !== country;
+    panel.classList.toggle("hidden", off);
+    if (off) {
+      const t = panel.querySelector(".panel-title");
+      hidden.push(t ? t.textContent.trim() : (panel.dataset.integrationKey || "eine Anbindung"));
+    }
   });
   document.querySelectorAll("#country-switch [data-country-option]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.countryOption === country);
   });
+  const status = document.getElementById("country-status");
+  if (status) {
+    status.textContent = hidden.length
+      ? `${COUNTRY_NAMES[country] || country} aktiv – ausgeblendet: ${hidden.join(", ")}.`
+      : `${COUNTRY_NAMES[country] || country} aktiv – alle Anbindungen sichtbar.`;
+  }
 }
 
 async function loadCountrySettings() {
@@ -46,8 +60,10 @@ async function loadCountrySettings() {
 document.querySelectorAll("#country-switch [data-country-option]").forEach(btn => {
   btn.addEventListener("click", async () => {
     const country = btn.dataset.countryOption;
+    if (btn.classList.contains("active")) return;
     await api("/settings/country", { method: "PUT", body: JSON.stringify({ country }) });
     applyCountryVisibility(country);
+    if (typeof toast === "function") toast(`Land auf ${COUNTRY_NAMES[country] || country} gestellt.`);
   });
 });
 
