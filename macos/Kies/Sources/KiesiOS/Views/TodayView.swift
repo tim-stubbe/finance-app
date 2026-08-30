@@ -17,6 +17,7 @@ struct TodayView: View {
     @StateObject private var nearGoals = Box<[Goal]>([])
     @StateObject private var uncheckedAreas = Box<[LifeArea]>([])
     @StateObject private var deadlines = Box<[String]>([])
+    @State private var editEvent: CalendarEvent?
 
     private var monthNet: Double { monthIncome.value - monthExpense.value }
 
@@ -73,6 +74,8 @@ struct TodayView: View {
                     VStack(spacing: 10) {
                         ForEach(upcomingEvents.value) { event in
                             KRow(title: event.title, subtitle: eventSubtitle(event))
+                                .contentShape(Rectangle())
+                                .onTapGesture { if event.id > 0 { editEvent = event } }
                         }
                     }
                 }
@@ -134,6 +137,9 @@ struct TodayView: View {
         .task { reload() }
         .onChange(of: engine.lastSyncedAt) { _, _ in reload() }
         .refreshable { await engine.run() }
+        .sheet(item: $editEvent) { event in
+            CalendarEventEditorSheet(event: event) { reload() }
+        }
     }
 
     private var header: some View {
@@ -206,5 +212,81 @@ struct TodayView: View {
             texts.append("Rückgabe: \(txDescription ?? "Buchung") – \(r.deadline_days) Tage ab \(r.start_date)")
         }
         deadlines.value = texts
+    }
+}
+
+/// Bearbeitet einen bestehenden Termin (Titel/Beginn/Ende/Ort/ganztägig).
+/// Neue Termine anlegen bleibt der Web-App vorbehalten - calendar_events hat
+/// lokal keine pending_client_id-Spalte für den Offline-Anlege-Fall.
+struct CalendarEventEditorSheet: View {
+    let event: CalendarEvent
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title = ""
+    @State private var allDay = false
+    @State private var start = Date()
+    @State private var hasEnd = false
+    @State private var end = Date()
+    @State private var location = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Termin") {
+                    TextField("Titel", text: $title)
+                    TextField("Ort (optional)", text: $location)
+                }
+                Section {
+                    Toggle("Ganztägig", isOn: $allDay)
+                    DatePicker("Beginn", selection: $start,
+                               displayedComponents: allDay ? .date : [.date, .hourAndMinute])
+                    Toggle("Ende festlegen", isOn: $hasEnd)
+                    if hasEnd {
+                        DatePicker("Ende", selection: $end,
+                                   displayedComponents: allDay ? .date : [.date, .hourAndMinute])
+                    }
+                }
+            }
+            .navigationTitle("Termin bearbeiten")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Speichern") { save() }
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .onAppear(perform: prime)
+        }
+    }
+
+    private func prime() {
+        title = event.title
+        allDay = event.all_day
+        location = event.location ?? ""
+        if let d = DateFormatter.parseServerDateTime(event.start) { start = d }
+        if let e = event.end, let d = DateFormatter.parseServerDateTime(e) {
+            hasEnd = true
+            end = d
+        }
+    }
+
+    private func save() {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let loc = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        try? SyncEngine.shared.updateCalendarEventOffline(
+            id: event.id,
+            title: t,
+            start: DateFormatter.serverDateTime(start),
+            end: hasEnd ? DateFormatter.serverDateTime(end) : nil,
+            location: loc.isEmpty ? nil : loc,
+            allDay: allDay
+        )
+        dismiss()
+        onSaved()
+        Task { await SyncEngine.shared.run() }
     }
 }

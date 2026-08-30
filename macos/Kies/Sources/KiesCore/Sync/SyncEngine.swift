@@ -455,6 +455,64 @@ public final class SyncEngine: ObservableObject {
         }
     }
 
+    /// Legt ein Ziel lokal an (Platzhalter-ID) und reiht es in die Outbox ein -
+    /// analog zu createTodoOffline. Nur die Felder, die diese Scheibe bearbeitet
+    /// (Titel/Kategorie/Zieldatum); goal_type bleibt "manual", status "open"
+    /// (siehe schemas.GoalCreate-Defaults).
+    public func createGoalOffline(title: String, category: String?, targetDate: String?) throws {
+        try db.write { db in
+            let clientID = UUID().uuidString
+            let placeholderID = -Int64(Date().timeIntervalSince1970 * 1000)
+            let goal = Goal(
+                id: placeholderID, space_id: nil, title: title, description: nil,
+                category: category, goal_type: "manual", target_date: targetDate,
+                status: "open", created_at: ISO8601DateFormatter().string(from: Date()), updated_at: nil
+            )
+            try goal.insert(db)
+            let data: [String: Any] = ["title": title, "category": category as Any, "target_date": targetDate as Any]
+            try Self.enqueueOutbox(db, entityType: "Goal", op: "create", clientID: clientID, serverID: nil, baseUpdatedAt: nil, data: data)
+        }
+    }
+
+    /// Bearbeitet Titel/Kategorie/Zieldatum eines bereits synchronisierten Ziels
+    /// (positive id) - analog zu updateTransactionOffline. status/goal_type
+    /// bleiben unangetastet (dafür setGoalStatusOffline bzw. die Web-App).
+    public func updateGoalOffline(id: Int64, title: String, category: String?, targetDate: String?) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var goal = try Goal.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = goal.updated_at
+            goal.title = title
+            goal.category = category
+            goal.target_date = targetDate
+            try goal.save(db)
+            let data: [String: Any] = ["title": title, "category": category as Any, "target_date": targetDate as Any]
+            try Self.enqueueOutbox(db, entityType: "Goal", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
+    /// Bearbeitet einen bereits synchronisierten Termin (positive id) - analog
+    /// zu updateTransactionOffline. Anlegen neuer Termine bleibt der Web-App
+    /// vorbehalten (calendar_events hat lokal keine pending_client_id-Spalte).
+    public func updateCalendarEventOffline(id: Int64, title: String, start: String, end: String?, location: String?, allDay: Bool) throws {
+        guard id > 0 else { return }
+        try db.write { db in
+            guard var event = try CalendarEvent.fetchOne(db, key: id) else { return }
+            let baseUpdatedAt = event.updated_at
+            event.title = title
+            event.start = start
+            event.end = end
+            event.location = location
+            event.all_day = allDay
+            try event.save(db)
+            let data: [String: Any] = [
+                "title": title, "start": start, "end": end as Any,
+                "location": location as Any, "all_day": allDay,
+            ]
+            try Self.enqueueOutbox(db, entityType: "CalendarEvent", op: "update", clientID: nil, serverID: id, baseUpdatedAt: baseUpdatedAt, data: data)
+        }
+    }
+
     /// Benennt eine Kategorie um - analog zu setWishlistPurchasedOffline, nur
     /// der Name (kein Anlegen/Löschen/Typ-Ändern in dieser Scheibe, dafür
     /// bleibt die Web-App der Ort).

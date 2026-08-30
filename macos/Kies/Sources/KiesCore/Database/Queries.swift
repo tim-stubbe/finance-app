@@ -227,6 +227,35 @@ public enum Queries {
         return areas.filter { !checkedInAreaIDs.contains($0.id) }
     }
 
+    /// Aktuelle Check-in-Serie eines Lebensbereichs: Anzahl zusammenhängender
+    /// Tage mit mindestens einem Check-in, endend heute oder gestern (ein noch
+    /// offener heutiger Tag bricht die Serie also nicht). Lokal aus
+    /// life_checkins abgeleitet - serverseitig gibt es einen reichhaltigeren
+    /// Streak-Wert, der hier bewusst nicht synchronisiert wird.
+    public static func checkinStreak(_ db: Database, areaID: Int64) throws -> Int {
+        let days = try String.fetchAll(db, sql: """
+            SELECT DISTINCT substr(created_at, 1, 10) AS d FROM life_checkins
+            WHERE area_id = ? ORDER BY d DESC
+            """, arguments: [areaID])
+        guard !days.isEmpty else { return 0 }
+        let cal = Calendar(identifier: .gregorian)
+        let fmt = DateFormatter.isoDate
+        let present = Set(days)
+        var cursor = Date()
+        // Startpunkt: heute, wenn heute ein Check-in vorliegt, sonst gestern.
+        if !present.contains(fmt.string(from: cursor)) {
+            guard let yesterday = cal.date(byAdding: .day, value: -1, to: cursor) else { return 0 }
+            cursor = yesterday
+        }
+        var streak = 0
+        while present.contains(fmt.string(from: cursor)) {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
+    }
+
     /// Nächster anstehender Termin (start in der Zukunft), fürs Widget - siehe
     /// TodayView.reload() für dieselbe Grundabfrage inkl. Formatierung.
     public static func nextUpcomingEvent(_ db: Database) throws -> CalendarEvent? {
@@ -359,6 +388,13 @@ extension DateFormatter {
     }()
     public static func parseServerDateTime(_ value: String) -> Date? {
         isoDateTimeNoFraction.date(from: value) ?? isoDateTimeWithFraction.date(from: value)
+    }
+
+    /// Serialisiert ein Date zurück in das naive ISO-Format, das der Server
+    /// erwartet ("2026-08-27T14:00:00") - Gegenstück zu parseServerDateTime,
+    /// für die Termin-Bearbeitung auf iOS (SyncEngine.updateCalendarEventOffline).
+    public static func serverDateTime(_ date: Date) -> String {
+        isoDateTimeNoFraction.string(from: date)
     }
 
     /// Anzeige für Termine in der "Heute"-Übersicht - Wochentag+Datum+Zeit

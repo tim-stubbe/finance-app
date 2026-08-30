@@ -11,6 +11,7 @@ struct LifeAreasView: View {
     @ObservedObject var engine = SyncEngine.shared
     @StateObject private var allAreas = Box<[LifeArea]>([])
     @StateObject private var openAreaIDs = Box<Set<Int64>>([])
+    @StateObject private var streaks = Box<[Int64: Int]>([:])
     @State private var checkinArea: LifeArea?
     @State private var checkinNote = ""
 
@@ -27,6 +28,9 @@ struct LifeAreasView: View {
                             Text("Heute noch kein Check-in").font(.caption).foregroundStyle(.orange)
                         } else {
                             Text("Heute schon eingecheckt").font(.caption).foregroundStyle(.green)
+                        }
+                        if let s = streaks.value[area.id], s > 0 {
+                            Text("🔥 \(s) Tag\(s == 1 ? "" : "e") in Folge").font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                     Spacer()
@@ -84,6 +88,13 @@ struct LifeAreasView: View {
         }) ?? []
         let openAreas = (try? AppDatabase.shared.read { db in try Queries.lifeAreasWithoutCheckinToday(db) }) ?? []
         openAreaIDs.value = Set(openAreas.map(\.id))
+        streaks.value = (try? AppDatabase.shared.read { db in
+            var out: [Int64: Int] = [:]
+            for area in try LifeArea.filter(Column("active") == true).fetchAll(db) {
+                out[area.id] = try Queries.checkinStreak(db, areaID: area.id)
+            }
+            return out
+        }) ?? [:]
     }
 
     private func quickCheckin(_ area: LifeArea) {
