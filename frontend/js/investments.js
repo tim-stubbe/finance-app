@@ -185,6 +185,46 @@ document.getElementById("refresh-prices-btn").addEventListener("click", async ()
   loadInvestmentsTab();
 });
 
+// ---------- Chart-Hover: senkrechte Linie + Datum als Tooltip-Titel ----------
+// Ein Mal global registriert. Zeigt beim Hovern über einen Verlauf-Chart eine
+// dünne senkrechte Linie am nächstgelegenen Datenpunkt (auch zwischen zwei
+// Punkten, weil interaction.mode = "index").
+if (typeof Chart !== "undefined" && !Chart.registry.plugins.get("kiesHoverLine")) {
+  Chart.register({
+    id: "kiesHoverLine",
+    afterDatasetsDraw(chart) {
+      const active = chart.tooltip?.getActiveElements?.() || [];
+      if (!active.length) return;
+      const x = active[0].element.x;
+      const { top, bottom } = chart.chartArea;
+      const c = chart.ctx;
+      c.save();
+      c.beginPath();
+      c.moveTo(x, top);
+      c.lineTo(x, bottom);
+      c.lineWidth = 1;
+      c.strokeStyle = cssVar("--border-strong") || "rgba(255,255,255,0.25)";
+      c.setLineDash([3, 3]);
+      c.stroke();
+      c.restore();
+    },
+  });
+}
+
+// ISO-Datum -> "Fr, 31.05.2026" (bzw. Jahr weglassen wäre auch ok, aber im
+// Tooltip ist das Jahr hilfreich).
+function kiesChartDate(label) {
+  if (!label || !/^\d{4}-\d{2}-\d{2}/.test(label)) return label || "";
+  const d = new Date(label.slice(0, 10) + "T00:00:00");
+  return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Gemeinsame Hover-/Tooltip-Basis für die Verlauf-Charts.
+const KIES_LINE_HOVER = {
+  interaction: { mode: "index", intersect: false },
+  hover: { mode: "index", intersect: false },
+};
+
 // ---------- Portfolio-Verlauf ----------
 async function loadPortfolioHistoryChart(range) {
   portfolioRange = range || portfolioRange;
@@ -274,13 +314,14 @@ async function loadPortfolioHistoryChart(range) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
+      ...KIES_LINE_HOVER,
       plugins: {
         legend: { display: true, position: "top", align: "end", labels: { color: cssVar("--text-secondary"), boxWidth: 16, font: { size: 12 } } },
         tooltip: {
           backgroundColor: cssVar("--surface-2"), borderColor: cssVar("--border-strong"), borderWidth: 1,
           titleColor: cssVar("--text"), bodyColor: cssVar("--text-secondary"), padding: 10, cornerRadius: 8,
           callbacks: {
+            title: items => kiesChartDate(items[0]?.label),
             label: c => c.dataset.yAxisID === "y1"
               ? `Rendite: ${c.parsed.y == null ? "–" : c.parsed.y.toFixed(1) + "%"}`
               : `${c.dataset.label}: ${eur(c.parsed.y)}`,
@@ -891,15 +932,17 @@ function renderHoldingHistoryChart(points, lots) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      ...KIES_LINE_HOVER,
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: cssVar("--surface-2"), borderColor: cssVar("--border-strong"), borderWidth: 1,
           titleColor: cssVar("--text"), bodyColor: cssVar("--text-secondary"), padding: 10, cornerRadius: 8,
           callbacks: {
+            title: items => kiesChartDate(items[0]?.label),
             label: c => {
               const lot = lotAtIndex[c.dataIndex];
-              const base = eur(c.parsed.y);
+              const base = `Kurs: ${eur(c.parsed.y)}`;
               return lot ? `${base} — ${lotTypeLabel(lot.type)}: ${lot.quantity} Stk. @ ${eur(lot.price_per_unit)}` : base;
             },
           },
