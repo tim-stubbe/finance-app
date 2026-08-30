@@ -16,6 +16,7 @@
 		2793BCA37DC0162FE03AE6D8 /* TodosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85F5ED97A93ECD9BC83743D /* TodosView.swift */; };
 		28B336A146960054E6B7890D /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C557578D4B70FD785495CC8 /* CategoriesView.swift */; };
 		326F90F46B74CA76DD560D57 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB383E45F1D2E267830E6E5 /* PairingView.swift */; };
+		37D64962C98845ECBAC0A905 /* PremiumTodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAC87F526ED9B0E6059BFBF /* PremiumTodayView.swift */; };
 		3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */; };
 		47108D58AF64315A96F7F14A /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5357355D6AA09CC225075155 /* MoreView.swift */; };
 		58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */; };
@@ -24,6 +25,7 @@
 		73EEE66A7C60EAC7ABB62CDD /* SyncStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688EF710F5CAC80ACBAD0D85 /* SyncStatusBar.swift */; };
 		761FB9FD89FC2A446959E6B7 /* Box.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BFEBBA631B1F700D31671F /* Box.swift */; };
 		77A8121258C229BD13A889F2 /* AppLockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C2FAFA9FA014943AD1D181 /* AppLockView.swift */; };
+		7B96B5D9926A00C92DC0A570 /* PremiumInvestmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA444C3D09AEA9938B77FE2F /* PremiumInvestmentsView.swift */; };
 		807B16A7ED8092320C57D7A9 /* DesignKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7FBB02C92E905A937C99DD /* DesignKit.swift */; };
 		990146C5809F4FA34F5EA3BC /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C96DEEF5122EF2D08A40156 /* GoalsView.swift */; };
 		A400936DEEE7E1471D4D07E4 /* KiesiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */; };
@@ -83,6 +85,7 @@
 		1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		139D81983F28F707A0312AC6 /* KiesiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KiesiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C96DEEF5122EF2D08A40156 /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
+		1FAC87F526ED9B0E6059BFBF /* PremiumTodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumTodayView.swift; sourceTree = "<group>"; };
 		269859CF78204993C6524A99 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		3329E7178B1F2338F8D33732 /* KiesWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KiesWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B680F6717ADE402F1BF17A0 /* HealthKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSync.swift; sourceTree = "<group>"; };
@@ -115,6 +118,7 @@
 		D5F9895247D0E91EACDAB4F0 /* InvestmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentsView.swift; sourceTree = "<group>"; };
 		D83EE951DD03CAD6FF1BEA47 /* KiesWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesWidget.entitlements; sourceTree = "<group>"; };
 		E581F3707BA30C9B425A56BB /* KiesiOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesiOS.entitlements; sourceTree = "<group>"; };
+		EA444C3D09AEA9938B77FE2F /* PremiumInvestmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumInvestmentsView.swift; sourceTree = "<group>"; };
 		EFDC5EE202B4C70D2EC672AB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F34C70844AA4048F50145115 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F85F5ED97A93ECD9BC83743D /* TodosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodosView.swift; sourceTree = "<group>"; };
@@ -255,6 +259,8 @@
 				67BDE07271DA65961F2A88CB /* LifeAreasView.swift */,
 				5357355D6AA09CC225075155 /* MoreView.swift */,
 				4BB383E45F1D2E267830E6E5 /* PairingView.swift */,
+				EA444C3D09AEA9938B77FE2F /* PremiumInvestmentsView.swift */,
+				1FAC87F526ED9B0E6059BFBF /* PremiumTodayView.swift */,
 				7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */,
 				269859CF78204993C6524A99 /* RootTabView.swift */,
 				C44C034838E984EFE80BB21E /* SearchView.swift */,
@@ -417,6 +423,8 @@
 				17E2FB83B1FA148965C2D5D8 /* LifeAreasView.swift in Sources */,
 				47108D58AF64315A96F7F14A /* MoreView.swift in Sources */,
 				326F90F46B74CA76DD560D57 /* PairingView.swift in Sources */,
+				7B96B5D9926A00C92DC0A570 /* PremiumInvestmentsView.swift in Sources */,
+				37D64962C98845ECBAC0A905 /* PremiumTodayView.swift in Sources */,
 				3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */,
 				E0F43EA44B23B0CB186047C5 /* RootTabView.swift in Sources */,
 				FAFF51A8EF6AACA402ADC33A /* SearchView.swift in Sources */,
