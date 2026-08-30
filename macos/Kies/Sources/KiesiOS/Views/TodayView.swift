@@ -3,10 +3,10 @@ import Charts
 import KiesCore
 import GRDB
 
-/// Tagesübersicht als Karten-Screen: Monats-Cashflow (Kacheln + 6-Monats-
-/// Balken), dann fällige Todos, nächste Termine, Ziele, Fristen und offene
-/// Check-ins als kompakte Abschnitts-Karten. Kein Bearbeiten hier - dafür
-/// die jeweiligen Tabs.
+/// Übersichts-Screen: Hero mit Gesamtvermögen + Monatsdelta + Mini-Verlauf,
+/// darunter kompakte Konten-Liste, letzte Transaktionen, ein Insight und die
+/// bisherigen Abschnitte (Cashflow, Termine, Todos, Ziele, Fristen, Check-ins)
+/// im neuen ruhigen Look. Kein Bearbeiten hier - dafür die jeweiligen Tabs.
 struct TodayView: View {
     @ObservedObject var engine = SyncEngine.shared
     @StateObject private var dueTodos = Box<[Todo]>([])
@@ -17,9 +17,17 @@ struct TodayView: View {
     @StateObject private var nearGoals = Box<[Goal]>([])
     @StateObject private var uncheckedAreas = Box<[LifeArea]>([])
     @StateObject private var deadlines = Box<[String]>([])
+    @StateObject private var netWorth = Box(0.0)
+    @StateObject private var netSeries = Box<[Queries.DayValue]>([])
+    @StateObject private var accountRows = Box<[(account: Account, balance: Double)]>([])
+    @StateObject private var recentTx = Box<[TransactionRecord]>([])
     @State private var editEvent: CalendarEvent?
 
     private var monthNet: Double { monthIncome.value - monthExpense.value }
+    private var netDelta: Double {
+        guard let first = netSeries.value.first?.value, let last = netSeries.value.last?.value else { return 0 }
+        return last - first
+    }
 
     var body: some View {
         KScreen {
@@ -36,42 +44,82 @@ struct TodayView: View {
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption)
                     }
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(KColor.warning)
                     .kCard()
                 }
                 .buttonStyle(.plain)
             }
 
-            HStack(spacing: KTheme.gap) {
-                KStatTile(label: "Einnahmen", value: kEUR(monthIncome.value), tint: KTheme.positive)
-                KStatTile(label: "Ausgaben", value: kEUR(monthExpense.value), tint: KTheme.negative)
+            heroCard
+
+            if !accountRows.value.isEmpty {
+                VStack(alignment: .leading, spacing: KSpacing.sm) {
+                    KSectionHeader(title: "Konten",
+                                  action: ("Alle", { TabRouter.shared.selection = .accounts }))
+                    VStack(spacing: 0) {
+                        ForEach(Array(accountRows.value.prefix(5)), id: \.account.id) { row in
+                            KAccountRow(icon: icon(for: row.account.type),
+                                        name: row.account.name,
+                                        subtitle: row.account.type.capitalized,
+                                        amount: row.balance)
+                            if row.account.id != accountRows.value.prefix(5).last?.account.id {
+                                Divider().overlay(KColor.divider)
+                            }
+                        }
+                    }
+                    .kCard(KSpacing.md)
+                }
             }
-            KStatTile(label: "Netto (Monat)", value: kEUR(monthNet),
-                      tint: monthNet < 0 ? KTheme.negative : KTheme.text)
+
+            if !recentTx.value.isEmpty {
+                VStack(alignment: .leading, spacing: KSpacing.sm) {
+                    KSectionHeader(title: "Letzte Transaktionen",
+                                  action: ("Alle", { TabRouter.shared.selection = .transactions }))
+                    VStack(spacing: 0) {
+                        ForEach(Array(recentTx.value.prefix(6))) { tx in
+                            KTransactionRow(title: tx.description ?? "–",
+                                            subtitle: nil,
+                                            amount: tx.amount,
+                                            pending: tx.pending_client_id != nil)
+                            if tx.id != recentTx.value.prefix(6).last?.id {
+                                Divider().overlay(KColor.divider)
+                            }
+                        }
+                    }
+                    .kCard(KSpacing.md)
+                }
+            }
+
+            KInsightCard(
+                icon: "chart.line.uptrend.xyaxis",
+                title: "Diesen Monat",
+                message: "Einnahmen \(kEUR(monthIncome.value)) · Ausgaben \(kEUR(monthExpense.value)) · Netto \(kEUR(monthNet)).",
+                actionTitle: "Analyse öffnen",
+                action: { TabRouter.shared.selection = .more }
+            )
 
             if cashflow.value.contains(where: { $0.income > 0 || $0.expense > 0 }) {
-                KSection(title: "Cashflow 6 Monate", systemImage: "chart.bar") {
+                KSection(title: "Cashflow · 6 Monate", systemImage: "chart.bar") {
                     Chart {
                         ForEach(cashflow.value) { m in
-                            BarMark(x: .value("Monat", m.label),
-                                    y: .value("Betrag", m.income))
+                            BarMark(x: .value("Monat", m.label), y: .value("Betrag", m.income))
                                 .position(by: .value("Art", "Einnahmen"))
                                 .foregroundStyle(by: .value("Art", "Einnahmen"))
-                            BarMark(x: .value("Monat", m.label),
-                                    y: .value("Betrag", m.expense))
+                            BarMark(x: .value("Monat", m.label), y: .value("Betrag", m.expense))
                                 .position(by: .value("Art", "Ausgaben"))
                                 .foregroundStyle(by: .value("Art", "Ausgaben"))
                         }
                     }
-                    .chartForegroundStyleScale(["Einnahmen": KTheme.positive, "Ausgaben": KTheme.negative])
+                    .chartForegroundStyleScale(["Einnahmen": KColor.positive, "Ausgaben": KColor.negative])
                     .chartLegend(position: .bottom, spacing: 8)
+                    .chartYAxis { AxisMarks { AxisValueLabel() } }
                     .frame(height: 150)
                 }
             }
 
             if !upcomingEvents.value.isEmpty {
                 KSection(title: "Nächste Termine", systemImage: "calendar") {
-                    VStack(spacing: 10) {
+                    VStack(spacing: KSpacing.sm) {
                         ForEach(upcomingEvents.value) { event in
                             KRow(title: event.title, subtitle: eventSubtitle(event))
                                 .contentShape(Rectangle())
@@ -81,16 +129,15 @@ struct TodayView: View {
                 }
             }
 
-            KSection(title: "Fällige Todos", systemImage: "checklist") {
+            KSection(title: "Fällige Aufgaben", systemImage: "checklist") {
                 if dueTodos.value.isEmpty {
-                    Text("Nichts fällig 🎉").font(.callout).foregroundStyle(.secondary)
+                    Text("Nichts fällig – alles erledigt.").font(.callout).foregroundStyle(KColor.secondary)
                 } else {
-                    VStack(spacing: 10) {
+                    VStack(spacing: KSpacing.sm) {
                         ForEach(dueTodos.value) { todo in
                             let overdue = (todo.due_date ?? "") < DateFormatter.isoDate.string(from: Date()) && todo.due_date != nil
-                            KRow(title: todo.title,
-                                 trailing: todo.due_date,
-                                 trailingTint: overdue ? KTheme.negative : .secondary)
+                            KRow(title: todo.title, trailing: todo.due_date,
+                                 trailingTint: overdue ? KColor.negative : KColor.secondary)
                         }
                     }
                 }
@@ -98,9 +145,9 @@ struct TodayView: View {
 
             if !nearGoals.value.isEmpty {
                 KSection(title: "Ziele in Reichweite", systemImage: "target") {
-                    VStack(spacing: 10) {
+                    VStack(spacing: KSpacing.sm) {
                         ForEach(nearGoals.value) { goal in
-                            KRow(title: goal.title, trailing: goal.target_date)
+                            KRow(title: goal.title, trailing: goal.target_date, trailingTint: KColor.secondary)
                         }
                     }
                 }
@@ -108,9 +155,9 @@ struct TodayView: View {
 
             if !deadlines.value.isEmpty {
                 KSection(title: "Fristen", systemImage: "clock.badge.exclamationmark") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: KSpacing.sm) {
                         ForEach(deadlines.value, id: \.self) { text in
-                            Text(text).font(.callout)
+                            Text(text).font(.callout).foregroundStyle(KColor.primary)
                         }
                     }
                 }
@@ -119,15 +166,15 @@ struct TodayView: View {
             if !uncheckedAreas.value.isEmpty {
                 KSection(title: "Ohne Check-in heute", systemImage: "heart.text.square") {
                     Text(uncheckedAreas.value.map(\.name).joined(separator: " · "))
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.callout).foregroundStyle(KColor.secondary)
                 }
             }
 
             SyncStatusFooter()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, KSpacing.xs)
         }
-        .navigationTitle("Heute")
+        .navigationTitle("Übersicht")
         .toolbar {
             SyncStatusToolbarItem()
             ToolbarItem(placement: .topBarLeading) {
@@ -143,12 +190,63 @@ struct TodayView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            KKicker(text: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
-            Text(greeting).font(.kSerif(.largeTitle)).foregroundStyle(KTheme.text)
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Übersicht").font(KFont.title).foregroundStyle(KColor.primary)
+            Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                .font(.subheadline).foregroundStyle(KColor.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 4)
+        .padding(.top, KSpacing.xs)
+    }
+
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: KSpacing.sm) {
+            Text("Gesamtvermögen").font(.footnote).foregroundStyle(KColor.secondary)
+            Text(kEUR(netWorth.value))
+                .font(KFont.hero)
+                .foregroundStyle(netWorth.value < 0 ? KColor.negative : KColor.primary)
+                .lineLimit(1).minimumScaleFactor(0.5)
+            if abs(netDelta) > 0.5 {
+                let base = abs(netWorth.value - netDelta)
+                HStack(spacing: KSpacing.xs) {
+                    Image(systemName: netDelta >= 0 ? "arrow.up.right" : "arrow.down.right")
+                    Text("\(netDelta >= 0 ? "+" : "")\(kEUR(netDelta))")
+                        .monospacedDigit()
+                    if base > 1 {
+                        Text("\(netDelta >= 0 ? "+" : "")\(netDelta / base * 100, format: .number.precision(.fractionLength(1)))\u{00A0}%")
+                            .foregroundStyle(KColor.secondary)
+                    }
+                    Text("· 30 Tage").foregroundStyle(KColor.secondary)
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(netDelta >= 0 ? KColor.positive : KColor.negative)
+            }
+            if netSeries.value.count > 1 {
+                Chart(netSeries.value) { p in
+                    AreaMark(x: .value("Tag", p.date), y: .value("Wert", p.value))
+                        .foregroundStyle(.linearGradient(colors: [KColor.accent.opacity(0.22), KColor.accent.opacity(0.0)],
+                                                         startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Tag", p.date), y: .value("Wert", p.value))
+                        .foregroundStyle(KColor.accent)
+                        .interpolationMethod(.monotone)
+                }
+                .chartXAxis(.hidden).chartYAxis(.hidden)
+                .frame(height: 56)
+                .padding(.top, KSpacing.xs)
+            }
+        }
+        .kCard(KSpacing.lg)
+    }
+
+    private func icon(for type: String) -> String {
+        switch type.lowercased() {
+        case let t where t.contains("spar"): return "banknote"
+        case let t where t.contains("kredit") || t.contains("credit"): return "creditcard"
+        case let t where t.contains("bar") || t.contains("cash"): return "wallet.pass"
+        case let t where t.contains("depot") || t.contains("invest"): return "chart.line.uptrend.xyaxis"
+        default: return "building.columns"
+        }
     }
 
     private var greeting: String {
@@ -176,6 +274,18 @@ struct TodayView: View {
     private func reload() {
         let db = AppDatabase.shared
         let today = DateFormatter.isoDate.string(from: Date())
+
+        netWorth.value = (try? db.read { db in try Queries.netWorth(db) }) ?? 0
+        netSeries.value = (try? db.read { db in try Queries.netWorthSeries(db, days: 30) }) ?? []
+        accountRows.value = (try? db.read { db in
+            try Account.order(Column("name")).fetchAll(db).map { acc in
+                (acc, try Queries.accountBalance(db, accountID: acc.id))
+            }
+        }) ?? []
+        recentTx.value = (try? db.read { db in
+            try TransactionRecord.order(Column("date").desc).limit(6).fetchAll(db)
+        }) ?? []
+
         dueTodos.value = (try? db.read { db in
             try Todo.filter(Column("done") == false)
                 .filter(Column("due_date") <= today || Column("due_date") == nil)

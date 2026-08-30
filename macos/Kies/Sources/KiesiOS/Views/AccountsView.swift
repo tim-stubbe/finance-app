@@ -13,23 +13,32 @@ struct AccountsView: View {
     @StateObject private var netSeries = Box<[Queries.DayValue]>([])
 
     private var netWorth: Double { rows.value.reduce(0) { $0 + $1.balance } }
-    private var maxAbsBalance: Double { max(rows.value.map { abs($0.balance) }.max() ?? 1, 1) }
 
     var body: some View {
         KScreen {
             netWorthCard
 
             if rows.value.isEmpty {
-                ContentUnavailableView("Noch keine Konten", systemImage: "banknote",
-                                       description: Text("Wird beim nächsten Sync geladen."))
-                    .kCard()
+                KEmptyState(icon: "creditcard",
+                            title: "Noch keine Konten",
+                            message: "Synchronisiere Kies mit deinem Server, um deine Konten hier zu sehen.",
+                            actionTitle: "Jetzt synchronisieren",
+                            action: { Task { await engine.run() } })
             } else {
-                KSection(title: "Konten", systemImage: "banknote") {
-                    VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: KSpacing.sm) {
+                    KSectionHeader(title: "Konten")
+                    VStack(spacing: 0) {
                         ForEach(rows.value, id: \.account.id) { row in
-                            accountRow(row.account, balance: row.balance)
+                            KAccountRow(icon: icon(for: row.account.type),
+                                        name: row.account.name,
+                                        subtitle: row.account.type.capitalized,
+                                        amount: row.balance)
+                            if row.account.id != rows.value.last?.account.id {
+                                Divider().overlay(KColor.divider)
+                            }
                         }
                     }
+                    .kCard(KSpacing.md)
                 }
             }
         }
@@ -42,11 +51,10 @@ struct AccountsView: View {
 
     private var netWorthCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            KKicker(text: "Nettovermögen")
+            Text("Nettovermögen").font(.footnote).foregroundStyle(KColor.secondary)
             Text(kEUR(netWorth))
-                .font(.system(size: 36, design: .serif))
-                .foregroundStyle(netWorth < 0 ? KTheme.negative : KTheme.text)
-                .monospacedDigit()
+                .font(KFont.hero)
+                .foregroundStyle(netWorth < 0 ? KColor.negative : KColor.primary)
                 .minimumScaleFactor(0.55).lineLimit(1)
 
             if netSeries.value.count > 1 {
@@ -69,33 +77,6 @@ struct AccountsView: View {
         .kCard()
     }
 
-    private func accountRow(_ account: Account, balance: Double) -> some View {
-        VStack(spacing: 6) {
-            HStack {
-                Image(systemName: icon(for: account.type))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 26)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(account.name).font(.callout.weight(.medium))
-                    Text(account.type.capitalized).font(.caption2).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                Text(kEUR(balance, fraction: 2))
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(balance < 0 ? KTheme.negative : .primary)
-            }
-            GeometryReader { geo in
-                Capsule()
-                    .fill(Color.secondary.opacity(0.12))
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(balance < 0 ? KTheme.negative : Color.accentColor)
-                            .frame(width: max(4, geo.size.width * abs(balance) / maxAbsBalance))
-                    }
-            }
-            .frame(height: 4)
-        }
-    }
 
     private func icon(for type: String) -> String {
         switch type.lowercased() {

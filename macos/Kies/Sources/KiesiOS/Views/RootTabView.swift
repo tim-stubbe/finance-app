@@ -18,19 +18,19 @@ struct RootTabView: View {
             // Kartenraster.
             TabView(selection: $router.selection) {
                 NavigationStack { TodayView() }
-                    .tabItem { Label("Heute", systemImage: "sun.max") }
+                    .tabItem { Label("Übersicht", systemImage: "square.grid.2x2") }
                     .tag(AppTab.today)
                 NavigationStack { AccountsView() }
-                    .tabItem { Label("Konten", systemImage: "banknote") }
+                    .tabItem { Label("Konten", systemImage: "creditcard") }
                     .tag(AppTab.accounts)
                 NavigationStack { TransactionsView() }
-                    .tabItem { Label("Buchungen", systemImage: "list.bullet.rectangle") }
+                    .tabItem { Label("Transaktionen", systemImage: "list.bullet") }
                     .tag(AppTab.transactions)
                 NavigationStack { TodosView() }
-                    .tabItem { Label("Todos", systemImage: "checklist") }
+                    .tabItem { Label("Aufgaben", systemImage: "checklist") }
                     .tag(AppTab.todos)
                 NavigationStack { MoreView() }
-                    .tabItem { Label("Mehr", systemImage: "square.grid.2x2") }
+                    .tabItem { Label("Mehr", systemImage: "ellipsis.circle") }
                     .tag(AppTab.more)
             }
 
@@ -38,13 +38,14 @@ struct RootTabView: View {
                 showQuickCapture = true
             } label: {
                 Image(systemName: "plus")
-                    .font(.title2.bold())
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color.accentColor))
-                    .shadow(radius: 4)
+                    .background(Circle().fill(KColor.accent))
+                    .shadow(color: KColor.accent.opacity(0.4), radius: 10, x: 0, y: 5)
             }
-            .padding(.trailing, 20)
+            .accessibilityLabel("Schnell erfassen")
+            .padding(.trailing, KSpacing.lg)
             .padding(.bottom, 70)  // über der Tab-Leiste schweben lassen
         }
         .sheet(isPresented: $showQuickCapture) {

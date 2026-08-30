@@ -1,89 +1,78 @@
 import SwiftUI
 import KiesCore
 
-/// "Mehr"-Tab: statt zehn Tabs (die iOS sonst in ein haessliches System-
-/// "Mehr"-Menue kippt) tragen fuenf Tabs die Kern-Screens, der Rest lebt
-/// hier als Karten-Raster mit NavigationLinks. Reihenfolge = Haeufigkeit.
+/// "Mehr"-Tab: native, gruppierte iOS-Liste (Profil / Finance / Life / Tools)
+/// statt Karten-Raster. Trägt die Nebenschauplätze, die keinen eigenen Tab
+/// haben (Ziele, Leben, Wünsche, Investments, Kategorien, Suche, Einstellungen).
 struct MoreView: View {
     @ObservedObject private var engine = SyncEngine.shared
 
-    private struct Entry: Identifiable {
-        let id = UUID()
-        let title: String
-        let icon: String
-        let tint: Color
-        let dest: AnyView
-    }
-
-    private var entries: [Entry] {
-        var list: [Entry] = [
-            Entry(title: "Ziele", icon: "target", tint: KTheme.gold, dest: AnyView(GoalsView())),
-            Entry(title: "Leben", icon: "heart.text.square", tint: KTheme.gold, dest: AnyView(LifeAreasView())),
-        ]
-        if HealthKitSync.shared.isAvailable {
-            list.append(Entry(title: "Gesundheit", icon: "heart.circle", tint: KTheme.gold, dest: AnyView(HealthView())))
-        }
-        list += [
-            Entry(title: "Wünsche", icon: "sparkles", tint: KTheme.gold, dest: AnyView(WishlistView())),
-            Entry(title: "Investments", icon: "chart.line.uptrend.xyaxis", tint: KTheme.gold, dest: AnyView(InvestmentsView())),
-            Entry(title: "Kategorien", icon: "tag", tint: KTheme.gold, dest: AnyView(CategoriesView())),
-            Entry(title: "Suche", icon: "magnifyingglass", tint: KTheme.gold, dest: AnyView(SearchView())),
-        ]
-        return list
-    }
-
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-
     var body: some View {
-        KScreen {
+        List {
             if !engine.conflicts.isEmpty {
-                NavigationLink { ConflictsView() } label: {
-                    HStack {
+                Section {
+                    NavigationLink { ConflictsView() } label: {
                         Label("\(engine.conflicts.count) Sync-Konflikt(e)", systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption)
+                            .foregroundStyle(KColor.warning)
                     }
-                    .foregroundStyle(.orange)
-                    .kCard()
                 }
-                .buttonStyle(.plain)
+                .listRowBackground(KColor.surface)
             }
 
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(entries) { e in
-                    NavigationLink { e.dest } label: { tile(e) }
-                        .buttonStyle(.plain)
+            Section("Profil") {
+                HStack(spacing: KSpacing.md) {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 34)).foregroundStyle(KColor.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Privater Bereich").font(.body.weight(.medium)).foregroundStyle(KColor.primary)
+                        Text("Kies · lokal & synchronisiert").font(.footnote).foregroundStyle(KColor.secondary)
+                    }
                 }
+                .padding(.vertical, KSpacing.xs)
             }
+            .listRowBackground(KColor.surface)
 
-            NavigationLink { SettingsView() } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "gearshape.fill").foregroundStyle(.secondary).frame(width: 26)
-                    Text("Einstellungen").font(.callout.weight(.medium))
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            Section("Finance") {
+                row("Investments", "chart.line.uptrend.xyaxis") { InvestmentsView() }
+                row("Ziele", "target") { GoalsView() }
+                row("Kategorien", "tag") { CategoriesView() }
+            }
+            .listRowBackground(KColor.surface)
+
+            Section("Life") {
+                row("Leben", "heart.text.square") { LifeAreasView() }
+                if HealthKitSync.shared.isAvailable {
+                    row("Gesundheit", "heart.circle") { HealthView() }
                 }
-                .kCard()
+                row("Wünsche", "sparkles") { WishlistView() }
             }
-            .buttonStyle(.plain)
+            .listRowBackground(KColor.surface)
 
-            SyncStatusFooter().padding(.horizontal, 4)
+            Section("Tools") {
+                row("Suche", "magnifyingglass") { SearchView() }
+                row("Einstellungen", "gearshape") { SettingsView() }
+            }
+            .listRowBackground(KColor.surface)
+
+            Section {
+                SyncStatusFooter()
+            }
+            .listRowBackground(Color.clear)
         }
+        .listStyle(.insetGrouped)
+        .kListChrome()
         .navigationTitle("Mehr")
         .toolbar { SyncStatusToolbarItem() }
     }
 
-    private func tile(_ e: Entry) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: e.icon)
-                .font(.title2)
-                .foregroundStyle(e.tint)
-                .frame(width: 44, height: 44)
-                .background(e.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text(e.title).font(.kSerif(.headline, weight: .medium)).foregroundStyle(KTheme.text)
+    @ViewBuilder
+    private func row<D: View>(_ title: String, _ icon: String, @ViewBuilder dest: @escaping () -> D) -> some View {
+        NavigationLink { dest() } label: {
+            Label {
+                Text(title).foregroundStyle(KColor.primary)
+            } icon: {
+                Image(systemName: icon).foregroundStyle(KColor.accent)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .kCard()
     }
 }

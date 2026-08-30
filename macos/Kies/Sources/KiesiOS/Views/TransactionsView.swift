@@ -25,38 +25,41 @@ struct TransactionsView: View {
                 }
                 Toggle("Nur letzte 30 Tage", isOn: onlyLast30Days.binding)
             }
+            .listRowBackground(KColor.surface)
 
             if filteredTransactions.isEmpty {
-                ContentUnavailableView("Keine Buchungen", systemImage: "list.bullet.rectangle", description: Text("Noch keine Buchungen synchronisiert oder Filter zu eng."))
+                Section {
+                    KEmptyState(icon: "list.bullet.rectangle",
+                                title: "Keine Transaktionen",
+                                message: "Noch nichts synchronisiert – oder der Filter ist zu eng gesetzt.")
+                    .listRowBackground(Color.clear)
+                }
             }
-            Section {
-                ForEach(filteredTransactions) { tx in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(tx.description ?? "–")
-                            Text(accountsByID.value[tx.account_id]?.name ?? "Konto \(tx.account_id)")
-                                .font(.caption).foregroundStyle(.secondary)
-                            if tx.pending_client_id != nil {
-                                Text("wird synchronisiert…").font(.caption2).foregroundStyle(.orange)
+
+            ForEach(groupedTransactions, id: \.key) { group in
+                Section {
+                    ForEach(group.items) { tx in
+                        KTransactionRow(title: tx.description ?? "–",
+                                        subtitle: accountsByID.value[tx.account_id]?.name ?? "Konto \(tx.account_id)",
+                                        amount: tx.amount,
+                                        pending: tx.pending_client_id != nil)
+                        .listRowBackground(KColor.surface)
+                        .swipeActions(edge: .trailing) {
+                            Button { editingTransaction = tx } label: {
+                                Label("Bearbeiten", systemImage: "pencil")
                             }
+                            .tint(KColor.accent)
+                            .disabled(tx.id < 0)
                         }
-                        Spacer()
-                        Text(tx.amount, format: .currency(code: "EUR"))
-                            .foregroundStyle(tx.amount < 0 ? Color.primary : Color.green)
                     }
-                    .swipeActions(edge: .trailing) {
-                        Button {
-                            editingTransaction = tx
-                        } label: {
-                            Label("Bearbeiten", systemImage: "pencil")
-                        }
-                        .tint(.blue)
-                        .disabled(tx.id < 0)
-                    }
+                } header: {
+                    Text(group.label).font(.footnote.weight(.semibold)).foregroundStyle(KColor.secondary)
                 }
             }
         }
-        .navigationTitle("Buchungen")
+        .listStyle(.insetGrouped)
+        .kListChrome()
+        .navigationTitle("Transaktionen")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { showNewSheet.value = true } label: { Image(systemName: "plus") }
@@ -90,6 +93,26 @@ struct TransactionsView: View {
             result = result.filter { $0.date >= cutoff }
         }
         return result
+    }
+
+    private struct TxGroup { let key: String; let label: String; let items: [TransactionRecord] }
+
+    /// Nach Datum gruppiert, "Heute" / "Gestern" / ausgeschriebenes Datum.
+    private var groupedTransactions: [TxGroup] {
+        let today = DateFormatter.isoDate.string(from: Date())
+        let yesterday = DateFormatter.isoDate.string(from: Calendar.current.date(byAdding: .day, value: -1, to: Date())!)
+        let order = filteredTransactions.map(\.date)
+        var seen = Set<String>()
+        let keys = order.filter { seen.insert($0).inserted }
+        return keys.map { key in
+            let label: String
+            if key == today { label = "Heute" }
+            else if key == yesterday { label = "Gestern" }
+            else if let d = DateFormatter.isoDate.date(from: key) {
+                label = d.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+            } else { label = key }
+            return TxGroup(key: key, label: label, items: filteredTransactions.filter { $0.date == key })
+        }
     }
 
     private func reload() {
