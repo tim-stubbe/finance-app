@@ -2049,9 +2049,34 @@
 
       <div class="cards" id="steuern-summary-cards"></div>
 
+      <details class="panel" id="steuern-profile-panel">
+        <summary class="panel-title">Steuer-Profil (macht die Beträge persönlicher)</summary>
+        <form id="steuern-profile-form" class="form-grid">
+          <label>Kirchensteuer (auf Abgeltungsteuer)
+            <select id="steuern-church">
+              <option value="0">keine</option>
+              <option value="0.08">8 % (BY / BW)</option>
+              <option value="0.09">9 % (übrige Länder)</option>
+            </select>
+          </label>
+          <label>Persönlicher Grenzsteuersatz (Einkommen), %
+            <input type="number" id="steuern-mtr" min="0" max="45" step="1" placeholder="z. B. 35">
+          </label>
+          <label>Sparerpauschbetrag (€)
+            <input type="number" id="steuern-freibetrag" min="0" step="1" placeholder="1000">
+          </label>
+          <label class="checkbox-label"><input type="checkbox" id="steuern-married"> Zusammenveranlagung</label>
+          <div class="form-actions"><button type="submit" class="btn-primary">Speichern</button></div>
+        </form>
+      </details>
+
       <div class="panel">
         <h3 class="panel-title">Spar-Ansätze</h3>
         <div id="steuern-tips"><p class="page-sub">Wird geladen …</p></div>
+        <details id="steuern-dismissed-wrap" class="hidden" style="margin-top:12px">
+          <summary class="page-sub">Erledigt / nicht relevant</summary>
+          <div id="steuern-dismissed"></div>
+        </details>
       </div>
 
       <div class="panel">

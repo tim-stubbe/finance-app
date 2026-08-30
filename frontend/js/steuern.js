@@ -25,8 +25,48 @@ async function loadSteuernTab() {
     }
     yearSel.addEventListener("change", loadSteuernTips);
   }
+  await loadSteuernProfile();
   await loadSteuernTips();
 }
+
+async function loadSteuernProfile() {
+  let p;
+  try { p = await api("/tax/profile"); } catch { return; }
+  document.getElementById("steuern-church").value = String(p.church_tax_rate || 0);
+  document.getElementById("steuern-mtr").value = p.marginal_tax_rate ? Math.round(p.marginal_tax_rate * 100) : "";
+  document.getElementById("steuern-freibetrag").value = p.sparerpauschbetrag != null ? p.sparerpauschbetrag : "";
+  document.getElementById("steuern-married").checked = !!p.filing_married;
+  // CH: Kirchensteuer/Freibetrag sind DE-Konzepte -> Felder ausgrauen
+  const isCH = p.country === "CH";
+  document.getElementById("steuern-church").disabled = isCH;
+  document.getElementById("steuern-freibetrag").disabled = isCH;
+}
+
+document.getElementById("steuern-profile-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const mtr = parseFloat(document.getElementById("steuern-mtr").value);
+  const fb = parseFloat(document.getElementById("steuern-freibetrag").value);
+  const payload = {
+    church_tax_rate: parseFloat(document.getElementById("steuern-church").value) || 0,
+    marginal_tax_rate: isFinite(mtr) ? mtr / 100 : 0,
+    filing_married: document.getElementById("steuern-married").checked,
+  };
+  if (isFinite(fb)) payload.sparerpauschbetrag = fb;
+  await api("/tax/profile", { method: "PUT", body: JSON.stringify(payload) });
+  toast("Steuer-Profil gespeichert.");
+  await loadSteuernTips();
+});
+
+async function setSteuernTipStatus(tipId, status) {
+  const year = Number(document.getElementById("steuern-year").value) || new Date().getFullYear();
+  try {
+    await api(`/tax/tips/${encodeURIComponent(tipId)}/status`, {
+      method: "POST", body: JSON.stringify({ year, status }),
+    });
+    await loadSteuernTips();
+  } catch { /* api() zeigt den Fehler */ }
+}
+window.setSteuernTipStatus = setSteuernTipStatus;
 
 async function loadSteuernTips() {
   const year = document.getElementById("steuern-year").value || new Date().getFullYear();
@@ -43,21 +83,33 @@ async function loadSteuernTips() {
   document.getElementById("steuern-country").textContent = data.country === "CH" ? "Schweiz" : "Deutschland";
   renderSteuernSummary(data.facts, data.country);
 
-  if (!data.tips.length) {
-    box.innerHTML = `<p class="page-sub">Aktuell keine offensichtlichen Ansatzpunkte – solide aufgestellt.</p>`;
-    return;
-  }
-  box.innerHTML = data.tips.map(t => {
-    const sev = STEUERN_SEV[t.severity] || STEUERN_SEV.info;
-    return `<div class="steuern-tip ${sev.cls}">
-      <div class="steuern-tip-head">
-        <span class="steuern-badge">${sev.label}</span>
-        <strong>${steuernEsc(t.title)}</strong>
-        <span class="steuern-area">${steuernEsc(STEUERN_AREA[t.area] || t.area)}</span>
-      </div>
-      <p>${steuernEsc(t.detail)}</p>
-    </div>`;
-  }).join("");
+  box.innerHTML = data.tips.length
+    ? data.tips.map(t => steuernTipCard(t, false)).join("")
+    : `<p class="page-sub">Aktuell keine offenen Ansatzpunkte – solide aufgestellt.</p>`;
+
+  const dwrap = document.getElementById("steuern-dismissed-wrap");
+  const dbox = document.getElementById("steuern-dismissed");
+  const dismissed = data.dismissed || [];
+  dwrap.classList.toggle("hidden", !dismissed.length);
+  dbox.innerHTML = dismissed.map(t => steuernTipCard(t, true)).join("");
+}
+
+function steuernTipCard(t, isDismissed) {
+  const sev = STEUERN_SEV[t.severity] || STEUERN_SEV.info;
+  const actions = isDismissed
+    ? `<button type="button" class="btn-ghost btn-sm" onclick="setSteuernTipStatus('${t.id}','open')">wieder aufnehmen</button>
+       <span class="steuern-area">${t.status === "done" ? "erledigt" : "nicht relevant"}</span>`
+    : `<button type="button" class="btn-ghost btn-sm" onclick="setSteuernTipStatus('${t.id}','done')">✓ erledigt</button>
+       <button type="button" class="btn-ghost btn-sm" onclick="setSteuernTipStatus('${t.id}','not_relevant')">nicht relevant</button>`;
+  return `<div class="steuern-tip ${sev.cls}${isDismissed ? " is-dismissed" : ""}">
+    <div class="steuern-tip-head">
+      <span class="steuern-badge">${sev.label}</span>
+      <strong>${steuernEsc(t.title)}</strong>
+      <span class="steuern-area">${steuernEsc(STEUERN_AREA[t.area] || t.area)}</span>
+    </div>
+    <p>${steuernEsc(t.detail)}</p>
+    <div class="steuern-tip-actions">${actions}</div>
+  </div>`;
 }
 
 function renderSteuernSummary(f, country) {
