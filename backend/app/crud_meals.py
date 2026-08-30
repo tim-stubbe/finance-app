@@ -19,7 +19,17 @@ def _recipe_out(r: models.Recipe) -> dict:
         "instructions": r.instructions or "",
         "servings": r.servings, "tags": r.tags or "",
         "source": r.source or "manuell",
+        "kcal": r.kcal, "protein_g": r.protein_g,
+        "carbs_g": r.carbs_g, "fat_g": r.fat_g,
     }
+
+
+def _clean_int(v):
+    try:
+        n = int(round(float(v)))
+        return n if n >= 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
 def get_recipes(db: Session):
@@ -40,6 +50,10 @@ def create_recipe(db: Session, data: dict) -> dict:
         servings=data.get("servings"),
         tags=(data.get("tags") or "").strip() or None,
         source=data.get("source") or "manuell",
+        kcal=_clean_int(data.get("kcal")),
+        protein_g=_clean_int(data.get("protein_g")),
+        carbs_g=_clean_int(data.get("carbs_g")),
+        fat_g=_clean_int(data.get("fat_g")),
     )
     db.add(r)
     db.commit()
@@ -56,6 +70,9 @@ def update_recipe(db: Session, recipe_id: int, data: dict):
             setattr(r, k, str(data[k]).strip() or None)
     if "servings" in data:
         r.servings = data["servings"]
+    for k in ("kcal", "protein_g", "carbs_g", "fat_g"):
+        if k in data:
+            setattr(r, k, _clean_int(data[k]))
     db.commit()
     db.refresh(r)
     return _recipe_out(r)

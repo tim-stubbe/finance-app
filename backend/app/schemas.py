@@ -2565,6 +2565,17 @@ class RecipeIn(BaseModel):
     servings: Optional[int] = None
     tags: Optional[str] = ""
     source: Optional[str] = "manuell"
+    kcal: Optional[int] = None
+    protein_g: Optional[int] = None
+    carbs_g: Optional[int] = None
+    fat_g: Optional[int] = None
+
+
+class NutritionProfileIn(BaseModel):
+    nutrition_goal: Optional[str] = None       # zunehmen|abnehmen|halten|muskelaufbau
+    nutrition_prefs: Optional[str] = None
+    nutrition_kcal_target: Optional[int] = None
+    height_cm: Optional[int] = None
 
 
 class MealPlanIn(BaseModel):

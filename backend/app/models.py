@@ -259,6 +259,16 @@ class Settings(Base):
     last_budget_alert_month = Column(String, nullable=True)
     # Für den Vermögensvergleich mit der eigenen Altersgruppe. Nur das Jahr.
     birth_year = Column(Integer, nullable=True)
+    # --- Ernährungs-/Essens-Profil (Essen-Tab, KI-Rezeptsuche) ---
+    # "zunehmen" | "abnehmen" | "halten" | "muskelaufbau"
+    nutrition_goal = Column(String, nullable=False, default="halten")
+    # Freitext: Vorlieben, Unverträglichkeiten, Diät (z.B. "vegetarisch, keine
+    # Nüsse, wenig scharf") - geht 1:1 in den KI-Prompt.
+    nutrition_prefs = Column(String, nullable=True)
+    # Optionales Tageskalorienziel; Körpergröße in cm für die BMI-Einordnung
+    # aus den Apple-Health-Gewichtsdaten.
+    nutrition_kcal_target = Column(Integer, nullable=True)
+    height_cm = Column(Integer, nullable=True)
     # --- Immich (Fotobibliothek) ---
     # URL im Klartext (kein Geheimnis), Schlüssel verschlüsselt wie alle anderen.
     immich_url = Column(String, nullable=True)
@@ -1938,6 +1948,12 @@ class Recipe(Base):
     servings = Column(Integer, nullable=True)
     tags = Column(String, nullable=True)        # CSV
     source = Column(String, nullable=True)      # "manuell" | "ki"
+    # Nährwerte PRO PORTION - optional, bewusst flach (kein Zutaten-Nährwert-
+    # Modell). Von der KI-Rezeptsuche geschätzt oder manuell gepflegt.
+    kcal = Column(Integer, nullable=True)
+    protein_g = Column(Integer, nullable=True)
+    carbs_g = Column(Integer, nullable=True)
+    fat_g = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

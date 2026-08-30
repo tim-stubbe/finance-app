@@ -284,6 +284,11 @@ ensure_columns("settings", {
     "church_tax_rate": "FLOAT DEFAULT 0",
     "marginal_tax_rate": "FLOAT DEFAULT 0",
     "filing_married": "BOOLEAN DEFAULT 0",
+    # Ernährungs-/Essens-Profil (Essen-Tab)
+    "nutrition_goal": "VARCHAR DEFAULT 'halten'",
+    "nutrition_prefs": "VARCHAR",
+    "nutrition_kcal_target": "INTEGER",
+    "height_cm": "INTEGER",
     "proactive_assistant_snoozed_until": "DATETIME",
     "ntfy_enabled": "BOOLEAN DEFAULT 0",
     "ntfy_url": "VARCHAR DEFAULT 'https://ntfy.sh'",
