@@ -2584,6 +2584,27 @@
         </div>
       </header>
 
+      <details class="panel" id="meals-profile-panel">
+        <summary class="panel-title">Ernährungs-Profil <span class="page-sub" id="meals-profile-summary"></span></summary>
+        <p class="page-sub">Steuert die KI-Rezeptvorschläge. Körpergröße + Apple-Health-Gewicht ergeben eine BMI-Einordnung.</p>
+        <form id="meals-profile-form" class="form-grid">
+          <label>Ziel
+            <select id="meals-goal">
+              <option value="halten">Gewicht halten</option>
+              <option value="zunehmen">Zunehmen</option>
+              <option value="muskelaufbau">Muskelaufbau</option>
+              <option value="abnehmen">Abnehmen</option>
+            </select>
+          </label>
+          <label>Körpergröße (cm) <input type="number" id="meals-height" min="0" step="1" style="width:100px"></label>
+          <label>Tageskalorienziel (kcal, optional) <input type="number" id="meals-kcal-target" min="0" step="50" style="width:120px"></label>
+          <label style="grid-column:1/-1">Vorlieben / Unverträglichkeiten / Diät
+            <input type="text" id="meals-prefs" placeholder="z. B. vegetarisch, keine Nüsse, wenig scharf"></label>
+          <div class="form-actions"><button type="submit" class="btn-primary">Speichern</button></div>
+        </form>
+        <p class="page-sub" id="meals-profile-health"></p>
+      </details>
+
       <div class="panel">
         <div class="panel-head-row">
           <h3 class="panel-title">Wochenplan</h3>
@@ -2620,11 +2641,15 @@
           <label style="grid-column:1/-1">Zutaten (eine pro Zeile) <textarea id="meals-recipe-ingredients" rows="4"></textarea></label>
           <label style="grid-column:1/-1">Zubereitung <textarea id="meals-recipe-instructions" rows="3"></textarea></label>
           <label>Tags <input type="text" id="meals-recipe-tags" placeholder="schnell, vegetarisch"></label>
+          <label>kcal / Portion <input type="number" id="meals-recipe-kcal" min="0" step="10" style="width:90px"></label>
+          <label>Eiweiß (g) <input type="number" id="meals-recipe-protein" min="0" step="1" style="width:80px"></label>
+          <label>Kohlenhydrate (g) <input type="number" id="meals-recipe-carbs" min="0" step="1" style="width:80px"></label>
+          <label>Fett (g) <input type="number" id="meals-recipe-fat" min="0" step="1" style="width:80px"></label>
           <div class="form-actions"><button type="submit" class="btn-primary">Rezept speichern</button></div>
         </form>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Rezept</th><th>Tags</th><th></th></tr></thead>
+            <thead><tr><th>Rezept</th><th>Nährwerte / Portion</th><th>Tags</th><th></th></tr></thead>
             <tbody id="meals-recipe-list"></tbody>
           </table>
         </div>

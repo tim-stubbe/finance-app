@@ -15,6 +15,11 @@ function mealsWeekRange() {
   return { days, from: iso(days[0]), to: iso(days[6]), iso };
 }
 
+const MEALS_GOAL_LABEL = {
+  halten: "Gewicht halten", zunehmen: "Zunehmen",
+  muskelaufbau: "Muskelaufbau", abnehmen: "Abnehmen",
+};
+
 async function loadMealsTab() {
   const { days, from, to, iso } = mealsWeekRange();
   document.getElementById("meals-week-label").textContent =
@@ -27,6 +32,47 @@ async function loadMealsTab() {
   } catch { mealsRecipes = []; mealsPlan = []; }
   renderMealsPlan(days, iso);
   renderMealsRecipes();
+  loadMealsProfile();
+}
+
+async function loadMealsProfile() {
+  let p;
+  try { p = await api("/meals/profile"); } catch { return; }
+  document.getElementById("meals-goal").value = p.nutrition_goal || "halten";
+  document.getElementById("meals-height").value = p.height_cm || "";
+  document.getElementById("meals-kcal-target").value = p.nutrition_kcal_target || "";
+  document.getElementById("meals-prefs").value = p.nutrition_prefs || "";
+  document.getElementById("meals-profile-summary").textContent =
+    "· " + (MEALS_GOAL_LABEL[p.nutrition_goal] || p.nutrition_goal);
+  const h = document.getElementById("meals-profile-health");
+  if (p.weight_kg != null) {
+    h.textContent = `Zuletzt ${p.weight_kg} kg`
+      + (p.bmi ? ` · BMI ${p.bmi} (${p.bmi_label})` : " · Körpergröße eintragen für BMI");
+  } else {
+    h.textContent = "Kein Gewicht aus Apple Health vorhanden.";
+  }
+}
+
+document.getElementById("meals-profile-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const num = id => { const v = parseInt(document.getElementById(id).value, 10); return isFinite(v) ? v : null; };
+  await api("/meals/profile", { method: "PUT", body: JSON.stringify({
+    nutrition_goal: document.getElementById("meals-goal").value,
+    nutrition_prefs: document.getElementById("meals-prefs").value.trim(),
+    nutrition_kcal_target: num("meals-kcal-target"),
+    height_cm: num("meals-height"),
+  }) });
+  toast("Ernährungs-Profil gespeichert – KI-Vorschläge richten sich jetzt danach.");
+  loadMealsProfile();
+});
+
+function mealsNutritionText(r) {
+  if (!r || r.kcal == null) return "";
+  const parts = [`${r.kcal} kcal`];
+  if (r.protein_g != null) parts.push(`E ${r.protein_g} g`);
+  if (r.carbs_g != null) parts.push(`K ${r.carbs_g} g`);
+  if (r.fat_g != null) parts.push(`F ${r.fat_g} g`);
+  return parts.join(" · ");
 }
 
 function mealsCellSelect(dayIso, meal) {
@@ -76,10 +122,11 @@ function renderMealsRecipes() {
   tb.innerHTML = mealsRecipes.length
     ? mealsRecipes.map(r => `<tr>
         <td>${esc(r.name)}${r.servings ? ` <span class="sh-sub">${r.servings} Portionen</span>` : ""}</td>
+        <td class="page-sub">${esc(mealsNutritionText(r)) || "–"}</td>
         <td>${esc(r.tags || "")}</td>
         <td><button type="button" class="link-btn" data-meals-recipe-del="${r.id}">Löschen</button></td>
       </tr>`).join("")
-    : emptyRow(3, "list", "Noch keine Rezepte.");
+    : emptyRow(4, "list", "Noch keine Rezepte.");
 }
 
 document.getElementById("meals-recipe-list").addEventListener("click", async e => {
@@ -93,6 +140,7 @@ document.getElementById("meals-recipe-list").addEventListener("click", async e =
 document.getElementById("meals-recipe-form").addEventListener("submit", async e => {
   e.preventDefault();
   const sv = document.getElementById("meals-recipe-servings").value;
+  const iv = id => { const v = parseInt(document.getElementById(id).value, 10); return isFinite(v) ? v : null; };
   await api("/meals/recipes", {
     method: "POST",
     body: JSON.stringify({
@@ -101,6 +149,8 @@ document.getElementById("meals-recipe-form").addEventListener("submit", async e 
       instructions: document.getElementById("meals-recipe-instructions").value,
       servings: sv ? parseInt(sv, 10) : null,
       tags: document.getElementById("meals-recipe-tags").value.trim(),
+      kcal: iv("meals-recipe-kcal"), protein_g: iv("meals-recipe-protein"),
+      carbs_g: iv("meals-recipe-carbs"), fat_g: iv("meals-recipe-fat"),
     }),
   });
   e.target.reset();
@@ -120,6 +170,7 @@ document.getElementById("meals-ai-suggest").addEventListener("click", async () =
   host.innerHTML = list.length ? list.map((r, i) => `
     <div class="sh-auto-card">
       <strong>${esc(r.name)}</strong> ${r.tags ? `<span class="sh-sub">${esc(r.tags)}</span>` : ""}
+      ${mealsNutritionText(r) ? `<p class="page-sub"><strong>${esc(mealsNutritionText(r))}</strong></p>` : ""}
       <p class="page-sub" style="white-space:pre-line">${esc(r.ingredients)}</p>
       <p class="page-sub" style="white-space:pre-line">${esc(r.instructions)}</p>
       <button type="button" class="btn-ghost btn-sm" data-meals-save="${i}">Als Rezept speichern</button>
