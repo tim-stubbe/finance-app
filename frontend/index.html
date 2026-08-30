@@ -1155,13 +1155,19 @@
 
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a6 6 0 0 0 6-6c0-2.5-1.5-4-2.5-5.5C14.5 9 14 7 14 5c-2 1.5-3.5 4-3.5 6.5C9 10 8.5 8.5 8.5 7 7 8.5 6 11 6 13.5A6 6 0 0 0 12 22z"/></svg> Rendite-Heatmap</h3>
-        <p class="page-sub">Zellengröße = Anteil am Portfolio, Farbe = Rendite (rot = Verlust, grün = Gewinn).</p>
-        <div class="range-tabs" id="heatmap-view-tabs">
-          <button type="button" class="range-tab active" data-heatmap-view="position">Position</button>
-          <button type="button" class="range-tab" data-heatmap-view="sector">Sektor</button>
-          <button type="button" class="range-tab" data-heatmap-view="country">Region</button>
-          <button type="button" class="range-tab" data-heatmap-view="asset_type">Anlageklasse</button>
-          <button type="button" class="range-tab" data-heatmap-view="currency">Währung</button>
+        <p class="page-sub">Zellengröße = Anteil (nach Wert oder eingesetztem Kapital), Farbe = Rendite (rot = Verlust, grün = Gewinn).</p>
+        <div class="heatmap-controls">
+          <div class="range-tabs" id="heatmap-view-tabs">
+            <button type="button" class="range-tab active" data-heatmap-view="position">Position</button>
+            <button type="button" class="range-tab" data-heatmap-view="sector">Sektor</button>
+            <button type="button" class="range-tab" data-heatmap-view="country">Region</button>
+            <button type="button" class="range-tab" data-heatmap-view="asset_type">Anlageklasse</button>
+            <button type="button" class="range-tab" data-heatmap-view="currency">Währung</button>
+          </div>
+          <div class="range-tabs" id="heatmap-size-tabs" title="Wonach sich die Kachelgröße richtet">
+            <button type="button" class="range-tab active" data-heatmap-size="wert">Größe: Wert</button>
+            <button type="button" class="range-tab" data-heatmap-size="investiert">Größe: Investiert</button>
+          </div>
         </div>
         <div class="heatmap" id="heatmap-grid"></div>
       </div>

@@ -425,6 +425,11 @@ function gainHeatColor(pct) {
 // nach Rendite. Gruppierte Ansichten zeigen den wertgewichteten
 // Durchschnitts-Gain der Gruppe.
 let heatmapView = "position";
+// Kachelgröße: nach aktuellem Wert ("wert") oder nach eingesetztem Kapital
+// ("investiert", = Summe der Kaufkurse). Auf Wunsch von Tim ist "investiert"
+// verfügbar; die Wahl merkt sich der Browser.
+let heatmapSizeBasis = "wert";
+try { heatmapSizeBasis = localStorage.getItem("heatmapSizeBasis") || "wert"; } catch (e) {}
 const HEATMAP_GROUP_LABELS = {
   sector: "Ohne Sektor", country: "Ohne Land", currency: "Ohne Währung",
 };
@@ -432,7 +437,8 @@ const HEATMAP_GROUP_LABELS = {
 function heatmapGroupsFor(view) {
   if (view === "position") {
     return holdingsCache.map(h => ({
-      key: `h${h.id}`, label: h.name, value: h.current_value, gain_pct: h.gain_pct, holdingId: h.id,
+      key: `h${h.id}`, label: h.name, value: h.current_value,
+      invested: h.purchase_value, gain_pct: h.gain_pct, holdingId: h.id,
     }));
   }
   const groups = new Map();
@@ -440,17 +446,22 @@ function heatmapGroupsFor(view) {
     let raw = h[view];
     if (view === "asset_type") raw = ASSET_TYPE_LABELS[h.asset_type] || h.asset_type;
     const key = raw && String(raw).trim() ? raw : (HEATMAP_GROUP_LABELS[view] || "Unbekannt");
-    if (!groups.has(key)) groups.set(key, { key, label: key, value: 0, weightedGain: 0, holdingIds: [] });
+    if (!groups.has(key)) groups.set(key, { key, label: key, value: 0, invested: 0, weightedGain: 0, holdingIds: [] });
     const g = groups.get(key);
     g.value += h.current_value;
+    g.invested += h.purchase_value || 0;
     g.weightedGain += h.current_value * h.gain_pct;
     g.holdingIds.push(h.id);
   });
   return [...groups.values()].map(g => ({
-    key: g.key, label: g.label, value: g.value,
+    key: g.key, label: g.label, value: g.value, invested: g.invested,
     gain_pct: g.value ? g.weightedGain / g.value : 0,
     holdingIds: g.holdingIds,
   }));
+}
+
+function heatmapSizeOf(g) {
+  return (heatmapSizeBasis === "investiert" ? g.invested : g.value) || 0;
 }
 
 function heatmapFilterChip(view) {
@@ -465,6 +476,8 @@ let heatmapFilterGroup = null;
 
 async function loadHeatmap() {
   if (!holdingsCache.length) await loadHoldings();
+  document.querySelectorAll("#heatmap-size-tabs .range-tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.heatmapSize === heatmapSizeBasis));
   const grid = document.getElementById("heatmap-grid");
   const chipHost = document.getElementById("heatmap-filter-chip") || (() => {
     const d = document.createElement("div");
@@ -488,17 +501,23 @@ async function loadHeatmap() {
     groups = heatmapGroupsFor("position").filter(g => heatmapFilterGroup.holdingIds.includes(g.holdingId));
     if (!groups.length) { heatmapFilterGroup = null; groups = heatmapGroupsFor(heatmapView); }
   }
-  const totalValue = groups.reduce((s, g) => s + g.value, 0) || 1;
+  const totalValue = groups.reduce((s, g) => s + heatmapSizeOf(g), 0) || 1;
   // Größte zuerst - macht die Fläche als "Treemap-artige" Anordnung lesbarer,
   // Chart.js-Treemap wäre ein zusätzliches Plugin nur für diese eine Ansicht
   // gewesen, reines CSS-Grid mit flex-basis reicht hier völlig.
-  groups.sort((a, b) => b.value - a.value);
+  groups.sort((a, b) => heatmapSizeOf(b) - heatmapSizeOf(a));
   groups.forEach(g => {
-    const share = g.value / totalValue;
+    const share = heatmapSizeOf(g) / totalValue;
     const tile = document.createElement("div");
     tile.className = "heatmap-tile";
     tile.style.background = gainHeatColor(g.gain_pct);
     tile.style.flexBasis = `${Math.max(11, Math.round(share * 100))}%`;
+    // flex-grow ebenfalls proportional, sonst gleicht das Standard-grow:1 die
+    // Breiten innerhalb einer Zeile wieder aus und der Anteil verpufft.
+    tile.style.flexGrow = String(Math.max(1, Math.round(share * 100)));
+    // Größere Position = auch höher (nicht nur breiter) -> echterer Treemap-
+    // Eindruck. 96 px Basis + bis ~200 px extra für die dickste Position.
+    tile.style.minHeight = `${Math.round(96 + Math.min(share, 0.5) * 400)}px`;
     // Ehrlich behandeln statt so tun als wäre 0% Rendite echt (Spezifikation
     // A.4): current_price fehlt z.B. bei frisch importierten/manuell
     // angelegten Positionen, denen noch kein Kursabruf gelungen ist -
@@ -509,13 +528,18 @@ async function loadHeatmap() {
     // heatmapView weiterhin z.B. "sector", obwohl gerade Einzelpositionen
     // gezeigt werden, siehe heatmapFilterGroup weiter unten).
     const noPrice = g.holdingId != null && holdingsCache.find(h => h.id === g.holdingId)?.current_price == null;
+    const shareLabel = share >= 0.01 ? (share * 100).toFixed(1) : "<1";
+    const basisWord = heatmapSizeBasis === "investiert" ? "des eingesetzten Kapitals" : "des Portfolios";
     tile.title = noPrice
       ? `${g.label} — kein aktueller Kurs, Rendite unbekannt`
-      : `${g.label} — ${share >= 0.01 ? (share * 100).toFixed(1) : "<1"}% des Portfolios`;
+      : `${g.label} — ${shareLabel}% ${basisWord} · Wert ${eur(g.value)} · investiert ${eur(g.invested || 0)}`;
+    const valueLine = heatmapSizeBasis === "investiert"
+      ? `${eur(g.invested || 0)} investiert`
+      : `${eur(g.value)}${noPrice ? " · kein Kurs" : ""}`;
     tile.innerHTML = `
       <span class="hm-name">${esc(g.label)}</span>
       <span class="hm-pct">${noPrice ? "? %" : `${g.gain_pct >= 0 ? "+" : ""}${g.gain_pct.toFixed(1)}%`}</span>
-      <span class="hm-value">${eur(g.value)}${noPrice ? " · kein Kurs" : ""}</span>`;
+      <span class="hm-value">${valueLine}</span>`;
     tile.addEventListener("click", () => {
       if (heatmapView === "position" || heatmapFilterGroup) {
         if (g.holdingId) openHoldingDetail(g.holdingId);
@@ -534,6 +558,15 @@ document.getElementById("heatmap-view-tabs").addEventListener("click", e => {
   document.querySelectorAll("#heatmap-view-tabs .range-tab").forEach(b => b.classList.toggle("active", b === btn));
   heatmapView = btn.dataset.heatmapView;
   heatmapFilterGroup = null;
+  loadHeatmap();
+});
+
+document.getElementById("heatmap-size-tabs")?.addEventListener("click", e => {
+  const btn = e.target.closest("[data-heatmap-size]");
+  if (!btn) return;
+  document.querySelectorAll("#heatmap-size-tabs .range-tab").forEach(b => b.classList.toggle("active", b === btn));
+  heatmapSizeBasis = btn.dataset.heatmapSize;
+  try { localStorage.setItem("heatmapSizeBasis", heatmapSizeBasis); } catch (e) {}
   loadHeatmap();
 });
 

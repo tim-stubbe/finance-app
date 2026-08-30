@@ -1968,10 +1968,12 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
    Flexbox mit wrap umgestellt - flex-basis kommt jetzt pro Kachel aus JS
    (Anteil am Portfolio), min-width hält es auf schmalen Viewports lesbar
    statt winziger, unlesbarer Kacheln (Spezifikationspunkt A.6/D). */
+.heatmap-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
 .heatmap {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: stretch;
 }
 .heatmap-tile {
   border-radius: var(--radius-sm);
