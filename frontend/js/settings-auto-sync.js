@@ -148,6 +148,18 @@ document.getElementById("notifications-test").addEventListener("click", async ()
   }
 });
 
+document.getElementById("notifications-test-proactive").addEventListener("click", async () => {
+  const statusEl = document.getElementById("notifications-status");
+  statusEl.textContent = "Erzeuge proaktive Meldung (kann kurz dauern) …";
+  try {
+    const r = await api("/notifications/test-proactive", { method: "POST" });
+    statusEl.textContent = r.message;
+    loadNotificationLog();
+  } catch (e) {
+    // api() zeigt den Fehler bereits per alert() an
+  }
+});
+
 document.getElementById("telegram-remove").addEventListener("click", async () => {
   await api("/settings/notifications/telegram", { method: "DELETE" });
   toast("Telegram entfernt.");

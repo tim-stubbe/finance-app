@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from typing import List
 
-from .. import schemas, auth, bank_sync, notifications, calls, radicale_sync, travel_time, models
+from .. import schemas, auth, bank_sync, notifications, calls, radicale_sync, travel_time, models, proactive
 from ..database import get_db
 
 notify_settings_router = APIRouter(prefix="/api")
@@ -71,6 +71,28 @@ def send_test_notification(db: Session = Depends(get_db)):
     except Exception as e:
         return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
     return schemas.NotificationTestResult(ok=True, message="Gesendet - schau in Telegram nach.")
+
+
+@notify_settings_router.post("/notifications/test-proactive", response_model=schemas.NotificationTestResult)
+def send_test_proactive_notification(db: Session = Depends(get_db)):
+    """Schickt EINE proaktive Beispielmeldung per Telegram - genau so
+    formatiert wie der echte Job (siehe main._scheduled_proactive_assistant),
+    aber ohne dessen Gates. Zeigt, wie sich der proaktive Assistent meldet."""
+    settings = auth.get_or_create_settings(db)
+    if not settings.telegram_bot_token_encrypted or not settings.telegram_chat_id:
+        return schemas.NotificationTestResult(ok=False, message="Bot-Token und Chat-ID zuerst speichern.")
+    if not settings.notifications_enabled:
+        return schemas.NotificationTestResult(ok=False, message="Benachrichtigungen sind aus.")
+    try:
+        text = proactive.preview(db, settings)
+    except Exception as e:  # noqa: BLE001
+        return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
+    notifications.notify(
+        settings,
+        "🤖 " + text + "\n\n(/proaktiv pause 6 für Ruhe · /proaktiv aus zum Abschalten)",
+        urgent=True,  # Testknopf -> auch in Ruhezeiten durchlassen
+    )
+    return schemas.NotificationTestResult(ok=True, message="Proaktive Testmeldung gesendet - schau in Telegram nach.")
 
 
 @notify_settings_router.get("/notifications/log", response_model=List[schemas.NotificationLogEntry])

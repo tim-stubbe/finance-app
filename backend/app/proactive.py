@@ -252,3 +252,31 @@ def generate(db, settings) -> tuple[str, str] | None:
     if h == (settings.proactive_assistant_last_hash or ""):
         return None
     return reply, h
+
+
+def preview(db, settings) -> str:
+    """Wie generate(), aber OHNE die Gates (opt-in, Abstand, Snooze, Dedup,
+    unveränderter Snapshot) und ohne Nebeneffekte - für einen Testknopf, der
+    zeigt, wie eine proaktive Meldung aussähe. Fällt auf einen Beispieltext
+    zurück, wenn die KI "NICHTS" sagt oder Ollama fehlt."""
+    example = ("Du hast diese Woche im Schnitt deutlich weniger Schritte gemacht als sonst "
+               "und morgen steht ein Termin ohne Ort im Kalender - willst du kurz beides klären?")
+    model = _chat_model(settings)
+    if not (settings.ollama_url and model):
+        return example
+    spaces = crud.get_spaces(db)
+    space_id = spaces[0].id if spaces else 1
+    snapshot = build_snapshot(db, settings, space_id)
+    try:
+        reply = ollama_client.chat(
+            settings.ollama_url, model,
+            [{"role": "system", "content": _SYSTEM},
+             {"role": "user", "content": "Snapshot:\n" + snapshot}],
+            timeout=90,
+        ).strip()
+    except Exception:
+        return example
+    compact = reply.strip().strip(".").upper()
+    if len(reply.strip()) < 12 or any(compact.startswith(tok) for tok in _NOTHING_TOKENS):
+        return example
+    return reply
