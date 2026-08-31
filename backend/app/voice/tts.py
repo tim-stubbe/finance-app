@@ -12,6 +12,11 @@ Backends (Env `TTS_BACKEND`, siehe voice/__init__.py):
     Modell-Download wie `ollama pull`, danach offline).
   - "http": selbst gehosteter Piper-HTTP-Server im eigenen Netz
     (`python -m piper.http_server ...`), Adresse in `PIPER_HTTP_URL`.
+    piper-tts >=1.7 synthetisiert unter `POST /synthesize` mit JSON
+    `{"text": ...}` -> WAV; aeltere Builds nahmen den rohen Text im
+    POST-Body direkt auf `/`. HttpPiperTTS bedient beide: zeigt die URL
+    nicht auf `/synthesize`, wird der Pfad automatisch ergaenzt und JSON
+    geschickt.
 """
 
 from __future__ import annotations
@@ -98,7 +103,12 @@ class HttpPiperTTS(TTS):
     """
 
     def __init__(self, url: str | None = None):
-        self.url = (url or os.environ.get("PIPER_HTTP_URL", "")).rstrip("/")
+        raw = (url or os.environ.get("PIPER_HTTP_URL", "")).rstrip("/")
+        # piper-tts >=1.7: Synthese liegt auf /synthesize. Zeigt die konfigu-
+        # rierte URL nur auf den Host/Root, den Pfad automatisch ergaenzen.
+        if raw and not raw.rsplit("/", 1)[-1] in ("synthesize", "api"):
+            raw = raw + "/synthesize"
+        self.url = raw
 
     def speak(self, text: str) -> bytes:
         text = (text or "").strip()
@@ -110,7 +120,7 @@ class HttpPiperTTS(TTS):
             )
         import requests
         try:
-            resp = requests.post(self.url, data=text.encode("utf-8"), timeout=60)
+            resp = requests.post(self.url, json={"text": text}, timeout=60)
             resp.raise_for_status()
         except requests.RequestException as exc:
             raise RuntimeError(f"Piper-HTTP-Server nicht erreichbar: {exc}") from exc
