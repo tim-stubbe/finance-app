@@ -51,7 +51,7 @@ from .routers.hub import hub_router
 from .routers.jarvis import jarvis_router
 from .routers.meals import meals_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
-from .db_migrate import run_migrations
+from .db_migrate import run_migrations, verify_and_heal_schema
 
 # Alembic zuerst: bestehende DBs werden auf die Baseline gestempelt, dann laufen
 # alle offenen Revisionen. Erst danach create_all/ensure_columns als
@@ -360,6 +360,10 @@ with engine.connect() as _conn:
             f"UPDATE {_table} SET updated_at = {_fallback} WHERE updated_at IS NULL"
         )
     _conn.commit()
+
+# Letztes Netz: fehlende NULLABLE Modell-Spalten still nachziehen + laut loggen,
+# falls doch mal eine Migration vergessen wurde (siehe recipes.kcal-Vorfall).
+verify_and_heal_schema()
 
 _bootstrap_db = SessionLocal()
 _settings = auth.get_or_create_settings(_bootstrap_db)

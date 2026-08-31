@@ -9,8 +9,10 @@ from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 
+from sqlalchemy import inspect, text
+
 from app.database import engine, Base
-from app.db_migrate import _alembic_config
+from app.db_migrate import _alembic_config, verify_and_heal_schema
 
 
 def test_db_is_at_alembic_head():
@@ -37,3 +39,13 @@ def test_no_structural_schema_drift():
         flat.extend(d if isinstance(d, list) else [d])
     offenders = [d for d in flat if d and d[0] in structural]
     assert not offenders, f"Schema weicht von den Migrationen ab: {offenders}"
+
+
+def test_verify_and_heal_schema_readds_missing_nullable_column():
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE recipes DROP COLUMN kcal"))
+    assert "kcal" not in {c["name"] for c in inspect(engine).get_columns("recipes")}
+
+    verify_and_heal_schema()
+
+    assert "kcal" in {c["name"] for c in inspect(engine).get_columns("recipes")}
