@@ -1042,6 +1042,14 @@ class BackupFileOut(BaseModel):
     created_at: datetime
 
 
+class BackupEncryptionOut(BaseModel):
+    configured: bool
+
+
+class BackupEncryptionUpdate(BaseModel):
+    passphrase: str
+
+
 # ---------- Steuer (Vorabpauschale / realisierte Gewinne) ----------
 class VorabpauschaleOut(BaseModel):
     holding_id: int

@@ -24,11 +24,11 @@ import zipfile
 from datetime import date, datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 
-from .. import schemas, auth
+from .. import schemas, auth, bank_sync, backup_crypto
 from ..database import get_db, DATA_DIR
 
 # Eigenständig berechnet statt aus main importiert (main.py importiert diesen
@@ -55,25 +55,46 @@ def _build_backup_zip_bytes() -> bytes:
     return buf.getvalue()
 
 
-@backup_router.get("/backup")
-def backup():
+def _backup_passphrase(db: Session) -> str | None:
+    """Entschluesselte Backup-Passphrase, falls konfiguriert - sonst None
+    (dann bleiben die Backups nackte ZIPs, wie bisher)."""
+    s = auth.get_or_create_settings(db)
+    if not s.backup_passphrase_encrypted:
+        return None
+    return bank_sync.decrypt_secret(s.secret_key, s.backup_passphrase_encrypted)
+
+
+def _package_backup(db: Session) -> tuple[bytes, str]:
+    """Backup-Bytes + Dateiendung. Mit Passphrase -> KIESBK-Container (.kies),
+    ohne -> ZIP."""
     data = _build_backup_zip_bytes()
-    filename = f"finanztool_backup_{date.today().isoformat()}.zip"
+    passphrase = _backup_passphrase(db)
+    if passphrase:
+        return backup_crypto.encrypt(data, passphrase), backup_crypto.ENCRYPTED_EXT
+    return data, backup_crypto.PLAIN_EXT
+
+
+@backup_router.get("/backup")
+def backup(db: Session = Depends(get_db)):
+    data, ext = _package_backup(db)
+    filename = f"finanztool_backup_{date.today().isoformat()}{ext}"
+    encrypted = ext == backup_crypto.ENCRYPTED_EXT
     return StreamingResponse(
         io.BytesIO(data),
-        media_type="application/zip",
+        media_type="application/octet-stream" if encrypted else "application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
 BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 os.makedirs(BACKUP_DIR, exist_ok=True)
-BACKUP_FILENAME_RE = re.compile(r"^auto_backup_\d{8}_\d{6}\.zip$")
+# .kies = verschluesselter Container (siehe backup_crypto), .zip = wie bisher.
+BACKUP_FILENAME_RE = re.compile(r"^auto_backup_\d{8}_\d{6}\.(?:zip|kies)$")
 
 
-def write_backup_to_disk(retention: int) -> schemas.BackupFileOut:
-    data = _build_backup_zip_bytes()
-    filename = f"auto_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
+def write_backup_to_disk(db: Session, retention: int) -> schemas.BackupFileOut:
+    data, ext = _package_backup(db)
+    filename = f"auto_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}{ext}"
     full_path = os.path.join(BACKUP_DIR, filename)
     with open(full_path, "wb") as f:
         f.write(data)
@@ -109,7 +130,7 @@ def list_backups():
 @backup_router.post("/backups/run", response_model=schemas.BackupFileOut)
 def run_backup_now(db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
-    return write_backup_to_disk(settings.backup_retention)
+    return write_backup_to_disk(db, settings.backup_retention)
 
 
 def _resolve_backup_path(filename: str) -> str:
@@ -144,8 +165,17 @@ def delete_backup(filename: str):
 
 
 @backup_router.post("/restore")
-def restore(file: UploadFile = File(...)):
+def restore(file: UploadFile = File(...), passphrase: str = Form("")):
     content = file.file.read()
+
+    if backup_crypto.is_encrypted(content):
+        if not passphrase.strip():
+            raise HTTPException(400, "Dieses Backup ist verschlüsselt – bitte die Passphrase angeben.")
+        try:
+            content = backup_crypto.decrypt(content, passphrase)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+
     try:
         zf = zipfile.ZipFile(io.BytesIO(content))
     except zipfile.BadZipFile:

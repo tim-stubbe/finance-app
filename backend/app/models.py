@@ -201,6 +201,12 @@ class Settings(Base):
     auto_backup_enabled = Column(Boolean, nullable=False, default=True)
     backup_hour = Column(Integer, nullable=False, default=2)
     backup_retention = Column(Integer, nullable=False, default=14)
+    # Optionale Passphrase fuer verschluesselte Backups (backup_crypto.py). Wenn
+    # gesetzt, werden Auto-Backups UND der manuelle Download als
+    # KIESBK-Container geschrieben - ein Backup, das die Maschine verlaesst,
+    # ist ohne die Passphrase wertlos. Verschluesselt gespeichert (muss zum
+    # Verschluesseln wieder lesbar sein), gleiches Muster wie die Secrets oben.
+    backup_passphrase_encrypted = Column(String, nullable=True)
     sparerpauschbetrag = Column(Float, nullable=False, default=1000.0)
     # Steuer-Profil für die personalisierten Spar-Tipps (tax_advice.py) -
     # rein für die Näherungsrechnung, keine Steuerberatung.

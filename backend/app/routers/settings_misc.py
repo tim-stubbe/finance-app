@@ -223,6 +223,31 @@ def remove_native_sync_secret(db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# ---------------- Backup-Verschluesselung (siehe backup_crypto.py) ----------------
+@settings_misc_router.get("/settings/backup-encryption", response_model=schemas.BackupEncryptionOut)
+def get_backup_encryption(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return schemas.BackupEncryptionOut(configured=bool(s.backup_passphrase_encrypted))
+
+
+@settings_misc_router.put("/settings/backup-encryption", response_model=schemas.BackupEncryptionOut)
+def set_backup_encryption(data: schemas.BackupEncryptionUpdate, db: Session = Depends(get_db)):
+    if len(data.passphrase) < 8:
+        raise HTTPException(400, "Passphrase muss mindestens 8 Zeichen haben.")
+    s = auth.get_or_create_settings(db)
+    s.backup_passphrase_encrypted = bank_sync.encrypt_secret(s.secret_key, data.passphrase)
+    db.commit()
+    return schemas.BackupEncryptionOut(configured=True)
+
+
+@settings_misc_router.delete("/settings/backup-encryption")
+def remove_backup_encryption(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    s.backup_passphrase_encrypted = None
+    db.commit()
+    return {"ok": True}
+
+
 @webhook_public_router.post("/webhook/business-issue", response_model=schemas.BusinessIssueOut)
 def webhook_create_business_issue(
     data: schemas.WebhookIssueCreate, db: Session = Depends(get_db),

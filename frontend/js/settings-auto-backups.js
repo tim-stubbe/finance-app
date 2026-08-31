@@ -69,6 +69,36 @@ document.getElementById("backup-btn").addEventListener("click", () => {
   window.location.href = API + "/backup";
 });
 
+async function loadBackupEncryption() {
+  const el = document.getElementById("backup-enc-status");
+  if (!el) return;
+  try {
+    const s = await api("/settings/backup-encryption");
+    el.textContent = s.configured
+      ? "Aktiv – Backups werden als verschlüsselter .kies-Container gespeichert."
+      : "Backups werden unverschlüsselt als ZIP gespeichert.";
+  } catch { /* Panel evtl. nicht sichtbar */ }
+}
+
+document.getElementById("backup-enc-save")?.addEventListener("click", async () => {
+  const inp = document.getElementById("backup-enc-passphrase");
+  const pw = inp.value;
+  if (pw.length < 8) { toast("Passphrase muss mindestens 8 Zeichen haben."); return; }
+  try {
+    await api("/settings/backup-encryption", { method: "PUT", body: JSON.stringify({ passphrase: pw }) });
+    inp.value = "";
+    toast("Backup-Verschlüsselung aktiviert. Passphrase gut aufbewahren!");
+    loadBackupEncryption();
+  } catch { toast("Konnte nicht gespeichert werden."); }
+});
+
+document.getElementById("backup-enc-clear")?.addEventListener("click", async () => {
+  if (!confirm("Verschlüsselung abschalten? Künftige Backups sind wieder unverschlüsselte ZIPs.")) return;
+  await api("/settings/backup-encryption", { method: "DELETE" });
+  toast("Backup-Verschlüsselung ausgeschaltet.");
+  loadBackupEncryption();
+});
+
 document.getElementById("restore-btn").addEventListener("click", async () => {
   const fileInput = document.getElementById("restore-file");
   const resultEl = document.getElementById("restore-result");
@@ -79,8 +109,15 @@ document.getElementById("restore-btn").addEventListener("click", async () => {
   if (!confirm("Achtung: Das überschreibt ALLE aktuellen Daten unwiderruflich mit dem Inhalt des Backups. Fortfahren?")) return;
   const fd = new FormData();
   fd.append("file", fileInput.files[0]);
-  const result = await api("/restore", { method: "POST", body: fd });
-  resultEl.textContent = result.message;
-  fileInput.value = "";
+  const pwEl = document.getElementById("restore-passphrase");
+  if (pwEl && pwEl.value) fd.append("passphrase", pwEl.value);
+  try {
+    const result = await api("/restore", { method: "POST", body: fd });
+    resultEl.textContent = result.message;
+    fileInput.value = "";
+    if (pwEl) pwEl.value = "";
+  } catch (e) {
+    resultEl.textContent = (e && e.message) || "Wiederherstellung fehlgeschlagen (Passphrase korrekt?).";
+  }
 });
 

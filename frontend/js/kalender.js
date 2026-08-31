@@ -298,6 +298,7 @@ async function loadSettingsTab() {
   await loadCallSettings();
   await loadBackupSettings();
   await loadBackupsList();
+  await loadBackupEncryption();
   await loadTaxExportFilters();
   await loadFintsSettings();
   await loadBankConnections();

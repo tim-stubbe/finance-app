@@ -3689,15 +3689,28 @@
 
       <div class="panel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6h8V3"/><circle cx="12" cy="15" r="2.5"/></svg> Datensicherung</h3>
-        <p class="page-sub">Vollständiges Backup (Datenbank + Belege) als ZIP herunterladen oder wiederherstellen.</p>
+        <p class="page-sub">Vollständiges Backup (Datenbank + Belege) herunterladen oder wiederherstellen.</p>
         <div class="filter-row">
           <button id="backup-btn" class="btn-primary">Backup herunterladen</button>
         </div>
+
+        <div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:8px">
+          <h4 style="margin:0 0 4px">Backup-Verschlüsselung</h4>
+          <p class="page-sub" id="backup-enc-status">Backups werden unverschlüsselt als ZIP gespeichert.</p>
+          <p class="page-sub">Mit Passphrase werden sowohl die automatischen Backups als auch der manuelle Download als verschlüsselter <code>.kies</code>-Container gespeichert – ein Backup, das die Maschine verlässt, ist ohne die Passphrase wertlos. <strong>Passphrase gut aufbewahren – ohne sie ist das Backup nicht wiederherstellbar.</strong></p>
+          <div class="filter-row">
+            <input type="password" id="backup-enc-passphrase" placeholder="Passphrase (min. 8 Zeichen)" autocomplete="new-password">
+            <button type="button" id="backup-enc-save" class="btn-ghost">Aktivieren / Ändern</button>
+            <button type="button" id="backup-enc-clear" class="btn-ghost btn-danger">Verschlüsselung aus</button>
+          </div>
+        </div>
+
         <div class="danger-zone">
           <h4>Backup wiederherstellen</h4>
           <p class="page-sub">Achtung: überschreibt alle aktuellen Daten unwiderruflich.</p>
           <div class="filter-row">
-            <input type="file" id="restore-file" accept=".zip">
+            <input type="file" id="restore-file" accept=".zip,.kies">
+            <input type="password" id="restore-passphrase" placeholder="Passphrase (nur bei .kies)" autocomplete="off">
             <button id="restore-btn" class="btn-ghost btn-danger">Wiederherstellen</button>
           </div>
           <p id="restore-result" class="import-result"></p>

@@ -51,6 +51,12 @@ from .routers.hub import hub_router
 from .routers.jarvis import jarvis_router
 from .routers.meals import meals_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
+from .db_migrate import run_migrations
+
+# Alembic zuerst: bestehende DBs werden auf die Baseline gestempelt, dann laufen
+# alle offenen Revisionen. Erst danach create_all/ensure_columns als
+# Uebergangs-Sicherheitsnetz (idempotent - legt nur an, was fehlt).
+run_migrations()
 
 models.Base.metadata.create_all(bind=engine)
 ensure_columns("settings", {
@@ -354,12 +360,6 @@ with engine.connect() as _conn:
             f"UPDATE {_table} SET updated_at = {_fallback} WHERE updated_at IS NULL"
         )
     _conn.commit()
-
-# Ab hier uebernimmt Alembic: die obigen create_all/ensure_columns-Bloecke
-# bleiben als Uebergangs-Sicherheitsnetz, neue Schema-Aenderungen laufen aber
-# als Alembic-Revision (siehe app/db_migrate.py, backend/alembic/).
-from .db_migrate import run_migrations  # noqa: E402
-run_migrations()
 
 _bootstrap_db = SessionLocal()
 _settings = auth.get_or_create_settings(_bootstrap_db)
@@ -983,7 +983,7 @@ def _scheduled_auto_backup():
         settings = auth.get_or_create_settings(db)
         if not settings.auto_backup_enabled:
             return
-        write_backup_to_disk(settings.backup_retention)
+        write_backup_to_disk(db, settings.backup_retention)
     finally:
         db.close()
 
