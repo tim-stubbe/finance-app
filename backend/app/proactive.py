@@ -1,42 +1,61 @@
 """Proaktiver KI-Assistent: schaut mehrmals täglich über einen breiten
-Lebens-Snapshot und meldet sich per Telegram NUR, wenn die lokale Ollama
-darin eine wirklich nützliche, nicht offensichtliche Beobachtung, Erinnerung
-oder Anregung findet.
+Lebens-Snapshot und meldet sich per Telegram - aber nicht mehr mit einem
+einzelnen Satz, sondern mit einem **strukturierten Vorschlag**: einer
+Beobachtung, einer Ja/Nein-Sache oder einer echten Auswahlfrage mit mehreren
+Optionen, hinter denen jeweils eine ausführbare Aktion steckt
+(siehe proactive_actions.py, models.ProactiveProposal).
 
-Bewusst getrennt von den bestehenden, rein regelbasierten Jobs
-(_scheduled_suggestion_check, _scheduled_anomaly_check, _scheduled_digest,
-morning_briefing): die machen feste Einzelprüfungen, das hier ist der
-freie "Assistent denkt über dein Leben nach"-Teil - das langfristige Ziel.
+Ziel (siehe [[feedback-push-not-pull]]): Tim soll KEINEN Tab bedienen müssen.
+Kies erkennt die Sache, bereitet die Entscheidung auf, schickt sie ihm - und
+handelt, sobald er eine Option wählt.
 
-Absicherungen gegen Nervigkeit:
-  * opt-in (Settings.proactive_assistant_enabled, Default aus)
-  * Mindestabstand zwischen zwei Meldungen (min_gap_hours, Default 4 h)
-  * Dedup über einen Hash der letzten Meldung
-  * Ruhezeiten greifen ohnehin in notifications.notify()
-  * die KI wird explizit angewiesen, "NICHTS" zu antworten, wenn nichts
-    einen Ping wert ist - und kurze/leere Antworten werden verworfen
+Kein Cloud-LLM: alles über die lokale Ollama. Absicherung: opt-in
+(Settings.proactive_assistant_enabled), die KI kann nur Aktionen aus der
+Allowlist wählen, und ein `dedup_key` verhindert, dass derselbe Vorschlag
+immer wieder auftaucht.
 """
 
+import json
 import hashlib
 from datetime import date, datetime, timedelta
 
-from . import crud, models, ollama_client
+from . import crud, models, ollama_client, proactive_actions
 
 _NOTHING_TOKENS = ("NICHTS", "NOTHING", "KEIN VORSCHLAG", "KEINE MELDUNG")
 
 _SYSTEM = (
-    "Du bist Kies - ein persönlicher, proaktiver Assistent (wie Jarvis). Du bekommst "
-    "einen kompakten Snapshot vom Leben deines Nutzers: Finanzen, Termine, Todos, Ziele, "
-    "Lebensbereiche, Fristen. Deine Aufgabe: entscheide, ob es GERADE JETZT genau EINE "
-    "wirklich nützliche, nicht offensichtliche Sache gibt, die eine kurze Telegram-Nachricht "
-    "wert ist - eine Erinnerung, eine Beobachtung, ein konkreter Vorschlag oder eine Frage, "
-    "die dem Nutzer hilft.\n"
-    "Regeln:\n"
-    "- Wenn nichts einen Ping wert ist (der Normalfall!), antworte mit EXAKT: NICHTS\n"
-    "- Sonst: 1-2 kurze deutsche Sätze, direkt, ohne Anrede/Grußformel, ohne Emojis.\n"
-    "- Keine reine Wiederholung von etwas, das im Snapshot schon offensichtlich steht.\n"
-    "- Keine Zahlen erfinden, keine Anlageberatung.\n"
-    "- Lieber NICHTS als etwas Belangloses."
+    "Du bist Kies - Tims persönlicher, proaktiver Assistent (wie Jarvis). Dein "
+    "EINZIGER Zweck: Tim Zeit sparen, damit er in seinen 24 Stunden mehr schafft. "
+    "Du bekommst einen kompakten Snapshot seines Lebens (Finanzen, Termine, Todos, "
+    "Ziele, Fristen, Fahrten, Gesundheit, Haus).\n\n"
+    "Melde dich, wenn du EINE dieser Situationen siehst:\n"
+    "1. Eine Entscheidung steht an, die du vorbereiten oder ihm abnehmen kannst.\n"
+    "2. Etwas wird teurer / schlimmer / unwiederbringlich, wenn es liegen bleibt "
+    "(Frist, Vertrag, Termin ohne Ort/Zeit, überfällige Sache).\n"
+    "3. Mehrere Kleinigkeiten lassen sich in einem Rutsch erledigen.\n"
+    "4. Du kannst etwas sofort tun, sobald Tim eine Option wählt.\n\n"
+    "Sei NICHT übervorsichtig: wenn der Snapshot Inhalt hat und gerade nichts "
+    "Dringendes offen ist, findest du trotzdem meist eine sinnvolle Anregung. "
+    "Stell ruhig komplexe Fragen mit 2-5 Optionen - Ja/Nein ist oft zu simpel.\n\n"
+    "Du antwortest AUSSCHLIESSLICH mit JSON in genau dieser Form:\n"
+    '{"proposals": [\n'
+    '  {"kind": "wahl|bestaetigen|info",\n'
+    '   "urgency": "hoch|mittel|niedrig",\n'
+    '   "title": "kurze Überschrift",\n'
+    '   "body": "1-3 Sätze: WARUM das jetzt kommt und was es ihm spart",\n'
+    '   "dedup": "stabiler-schluessel-ohne-datum",\n'
+    '   "options": [\n'
+    '      {"label": "Klartext für den Button", "action": {"type": "...", "params": {...}}}\n'
+    "   ]}\n"
+    "]}\n\n"
+    "Regeln für options:\n"
+    "- Bei kind=info: options weglassen oder leer.\n"
+    "- Bei kind=bestaetigen/wahl: 2-5 Optionen, die LETZTE ist immer eine "
+    'Ausweichoption ({"type":"dismiss"} oder {"type":"remind_later","params":{"days":N}}).\n'
+    "- action.type MUSS aus dieser Liste sein, sonst nimm \"open\":\n"
+    + proactive_actions.CATALOG_FOR_PROMPT + "\n\n"
+    "- Keine Zahlen erfinden. Keine Anlageberatung. Kein Geld bewegen.\n"
+    "- Wenn wirklich GAR NICHTS einen Ping wert ist: {\"proposals\": []}"
 )
 
 
@@ -82,13 +101,14 @@ def build_snapshot(db, settings, space_id: int) -> str:
     try:
         overdue = (db.query(models.Todo)
                    .filter(models.Todo.done.is_(False), models.Todo.due_date.isnot(None),
-                           models.Todo.due_date < today).count())
+                           models.Todo.due_date < today).all())
         soon = (db.query(models.Todo)
                 .filter(models.Todo.done.is_(False), models.Todo.due_date.isnot(None),
                         models.Todo.due_date >= today, models.Todo.due_date <= today + timedelta(days=2))
                 .order_by(models.Todo.due_date).limit(5).all())
         if overdue:
-            lines.append(f"Überfällige Todos: {overdue}")
+            lines.append(f"Überfällige Todos ({len(overdue)}): "
+                         + "; ".join(t.title for t in overdue[:6]))
         if soon:
             lines.append("Todos fällig in 2 Tagen: " + "; ".join(t.title for t in soon))
     except Exception:
@@ -98,7 +118,9 @@ def build_snapshot(db, settings, space_id: int) -> str:
         events = crud.get_upcoming_calendar_events(db, days=2, limit=8)
         if events:
             lines.append("Termine nächste 48 h: " + "; ".join(
-                f"{e.title} ({e.start[:16].replace('T', ' ')})" for e in events))
+                f"{e.title} ({e.start[:16].replace('T', ' ')})"
+                + ("" if getattr(e, "location", None) else " [ohne Ort]")
+                for e in events))
     except Exception:
         pass
 
@@ -109,7 +131,8 @@ def build_snapshot(db, settings, space_id: int) -> str:
                  .limit(6).all())
         if goals:
             lines.append("Offene Ziele: " + "; ".join(
-                f"{g.title}" + (f" (bis {g.target_date})" if g.target_date else "") for g in goals))
+                f"#{g.id} {g.title}" + (f" (bis {g.target_date})" if g.target_date else "")
+                for g in goals))
     except Exception:
         pass
 
@@ -121,6 +144,17 @@ def build_snapshot(db, settings, space_id: int) -> str:
         if reminders:
             lines.append("Kündigungsfristen < 30 Tage: " + "; ".join(
                 f"{r.label} (Verlängerung {r.renewal_date})" for r in reminders))
+    except Exception:
+        pass
+
+    try:
+        veh = db.query(models.Vehicle).order_by(models.Vehicle.id).first()
+        if veh:
+            unkl = (db.query(models.VehicleTrip)
+                    .filter_by(vehicle_id=veh.id, purpose="unbekannt").count())
+            if unkl:
+                lines.append(f"Fahrtenbuch: {unkl} Fahrt(en) noch nicht als "
+                             f"geschäftlich/privat eingeordnet")
     except Exception:
         pass
 
@@ -138,15 +172,21 @@ def build_snapshot(db, settings, space_id: int) -> str:
     except Exception:
         pass
 
-    # Proaktives Haus (E): nur ableitbare Auffälligkeiten aus HA-States
-    # (Fenster lange offen bei Kälte, Licht ewig an, Verbrauchs-Spitze).
-    # Gebündelt in EINE Zeile - die KI entscheidet dann wie beim Rest, ob es
-    # einen Ping wert ist; keine automatische Gerätesteuerung.
     try:
         from . import smarthome
         notes = smarthome.house_anomalies(settings)
         if notes:
             lines.append("Haus: " + " | ".join(notes[:4]))
+    except Exception:
+        pass
+
+    try:
+        recent = (db.query(models.ProactiveProposal)
+                  .filter(models.ProactiveProposal.created_at >= datetime.utcnow() - timedelta(days=3))
+                  .order_by(models.ProactiveProposal.id.desc()).limit(8).all())
+        if recent:
+            lines.append("Zuletzt schon vorgeschlagen (nicht wiederholen): "
+                         + "; ".join(f"{p.title} [{p.status}]" for p in recent))
     except Exception:
         pass
 
@@ -159,8 +199,6 @@ def _avg(vals) -> float | None:
 
 
 def _health_lines(db) -> list[str]:
-    """Auffällige Gesundheits-Trends aus health_metrics (Apple-Health-Import) -
-    nur was heraussticht, plus je Kennzahl der letzte Wert als Kontext."""
     out: list[str] = []
     for mt, label, unit in (
         (models.HealthMetricType.schlaf, "Schlaf", "h"),
@@ -177,13 +215,12 @@ def _health_lines(db) -> list[str]:
                 f"{last:.1f} h" if mt == models.HealthMetricType.schlaf else \
                 f"{round(last)}{(' ' + unit) if unit else ''}"
         note = f"{label}: zuletzt {shown}"
-
         if mt == models.HealthMetricType.schlaf and len(vals) >= 3 and all(v < 6 for v in vals[-3:]):
             note += " – 3 Nächte in Folge unter 6 h"
         elif mt == models.HealthMetricType.schritte and len(vals) >= 10:
             wk = _avg(vals[-7:]); prev = _avg(vals[-14:-7])
             if wk and prev and wk < prev * 0.65:
-                note += f" – diese Woche im Schnitt deutlich weniger ({round(wk)} statt {round(prev)})"
+                note += f" – diese Woche deutlich weniger ({round(wk)} statt {round(prev)})"
         elif mt == models.HealthMetricType.gewicht and len(vals) >= 2:
             delta = vals[-1] - vals[0]
             if abs(delta) >= 2:
@@ -201,9 +238,6 @@ def _chat_model(settings) -> str | None:
 
 
 def _feedback_hint(db) -> str:
-    """Lern-Hinweis aus den letzten /nützlich- bzw. /unnötig-Rückmeldungen
-    (models.ProactiveFeedback) - wird dem System-Prompt vorangestellt, damit
-    der Assistent sich an dem orientiert, was der Nutzer schätzt."""
     rows = (db.query(models.ProactiveFeedback)
             .order_by(models.ProactiveFeedback.id.desc()).limit(20).all())
     if not rows:
@@ -212,7 +246,7 @@ def _feedback_hint(db) -> str:
     bad = [r.text for r in rows if not r.useful][:5]
     parts = []
     if bad:
-        parts.append("Der Nutzer fand diese früheren Meldungen UNNÖTIG - vermeide Ähnliches:\n- "
+        parts.append("Diese früheren Meldungen fand Tim UNNÖTIG - vermeide Ähnliches:\n- "
                      + "\n- ".join(bad))
     if good:
         parts.append("Diese fand er NÜTZLICH - mehr in die Richtung:\n- " + "\n- ".join(good))
@@ -223,70 +257,165 @@ def _hash(text: str) -> str:
     return hashlib.sha256(" ".join(text.lower().split()).encode("utf-8")).hexdigest()[:16]
 
 
-def generate(db, settings) -> tuple[str, str] | None:
-    """Gibt (text, reply_hash) zurück, wenn die KI eine proaktive Meldung hat -
-    sonst None.
+def _extract_json(raw: str) -> dict:
+    s = raw.strip()
+    if s.startswith("```"):
+        s = s.split("```", 2)[1] if s.count("```") >= 2 else s.strip("`")
+        s = s[4:] if s[:4].lower() == "json" else s
+    i, j = s.find("{"), s.rfind("}")
+    if i == -1 or j == -1:
+        return {}
+    try:
+        return json.loads(s[i:j + 1])
+    except json.JSONDecodeError:
+        return {}
 
-    Bewusst OHNE Drosseln (Nutzerwunsch: "nimm alle Limits raus - der soll mir
-    das schicken können, wann er will"). Es bleiben nur: der An/Aus-Schalter,
-    die manuelle "/proaktiv pause", eine konfigurierte Telegram-/Ollama-
-    Verbindung, und die Entscheidung der KI selbst ("NICHTS", wenn nichts
-    anliegt). Kein Mindestabstand, kein Snapshot-/Antwort-Dedup mehr.
-    """
-    if not (settings.proactive_assistant_enabled and settings.notifications_enabled):
+
+def _sanitize(proposal: dict) -> dict | None:
+    """Ein rohes LLM-Proposal in eine sichere, speicherbare Form bringen.
+    Optionen mit unbekannter Aktion werden zu einer aktionslosen Info-Option
+    degradiert; ist danach nichts Sinnvolles übrig, gilt der Vorschlag als
+    reine Info."""
+    title = (proposal.get("title") or "").strip()
+    if not title:
         return None
+    kind = proposal.get("kind") if proposal.get("kind") in ("info", "bestaetigen", "wahl") else "info"
+    urgency = proposal.get("urgency") if proposal.get("urgency") in ("hoch", "mittel", "niedrig") else "mittel"
+    body = (proposal.get("body") or "").strip() or None
+    dedup = (proposal.get("dedup") or _hash(title))[:120]
+
+    raw_opts = proposal.get("options") or []
+    options = []
+    for idx, o in enumerate(raw_opts[:5]):
+        label = (o.get("label") or "").strip()
+        if not label:
+            continue
+        action = o.get("action") if isinstance(o.get("action"), dict) else None
+        if not proactive_actions.is_allowed(action):
+            action = {"type": "open", "params": {}}
+        options.append({"key": chr(ord("a") + idx), "label": label, "action": action})
+
+    if kind != "info" and not options:
+        kind = "info"
+    if kind != "info" and all(o["action"]["type"] not in ("dismiss", "remind_later") for o in options):
+        options.append({"key": chr(ord("a") + len(options)), "label": "Später erinnern",
+                        "action": {"type": "remind_later", "params": {"days": 2}}})
+
+    return {"kind": kind, "urgency": urgency, "title": title[:200],
+            "body": body, "dedup_key": dedup, "options": options}
+
+
+def think(db, settings, space_id: int) -> list[dict]:
+    """Fragt die lokale KI und gibt eine Liste sanitisierter Proposal-Dicts
+    zurück (noch nicht gespeichert)."""
     model = _chat_model(settings)
     if not (settings.ollama_url and model):
-        return None
-
-    snoozed = getattr(settings, "proactive_assistant_snoozed_until", None)
-    if snoozed and datetime.utcnow() < snoozed:
-        return None
-
-    spaces = crud.get_spaces(db)
-    space_id = spaces[0].id if spaces else 1
+        return []
     snapshot = build_snapshot(db, settings, space_id)
-
     try:
         reply = ollama_client.chat(
             settings.ollama_url, model,
             [{"role": "system", "content": _feedback_hint(db) + _SYSTEM},
              {"role": "user", "content": "Snapshot:\n" + snapshot}],
-            timeout=90,
-        ).strip()
+            timeout=120,
+        )
     except Exception:
-        return None
+        return []
+    data = _extract_json(reply)
+    out = []
+    for p in (data.get("proposals") or [])[:4]:
+        s = _sanitize(p) if isinstance(p, dict) else None
+        if s:
+            out.append(s)
+    return out
 
-    compact = reply.strip().strip(".").upper()
-    if len(reply.strip()) < 12 or any(compact.startswith(tok) for tok in _NOTHING_TOKENS):
-        return None
 
-    return reply, _hash(reply)
+def _recent_dedup_keys(db, days: int = 7) -> set[str]:
+    since = datetime.utcnow() - timedelta(days=days)
+    rows = (db.query(models.ProactiveProposal.dedup_key)
+            .filter(models.ProactiveProposal.created_at >= since,
+                    models.ProactiveProposal.dedup_key.isnot(None)).all())
+    return {r[0] for r in rows}
 
 
-def preview(db, settings) -> str:
-    """Wie generate(), aber OHNE die Gates (opt-in, Abstand, Snooze, Dedup,
-    unveränderter Snapshot) und ohne Nebeneffekte - für einen Testknopf, der
-    zeigt, wie eine proaktive Meldung aussähe. Fällt auf einen Beispieltext
-    zurück, wenn die KI "NICHTS" sagt oder Ollama fehlt."""
-    example = ("Du hast diese Woche im Schnitt deutlich weniger Schritte gemacht als sonst "
-               "und morgen steht ein Termin ohne Ort im Kalender - willst du kurz beides klären?")
-    model = _chat_model(settings)
-    if not (settings.ollama_url and model):
-        return example
+def run(db, settings) -> list[models.ProactiveProposal]:
+    """Scheduler-Einstieg: denkt nach, entdoppelt, speichert - gibt die NEUEN
+    Vorschläge zurück (der Aufrufer verschickt sie per Telegram)."""
+    snoozed = getattr(settings, "proactive_assistant_snoozed_until", None)
+    if not (settings.proactive_assistant_enabled and settings.notifications_enabled):
+        return []
+    if snoozed and datetime.utcnow() < snoozed:
+        return []
+
     spaces = crud.get_spaces(db)
     space_id = spaces[0].id if spaces else 1
-    snapshot = build_snapshot(db, settings, space_id)
+    seen = _recent_dedup_keys(db)
+    created: list[models.ProactiveProposal] = []
+    for s in think(db, settings, space_id):
+        if s["dedup_key"] in seen:
+            continue
+        seen.add(s["dedup_key"])
+        row = models.ProactiveProposal(
+            kind=s["kind"], urgency=s["urgency"], title=s["title"], body=s["body"],
+            options_json=json.dumps(s["options"], ensure_ascii=False),
+            dedup_key=s["dedup_key"], status="offen",
+            expires_at=datetime.utcnow() + timedelta(days=7),
+        )
+        db.add(row)
+        created.append(row)
+    if created:
+        settings.proactive_assistant_last_sent_at = datetime.utcnow()
+        settings.proactive_assistant_last_text = created[0].title[:1000]
+        db.commit()
+    return created
+
+
+def render(proposal: models.ProactiveProposal) -> str:
+    """Menschlicher Text eines Vorschlags (Telegram-Body ohne Buttons /
+    Web-Fallback)."""
+    head = {"hoch": "❗", "mittel": "🤖", "niedrig": "💡"}.get(proposal.urgency, "🤖")
+    parts = [f"{head} {proposal.title}"]
+    if proposal.body:
+        parts.append(proposal.body)
+    opts = json.loads(proposal.options_json or "[]")
+    for i, o in enumerate(opts, 1):
+        parts.append(f"{i}. {o['label']}")
+    return "\n".join(parts)
+
+
+def answer(db, settings, proposal_id: int, key: str) -> str:
+    """Tim hat eine Option gewählt (per Button-Callback oder Zahl). Aktion
+    ausführen, Vorschlag abschließen, Ergebnistext zurückgeben."""
+    p = db.query(models.ProactiveProposal).filter_by(id=proposal_id).first()
+    if not p:
+        return "Diesen Vorschlag gibt es nicht mehr."
+    if p.status != "offen":
+        return f"Schon erledigt ({p.status})."
+    opts = json.loads(p.options_json or "[]")
+    chosen = next((o for o in opts if o["key"] == key), None)
+    if chosen is None and key.isdigit() and 1 <= int(key) <= len(opts):
+        chosen = opts[int(key) - 1]
+    if chosen is None:
+        return "Diese Option kenne ich nicht."
     try:
-        reply = ollama_client.chat(
-            settings.ollama_url, model,
-            [{"role": "system", "content": _SYSTEM},
-             {"role": "user", "content": "Snapshot:\n" + snapshot}],
-            timeout=90,
-        ).strip()
-    except Exception:
-        return example
-    compact = reply.strip().strip(".").upper()
-    if len(reply.strip()) < 12 or any(compact.startswith(tok) for tok in _NOTHING_TOKENS):
-        return example
-    return reply
+        result = proactive_actions.execute(db, settings, chosen["action"])
+    except Exception as exc:  # noqa: BLE001
+        result = f"Konnte die Aktion nicht ausführen: {exc}"
+    p.status = "beantwortet"
+    p.chosen_key = chosen["key"]
+    p.result_text = result
+    p.answered_at = datetime.utcnow()
+    db.commit()
+    return result
+
+
+# --- Rückwärtskompatibilität für den Testknopf (notify_settings.py) ---
+def preview(db, settings) -> str:
+    spaces = crud.get_spaces(db)
+    space_id = spaces[0].id if spaces else 1
+    for s in think(db, settings, space_id):
+        opts = "\n".join(f"{i}. {o['label']}" for i, o in enumerate(s["options"], 1))
+        return f"🤖 {s['title']}\n{s['body'] or ''}\n{opts}".strip()
+    return ("Du hast diese Woche im Schnitt deutlich weniger Schritte gemacht als sonst "
+            "und morgen steht ein Termin ohne Ort im Kalender.\n"
+            "1. Beides als To-do notieren\n2. Nur den Termin\n3. Später erinnern")

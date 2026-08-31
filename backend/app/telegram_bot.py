@@ -44,7 +44,7 @@ from datetime import date, datetime, timedelta
 
 import requests
 
-from . import ai_auto, auth, bank_sync, crud, models, ollama_client, radicale_sync, schemas, websearch, voice
+from . import ai_auto, auth, bank_sync, crud, models, ollama_client, proactive, radicale_sync, schemas, websearch, voice
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
@@ -335,6 +335,91 @@ def _send(token: str, chat_id: str, text: str) -> None:
                 _send_audio(token, chat_id, audio)
         except Exception:
             pass
+
+
+def send_proposal(db, settings, proposal) -> None:
+    """Einen strukturierten proaktiven Vorschlag (models.ProactiveProposal)
+    mit Inline-Buttons schicken - ein Button pro Option, callback_data
+    `pp:<id>:<key>`. Bei kind=info ohne Buttons. Speichert die
+    Telegram-message_id, damit die Nachricht nach der Antwort editiert
+    werden kann."""
+    if not (settings.telegram_bot_token_encrypted and settings.telegram_chat_id):
+        return
+    token = bank_sync.decrypt_secret(settings.secret_key, settings.telegram_bot_token_encrypted)
+    opts = json.loads(proposal.options_json or "[]")
+    payload = {"chat_id": str(settings.telegram_chat_id), "text": proactive.render(proposal)}
+    if opts:
+        payload["reply_markup"] = {"inline_keyboard": [
+            [{"text": o["label"][:60], "callback_data": f"pp:{proposal.id}:{o['key']}"}]
+            for o in opts
+        ]}
+    try:
+        resp = requests.post(
+            f"{TELEGRAM_API.format(token=token)}/sendMessage", json=payload, timeout=15)
+        resp.raise_for_status()
+        proposal.telegram_message_id = resp.json().get("result", {}).get("message_id")
+        db.commit()
+    except Exception:
+        pass
+
+
+def _answer_callback(token: str, cb_id: str, text: str = "") -> None:
+    try:
+        requests.post(f"{TELEGRAM_API.format(token=token)}/answerCallbackQuery",
+                      json={"callback_query_id": cb_id, "text": text[:200]}, timeout=10)
+    except Exception:
+        pass
+
+
+def _edit_message(token: str, chat_id: str, message_id: int, text: str) -> None:
+    try:
+        requests.post(f"{TELEGRAM_API.format(token=token)}/editMessageText",
+                      json={"chat_id": chat_id, "message_id": message_id, "text": text},
+                      timeout=10)
+    except Exception:
+        pass
+
+
+def _handle_proposal_callback(db, settings, token: str, chat_id: str, cb: dict) -> None:
+    """callback_query auf einen `pp:<id>:<key>`-Button."""
+    data = (cb.get("data") or "")
+    cb_id = cb.get("id") or ""
+    if not data.startswith("pp:"):
+        _answer_callback(token, cb_id)
+        return
+    try:
+        _, pid, key = data.split(":", 2)
+        pid = int(pid)
+    except ValueError:
+        _answer_callback(token, cb_id, "Ungültig.")
+        return
+    result = proactive.answer(db, settings, pid, key)
+    _answer_callback(token, cb_id, result[:180])
+    msg = cb.get("message") or {}
+    mid = msg.get("message_id")
+    if mid:
+        base = (msg.get("text") or "").split("\n\n➜")[0]
+        _edit_message(token, chat_id, mid, base + "\n\n➜ " + result)
+    db.commit()
+
+
+_PROPOSAL_NUM_RE = re.compile(r"^\s*([1-9])\s*$")
+
+
+def _handle_proposal_number_reply(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """Blanke Zahl als Antwort auf den jüngsten offenen Vorschlag (Fallback,
+    falls die Buttons mal nicht gehen)."""
+    m = _PROPOSAL_NUM_RE.match(text or "")
+    if not m:
+        return False
+    p = (db.query(models.ProactiveProposal)
+         .filter(models.ProactiveProposal.status == "offen")
+         .order_by(models.ProactiveProposal.id.desc()).first())
+    if not p:
+        return False
+    result = proactive.answer(db, settings, p.id, m.group(1))
+    _send(token, chat_id, result)
+    return True
 
 
 def _handle_balance_command(db, token: str, chat_id: str, text: str) -> bool:
@@ -971,6 +1056,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
         return
     if _handle_suggestion_reply(db, settings, token, chat_id, text):
         return
+    if _handle_proposal_number_reply(db, settings, token, chat_id, text):
+        return
     if _handle_hanging_command(db, settings, token, chat_id, text):
         return
     if _handle_home_command(db, settings, token, chat_id, text):
@@ -1085,6 +1172,19 @@ def _poll_once(db) -> None:
 
     for upd in updates:
         settings.telegram_last_update_id = upd["update_id"]
+
+        # Button-Antwort auf einen proaktiven Vorschlag (Inline-Keyboard).
+        cb = upd.get("callback_query")
+        if cb:
+            cb_chat_id = str(((cb.get("message") or {}).get("chat") or {}).get("id", ""))
+            if cb_chat_id == configured_chat_id:
+                try:
+                    _handle_proposal_callback(db, settings, token, configured_chat_id, cb)
+                except Exception:
+                    pass
+            db.commit()
+            continue
+
         msg = upd.get("message") or {}
         incoming_chat_id = str((msg.get("chat") or {}).get("id", ""))
         text = msg.get("text")

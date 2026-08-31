@@ -1,10 +1,21 @@
-"""Proaktiver KI-Assistent (proactive.py): opt-in, Ollama-Pflicht,
-8-Minuten-Untergrenze und Dedup gegen die letzte Meldung."""
+"""Proaktiver KI-Assistent (proactive.py): opt-in, Ollama-Pflicht, Snooze,
+Dedup über dedup_key. Seit dem Umbau liefert die KI strukturiertes JSON und
+proactive.run() gibt die neu angelegten Vorschläge zurück."""
+import json
 import uuid
 from datetime import date, datetime, timedelta
 
 from app import auth, models, proactive, ollama_client
 from app.database import SessionLocal
+
+_ONE = json.dumps({"proposals": [{
+    "kind": "wahl", "urgency": "mittel", "title": "Steuererklärung ist überfällig",
+    "body": "Spart Ärger mit dem Finanzamt.", "dedup": "steuer-ueberfaellig",
+    "options": [
+        {"label": "Als To-do für morgen", "action": {"type": "todo_add",
+         "params": {"title": "Steuererklärung", "due_date": "2026-09-01"}}},
+        {"label": "Später erinnern", "action": {"type": "remind_later", "params": {"days": 3}}},
+    ]}]})
 
 
 def _add_overdue_todo(db):
@@ -30,29 +41,29 @@ def _settings(with_content=True, **over):
     return db, s
 
 
-def test_disabled_returns_none(client, monkeypatch):
-    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: "Trink mehr Wasser.")
+def test_disabled_returns_nothing(client, monkeypatch):
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
     db, s = _settings(proactive_assistant_enabled=False)
     try:
-        assert proactive.generate(db, s) is None
+        assert proactive.run(db, s) == []
     finally:
         db.close()
 
 
 def test_needs_ollama(client, monkeypatch):
-    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: "Etwas Nützliches.")
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
     db, s = _settings(ollama_url=None)
     try:
-        assert proactive.generate(db, s) is None
+        assert proactive.run(db, s) == []
     finally:
         db.close()
 
 
-def test_nichts_is_swallowed(client, monkeypatch):
-    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: "NICHTS")
+def test_empty_json_yields_nothing(client, monkeypatch):
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: '{"proposals": []}')
     db, s = _settings()
     try:
-        assert proactive.generate(db, s) is None
+        assert proactive.run(db, s) == []
     finally:
         db.close()
 
@@ -73,14 +84,14 @@ def test_snapshot_includes_health_trends(client):
 
 
 def test_snooze_blocks(client, monkeypatch):
-    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: "Etwas Nützliches passiert gerade.")
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
     db, s = _settings(proactive_assistant_snoozed_until=datetime.utcnow() + timedelta(hours=3))
     try:
-        assert proactive.generate(db, s) is None
+        assert proactive.run(db, s) == []
         # abgelaufene Pause -> wieder aktiv
         s.proactive_assistant_snoozed_until = datetime.utcnow() - timedelta(minutes=1)
         db.commit()
-        assert proactive.generate(db, s) is not None
+        assert len(proactive.run(db, s)) == 1
     finally:
         db.close()
 
@@ -129,21 +140,20 @@ def test_telegram_proaktiv_feedback_command(client, monkeypatch):
         db.close()
 
 
-def test_no_throttle_repeats_allowed(client, monkeypatch):
-    """Nach "nimm alle Limits raus": keine Cooldown-/Dedup-Sperre mehr - was
-    zaehlt ist nur, ob die KI etwas sagt (statt "NICHTS")."""
-    monkeypatch.setattr(ollama_client, "chat",
-                        lambda *a, **k: "Dein Budget für Essen ist zu 90 % ausgeschöpft, noch 8 Tage im Monat.")
+def test_dedup_key_prevents_repeat(client, monkeypatch):
+    """Kein Cooldown - aber derselbe Vorschlag (gleicher dedup_key) kommt nicht
+    zweimal. Ein inhaltlich anderer Vorschlag schon."""
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
     db, s = _settings()
     try:
-        first = proactive.generate(db, s)
-        assert first is not None and "Budget" in first[0]
+        first = proactive.run(db, s)
+        assert len(first) == 1 and first[0].dedup_key == "steuer-ueberfaellig"
 
-        # gerade eben gesendet + identischer Hash gespeichert -> trotzdem wieder
-        s.proactive_assistant_last_sent_at = datetime.utcnow()
-        s.proactive_assistant_last_hash = first[1]
-        db.commit()
-        again = proactive.generate(db, s)
-        assert again is not None and again[0] == first[0]
+        assert proactive.run(db, s) == []  # gleicher dedup_key -> nichts Neues
+
+        other = json.dumps({"proposals": [{
+            "kind": "info", "title": "Ganz andere Sache", "dedup": "andere-sache"}]})
+        monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: other)
+        assert len(proactive.run(db, s)) == 1
     finally:
         db.close()

@@ -2025,26 +2025,18 @@ def _scheduled_tax_reminder():
 
 def _scheduled_proactive_assistant():
     """Alle paar Minuten: lässt die lokale KI über einen breiten Lebens-
-    Snapshot schauen und meldet sich per Telegram, wenn dabei eine nützliche
-    Anregung/Erinnerung herauskommt (siehe proactive.py). Bewusst ohne
-    Drosseln (Nutzerwunsch) - es bleiben nur der An/Aus-Schalter und die
-    manuelle "/proaktiv pause". Sendet urgent, also auch in Ruhezeiten."""
+    Snapshot schauen und schickt STRUKTURIERTE Vorschläge per Telegram
+    (Beobachtung / Ja-Nein / Auswahlfrage mit Buttons, hinter denen eine
+    Aktion aus der Allowlist steckt - siehe proactive.py, proactive_actions).
+    Ziel: Kies handelt für Tim, statt dass er einen Tab bedienen muss.
+    Bewusst ohne Drosseln - nur der An/Aus-Schalter und "/proaktiv pause"."""
+    from . import telegram_bot
     db = SessionLocal()
     try:
         settings = auth.get_or_create_settings(db)
-        result = proactive.generate(db, settings)
-        if not result:
-            return
-        text, digest = result
-        notifications.notify(
-            settings,
-            "🤖 " + text + "\n\n(/nützlich · /unnötig · /proaktiv pause 6 · /proaktiv aus)",
-            urgent=True,
-        )
-        settings.proactive_assistant_last_sent_at = datetime.utcnow()
-        settings.proactive_assistant_last_hash = digest
-        settings.proactive_assistant_last_text = text[:1000]
-        db.commit()
+        proposals = proactive.run(db, settings)
+        for p in proposals:
+            telegram_bot.send_proposal(db, settings, p)
     finally:
         db.close()
 

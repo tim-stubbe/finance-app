@@ -1730,6 +1730,37 @@ class ProactiveFeedback(Base):
     useful = Column(Boolean, nullable=False)
 
 
+class ProactiveProposal(Base):
+    """Ein strukturierter Vorschlag des proaktiven Assistenten: eine Beobachtung
+    (`info`), eine Ja/Nein-Sache (`bestaetigen`) oder eine echte Auswahlfrage
+    mit mehreren Optionen (`wahl`). Jede Option trägt eine Aktion aus einer
+    festen Allowlist (siehe proactive_actions.py) - der Assistent kann nichts
+    Freies ausführen, nur aus dem Katalog wählen.
+
+    Ziel (siehe [[feedback-push-not-pull]]): Kies meldet sich mit einer fertigen
+    Entscheidung und handelt auf Tims Antwort - er muss keinen Tab bedienen.
+
+    status: offen -> beantwortet | verfallen | storniert
+    """
+
+    __tablename__ = "proactive_proposals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    kind = Column(String, nullable=False, default="wahl")   # info | bestaetigen | wahl
+    urgency = Column(String, nullable=False, default="mittel")  # hoch | mittel | niedrig
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=True)                      # das "warum / Zeitersparnis"
+    options_json = Column(Text, nullable=True)              # [{"key","label","action":{"type","params"}}]
+    dedup_key = Column(String, nullable=True, index=True)   # verhindert Wiedervorlage
+    status = Column(String, nullable=False, default="offen", index=True)
+    chosen_key = Column(String, nullable=True)
+    result_text = Column(Text, nullable=True)
+    answered_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    telegram_message_id = Column(Integer, nullable=True)    # zum Nachträglich-Editieren
+
+
 class TaxTipStatus(Base):
     """Merkt sich pro Steuerjahr, welche Spar-Tipps (tax_advice.generate_tips)
     der Nutzer als erledigt oder nicht relevant markiert hat - damit der
