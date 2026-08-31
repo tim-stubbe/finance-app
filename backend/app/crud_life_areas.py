@@ -171,6 +171,14 @@ def find_open_business_issue(db: Session, project_id: int, title_query: str) -> 
 LIFE_AREA_HISTORY_DAYS = 30
 
 
+def _local_checkin_date(col):
+    """`created_at` wird als UTC-`datetime.utcnow()` abgelegt, die Historie/
+    Streak/Heatmap denken aber in lokalen Kalendertagen (und werden mit
+    `date.today()` verglichen). Ohne die `localtime`-Umrechnung fällt ein
+    Check-in am späten Abend je nach Zeitzone auf den falschen Tag."""
+    return func.date(col, "localtime")
+
+
 def _life_area_streak_and_history(db: Session, area_id: int, days: int = LIFE_AREA_HISTORY_DAYS) -> tuple[list[str], int]:
     """Liefert (Tage mit mind. einem Check-in der letzten `days` Tage als
     ISO-Strings, aktuelle Streak-Länge) für die visuelle Historie im Frontend
@@ -180,7 +188,7 @@ def _life_area_streak_and_history(db: Session, area_id: int, days: int = LIFE_AR
     (Kulanz bis Tagesende, wie bei den gängigen Streak-Apps)."""
     since = date.today() - timedelta(days=days - 1)
     rows = (
-        db.query(func.date(models.LifeCheckIn.created_at))
+        db.query(_local_checkin_date(models.LifeCheckIn.created_at))
         .filter(
             models.LifeCheckIn.area_id == area_id,
             models.LifeCheckIn.created_at >= datetime.combine(since, datetime.min.time()),
@@ -206,12 +214,12 @@ def life_heatmap(db: Session, days: int = 371, area_id=None):
     GitHub-artige Jahres-Heatmap). Fehlende Tage = 0, chronologisch."""
     since = date.today() - timedelta(days=days - 1)
     q = (
-        db.query(func.date(models.LifeCheckIn.created_at), func.count(models.LifeCheckIn.id))
-        .filter(models.LifeCheckIn.created_at >= datetime.combine(since, datetime.min.time()))
+        db.query(_local_checkin_date(models.LifeCheckIn.created_at), func.count(models.LifeCheckIn.id))
+        .filter(models.LifeCheckIn.created_at >= datetime.combine(since, datetime.min.time()) - timedelta(days=1))
     )
     if area_id:
         q = q.filter(models.LifeCheckIn.area_id == area_id)
-    counts = {str(d): int(c) for d, c in q.group_by(func.date(models.LifeCheckIn.created_at)).all()}
+    counts = {str(d): int(c) for d, c in q.group_by(_local_checkin_date(models.LifeCheckIn.created_at)).all()}
     return [{"date": (since + timedelta(days=i)).isoformat(),
              "count": counts.get((since + timedelta(days=i)).isoformat(), 0)}
             for i in range(days)]
