@@ -1,6 +1,10 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.4
 sqlalchemy==2.0.52
+# Schema-Migrationen (backend/alembic/, app/db_migrate.py laeuft beim Start).
+# Reines Python-Wheel (nur Mako als Extra-Abhaengigkeit), unbedenklich fuer
+# das schlanke python:3.14-slim-Image.
+alembic==1.19.1
 python-multipart==0.0.32
 pydantic==2.13.4
 itsdangerous==2.2.0

@@ -355,6 +355,12 @@ with engine.connect() as _conn:
         )
     _conn.commit()
 
+# Ab hier uebernimmt Alembic: die obigen create_all/ensure_columns-Bloecke
+# bleiben als Uebergangs-Sicherheitsnetz, neue Schema-Aenderungen laufen aber
+# als Alembic-Revision (siehe app/db_migrate.py, backend/alembic/).
+from .db_migrate import run_migrations  # noqa: E402
+run_migrations()
+
 _bootstrap_db = SessionLocal()
 _settings = auth.get_or_create_settings(_bootstrap_db)
 SECRET_KEY = _settings.secret_key

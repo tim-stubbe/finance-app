@@ -91,6 +91,15 @@ Because of this, **live-verification happens BEFORE the push, not via CI**:
   pattern, added to `frontend/index.html`'s script list AND to
   `SHELL_ASSETS` in `frontend/sw.js`, with `CACHE_NAME` bumped so installed
   PWA instances pick up the change.
+- Schema changes go through Alembic now (`backend/alembic/`,
+  `app/db_migrate.py` runs `upgrade head` at import time). Add a column by
+  editing the model, then `cd backend && alembic revision --autogenerate -m
+  "..."`, eyeball the generated `versions/*.py` (SQLite needs batch ops —
+  `render_as_batch=True` is already set), commit it. Do NOT add new
+  `ensure_columns(...)` lines to `main.py` — that block is a frozen
+  transition-era safety net; existing installs get `stamp`ed at
+  `0001_baseline` on first boot. `backend/tests/test_migrations.py` fails
+  if a model column has no matching migration.
 - Any negative-cache pattern (an external lookup that failed and shouldn't
   be retried every call) needs an explicit TTL, not permanent caching of
   the failure — a `resolved_at`/`fetched_at` timestamp column without an

@@ -42,6 +42,11 @@ RUN python -c "import urllib.request; urllib.request.urlretrieve('https://github
  && rm -rf /tmp/sc.tar.gz /tmp/sc-v1.0.0-linux-x86_64-gnu
 
 COPY backend/app ./app
+# Alembic-Migrationen: app/db_migrate.py laeuft beim Start `upgrade head` und
+# erwartet den Ordner als Geschwister von ./app (also /app/alembic). Ohne das
+# crasht der Container-Start.
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./alembic.ini
 COPY frontend /frontend
 
 # Von GitHub Actions befuellt (siehe docker-publish.yml), lokal leer ("dev").
