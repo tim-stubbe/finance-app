@@ -2037,6 +2037,16 @@ def _scheduled_proactive_assistant():
         proposals = proactive.run(db, settings)
         for p in proposals:
             telegram_bot.send_proposal(db, settings, p)
+            # urgency=hoch -> zusaetzlich der laute ntfy-"Anruf" (Prio 5,
+            # klingelt durch den Stumm-Modus). Nur wenn ein Topic konfiguriert
+            # ist; die Telegram-Buttons kamen oben schon.
+            if p.urgency == "hoch" and getattr(settings, "ntfy_enabled", False) \
+                    and getattr(settings, "ntfy_topic", None):
+                try:
+                    notifications.send_ntfy(settings.ntfy_url or "https://ntfy.sh",
+                                            settings.ntfy_topic, "❗ " + p.title, urgent=True)
+                except Exception:
+                    pass
     finally:
         db.close()
 
