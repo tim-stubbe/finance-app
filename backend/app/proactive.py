@@ -36,18 +36,25 @@ _SYSTEM = (
     "4. Du kannst etwas sofort tun, sobald Tim eine Option wählt.\n\n"
     "Sei NICHT übervorsichtig: wenn der Snapshot Inhalt hat und gerade nichts "
     "Dringendes offen ist, findest du trotzdem meist eine sinnvolle Anregung. "
-    "Stell ruhig komplexe Fragen mit 2-5 Optionen - Ja/Nein ist oft zu simpel.\n\n"
-    "Du antwortest AUSSCHLIESSLICH mit JSON in genau dieser Form:\n"
+    "Stell ruhig komplexe Fragen mit 2-5 Optionen - Ja/Nein ist oft zu simpel.\n"
+    "Das Wertvollste: VERKNÜPFE Punkte aus verschiedenen Bereichen zu EINER "
+    "Einsicht, statt sie einzeln abzuarbeiten. Beispiel: Todo 'Grafikkarte "
+    "ausbauen' + Ziel 'Umzug Schweiz' + '190 Fahrten unklassifiziert' + "
+    "anstehende Steuer -> ein Vorschlag, der das zusammenbringt. Ein guter "
+    "Vorschlag spart Tim mehrere Handgriffe auf einmal.\n\n"
+    "Du antwortest AUSSCHLIESSLICH mit JSON, HÖCHSTENS 3 Vorschläge, in genau "
+    "dieser Form:\n"
     '{"proposals": [\n'
     '  {"kind": "wahl|bestaetigen|info",\n'
     '   "urgency": "hoch|mittel|niedrig",\n'
-    '   "title": "kurze Überschrift",\n'
-    '   "body": "1-3 Sätze: WARUM das jetzt kommt und was es ihm spart",\n'
+    '   "title": "kurze Überschrift (max 6 Wörter)",\n'
+    '   "body": "GENAU EIN kurzer Satz: warum das jetzt kommt und was es spart",\n'
     '   "dedup": "stabiler-schluessel-ohne-datum",\n'
     '   "options": [\n'
     '      {"label": "Klartext für den Button", "action": {"type": "...", "params": {...}}}\n'
     "   ]}\n"
     "]}\n\n"
+    "Halte body kurz - keine langen Erklärungen, kein Zeilenumbruch im Text.\n"
     "Regeln für options:\n"
     "- Bei kind=info: options weglassen oder leer.\n"
     "- Bei kind=bestaetigen/wahl: 2-5 Optionen, die LETZTE ist immer eine "
@@ -317,13 +324,13 @@ def think(db, settings, space_id: int) -> list[dict]:
             settings.ollama_url, model,
             [{"role": "system", "content": _feedback_hint(db) + _SYSTEM},
              {"role": "user", "content": "Snapshot:\n" + snapshot}],
-            timeout=120,
+            timeout=180, format="json", options={"num_predict": 1200},
         )
     except Exception:
         return []
     data = _extract_json(reply)
     out = []
-    for p in (data.get("proposals") or [])[:4]:
+    for p in (data.get("proposals") or [])[:3]:
         s = _sanitize(p) if isinstance(p, dict) else None
         if s:
             out.append(s)
