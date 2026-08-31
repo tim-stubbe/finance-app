@@ -95,7 +95,7 @@ def _looks_like_followup(text: str) -> bool:
 # --------------------------------------------------------------------------
 _HANGING_RE = re.compile(r"\b(was h[äa]ngt|h[äa]ngt (noch|was)|offene punkte|todo.?liste offen)\b", re.IGNORECASE)
 _CAL_TODAY_RE = re.compile(r"\b(kalender|termin[e]?)\b.*\b(heute|jetzt|an|gleich)\b|^termine heute", re.IGNORECASE)
-_TODO_ADD_RE = re.compile(r"^\s*(todo|aufgabe|merk[e]?|to-?do)\s*[:\-]?\s+(.{2,})$", re.IGNORECASE)
+_TODO_ADD_RE = re.compile(r"^\s*(todo|aufgabe|merke?|to-?do)[\s:\-]+(.{2,})$", re.IGNORECASE)
 _TODO_DONE_RE = re.compile(r"^\s*(.{2,}?)\s+(abhaken|erledigt|abgehakt|fertig)\s*$", re.IGNORECASE)
 _SALDO_RE = re.compile(r"\b(saldo|kontostand|wie viel .* konto|was ist auf .* konto)\b", re.IGNORECASE)
 

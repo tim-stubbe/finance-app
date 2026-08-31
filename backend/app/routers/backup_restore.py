@@ -90,6 +90,8 @@ BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 os.makedirs(BACKUP_DIR, exist_ok=True)
 # .kies = verschluesselter Container (siehe backup_crypto), .zip = wie bisher.
 BACKUP_FILENAME_RE = re.compile(r"^auto_backup_\d{8}_\d{6}\.(?:zip|kies)$")
+# Beleg-Dateinamen im Backup: nur harmlose Zeichen, kein Trenner, kein "..".
+_UPLOAD_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")
 
 
 def write_backup_to_disk(db: Session, retention: int) -> schemas.BackupFileOut:
@@ -134,18 +136,16 @@ def run_backup_now(db: Session = Depends(get_db)):
 
 
 def _resolve_backup_path(filename: str) -> str:
-    """Backup-Dateiname -> validierter, auf BACKUP_DIR eingeschraenkter Pfad.
-
-    Regex-Fullmatch auf den Basename schliesst Traversal schon aus, aber
-    CodeQL (py/path-injection) erkennt das nicht als Sanitizer - deshalb
-    zusaetzlich explizite Containment-Pruefung gegen BACKUP_DIR."""
-    safe_name = os.path.basename(filename)
-    if not BACKUP_FILENAME_RE.fullmatch(safe_name):
-        raise HTTPException(404, "Backup nicht gefunden")
-    full = os.path.realpath(os.path.join(BACKUP_DIR, safe_name))
-    if os.path.dirname(full) != os.path.realpath(BACKUP_DIR):
-        raise HTTPException(404, "Backup nicht gefunden")
-    return full
+    """Backup-Dateiname -> Pfad einer TATSAECHLICH in BACKUP_DIR liegenden
+    Datei. Der zurueckgegebene Pfad wird aus einem `os.listdir`-Eintrag
+    zusammengesetzt, nie aus der Anfrage - damit gibt es keinen Taint-Flow
+    von der URL zum Dateizugriff (Traversal ist strukturell unmoeglich, und
+    CodeQL/py/path-injection sieht das auch so)."""
+    wanted = os.path.basename(filename)
+    for entry in os.listdir(BACKUP_DIR):
+        if entry == wanted and BACKUP_FILENAME_RE.fullmatch(entry):
+            return os.path.join(BACKUP_DIR, entry)
+    raise HTTPException(404, "Backup nicht gefunden")
 
 
 @backup_router.get("/backups/{filename}")
@@ -195,14 +195,17 @@ def restore(file: UploadFile = File(...), passphrase: str = Form("")):
     # und wie bei _resolve_backup_path() oben zusätzlich per realpath gegen
     # UPLOAD_DIR abgesichert, bevor der Inhalt selbst geschrieben wird.
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+    upload_root = os.path.realpath(UPLOAD_DIR)
     for name in zf.namelist():
         if not (name.startswith("uploads/") and not name.endswith("/")):
             continue
         safe_name = os.path.basename(name)
-        if not safe_name:
+        # Strikte Allowlist: keine Trenner, kein ".." - damit ist der Ziel-
+        # pfad strukturell auf UPLOAD_DIR beschraenkt (Zip-Slip unmoeglich).
+        if not _UPLOAD_NAME_RE.fullmatch(safe_name):
             continue
-        target = os.path.realpath(os.path.join(UPLOAD_DIR, safe_name))
-        if os.path.dirname(target) != os.path.realpath(UPLOAD_DIR):
+        target = os.path.join(upload_root, safe_name)
+        if os.path.realpath(target) != os.path.join(upload_root, safe_name):
             continue
         with zf.open(name) as src, open(target, "wb") as dst:
             shutil.copyfileobj(src, dst)
