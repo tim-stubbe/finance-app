@@ -75,3 +75,27 @@ def test_think_persists_and_answer_executes(monkeypatch):
 def test_registry_actions_all_callable():
     for name, fn in proactive_actions.REGISTRY.items():
         assert callable(fn), name
+
+
+def test_too_similar_catches_near_duplicate_titles():
+    assert proactive._too_similar(
+        "Drohne-Karte & Zigaretten-Verkauf",
+        ["Dringende Entscheidung: Drohne-Karte und Zigaretten-Verkauf"])
+    assert not proactive._too_similar(
+        "Wochenplan füllen", ["Fahrten einordnen", "Steuer vorbereiten"])
+
+
+def test_dismiss_records_negative_feedback(monkeypatch):
+    db = SessionLocal()
+    try:
+        s = _settings(db)
+        payload = json.dumps({"proposals": [{
+            "kind": "wahl", "urgency": "mittel", "title": "Nervnachricht", "dedup": "x",
+            "options": [{"label": "Nein danke", "action": {"type": "dismiss"}}]}]})
+        monkeypatch.setattr("app.ollama_client.chat", lambda *a, **k: payload)
+        pid = proactive.run(db, s)[0].id
+        proactive.answer(db, s, pid, "a")
+        fb = db.query(models.ProactiveFeedback).order_by(models.ProactiveFeedback.id.desc()).first()
+        assert fb and fb.useful is False and "Nervnachricht" in fb.text
+    finally:
+        db.close()

@@ -40,9 +40,17 @@ def _todo_add(db, settings, p) -> str:
 
 
 def _todo_done(db, settings, p) -> str:
+    tid = p.get("todo_id")
+    if tid:
+        t = db.query(models.Todo).filter_by(id=int(tid)).first()
+        if not t:
+            return "To-do nicht gefunden (schon weg?)."
+        t.done = True
+        db.commit()
+        return f"{_q(t.title)} abgehakt."
     query = (p.get("title") or p.get("match") or "").strip()
     if not query:
-        raise ValueError("todo_done ohne title")
+        raise ValueError("todo_done ohne todo_id/title")
     todo, err = crud.complete_todo_by_name(db, query)
     if todo:
         return f"{_q(todo.title)} abgehakt."
@@ -133,7 +141,7 @@ REGISTRY = {
 # Für den LLM-Prompt: knappe Beschreibung jeder erlaubten Aktion.
 CATALOG_FOR_PROMPT = (
     "todo_add {title, due_date?}   - neues To-do\n"
-    "todo_done {title}             - To-do abhaken (Textsuche)\n"
+    "todo_done {todo_id}           - To-do abhaken (die #N aus dem Snapshot)\n"
     "note_add {text}              - Notiz ablegen\n"
     "goal_status {goal_id, status} - Ziel-Status setzen (open|done|archived)\n"
     "trips_classify_all {purpose} - alle unklassifizierten Fahrten auf geschaeftlich|privat\n"

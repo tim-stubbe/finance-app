@@ -56,11 +56,18 @@ _SYSTEM = (
     "]}\n\n"
     "Halte body kurz - keine langen Erklärungen, kein Zeilenumbruch im Text.\n"
     "Regeln für options:\n"
-    "- Bei kind=info: options weglassen oder leer.\n"
+    "- kind=info NUR, wenn KEINE Aktion aus dem Katalog passt. Passt eine "
+    "Aktion (z.B. Fahrten einordnen, To-do abhaken), dann IMMER kind=wahl oder "
+    "bestaetigen mit dieser Aktion - niemals eine Sackgasse ohne Button.\n"
     "- Bei kind=bestaetigen/wahl: 2-5 Optionen, die LETZTE ist immer eine "
     'Ausweichoption ({"type":"dismiss"} oder {"type":"remind_later","params":{"days":N}}).\n'
     "- action.type MUSS aus dieser Liste sein, sonst nimm \"open\":\n"
-    + proactive_actions.CATALOG_FOR_PROMPT + "\n\n"
+    + proactive_actions.CATALOG_FOR_PROMPT + "\n"
+    "- todo_done braucht {\"todo_id\": N} (die #N aus dem Snapshot). Nimm es NUR "
+    "fuer wirklich abhakbare Aufgaben, NICHT fuer Sachen, die im Snapshot als "
+    "[Projekt/kein Häkchen] markiert sind.\n"
+    "- Schreib natuerliches, flüssiges Deutsch (kein 'Urgente', kein 'Es fällt "
+    "Ihnen'). Duze Tim.\n"
     "- Keine Zahlen erfinden. Keine Anlageberatung. Kein Geld bewegen.\n"
     "- Wenn wirklich GAR NICHTS einen Ping wert ist: {\"proposals\": []}"
 )
@@ -113,11 +120,31 @@ def build_snapshot(db, settings, space_id: int) -> str:
                 .filter(models.Todo.done.is_(False), models.Todo.due_date.isnot(None),
                         models.Todo.due_date >= today, models.Todo.due_date <= today + timedelta(days=2))
                 .order_by(models.Todo.due_date).limit(5).all())
+        # ID + Einschaetzung mitgeben, damit die KI todo_done nur fuer
+        # wirklich abhakbare Sachen nimmt (nicht fuer Projekte/Konten) und
+        # per todo_id statt per Textsuche referenziert.
+        def _todo_line(t):
+            proj = " [Projekt/kein Häkchen]" if len((t.title or "").split()) >= 3 \
+                   and not any(v in (t.title or "").lower() for v in
+                               ("anrufen", "kaufen", "buchen", "senden", "schicken",
+                                "abholen", "zahlen", "melden", "eintragen")) else ""
+            return f"#{t.id} {t.title}{proj}"
         if overdue:
             lines.append(f"Überfällige Todos ({len(overdue)}): "
-                         + "; ".join(t.title for t in overdue[:6]))
+                         + "; ".join(_todo_line(t) for t in overdue[:6]))
         if soon:
-            lines.append("Todos fällig in 2 Tagen: " + "; ".join(t.title for t in soon))
+            lines.append("Todos fällig in 2 Tagen: " + "; ".join(_todo_line(t) for t in soon))
+    except Exception:
+        pass
+
+    try:
+        rec = crud.detect_recurring_transactions(db, space_id) or []
+        upcoming = [f"{r.get('description', '?')} {_fmt_eur(r.get('amount'))}"
+                    for r in rec
+                    if r.get("next_expected_date")
+                    and today <= r["next_expected_date"] <= today + timedelta(days=7)]
+        if upcoming:
+            lines.append("Abbuchungen nächste 7 Tage: " + "; ".join(upcoming[:6]))
     except Exception:
         pass
 
@@ -345,6 +372,25 @@ def _recent_dedup_keys(db, days: int = 7) -> set[str]:
     return {r[0] for r in rows}
 
 
+def _norm(s: str) -> set[str]:
+    return {w for w in "".join(c if c.isalnum() else " " for c in (s or "").lower()).split()
+            if len(w) > 3}
+
+
+def _too_similar(title: str, recent_titles: list[str]) -> bool:
+    """Grober Titel-Abgleich (Jaccard der laengeren Woerter) - fängt
+    'Drohne-Karte & Zigaretten-Verkauf' vs. 'Dringende Entscheidung: Drohne-
+    Karte & Zigaretten-Verkauf' ab, die per dedup_key durchrutschen."""
+    a = _norm(title)
+    if not a:
+        return False
+    for t in recent_titles:
+        b = _norm(t)
+        if b and len(a & b) / len(a | b) >= 0.6:
+            return True
+    return False
+
+
 def run(db, settings) -> list[models.ProactiveProposal]:
     """Scheduler-Einstieg: denkt nach, entdoppelt, speichert - gibt die NEUEN
     Vorschläge zurück (der Aufrufer verschickt sie per Telegram)."""
@@ -357,11 +403,15 @@ def run(db, settings) -> list[models.ProactiveProposal]:
     spaces = crud.get_spaces(db)
     space_id = spaces[0].id if spaces else 1
     seen = _recent_dedup_keys(db)
+    recent_titles = [r[0] for r in db.query(models.ProactiveProposal.title)
+                     .filter(models.ProactiveProposal.created_at
+                             >= datetime.utcnow() - timedelta(days=7)).all()]
     created: list[models.ProactiveProposal] = []
     for s in think(db, settings, space_id):
-        if s["dedup_key"] in seen:
+        if s["dedup_key"] in seen or _too_similar(s["title"], recent_titles):
             continue
         seen.add(s["dedup_key"])
+        recent_titles.append(s["title"])
         row = models.ProactiveProposal(
             kind=s["kind"], urgency=s["urgency"], title=s["title"], body=s["body"],
             options_json=json.dumps(s["options"], ensure_ascii=False),
@@ -412,6 +462,15 @@ def answer(db, settings, proposal_id: int, key: str) -> str:
     p.chosen_key = chosen["key"]
     p.result_text = result
     p.answered_at = datetime.utcnow()
+
+    # Implizites Lernen: echte Aktion gewählt = nützlich, dismiss = daneben.
+    # remind_later ist neutral, kein Feedback.
+    at = (chosen.get("action") or {}).get("type")
+    if at in ("dismiss",) or at not in ("remind_later", "open"):
+        db.add(models.ProactiveFeedback(
+            text=f"[{p.kind}/{p.urgency}] {p.title}",
+            useful=(at != "dismiss"),
+        ))
     db.commit()
     return result
 
