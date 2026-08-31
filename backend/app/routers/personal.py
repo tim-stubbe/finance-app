@@ -22,20 +22,33 @@ personal_router = APIRouter(prefix="/api")
 
 
 # ---------------- Kontextbezogene Notizen ----------------
-def _note_entity_label(db: Session, entity_type: str, entity_id: int) -> Optional[str]:
+def _note_entity_label(db: Session, entity_type: str, entity_id: int,
+                       space_id: Optional[int] = None) -> Optional[str]:
     """Für die Notiz-Suche: ein lesbarer Titel des Objekts, an dem die Notiz
     hängt, damit ein Treffer nicht nur "Notiz #17" zeigt. Best-effort - fehlt
-    das Objekt (gelöscht), bleibt es None statt eines Fehlers."""
+    das Objekt (gelöscht), bleibt es None statt eines Fehlers.
+
+    Bereichs-gebundene Objekte (Ziel, Business-Projekt) werden auf den aktiven
+    Bereich eingeschränkt (`space_id`), damit ein Notiz-Treffer nie den Titel
+    eines fremden Bereichs durchsickern lässt (Multi-User Phase 2 / Audit)."""
+    def _scoped(model):
+        q = db.query(model).filter(model.id == entity_id)
+        if space_id is not None and hasattr(model, "space_id"):
+            q = q.filter((model.space_id == space_id) | (model.space_id.is_(None)))
+        return q.first()
+
     if entity_type == "goal":
-        g = db.query(models.Goal).filter(models.Goal.id == entity_id).first()
+        g = _scoped(models.Goal)
         return g.title if g else None
     if entity_type == "todo":
+        # Todos hängen (noch) an keinem Bereich - instanzweit wie bisher.
         t = db.query(models.Todo).filter(models.Todo.id == entity_id).first()
         return t.title if t else None
     if entity_type == "business_project":
-        p = db.query(models.BusinessProject).filter(models.BusinessProject.id == entity_id).first()
+        p = _scoped(models.BusinessProject)
         return p.name if p else None
     if entity_type == "life_area":
+        # LifeArea ist ebenfalls instanzweit (kein space_id).
         a = db.query(models.LifeArea).filter(models.LifeArea.id == entity_id).first()
         return a.name if a else None
     if entity_type == "schweiz":
@@ -65,7 +78,8 @@ def remove_note(note_id: int, db: Session = Depends(get_db)):
 
 
 @personal_router.get("/notes/search", response_model=List[schemas.NoteSearchResult])
-def search_notes(q: str, db: Session = Depends(get_db)):
+def search_notes(q: str, db: Session = Depends(get_db),
+                 space_id: int = Depends(auth.get_active_space_id)):
     if len(q.strip()) < 2:
         return []
     notes = crud.search_notes(db, q.strip())
@@ -74,7 +88,7 @@ def search_notes(q: str, db: Session = Depends(get_db)):
         results.append(schemas.NoteSearchResult(
             id=n.id, entity_type=n.entity_type, entity_id=n.entity_id, text=n.text,
             created_at=n.created_at, updated_at=n.updated_at,
-            entity_label=_note_entity_label(db, n.entity_type, n.entity_id),
+            entity_label=_note_entity_label(db, n.entity_type, n.entity_id, space_id),
         ))
     return results
 
