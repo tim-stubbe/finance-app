@@ -1,3 +1,4 @@
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -43,6 +44,13 @@ def get_or_create_settings(db: Session) -> models.Settings:
         db.add(settings)
         db.commit()
         db.refresh(settings)
+    # Container-weiter Override: ist KIES_OLLAMA_MODEL in der Env gesetzt, gilt
+    # DIESES Modell fuer alles (proaktiver Assistent, Jarvis, Steuer-Q&A, Haus,
+    # Hub) - unabhaengig davon, was im UI/DB steht. Nur im Speicher, wird nicht
+    # zurueckgeschrieben.
+    _env_model = os.environ.get("KIES_OLLAMA_MODEL")
+    if _env_model and settings.ollama_model != _env_model:
+        settings.ollama_model = _env_model
     return settings
 
 
