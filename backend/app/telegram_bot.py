@@ -823,6 +823,31 @@ def _handle_hanging_command(db, settings, token: str, chat_id: str, text: str) -
     return True
 
 
+_CLASSIFY_TRIPS_RE = re.compile(
+    r"fahrt(en)?\b.{0,80}?\b(privat|gesch(ä|ae)ftlich)\b|"
+    r"\b(privat|gesch(ä|ae)ftlich)\b.{0,80}?\bfahrt(en)?\b",
+    re.IGNORECASE | re.DOTALL)
+_CLASSIFY_VERB_RE = re.compile(
+    r"klassifizier|einordn|\btrag|kennzeichn|umstell|markier|\bsetz|verbuch|"
+    r"ordne|deklarier|zuordn", re.IGNORECASE)
+
+
+def _handle_classify_trips_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """Deterministisch: '(alle) Fahrten als privat/geschäftlich einordnen' -
+    ohne Umweg ueber die KI (die das bei schwachen Modellen als sinnloses
+    Todo missversteht). Braucht Fahrten + Zweck + ein Handlungs-Verb."""
+    t = text.strip()
+    if len(t) > 200 or not _CLASSIFY_TRIPS_RE.search(t) or not _CLASSIFY_VERB_RE.search(t):
+        return False
+    purpose = "privat" if re.search(r"privat", t, re.IGNORECASE) else "geschaeftlich"
+    only_open = not re.search(r"\balle\s+(gesamt|fahrt)|jede|s(ä|ae)mtliche|komplett", t, re.IGNORECASE)
+    reply = _execute_action(db, settings, {"type": "classify_trips",
+                                           "purpose": "privat" if purpose == "privat" else "geschäftlich",
+                                           "only_open": only_open})
+    _send(token, chat_id, reply)
+    return True
+
+
 def _handle_home_command(db, settings, token: str, chat_id: str, text: str) -> bool:
     """/haus <Befehl> - Smart-Home ueber dieselbe Pipeline wie der Web-Tab.
     Bestaetigung laeuft ueber '/haus ja' (process_command kennt "ja")."""
@@ -1110,6 +1135,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     if _handle_proposal_number_reply(db, settings, token, chat_id, text):
         return
     if _handle_hanging_command(db, settings, token, chat_id, text):
+        return
+    if _handle_classify_trips_command(db, settings, token, chat_id, text):
         return
     if _handle_home_command(db, settings, token, chat_id, text):
         return

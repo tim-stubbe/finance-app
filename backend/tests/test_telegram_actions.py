@@ -21,3 +21,14 @@ def test_plain_text_reply_is_no_action():
 
 def test_unknown_type_ignored():
     assert _extract_action('{"type": "rm_rf", "path": "/"}') is None
+
+
+def test_classify_trips_command_matches_clear_instructions():
+    from app.telegram_bot import _CLASSIFY_TRIPS_RE, _CLASSIFY_VERB_RE
+    def hits(t):
+        return bool(_CLASSIFY_TRIPS_RE.search(t) and _CLASSIFY_VERB_RE.search(t) and len(t) <= 200)
+    assert hits("trag die Fahrten als privat ein")
+    assert hits("klassifizier alle Fahrten geschäftlich")
+    assert hits("dann möchte ich, dass du alle 190 Fahrten als privat klassifizierst")
+    assert not hits("Wie viele Fahrten sind noch offen?")
+    assert not hits("Ich fahre morgen privat nach Hause")
