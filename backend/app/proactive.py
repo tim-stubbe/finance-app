@@ -69,6 +69,7 @@ _SYSTEM = (
     "- Schreib natuerliches, flüssiges Deutsch (kein 'Urgente', kein 'Es fällt "
     "Ihnen'). Duze Tim.\n"
     "- Keine Zahlen erfinden. Keine Anlageberatung. Kein Geld bewegen.\n"
+    "- Datumsangaben immer TT.MM.JJJJ, nie ISO (2027-01-01 falsch).\n"
     "- Wenn wirklich GAR NICHTS einen Ping wert ist: {\"proposals\": []}"
 )
 
@@ -78,6 +79,19 @@ def _fmt_eur(v) -> str:
         return f"{float(v):,.0f} €".replace(",", ".")
     except (TypeError, ValueError):
         return "–"
+
+
+def _de(d) -> str:
+    """Datum als TT.MM.JJJJ - die KI uebernimmt die Schreibweise aus dem
+    Snapshot woertlich in ihre Nachrichten (Tim will kein ISO-Format)."""
+    try:
+        return d.strftime("%d.%m.%Y")
+    except (AttributeError, ValueError):
+        s = str(d)
+        # 2027-01-01[...] -> 01.01.2027
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+            return f"{s[8:10]}.{s[5:7]}.{s[0:4]}" + (" " + s[11:16] if len(s) >= 16 else "")
+        return s
 
 
 def build_snapshot(db, settings, space_id: int) -> str:
@@ -152,7 +166,7 @@ def build_snapshot(db, settings, space_id: int) -> str:
         events = crud.get_upcoming_calendar_events(db, days=2, limit=8)
         if events:
             lines.append("Termine nächste 48 h: " + "; ".join(
-                f"{e.title} ({e.start[:16].replace('T', ' ')})"
+                f"{e.title} ({_de(e.start)})"
                 + ("" if getattr(e, "location", None) else " [ohne Ort]")
                 for e in events))
     except Exception:
@@ -165,7 +179,7 @@ def build_snapshot(db, settings, space_id: int) -> str:
                  .limit(6).all())
         if goals:
             lines.append("Offene Ziele: " + "; ".join(
-                f"#{g.id} {g.title}" + (f" (bis {g.target_date})" if g.target_date else "")
+                f"#{g.id} {g.title}" + (f" (bis {_de(g.target_date)})" if g.target_date else "")
                 for g in goals))
     except Exception:
         pass
@@ -177,7 +191,7 @@ def build_snapshot(db, settings, space_id: int) -> str:
                      .order_by(models.ContractReminder.renewal_date).limit(5).all())
         if reminders:
             lines.append("Kündigungsfristen < 30 Tage: " + "; ".join(
-                f"{r.label} (Verlängerung {r.renewal_date})" for r in reminders))
+                f"{r.label} (Verlängerung {_de(r.renewal_date)})" for r in reminders))
     except Exception:
         pass
 

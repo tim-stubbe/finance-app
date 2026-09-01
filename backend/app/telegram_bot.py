@@ -1087,7 +1087,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
     space = crud.get_spaces(db)[0]
     today = date.today()
     weekday_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"][today.weekday()]
-    heute_zeile = f"\n\nHeutiges Datum: {today.isoformat()} ({weekday_de})."
+    heute_zeile = (f"\n\nHeutiges Datum: {today.strftime('%d.%m.%Y')} ({weekday_de}). "
+                   "Schreib Datumsangaben immer im Format TT.MM.JJJJ, nie ISO.")
     system_content = (
         TELEGRAM_SYSTEM_PROMPT + heute_zeile + "\n\n" + _tone_instruction(settings.communication_style)
         + "\n\n" + _context_facts(db, space.id)
