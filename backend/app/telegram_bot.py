@@ -55,6 +55,30 @@ MAX_HISTORY = 20  # Nachrichten (User+Assistant zusammen); nur im Prozessspeiche
 
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
 _ACTION_BLOCK_RE = re.compile(r"```action\s*(.*?)\s*```", re.DOTALL)
+_ACTION_TYPES = {
+    "create_todo", "complete_todo", "create_termin", "cancel_termin",
+    "create_business_issue", "resolve_business_issue", "mark_project_checked",
+    "life_checkin", "add_wishlist_item", "mark_wishlist_checked", "classify_trips",
+}
+_BARE_JSON_RE = re.compile(r'\{[^{}]*"type"\s*:\s*"[a-z_]+"[^{}]*\}', re.DOTALL)
+
+
+def _extract_action(reply: str) -> dict | None:
+    """Aktions-Block aus der KI-Antwort ziehen. Bevorzugt den ```action```-Block,
+    faellt aber auf ein blankes JSON-Objekt mit bekanntem "type" zurueck -
+    schwaechere Modelle (gemma3:4b) vergessen die Fences und wuerden das rohe
+    JSON sonst als Antwort schicken."""
+    m = _ACTION_BLOCK_RE.search(reply)
+    candidates = [m.group(1)] if m else []
+    candidates += _BARE_JSON_RE.findall(reply)
+    for c in candidates:
+        try:
+            obj = json.loads(c.strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("type") in _ACTION_TYPES:
+            return obj
+    return None
 # Bewusst ein explizites Kommando statt Freitext-Interpretation durch die KI -
 # bei einer Geldsumme soll nichts geraten werden. Format: /saldo <Kontoname> <Betrag>
 _BALANCE_CMD_RE = re.compile(r"^/saldo\s+(.+?)\s+(-?\d+(?:[.,]\d{1,2})?)\s*€?\s*$", re.IGNORECASE)
@@ -139,8 +163,15 @@ er das in der App (schwebender KI-Chat oder direkt) erledigen soll. Der Kontosta
 als Fließtext nachbauen, bei Geld wird nichts geraten.
 
 Termine und To-Dos darfst du dagegen direkt aus normaler Sprache heraus anlegen/abhaken/absagen, ohne dass der \
-Nutzer ein Kommando tippen muss. Erkennst du eindeutig eine solche Absicht, antworte AUSSCHLIESSLICH mit einem \
-Aktions-Block (kein Fließtext davor/danach), einer der folgenden Formen:
+Nutzer ein Kommando tippen muss. NUR bei einer klaren Handlungsanweisung ("mach…", "leg an", "trag ein", "hak ab", \
+"sag ab"). Bei FRAGEN ("hast du…", "ist … erledigt?", "was ist mit…"), Feststellungen oder Korrekturen/Widerspruch \
+("nein, du solltest…") gibst du KEINEN Aktions-Block aus, sondern antwortest normal in Textform. Im Zweifel: nachfragen \
+statt eine Aktion raten.
+Erkennst du eindeutig eine Handlungsanweisung, antworte AUSSCHLIESSLICH mit einem \
+Aktions-Block (kein Fließtext davor/danach, mit ```action-Fences), einer der folgenden Formen:
+```action
+{"type": "classify_trips", "purpose": "privat oder geschäftlich"}
+```
 ```action
 {"type": "create_todo", "title": "<Text>", "due_date": "JJJJ-MM-TT oder null"}
 ```
@@ -886,6 +917,26 @@ def _execute_action(db, settings, action: dict) -> str:
     Missverständnis sofort auffällt."""
     action_type = action.get("type")
 
+    if action_type == "classify_trips":
+        purpose = (action.get("purpose") or "").strip().lower()
+        purpose = {"privat": "privat", "geschäftlich": "geschaeftlich",
+                   "geschaeftlich": "geschaeftlich"}.get(purpose)
+        if not purpose:
+            return "Sag mir, ob die Fahrten geschäftlich oder privat sein sollen."
+        only_open = action.get("only_open", True)
+        veh = db.query(models.Vehicle).order_by(models.Vehicle.id).first()
+        if not veh:
+            return "Es ist noch kein Fahrzeug angelegt."
+        q = db.query(models.VehicleTrip).filter_by(vehicle_id=veh.id)
+        if only_open:
+            q = q.filter(models.VehicleTrip.purpose == "unbekannt")
+        rows = q.all()
+        for t in rows:
+            t.purpose = purpose
+        db.commit()
+        label = "privat" if purpose == "privat" else "geschäftlich"
+        return f"{len(rows)} Fahrt(en) auf „{label}“ gesetzt."
+
     if action_type == "create_todo":
         title = (action.get("title") or "").strip()
         if not title:
@@ -1099,14 +1150,12 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
 
     reply = ollama_client.chat(settings.ollama_url, chat_model, messages)
 
-    action_match = _ACTION_BLOCK_RE.search(reply)
-    if action_match:
+    action = _extract_action(reply)
+    if action is not None:
         try:
-            action = json.loads(action_match.group(1).strip())
             confirmation = _execute_action(db, settings, action)
-        except (json.JSONDecodeError, AttributeError):
-            confirmation = "Habe die Anfrage nicht als eindeutige Aktion verstanden - bitte anders formulieren " \
-                            "oder das passende Kommando nutzen (/todo, /erledigt, /termin, /termin_absagen)."
+        except Exception as exc:  # noqa: BLE001
+            confirmation = f"Konnte die Aktion nicht ausführen: {exc}"
         _history.append({"role": "user", "content": text})
         _history.append({"role": "assistant", "content": confirmation})
         del _history[:-MAX_HISTORY]
