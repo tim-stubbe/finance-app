@@ -147,7 +147,7 @@ async def smarthome_voice_stream(ws: WebSocket):
                                 "message": "Kein Spracherkennungs-Backend aktiv (STT_BACKEND=stub)."})
             return
         try:
-            detector = voice.WakeWord(model=settings.homeassistant_wake_word or None)
+            detector = voice.get_wakeword(model=settings.homeassistant_wake_word or None)
             await asyncio.to_thread(detector._load)
         except NotImplementedError as exc:
             await ws.send_json({"type": "error", "message": str(exc)})

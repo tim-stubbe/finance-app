@@ -22,13 +22,16 @@ Solange STT_BACKEND=stub ist, antwortet /api/smarthome/voice/command mit 501
 und einer Anleitung - der dokumentierte Offline-Fallback.
 """
 
+from __future__ import annotations
+
 import os
 
 from .stt import STT, StubSTT, FasterWhisperSTT, HttpWhisperSTT
 from .tts import TTS, StubTTS, PiperTTS, HttpPiperTTS
-from .wakeword import WakeWord
+from .wakeword import WakeWord, HttpWakeWord
 
-__all__ = ["STT", "TTS", "StubSTT", "WakeWord", "get_stt", "get_tts"]
+__all__ = ["STT", "TTS", "StubSTT", "WakeWord", "HttpWakeWord",
+           "get_stt", "get_tts", "get_wakeword"]
 
 
 def _language() -> str:
@@ -45,6 +48,19 @@ def get_stt() -> STT:
     if backend == "http":
         return HttpWhisperSTT(language=os.environ.get("WHISPER_LANGUAGE", _language()))
     return StubSTT()
+
+
+def get_wakeword(model: str | None = None):
+    """Weckwort-Detektor je nach `WAKEWORD_BACKEND` (openwakeword | http).
+
+    Default bleibt openwakeword (lokal, braucht requirements-voice.txt). Mit
+    `http` laeuft die Erkennung in einem Sidecar, damit openwakeword nicht ins
+    Produktions-Image muss.
+    """
+    backend = os.environ.get("WAKEWORD_BACKEND", "openwakeword").lower()
+    if backend == "http":
+        return HttpWakeWord(model=model)
+    return WakeWord(model=model)
 
 
 def get_tts() -> TTS:
