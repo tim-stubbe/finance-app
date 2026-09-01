@@ -83,6 +83,26 @@ def test_snapshot_includes_health_trends(client):
         db.close()
 
 
+def test_quiet_hours_block_proactive_run(client, monkeypatch):
+    import app.proactive as p
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
+    db, s = _settings(quiet_hours_enabled=True, quiet_hours_start_hour=2,
+                      quiet_hours_end_hour=7)
+    try:
+        # 3 Uhr nachts -> Ruhezeit -> nichts
+        monkeypatch.setattr(p, "datetime", type("D", (), {
+            "utcnow": staticmethod(lambda: datetime(2026, 9, 1, 3, 0)),
+            "now": staticmethod(lambda: datetime(2026, 9, 1, 3, 0))}))
+        assert p.run(db, s) == []
+        # 10 Uhr -> aktiv
+        monkeypatch.setattr(p, "datetime", type("D", (), {
+            "utcnow": staticmethod(lambda: datetime(2026, 9, 1, 10, 0)),
+            "now": staticmethod(lambda: datetime(2026, 9, 1, 10, 0))}))
+        assert len(p.run(db, s)) == 1
+    finally:
+        db.close()
+
+
 def test_snooze_blocks(client, monkeypatch):
     monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
     db, s = _settings(proactive_assistant_snoozed_until=datetime.utcnow() + timedelta(hours=3))

@@ -399,6 +399,12 @@ def run(db, settings) -> list[models.ProactiveProposal]:
         return []
     if snoozed and datetime.utcnow() < snoozed:
         return []
+    # Ruhezeiten gelten auch fuer den proaktiven Job - anders als bei
+    # notifications.notify() gibt es hier kein urgent-Bypass. Fenster wird ueber
+    # settings.quiet_hours_* konfiguriert (lokale Wanduhrzeit, wrap-around ok).
+    from . import notifications
+    if notifications._in_quiet_hours(settings, datetime.now()):
+        return []
 
     spaces = crud.get_spaces(db)
     space_id = spaces[0].id if spaces else 1
