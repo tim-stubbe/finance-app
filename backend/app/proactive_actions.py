@@ -101,13 +101,29 @@ def _trips_classify_all(db, settings, p) -> str:
 
 
 def _meal_plan_fill(db, settings, p) -> str:
-    try:
-        from . import crud_meals
-        res = crud_meals.suggest_and_fill_week(db, settings)
-        return res if isinstance(res, str) else "Wochenplan mit Vorschlägen gefüllt."
-    except Exception:
-        return ("Öffne den Essen-Tab und tippe auf KI-Vorschläge - automatisches "
-                "Füllen ist hier noch nicht verdrahtet.")
+    """Freie Abendessen-Slots der nächsten 7 Tage mit vorhandenen Rezepten
+    füllen (rotierend). Legt nichts an, wenn keine Rezepte da sind; überschreibt
+    keine belegten Slots - reversibel über den Essen-Tab."""
+    import random
+    from . import crud_meals
+    recipes = [r for r in db.query(models.Recipe).all()]
+    if not recipes:
+        return "Noch keine Rezepte angelegt - im Essen-Tab welche erstellen (auch per KI-Vorschlag)."
+    today = date.today()
+    span = [today + timedelta(days=i) for i in range(7)]
+    plan = crud_meals.get_meal_plan(db, span[0], span[-1])
+    belegt = {(e["date"], e["meal"]) for e in plan if e.get("recipe_id")}
+    pool = recipes[:]
+    random.shuffle(pool)
+    n = 0
+    for d in span:
+        if (d.isoformat(), "abend") in belegt:
+            continue
+        rec = pool[n % len(pool)]
+        crud_meals.set_meal_plan_entry(db, d, "abend", recipe_id=rec.id)
+        n += 1
+    return (f"{n} Abendessen für die nächsten 7 Tage eingeplant." if n
+            else "Alle Abendessen der nächsten Woche waren schon geplant.")
 
 
 def _memory_add(db, settings, p) -> str:
@@ -126,6 +142,49 @@ def _memory_forget(db, settings, p) -> str:
     ok = assistant_memory.forget_memory(db, key=key) if key else False
     db.commit()
     return "Vergessen." if ok else "Diesen Merksatz kenne ich nicht."
+
+
+def _first_calendar_url(settings):
+    raw = getattr(settings, "radicale_calendar_url", None) or ""
+    urls = [u.strip() for u in raw.split(",") if u.strip()]
+    return urls[0] if urls else None
+
+
+def _calendar_add(db, settings, p) -> str:
+    title = (p.get("title") or "").strip()
+    raw = p.get("date")
+    if not title or not raw:
+        raise ValueError("calendar_add braucht title und date")
+    try:
+        d = date.fromisoformat(str(raw)[:10])
+    except ValueError:
+        raise ValueError(f"{_q(raw)} ist kein gültiges Datum (JJJJ-MM-TT)")
+    time_str = (p.get("time") or "").strip()
+    all_day = not time_str
+    hour = minute = 0
+    if time_str:
+        try:
+            hour, minute = (int(x) for x in time_str.split(":")[:2])
+        except (ValueError, TypeError):
+            all_day, hour, minute = True, 0, 0
+    start = datetime(d.year, d.month, d.day, hour, minute)
+    crud.create_calendar_event(db, title, start, None, None, all_day, _first_calendar_url(settings))
+    when = d.strftime("%d.%m.%Y") + ("" if all_day else f" {hour:02d}:{minute:02d}")
+    return f"Termin {_q(title)} am {when} eingetragen."
+
+
+def _wishlist_add(db, settings, p) -> str:
+    name = (p.get("name") or p.get("title") or "").strip()
+    if not name:
+        raise ValueError("wishlist_add ohne name")
+    price = p.get("target_price")
+    try:
+        price = float(price) if price not in (None, "") else None
+    except (TypeError, ValueError):
+        price = None
+    crud.create_wishlist_item(db, schemas.WishlistItemCreate(name=name, target_price=price))
+    tail = f" (Zielpreis {price:.2f} €)" if price else ""
+    return f"{_q(name)} auf die Wunschliste gesetzt{tail}."
 
 
 def _open(db, settings, p) -> str:
@@ -151,6 +210,8 @@ REGISTRY = {
     "goal_status": _goal_status,
     "trips_classify_all": _trips_classify_all,
     "meal_plan_fill": _meal_plan_fill,
+    "calendar_add": _calendar_add,
+    "wishlist_add": _wishlist_add,
     "memory_add": _memory_add,
     "memory_forget": _memory_forget,
     "open": _open,
@@ -166,6 +227,8 @@ CATALOG_FOR_PROMPT = (
     "goal_status {goal_id, status} - Ziel-Status setzen (open|done|archived)\n"
     "trips_classify_all {purpose} - alle unklassifizierten Fahrten auf geschaeftlich|privat\n"
     "meal_plan_fill {}            - Wochenplan mit KI-Rezepten fuellen\n"
+    "calendar_add {title, date, time?} - Termin in den Kalender (date=JJJJ-MM-TT)\n"
+    "wishlist_add {name, target_price?} - Ding auf die Wunschliste\n"
     "memory_add {text, category?, importance?} - dauerhaft merken (Fakt/Praeferenz/Vorhaben)\n"
     "memory_forget {key}          - gemerkten Punkt vergessen\n"
     "open {tab}                   - nur Hinweis, Tim schaut selbst nach\n"
