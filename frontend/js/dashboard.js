@@ -280,6 +280,7 @@ async function loadHubTab() {
   // beant-/löschbar.
   loadHubProposals();
   loadHubMemory();
+  loadHubEnergy();
 
   // Überfällige Projekte/Lebensbereiche/Wunschliste - dasselbe "seit wie
   // lange nicht bestätigt"-Kriterium wie die jeweiligen Telegram-Erinnerungen

@@ -40,6 +40,24 @@ def _get_states(settings):
         return cached
     return ha_client.get_states(settings.homeassistant_url, _token(settings))
 
+
+def read_power_watts(settings) -> float | None:
+    """Aktueller Wattstand des Server-Strommessers (Settings.homeassistant_power_entity).
+    None, wenn nicht konfiguriert / HA nicht erreichbar / kein Zahlenwert."""
+    ent = (getattr(settings, "homeassistant_power_entity", None) or "").strip()
+    url, token = getattr(settings, "homeassistant_url", None), _token(settings)
+    if not (ent and url and token):
+        return None
+    try:
+        st = ha_client.get_state(url, token, ent)
+        w = float(st.get("state"))
+    except (ha_client.HAError, TypeError, ValueError, KeyError):
+        return None
+    unit = ((st.get("attributes") or {}).get("unit_of_measurement") or "").lower()
+    if unit in ("kw", "kilowatt"):
+        w *= 1000.0
+    return w if w >= 0 else None
+
 # --------------------------------------------------------------------------
 # Policy / Allowlist
 # --------------------------------------------------------------------------

@@ -50,6 +50,7 @@ from .routers.smarthome import smarthome_router, smarthome_ws_router
 from .routers.hub import hub_router
 from .routers.proactive import proactive_router
 from .routers.assistant_memory_routes import assistant_memory_router
+from .routers.energy import energy_router
 from .routers.jarvis import jarvis_router
 from .routers.meals import meals_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
@@ -1061,6 +1062,7 @@ app.include_router(smarthome_ws_router)  # WebSocket, Auth im Handler
 app.include_router(hub_router, dependencies=_require_auth)
 app.include_router(proactive_router, dependencies=_require_auth)
 app.include_router(assistant_memory_router, dependencies=_require_auth)
+app.include_router(energy_router, dependencies=_require_auth)
 app.include_router(jarvis_router, dependencies=_require_auth)
 app.include_router(meals_router, dependencies=_require_auth)
 app.include_router(sync_router)
@@ -2109,6 +2111,31 @@ def _scheduled_memory_distill():
         db.close()
 
 
+def _scheduled_power_sample():
+    """Alle 15 Minuten: aktuellen Wattstand des Server-Strommessers (HA-Sensor,
+    Settings.homeassistant_power_entity) als models.PowerReading ablegen -
+    Basis für die kWh/€-Auswertung (routers/energy.py). Läuft leer, wenn kein
+    Sensor konfiguriert ist. Einmal täglich (04:xx) alte Zeilen (>90 Tage) weg."""
+    from . import smarthome
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        w = smarthome.read_power_watts(settings)
+        if w is not None:
+            db.add(models.PowerReading(watts=float(w)))
+            db.commit()
+        now = datetime.utcnow()
+        if now.hour == 4 and now.minute < 15:
+            db.query(models.PowerReading).filter(
+                models.PowerReading.ts < now - timedelta(days=90)
+            ).delete(synchronize_session=False)
+            db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _scheduled_memory_prune():
     """Wöchentlich: Abgelaufenes/Verworfenes weg, Gedächtnis auf eine
     handhabbare Grösse deckeln, alten Chatverlauf abschneiden (pinned bleibt),
@@ -2489,6 +2516,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_memory_prune, CronTrigger(day_of_week="mon", hour=4, minute=0),
     id="memory_prune", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_power_sample, CronTrigger(minute="*/15"),
+    id="power_sample", misfire_grace_time=300, max_instances=1, coalesce=True,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es

@@ -466,6 +466,9 @@ class Settings(Base):
     homeassistant_electricity_price = Column(Float, nullable=False, default=0.35)
     # Kommagetrennte entity_ids fuer die Verlaufs-Charts (D, Smart-Home-Settings).
     homeassistant_history_entities = Column(String, nullable=True)
+    # HA-Sensor (Watt) fuer den Server-Stromverbrauch - der Sampler-Job
+    # (_scheduled_power_sample) pollt ihn und fuellt PowerReading.
+    homeassistant_power_entity = Column(String, nullable=True)
     # Timeout des Jarvis-Kurzzeitgedaechtnisses in Minuten (F, jarvis.py).
     jarvis_memory_minutes = Column(Integer, nullable=False, default=10)
 
@@ -1808,6 +1811,19 @@ class ConversationTurn(Base):
     role = Column(String, nullable=False)                      # user | assistant
     content = Column(Text, nullable=False)
     summarized = Column(Boolean, nullable=False, default=False)
+
+
+class PowerReading(Base):
+    """Ein Wattstand-Sample des Server-Strommessers (HA-Sensor, siehe
+    Settings.homeassistant_power_entity). `_scheduled_power_sample` schreibt
+    alle ~15 min eine Zeile; `routers/energy.py` integriert daraus kWh/€.
+    Wird auf ~90 Tage begrenzt."""
+
+    __tablename__ = "power_readings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ts = Column(DateTime, default=datetime.utcnow, index=True)
+    watts = Column(Float, nullable=False)
 
 
 class TaxTipStatus(Base):
