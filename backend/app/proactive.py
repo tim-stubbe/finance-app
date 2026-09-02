@@ -19,7 +19,7 @@ import json
 import hashlib
 from datetime import date, datetime, timedelta
 
-from . import crud, models, ollama_client, proactive_actions
+from . import assistant_memory, crud, models, ollama_client, proactive_actions
 
 _NOTHING_TOKENS = ("NICHTS", "NOTHING", "KEIN VORSCHLAG", "KEINE MELDUNG")
 
@@ -68,6 +68,9 @@ _SYSTEM = (
     "[Projekt/kein Häkchen] markiert sind.\n"
     "- Schreib natuerliches, flüssiges Deutsch (kein 'Urgente', kein 'Es fällt "
     "Ihnen'). Duze Tim.\n"
+    "- Nennt Tim dir einen dauerhaften Fakt, eine Präferenz oder ein festes "
+    "Vorhaben (steht evtl. schon oben unter 'Was ich mir gemerkt habe'), "
+    "biete eine Option mit action.type=\"memory_add\" an.\n"
     "- Keine Zahlen erfinden. Keine Anlageberatung. Kein Geld bewegen.\n"
     "- Datumsangaben immer TT.MM.JJJJ, nie ISO (2027-01-01 falsch).\n"
     "- Wenn wirklich GAR NICHTS einen Ping wert ist: {\"proposals\": []}"
@@ -363,9 +366,11 @@ def think(db, settings, space_id: int) -> list[dict]:
     try:
         reply = ollama_client.chat(
             settings.ollama_url, model,
-            [{"role": "system", "content": _feedback_hint(db) + _SYSTEM},
+            [{"role": "system", "content": _feedback_hint(db)
+              + assistant_memory.build_memory_block(db, 1200) + _SYSTEM},
              {"role": "user", "content": "Snapshot:\n" + snapshot}],
-            timeout=180, format="json", options={"num_predict": 1200},
+            timeout=180, format="json",
+            options={"num_predict": 1200, "num_ctx": assistant_memory.NUM_CTX_PROACTIVE},
         )
     except Exception:
         return []

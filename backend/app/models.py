@@ -1761,6 +1761,55 @@ class ProactiveProposal(Base):
     telegram_message_id = Column(Integer, nullable=True)    # zum Nachträglich-Editieren
 
 
+class AssistantMemory(Base):
+    """Dauerhaftes Gedächtnis des Assistenten: ein Fakt / eine Präferenz / ein
+    Vorhaben je Zeile. Wird beim Prompt-Bau eingespeist (siehe
+    assistant_memory.build_memory_block) - so muss Tim dem Assistenten Dinge
+    nicht bei jedem Gespräch neu sagen, und Entscheidungen überleben Neustarts.
+
+    Geschrieben per `/merk` (Telegram), ```action``` `remember`, proaktiver
+    Aktion `memory_add`, oder leise vom nächtlichen Destillations-Job
+    (source="destillation", nie importance 3, nie pinned - über `/gedächtnis`
+    sichtbar und per `/vergiss` widerrufbar).
+
+    category:  fakt | praeferenz | vorhaben | erledigt | kontext | zusammenfassung
+    status:    aktiv | erledigt | verworfen
+    """
+
+    __tablename__ = "assistant_memory"
+    __table_args__ = (UniqueConstraint("key", name="uq_assistant_memory_key"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True, index=True)  # LRU-Bump beim Einspeisen
+    key = Column(String, nullable=False)                       # Slug für Dedup/Upsert
+    text = Column(String, nullable=False)                      # der Fakt, 1 Satz
+    category = Column(String, nullable=False, default="fakt")
+    source = Column(String, nullable=False, default="manuell")  # manuell|telegram|proaktiv|jarvis|destillation
+    importance = Column(Integer, nullable=False, default=2)     # 1..3
+    pinned = Column(Boolean, nullable=False, default=False)     # nie auto-gelöscht
+    status = Column(String, nullable=False, default="aktiv")
+    expires_at = Column(DateTime, nullable=True, index=True)
+
+
+class ConversationTurn(Base):
+    """Ein Zug im Telegram-Freitext-Chat, dauerhaft statt nur im RAM
+    (früher telegram_bot._history). Übersteht Neustarts/Deploys; wird nach
+    Zeit- und Zeichen-Budget gekappt (assistant_memory.load_history_for_prompt)
+    und alte Züge werden zu einer `zusammenfassung`-Memory verdichtet
+    (assistant_memory.compress_old_turns). `/reset` leert den Verlauf."""
+
+    __tablename__ = "conversation_turn"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    chat_id = Column(String, nullable=True, index=True)
+    role = Column(String, nullable=False)                      # user | assistant
+    content = Column(Text, nullable=False)
+    summarized = Column(Boolean, nullable=False, default=False)
+
+
 class TaxTipStatus(Base):
     """Merkt sich pro Steuerjahr, welche Spar-Tipps (tax_advice.generate_tips)
     der Nutzer als erledigt oder nicht relevant markiert hat - damit der

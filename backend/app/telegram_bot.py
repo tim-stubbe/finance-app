@@ -44,14 +44,13 @@ from datetime import date, datetime, timedelta
 
 import requests
 
-from . import ai_auto, auth, bank_sync, crud, models, ollama_client, proactive, radicale_sync, schemas, websearch, voice
+from . import ai_auto, assistant_memory, auth, bank_sync, crud, models, ollama_client, proactive, radicale_sync, schemas, websearch, voice
 from .database import SessionLocal
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}"
 POLL_TIMEOUT = 30
 IDLE_SLEEP_SECONDS = 10
 ERROR_BACKOFF_SECONDS = 15
-MAX_HISTORY = 20  # Nachrichten (User+Assistant zusammen); nur im Prozessspeicher
 
 _SEARCH_BLOCK_RE = re.compile(r"```search\s*(.*?)\s*```", re.DOTALL)
 _ACTION_BLOCK_RE = re.compile(r"```action\s*(.*?)\s*```", re.DOTALL)
@@ -59,6 +58,7 @@ _ACTION_TYPES = {
     "create_todo", "complete_todo", "create_termin", "cancel_termin",
     "create_business_issue", "resolve_business_issue", "mark_project_checked",
     "life_checkin", "add_wishlist_item", "mark_wishlist_checked", "classify_trips",
+    "remember", "forget",
 }
 _BARE_JSON_RE = re.compile(r'\{[^{}]*"type"\s*:\s*"[a-z_]+"[^{}]*\}', re.DOTALL)
 
@@ -139,6 +139,15 @@ _PROACTIVE_CMD_RE = re.compile(
 _PROACTIVE_FEEDBACK_CMD_RE = re.compile(
     r"^/(n(?:ü|ue)tzlich|gut|unn(?:ö|oe)tig|schlecht|nervt)\s*$", re.IGNORECASE,
 )
+# Gedächtnis (siehe assistant_memory.py):
+#   /merk <Text>       - dauerhaft merken
+#   /vergiss <N>|<Text> - Merksatz N aus /gedächtnis (oder per Stichwort) löschen
+#   /gedächtnis         - alles anzeigen, was Kies sich gemerkt hat
+#   /reset (oder /neu)  - Telegram-Gesprächsverlauf leeren (Gedächtnis bleibt)
+_MERK_CMD_RE = re.compile(r"^/merk(?:en)?\s+(.+)$", re.IGNORECASE | re.DOTALL)
+_VERGISS_CMD_RE = re.compile(r"^/vergiss\s+(.+)$", re.IGNORECASE | re.DOTALL)
+_GEDAECHTNIS_CMD_RE = re.compile(r"^/(ged(?:ä|ae)chtnis|memory)\s*$", re.IGNORECASE)
+_RESET_CMD_RE = re.compile(r"^/(reset|neu)\s*$", re.IGNORECASE)
 # Format: /ausgabe <Konto>; <Betrag>; <Text> - schnelle Ausgabe (Spezifikation
 # Abschnitt D). Bewusst ein FESTES Kommando statt KI-Freitext-Erkennung wie
 # bei Todo/Termin/Projekt/Leben (siehe _execute_action) - bei Geld soll
@@ -265,9 +274,6 @@ def _tone_instruction(style: str | None) -> str:
     return COMMUNICATION_STYLE_INSTRUCTIONS.get(style or "freundlich", COMMUNICATION_STYLE_INSTRUCTIONS["freundlich"])
 
 
-_history: list[dict] = []
-
-
 def _context_facts(db, space_id: int) -> str:
     accounts = crud.get_accounts(db, space_id)
     debts_list = crud.get_debts(db, space_id)
@@ -320,6 +326,10 @@ def _context_facts(db, space_id: int) -> str:
         for w in wishlist:
             preis = f" (Zielpreis {w.target_price:.2f} EUR)" if w.target_price else ""
             lines.append(f"- „{w.name}“{preis}")
+
+    mem = assistant_memory.build_memory_block(db, 1500)
+    if mem:
+        lines.append("\n" + mem.rstrip())
 
     return "\n".join(lines)
 
@@ -799,6 +809,77 @@ def _handle_proactive_feedback_command(db, settings, token: str, chat_id: str, t
     return True
 
 
+_MEM_CAT_MARK = {"praeferenz": "Präferenz", "vorhaben": "Vorhaben", "erledigt": "erledigt",
+                 "kontext": "Kontext", "zusammenfassung": "Zusammenfassung", "fakt": "Fakt"}
+
+
+def _handle_merk_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/merk <Text> - dauerhaft ins Gedächtnis (siehe assistant_memory)."""
+    m = _MERK_CMD_RE.match(text.strip())
+    if not m:
+        return False
+    row = assistant_memory.add_memory(db, text=m.group(1).strip(), source="telegram")
+    db.commit()
+    _send(token, chat_id, f"🧠 Gemerkt: {row.text}" if row is not None
+          else "🧠 Konnte mir das nicht merken.")
+    return True
+
+
+def _handle_vergiss_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/vergiss <N> (Index aus /gedächtnis) oder /vergiss <Stichwort>."""
+    m = _VERGISS_CMD_RE.match(text.strip())
+    if not m:
+        return False
+    arg = m.group(1).strip()
+    rows = assistant_memory.list_memories(db)
+    target = None
+    if arg.isdigit():
+        idx = int(arg) - 1
+        if 0 <= idx < len(rows):
+            target = rows[idx]
+    else:
+        low = arg.lower()
+        target = next((r for r in rows if low in r.text.lower() or low in r.key.lower()), None)
+    if target is None:
+        _send(token, chat_id, "🧠 Kein passender Merksatz. /gedächtnis zeigt die Liste.")
+        return True
+    assistant_memory.forget_memory(db, mem_id=target.id)
+    db.commit()
+    _send(token, chat_id, f"🧠 Vergessen: {target.text}")
+    return True
+
+
+def _handle_gedaechtnis_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/gedächtnis - zeigt an, was Kies sich gemerkt hat."""
+    if not _GEDAECHTNIS_CMD_RE.match(text.strip()):
+        return False
+    rows = assistant_memory.list_memories(db)[:30]
+    if not rows:
+        _send(token, chat_id, "🧠 Ich habe mir noch nichts gemerkt. Mit /merk <Text> geht's los.")
+        return True
+    lines = ["🧠 Was ich mir gemerkt habe:"]
+    for i, r in enumerate(rows, 1):
+        cat = _MEM_CAT_MARK.get(r.category, r.category)
+        pin = " 📌" if r.pinned else ""
+        lines.append(f"{i}. [{cat}⋆{r.importance}]{pin} {r.text}")
+    lines.append("\nLöschen mit /vergiss <Nummer>.")
+    _send(token, chat_id, "\n".join(lines))
+    return True
+
+
+def _handle_reset_command(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """/reset bzw. /neu - leert den Telegram-Gesprächsverlauf (das dauerhafte
+    Gedächtnis bleibt)."""
+    if not _RESET_CMD_RE.match(text.strip()):
+        return False
+    n = (db.query(models.ConversationTurn)
+         .filter(models.ConversationTurn.chat_id == str(chat_id))
+         .delete(synchronize_session=False))
+    db.commit()
+    _send(token, chat_id, f"🧹 Gesprächsverlauf gelöscht ({n} Nachrichten). Gedächtnis bleibt.")
+    return True
+
+
 def _handle_suggestion_reply(db, settings, token: str, chat_id: str, text: str) -> bool:
     """/ok, /später (oder /spaeter), /verwerfen - Antwort auf den aktuell
     einzigen offenen Jarvis-Vorschlag (siehe crud.decide_pending_suggestion)."""
@@ -961,6 +1042,22 @@ def _execute_action(db, settings, action: dict) -> str:
         db.commit()
         label = "privat" if purpose == "privat" else "geschäftlich"
         return f"{len(rows)} Fahrt(en) auf „{label}“ gesetzt."
+
+    if action_type == "remember":
+        txt = (action.get("text") or "").strip()
+        if not txt:
+            return "Sag mir, was ich mir merken soll."
+        row = assistant_memory.add_memory(
+            db, text=txt, source="telegram", category=action.get("category") or "fakt",
+            importance=int(action.get("importance") or 2))
+        db.commit()
+        return f"🧠 Gemerkt: {row.text}" if row is not None else "Konnte mir das nicht merken."
+
+    if action_type == "forget":
+        key = (action.get("key") or "").strip()
+        ok = assistant_memory.forget_memory(db, key=key) if key else False
+        db.commit()
+        return "🧠 Vergessen." if ok else "Diesen Merksatz kenne ich nicht."
 
     if action_type == "create_todo":
         title = (action.get("title") or "").strip()
@@ -1130,6 +1227,14 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
         return
     if _handle_proactive_feedback_command(db, settings, token, chat_id, text):
         return
+    if _handle_merk_command(db, settings, token, chat_id, text):
+        return
+    if _handle_vergiss_command(db, settings, token, chat_id, text):
+        return
+    if _handle_gedaechtnis_command(db, settings, token, chat_id, text):
+        return
+    if _handle_reset_command(db, settings, token, chat_id, text):
+        return
     if _handle_suggestion_reply(db, settings, token, chat_id, text):
         return
     if _handle_proposal_number_reply(db, settings, token, chat_id, text):
@@ -1172,10 +1277,11 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
         + "\n\n" + _context_facts(db, space.id)
     )
     messages = [{"role": "system", "content": system_content}]
-    messages.extend(_history[-MAX_HISTORY:])
+    messages.extend(assistant_memory.load_history_for_prompt(db, chat_id=chat_id))
     messages.append({"role": "user", "content": text})
 
-    reply = ollama_client.chat(settings.ollama_url, chat_model, messages)
+    reply = ollama_client.chat(settings.ollama_url, chat_model, messages,
+                               options={"num_ctx": assistant_memory.NUM_CTX_CHAT})
 
     action = _extract_action(reply)
     if action is not None:
@@ -1183,9 +1289,8 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
             confirmation = _execute_action(db, settings, action)
         except Exception as exc:  # noqa: BLE001
             confirmation = f"Konnte die Aktion nicht ausführen: {exc}"
-        _history.append({"role": "user", "content": text})
-        _history.append({"role": "assistant", "content": confirmation})
-        del _history[:-MAX_HISTORY]
+        assistant_memory.append_turn(db, "user", text, chat_id)
+        assistant_memory.append_turn(db, "assistant", confirmation, chat_id)
         _send(token, chat_id, confirmation)
         return
 
@@ -1202,12 +1307,16 @@ def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
         messages.append({"role": "assistant", "content": reply})
         messages.append({"role": "user", "content": websearch.format_for_prompt(query, results)
                          + "\n\nBeantworte jetzt meine ursprüngliche Frage auf Basis dieser Suchergebnisse."})
-        reply = ollama_client.chat(settings.ollama_url, chat_model, messages)
+        reply = ollama_client.chat(settings.ollama_url, chat_model, messages,
+                                   options={"num_ctx": assistant_memory.NUM_CTX_CHAT})
 
     reply = _SEARCH_BLOCK_RE.sub("", reply).strip()
-    _history.append({"role": "user", "content": text})
-    _history.append({"role": "assistant", "content": reply})
-    del _history[:-MAX_HISTORY]
+    assistant_memory.append_turn(db, "user", text, chat_id)
+    assistant_memory.append_turn(db, "assistant", reply, chat_id)
+    try:
+        assistant_memory.compress_old_turns(db, settings, chat_id=chat_id)
+    except Exception:  # noqa: BLE001 - Verdichtung darf die Antwort nie stören
+        pass
 
     _send(token, chat_id, reply or "(keine Antwort erhalten)")
 

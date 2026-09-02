@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from . import crud, models, schemas
+from . import assistant_memory, crud, models, schemas
 
 _PURPOSES = ("geschaeftlich", "privat")
 
@@ -110,6 +110,24 @@ def _meal_plan_fill(db, settings, p) -> str:
                 "Füllen ist hier noch nicht verdrahtet.")
 
 
+def _memory_add(db, settings, p) -> str:
+    text = (p.get("text") or "").strip()
+    if not text:
+        raise ValueError("memory_add ohne text")
+    row = assistant_memory.add_memory(
+        db, text=text, category=p.get("category") or "fakt", source="proaktiv",
+        importance=int(p.get("importance") or 2))
+    db.commit()
+    return f"Gemerkt: {row.text}" if row is not None else "Konnte mir das nicht merken."
+
+
+def _memory_forget(db, settings, p) -> str:
+    key = (p.get("key") or "").strip()
+    ok = assistant_memory.forget_memory(db, key=key) if key else False
+    db.commit()
+    return "Vergessen." if ok else "Diesen Merksatz kenne ich nicht."
+
+
 def _open(db, settings, p) -> str:
     tab = (p.get("tab") or "").strip()
     return f"Alles klar - schau im Tab {_q(tab)} nach." if tab else "Alles klar."
@@ -133,6 +151,8 @@ REGISTRY = {
     "goal_status": _goal_status,
     "trips_classify_all": _trips_classify_all,
     "meal_plan_fill": _meal_plan_fill,
+    "memory_add": _memory_add,
+    "memory_forget": _memory_forget,
     "open": _open,
     "remind_later": _remind_later,
     "dismiss": _dismiss,
@@ -146,6 +166,8 @@ CATALOG_FOR_PROMPT = (
     "goal_status {goal_id, status} - Ziel-Status setzen (open|done|archived)\n"
     "trips_classify_all {purpose} - alle unklassifizierten Fahrten auf geschaeftlich|privat\n"
     "meal_plan_fill {}            - Wochenplan mit KI-Rezepten fuellen\n"
+    "memory_add {text, category?, importance?} - dauerhaft merken (Fakt/Praeferenz/Vorhaben)\n"
+    "memory_forget {key}          - gemerkten Punkt vergessen\n"
     "open {tab}                   - nur Hinweis, Tim schaut selbst nach\n"
     "remind_later {days}          - Vorschlag vertagen\n"
     "dismiss {}                   - verwerfen"

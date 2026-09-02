@@ -131,6 +131,22 @@ stable existing row's id) breaks the "don't re-ask after rejection"
 guarantee unless the underlying draft row is kept, not deleted, on
 rejection.
 
+**Assistant memory** (`assistant_memory.py`, `AssistantMemory` +
+`ConversationTurn`): the assistant's durable memory so facts/decisions
+survive restarts and the LLM context stays bounded. `build_memory_block(db,
+char_budget)` renders the top memories (pinned → importance → LRU, expiry
+filtered, hard char cap, bumps `last_used_at`) and is injected beside
+`proactive._feedback_hint` and at the end of `telegram_bot._context_facts`
+(so `hub_command` gets it too). Written via `/merk` + ```action``` `remember`
++ proactive action `memory_add`, and silently by the nightly
+`_scheduled_memory_distill` job (`source="destillation"`, never importance 3
+/ pinned — visible in `/gedächtnis`, revocable with `/vergiss`). Telegram
+chat history is now `ConversationTurn` rows (not the old RAM `_history`),
+time+char budgeted, oldest turns compressed into a `zusammenfassung` memory;
+`/reset` clears it. `_scheduled_memory_prune` (weekly) caps the store and
+`export_obsidian()` writes a read-only `$DATA_DIR/obsidian/Kies-Gedaechtnis.md`.
+The big chat calls now pass an explicit `options={"num_ctx": ...}`.
+
 **Notifications** (`notifications.py`): `notifications.notify(settings,
 text, urgent=False)` is the single choke point for all Telegram sends —
 quiet-hours logic lives there once. Don't add a per-caller quiet-hours

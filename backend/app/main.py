@@ -2051,6 +2051,38 @@ def _scheduled_proactive_assistant():
         db.close()
 
 
+def _scheduled_memory_distill():
+    """Nachts: aus dem Gespräch der letzten 24 h + beantworteten Vorschlägen
+    leise dauerhafte Merksätze ableiten, alten Chatverlauf zu einer
+    Zusammenfassung verdichten und das Gedächtnis nach Obsidian exportieren
+    (siehe assistant_memory)."""
+    from . import assistant_memory
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        try:
+            assistant_memory.distill_recent(db, settings)
+            assistant_memory.compress_old_turns(db, settings)
+        except Exception:  # noqa: BLE001
+            pass
+        assistant_memory.export_obsidian(db)
+    finally:
+        db.close()
+
+
+def _scheduled_memory_prune():
+    """Wöchentlich: Abgelaufenes/Verworfenes weg, Gedächtnis auf eine
+    handhabbare Grösse deckeln, alten Chatverlauf abschneiden (pinned bleibt),
+    danach Obsidian-Export aktualisieren."""
+    from . import assistant_memory
+    db = SessionLocal()
+    try:
+        assistant_memory.prune(db)
+        assistant_memory.export_obsidian(db)
+    finally:
+        db.close()
+
+
 def _scheduled_routines():
     """Alle 15 Minuten: prüft, ob eine Routine (Spezifikation Abschnitt G)
     jetzt fällig ist (siehe crud.get_due_routines) und schickt die Checkliste
@@ -2410,6 +2442,14 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_tax_reminder, CronTrigger(day_of_week="mon", hour=9, minute=0),
     id="tax_year_end_reminder", misfire_grace_time=3600,
+)
+scheduler.add_job(
+    _scheduled_memory_distill, CronTrigger(hour=3, minute=20),
+    id="memory_distill", misfire_grace_time=3600, max_instances=1, coalesce=True,
+)
+scheduler.add_job(
+    _scheduled_memory_prune, CronTrigger(day_of_week="mon", hour=4, minute=0),
+    id="memory_prune", misfire_grace_time=3600,
 )
 scheduler.start()
 # Direkt beim Start einmal ausfuehren statt bis 23:55 zu warten - sonst gibt es
