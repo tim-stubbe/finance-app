@@ -276,7 +276,17 @@ def compress_old_turns(db, settings, keep_chars: int = 6000,
     if len(old) < 4:
         return None
 
-    convo = "\n".join(f"{r.role}: {r.content}" for r in old)[:8000]
+    iso = _now().isocalendar()
+    key = f"gespraechszusammenfassung-{iso[0]}-w{iso[1]:02d}"
+    # Bereits vorhandene Wochenzusammenfassung mit reinnehmen, sonst würde ein
+    # zweiter Lauf in derselben Woche sie durch die Upsert ersetzen und den
+    # älteren Inhalt verlieren.
+    prev = (db.query(models.AssistantMemory)
+            .filter(models.AssistantMemory.key == key).first())
+    convo = "\n".join(f"{r.role}: {r.content}" for r in old)
+    if prev is not None:
+        convo = f"Bisherige Zusammenfassung:\n{prev.text}\n\nNeue Züge:\n{convo}"
+    convo = convo[:9000]
     try:
         summary = ollama_client.chat(
             settings.ollama_url, model,
@@ -289,10 +299,8 @@ def compress_old_turns(db, settings, keep_chars: int = 6000,
     if not summary:
         return None
 
-    iso = _now().isocalendar()
     mem = add_memory(db, text=summary, category="zusammenfassung",
-                     source="destillation", importance=2,
-                     key=f"gespraechszusammenfassung-{iso[0]}-w{iso[1]:02d}")
+                     source="destillation", importance=2, key=key)
     for r in old:
         db.delete(r)
     db.commit()
@@ -352,9 +360,12 @@ def distill_recent(db, settings, max_new: int = 5) -> list:
         text = (f.get("text") or "").strip()
         if not text:
             continue
+        try:
+            imp = min(2, int(f.get("importance", 2) or 2))
+        except (TypeError, ValueError):
+            imp = 2
         row = add_memory(db, text=text, category=f.get("category", "fakt"),
-                         source="destillation",
-                         importance=min(2, int(f.get("importance", 2) or 2)))
+                         source="destillation", importance=imp)
         if row is not None and row not in created:
             created.append(row)
     db.commit()
