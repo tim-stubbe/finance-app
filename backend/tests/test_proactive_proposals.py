@@ -77,6 +77,67 @@ def test_registry_actions_all_callable():
         assert callable(fn), name
 
 
+def test_push_proposal_creates_row_and_dedups():
+    db = SessionLocal()
+    try:
+        s = _settings(db)
+        p = proactive.push_proposal(
+            db, s, title="Preiserhöhung: Spotify",
+            body="10 → 12 €.", urgency="mittel", dedup_key="anom-x",
+            options=[{"label": "Notieren", "action": {"type": "note_add", "params": {"text": "hoch"}}},
+                     {"label": "Ignorieren", "action": {"type": "dismiss"}}])
+        assert p is not None and p.status == "offen"
+        opts = json.loads(p.options_json)
+        assert opts[0]["action"]["type"] == "note_add"
+        # gleicher dedup_key innerhalb 7 Tagen -> None
+        assert proactive.push_proposal(db, s, title="Nochmal", dedup_key="anom-x",
+                                       options=[{"label": "x", "action": {"type": "dismiss"}}]) is None
+    finally:
+        db.close()
+
+
+def test_push_proposal_answer_runs_action():
+    db = SessionLocal()
+    try:
+        s = _settings(db)
+        p = proactive.push_proposal(
+            db, s, title="Ausreißer: Lebensmittel", urgency="mittel", dedup_key="anom-y",
+            options=[{"label": "To-do", "action": {"type": "todo_add", "params": {"title": "Prüfen"}}},
+                     {"label": "Ignorieren", "action": {"type": "dismiss"}}])
+        proactive.answer(db, s, p.id, "a")
+        assert db.query(models.Todo).filter(models.Todo.title == "Prüfen").count() == 1
+    finally:
+        db.close()
+
+
+def test_new_actions_calendar_and_wishlist():
+    from app import auth
+    db = SessionLocal()
+    try:
+        s = auth.get_or_create_settings(db)
+        r1 = proactive_actions.execute(db, s, {"type": "wishlist_add",
+                                               "params": {"name": "Kopfhörer", "target_price": 99}})
+        assert "Kopfhörer" in r1
+        assert db.query(models.WishlistItem).filter_by(name="Kopfhörer").count() == 1
+        r2 = proactive_actions.execute(db, s, {"type": "calendar_add",
+                                               "params": {"title": "Zahnarzt", "date": "2027-01-15", "time": "09:30"}})
+        assert "Zahnarzt" in r2
+        assert db.query(models.CalendarEvent).filter_by(title="Zahnarzt").count() == 1
+    finally:
+        db.close()
+
+
+def test_meal_plan_fill_no_recipes_is_noop():
+    from app import auth
+    db = SessionLocal()
+    try:
+        s = auth.get_or_create_settings(db)
+        out = proactive_actions.execute(db, s, {"type": "meal_plan_fill", "params": {}})
+        assert "Rezept" in out  # "Noch keine Rezepte angelegt ..."
+    finally:
+        db.close()
+
+
 def test_too_similar_catches_near_duplicate_titles():
     assert proactive._too_similar(
         "Drohne-Karte & Zigaretten-Verkauf",
