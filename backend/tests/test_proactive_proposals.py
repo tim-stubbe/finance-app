@@ -138,6 +138,56 @@ def test_meal_plan_fill_no_recipes_is_noop():
         db.close()
 
 
+def test_meal_plan_fill_with_recipes_fills_and_is_idempotent():
+    from app import auth, crud_meals
+    db = SessionLocal()
+    try:
+        s = auth.get_or_create_settings(db)
+        for n in ("Pasta", "Curry", "Salat"):
+            crud_meals.create_recipe(db, {"name": n})
+        out = proactive_actions.execute(db, s, {"type": "meal_plan_fill", "params": {}})
+        assert "eingeplant" in out
+        planned = [e for e in db.query(models.MealPlanEntry).all() if e.recipe_id]
+        assert 1 <= len(planned) <= 7
+        out2 = proactive_actions.execute(db, s, {"type": "meal_plan_fill", "params": {}})
+        assert "schon geplant" in out2  # nichts überschrieben
+    finally:
+        db.close()
+
+
+def test_hub_proposal_and_memory_routes(auth_client):
+    client = auth_client
+    # Vorschlag anlegen und über den Router beantworten
+    from app import proactive
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        s = _settings(db)
+        p = proactive.push_proposal(db, s, title="Router-Test", dedup_key="rt-1",
+                                    options=[{"label": "To-do", "action": {"type": "todo_add",
+                                              "params": {"title": "Router-Todo"}}},
+                                             {"label": "Nö", "action": {"type": "dismiss"}}])
+        pid = p.id
+    finally:
+        db.close()
+    lst = client.get("/api/proactive/proposals").json()
+    assert any(x["id"] == pid for x in lst)
+    r = client.post(f"/api/proactive/proposals/{pid}/answer", json={"key": "a"})
+    assert r.status_code == 200 and "angelegt" in r.json()["result"].lower()
+
+    # Gedächtnis-Router
+    from app import assistant_memory
+    db = SessionLocal()
+    try:
+        assistant_memory.add_memory(db, text="Router merkt sich das", key="rt-mem")
+        db.commit()
+    finally:
+        db.close()
+    mem = client.get("/api/assistant-memory").json()
+    mid = next(m["id"] for m in mem if m["text"] == "Router merkt sich das")
+    assert client.delete(f"/api/assistant-memory/{mid}").json()["ok"] is True
+
+
 def test_too_similar_catches_near_duplicate_titles():
     assert proactive._too_similar(
         "Drohne-Karte & Zigaretten-Verkauf",
