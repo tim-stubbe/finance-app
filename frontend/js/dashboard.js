@@ -275,6 +275,12 @@ async function loadHubTab() {
   // Panels, um den Hub nicht mit noch mehr Kacheln zu überladen.
   await loadHubJarvisPanel();
 
+  // Strukturierte proaktive Vorschläge + Assistenten-Gedächtnis (siehe
+  // js/hub-proactive.js) - dieselben Daten wie Telegram, hier im Browser
+  // beant-/löschbar.
+  loadHubProposals();
+  loadHubMemory();
+
   // Überfällige Projekte/Lebensbereiche/Wunschliste - dasselbe "seit wie
   // lange nicht bestätigt"-Kriterium wie die jeweiligen Telegram-Erinnerungen
   // (main._scheduled_*_reminder), hier zusätzlich sofort sichtbar statt nur

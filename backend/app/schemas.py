@@ -1643,6 +1643,10 @@ class ProactiveFeedbackIn(BaseModel):
     useful: bool
 
 
+class ProactiveAnswerIn(BaseModel):
+    key: str
+
+
 # ---------- Echte Anrufe (Twilio) ----------
 class CallSettingsOut(BaseModel):
     enabled: bool

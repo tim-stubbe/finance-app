@@ -37,7 +37,9 @@
 // (auffindbar) -> Browser bietet auch Bitwarden/Telefon an statt nur Geraet.
 // v53: Multi-User Phase 1 - User-Tabelle, Login mit Name, Personen-Verwaltung
 // in den Einstellungen. Auth haengt jetzt an models.User statt am Settings-Singleton.
-const CACHE_NAME = "finanztool-shell-v87";
+// v88: Hub-Karten "Kies-Vorschläge" + "Was Kies sich gemerkt hat"
+// (js/hub-proactive.js, routers/proactive.py + assistant_memory_routes.py).
+const CACHE_NAME = "finanztool-shell-v88";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.jpg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
@@ -49,7 +51,7 @@ const SHELL_ASSETS = [
   "/js/settings-auto-backups.js", "/js/settings-auto-sync.js",
   "/js/eigene-regeln.js", "/js/settings-fints.js", "/js/settings-bitvavo.js",
   "/js/settings-paypal.js", "/js/settings-enablebanking.js", "/js/kalender.js",
-  "/js/dashboard.js", "/js/hub-command.js", "/js/geschaeftlich.js", "/js/schulden.js",
+  "/js/dashboard.js", "/js/hub-proactive.js", "/js/hub-command.js", "/js/geschaeftlich.js", "/js/schulden.js",
   "/js/schwebender-ki-assistent.js", "/js/ziele.js", "/js/init.js",
   "/js/command-palette.js", "/js/jahresrueckblick.js", "/js/notizen.js",
   "/js/auth-login.js", "/js/settings-assistent.js", "/js/quick-capture.js",
