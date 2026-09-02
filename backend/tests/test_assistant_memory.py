@@ -159,3 +159,46 @@ def test_distill_recent_writes_facts(monkeypatch):
         assert created[0].importance <= 2                 # nie 3 vom Job
     finally:
         db.close()
+
+
+def test_distill_recent_survives_string_importance(monkeypatch):
+    db = _db()
+    try:
+        from app import auth
+        s = auth.get_or_create_settings(db)
+        s.ollama_url, s.ollama_model = "http://x", "m"
+        db.commit()
+        assistant_memory.append_turn(db, "user", "Merk dir X", chat_id="c1")
+        monkeypatch.setattr(assistant_memory.ollama_client, "chat", lambda *a, **k:
+                            '{"facts":[{"text":"Fakt X","category":"fakt","importance":"hoch"}]}')
+        created = assistant_memory.distill_recent(db, s)  # darf nicht crashen
+        assert created and created[0].importance == 2
+    finally:
+        db.close()
+
+
+def test_compress_keeps_prior_weekly_summary(monkeypatch):
+    db = _db()
+    try:
+        from app import auth
+        s = auth.get_or_create_settings(db)
+        s.ollama_url, s.ollama_model = "http://x", "m"
+        db.commit()
+        calls = []
+        monkeypatch.setattr(assistant_memory.ollama_client, "chat",
+                            lambda url, model, msgs, **k: (calls.append(msgs[-1]["content"]), "ZUSAMMENFASSUNG")[1])
+        for i in range(12):
+            assistant_memory.append_turn(db, "user", f"lange nachricht {i} " * 40, chat_id="c1")
+            assistant_memory.append_turn(db, "assistant", f"antwort {i} " * 40, chat_id="c1")
+        assistant_memory.compress_old_turns(db, s, keep_chars=2000, chat_id="c1")
+        # zweiter Lauf: die vorhandene Wochenzusammenfassung muss im Prompt landen
+        for i in range(12, 24):
+            assistant_memory.append_turn(db, "user", f"neue nachricht {i} " * 40, chat_id="c1")
+            assistant_memory.append_turn(db, "assistant", f"antwort {i} " * 40, chat_id="c1")
+        assistant_memory.compress_old_turns(db, s, keep_chars=2000, chat_id="c1")
+        assert any("Bisherige Zusammenfassung" in c for c in calls)
+        rows = [m for m in db.query(assistant_memory.models.AssistantMemory)
+                .filter_by(category="zusammenfassung").all()]
+        assert len(rows) == 1  # eine Zeile pro ISO-Woche
+    finally:
+        db.close()
