@@ -1371,6 +1371,49 @@ def _scheduled_anomaly_check():
                     crud.mark_anomaly_notified(db, spaces[0].id, key)
             except Exception:
                 db.rollback()
+
+        # Server-Strom: abgeschlossene Vorwoche vs. Schnitt der 3 Wochen davor.
+        # Einmal pro ISO-Woche (NotifiedAnomaly-Key), nur wenn ein Watt-Sensor
+        # konfiguriert ist und genug Daten da sind.
+        if spaces and (getattr(settings, "homeassistant_power_entity", None) or "").strip():
+            try:
+                from .routers.energy import _kwh
+                now = datetime.utcnow()
+                today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                week0 = today0 - timedelta(days=today0.weekday())
+                iso = (week0 - timedelta(days=7)).isocalendar()
+                key = f"power-week:{iso[0]}-{iso[1]:02d}"
+                if not crud.is_anomaly_notified(db, spaces[0].id, key):
+                    samples = [(r.ts, r.watts) for r in db.query(models.PowerReading)
+                               .filter(models.PowerReading.ts >= week0 - timedelta(days=28))
+                               .order_by(models.PowerReading.ts).all()]
+
+                    def _wk(a, b):
+                        return _kwh([x for x in samples if a <= x[0] < b])
+                    last = _wk(week0 - timedelta(days=7), week0)
+                    prior = [_wk(week0 - timedelta(days=7 * k), week0 - timedelta(days=7 * (k - 1)))
+                             for k in (4, 3, 2)]
+                    prior = [p for p in prior if p > 0]
+                    avg = sum(prior) / len(prior) if prior else 0
+                    if avg > 0 and last > avg * 1.20:
+                        price = float(settings.homeassistant_electricity_price or 0.35)
+                        extra = (last - avg) * price
+                        _push(
+                            "Server zog letzte Woche mehr Strom",
+                            f"{last:.1f} kWh (sonst ø {avg:.1f} kWh, +{(last / avg - 1) * 100:.0f} %) "
+                            f"≈ {extra:.2f} € mehr.",
+                            "niedrig",
+                            [
+                                {"label": "Notieren", "action": {"type": "note_add", "params": {
+                                    "text": f"Server-Stromverbrauch KW{iso[1]}: {last:.1f} kWh (+{(last / avg - 1) * 100:.0f} %)"}}},
+                                {"label": "Smart-Home öffnen", "action": {"type": "open", "params": {"tab": "Smart Home"}}},
+                                {"label": "Passt / ignorieren", "action": {"type": "dismiss"}},
+                            ],
+                            f"anom-{key}",
+                        )
+                    crud.mark_anomaly_notified(db, spaces[0].id, key)
+            except Exception:
+                db.rollback()
     finally:
         db.close()
 
