@@ -452,6 +452,34 @@ def run(db, settings) -> list[models.ProactiveProposal]:
     return created
 
 
+def push_proposal(db, settings, *, title: str, body: str | None = None,
+                  urgency: str = "mittel", options: list[dict] | None = None,
+                  dedup_key: str | None = None, kind: str = "bestaetigen"
+                  ) -> models.ProactiveProposal | None:
+    """Einen fertig formulierten Vorschlag von ausserhalb (z.B. den Anomalie-
+    Job) in dieselbe Queue + denselben Telegram-Button-Weg wie `run()` geben.
+    Aktionen werden durch `_sanitize` gegen die Allowlist geprüft. Gibt die
+    gespeicherte Zeile zurück, oder None wenn der `dedup_key` in den letzten
+    7 Tagen schon da war."""
+    if dedup_key and dedup_key in _recent_dedup_keys(db):
+        return None
+    s = _sanitize({"kind": kind, "urgency": urgency, "title": title,
+                   "body": body, "dedup": dedup_key, "options": options or []})
+    if not s:
+        return None
+    row = models.ProactiveProposal(
+        kind=s["kind"], urgency=s["urgency"], title=s["title"], body=s["body"],
+        options_json=json.dumps(s["options"], ensure_ascii=False),
+        dedup_key=s["dedup_key"], status="offen",
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(row)
+    settings.proactive_assistant_last_sent_at = datetime.utcnow()
+    settings.proactive_assistant_last_text = row.title[:1000]
+    db.commit()
+    return row
+
+
 def render(proposal: models.ProactiveProposal) -> str:
     """Menschlicher Text eines Vorschlags (Telegram-Body ohne Buttons /
     Web-Fallback)."""

@@ -1276,13 +1276,25 @@ def _scheduled_ai_maintenance():
 
 def _scheduled_anomaly_check():
     """Alle 30 Minuten: Preiserhöhungen bei Abos, Ausgaben-Ausreißer und
-    überschneidende Termine sofort per Telegram melden, statt nur im
-    3-Stunden-Digest aufzutauchen - nutzt die schon vorhandenen Auswertungen
-    (detect_price_increases/detect_spending_anomalies/detect_calendar_conflicts,
-    sonst nur passiv in der App sichtbar). NotifiedAnomaly verhindert, dieselbe
-    Auffälligkeit bei jedem Lauf erneut zu schicken (siehe dort für die
-    Begründung)."""
+    überschneidende Termine sofort melden - jetzt als STRUKTURIERTER Vorschlag
+    (Button-Karte in Telegram + Hub) statt reinem Text, weil jede dieser
+    Auffälligkeiten eine Entscheidung ist (notieren / To-do / ignorieren).
+    Nutzt die vorhandenen Auswertungen (detect_price_increases/
+    detect_spending_anomalies/detect_calendar_conflicts). NotifiedAnomaly
+    verhindert, dieselbe Auffälligkeit bei jedem Lauf erneut zu schicken."""
+    from . import telegram_bot
     db = SessionLocal()
+
+    def _push(title, body, urgency, options, dedup):
+        p = proactive.push_proposal(db, settings, title=title, body=body,
+                                    urgency=urgency, options=options, dedup_key=dedup)
+        if p is not None:
+            try:
+                telegram_bot.send_proposal(db, settings, p)
+            except Exception:
+                pass
+        return p
+
     try:
         settings = auth.get_or_create_settings(db)
         if not settings.notifications_enabled:
@@ -1294,10 +1306,20 @@ def _scheduled_anomaly_check():
                     key = f"price:{space.id}:{inc['account_id']}:{inc['description']}:{inc['new_amount']}"
                     if crud.is_anomaly_notified(db, space.id, key):
                         continue
-                    notifications.notify(
-                        settings,
-                        f"💸 Preiserhöhung erkannt: „{inc['description']}“ ({inc['account_name']}) "
-                        f"{inc['old_amount']:.2f} € → {inc['new_amount']:.2f} € ({inc['increase_pct']:.0f}% mehr).",
+                    _push(
+                        f"Preiserhöhung: {inc['description']}",
+                        f"{inc['account_name']}: {inc['old_amount']:.2f} € → {inc['new_amount']:.2f} € "
+                        f"(+{inc['increase_pct']:.0f} %).",
+                        "mittel",
+                        [
+                            {"label": "Als Notiz festhalten", "action": {"type": "note_add",
+                             "params": {"text": f"Preiserhöhung {inc['description']} ({inc['account_name']}): "
+                                        f"{inc['old_amount']:.2f} → {inc['new_amount']:.2f} €"}}},
+                            {"label": "To-do: kündigen prüfen", "action": {"type": "todo_add",
+                             "params": {"title": f"{inc['description']} prüfen – Preiserhöhung +{inc['increase_pct']:.0f} %"}}},
+                            {"label": "Ignorieren", "action": {"type": "dismiss"}},
+                        ],
+                        f"anom-{key}",
                     )
                     crud.mark_anomaly_notified(db, space.id, key)
 
@@ -1306,11 +1328,17 @@ def _scheduled_anomaly_check():
                     key = f"spend:{space.id}:{an['category_id']}:{today.year}:{today.month}"
                     if crud.is_anomaly_notified(db, space.id, key):
                         continue
-                    notifications.notify(
-                        settings,
-                        f"📈 Ausgaben-Ausreißer: „{an['category_name']}“ liegt diesen Monat hochgerechnet bei "
-                        f"{an['projected_spent']:.2f} € (sonst ø {an['avg_prior_months']:.2f} €, "
-                        f"+{an['deviation_pct']:.0f}%).",
+                    _push(
+                        f"Ausgaben-Ausreißer: {an['category_name']}",
+                        f"Hochgerechnet {an['projected_spent']:.2f} € diesen Monat (sonst ø "
+                        f"{an['avg_prior_months']:.2f} €, +{an['deviation_pct']:.0f} %).",
+                        "mittel",
+                        [
+                            {"label": f"To-do: {an['category_name']}-Ausgaben prüfen", "action": {"type": "todo_add",
+                             "params": {"title": f"Ausgaben {an['category_name']} prüfen (Ausreißer +{an['deviation_pct']:.0f} %)"}}},
+                            {"label": "Ignorieren", "action": {"type": "dismiss"}},
+                        ],
+                        f"anom-{key}",
                     )
                     crud.mark_anomaly_notified(db, space.id, key)
             except Exception:
@@ -1326,10 +1354,17 @@ def _scheduled_anomaly_check():
                     key = f"conflict:{min(c['event_a_id'], c['event_b_id'])}:{max(c['event_a_id'], c['event_b_id'])}"
                     if crud.is_anomaly_notified(db, spaces[0].id, key):
                         continue
-                    notifications.notify(
-                        settings,
-                        f"⚠️ Terminüberschneidung: „{c['event_a_title']}“ ({c['event_a_start'].strftime('%d.%m. %H:%M')}) "
-                        f"und „{c['event_b_title']}“ ({c['event_b_start'].strftime('%d.%m. %H:%M')}).",
+                    _push(
+                        "Terminüberschneidung",
+                        f"„{c['event_a_title']}“ ({c['event_a_start'].strftime('%d.%m. %H:%M')}) "
+                        f"und „{c['event_b_title']}“ ({c['event_b_start'].strftime('%d.%m. %H:%M')}) "
+                        f"überschneiden sich.",
+                        "mittel",
+                        [
+                            {"label": "Kalender öffnen", "action": {"type": "open", "params": {"tab": "Kalender"}}},
+                            {"label": "Passt so / ignorieren", "action": {"type": "dismiss"}},
+                        ],
+                        f"anom-{key}",
                     )
                     crud.mark_anomaly_notified(db, spaces[0].id, key)
             except Exception:
