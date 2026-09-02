@@ -21,6 +21,7 @@ async function loadSmartHomeSettingsPanel() {
   document.getElementById("smarthome-cfg-wake").value = s.wake_word || "hey_jarvis";
   document.getElementById("smarthome-cfg-price").value = s.electricity_price != null ? s.electricity_price : "";
   document.getElementById("smarthome-cfg-history").value = s.history_entities || "";
+  document.getElementById("smarthome-cfg-power").value = s.power_entity || "";
 }
 
 document.getElementById("smarthome-settings-form").addEventListener("submit", async e => {
@@ -37,6 +38,7 @@ document.getElementById("smarthome-settings-form").addEventListener("submit", as
     wake_word: document.getElementById("smarthome-cfg-wake").value.trim(),
     electricity_price: parseFloat(document.getElementById("smarthome-cfg-price").value) || 0,
     history_entities: document.getElementById("smarthome-cfg-history").value.trim(),
+    power_entity: document.getElementById("smarthome-cfg-power").value.trim(),
   };
   // Token nur mitschicken, wenn wirklich etwas eingegeben wurde - sonst bleibt
   // der gespeicherte unangetastet (Backend: token === undefined -> unverändert).

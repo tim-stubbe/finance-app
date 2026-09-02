@@ -2931,6 +2931,8 @@
             </select>
           </label>
           <label>Strompreis (€/kWh, für die Energie-Schätzung) <input type="number" id="smarthome-cfg-price" step="0.01" min="0" placeholder="0.35"></label>
+          <label>Server-Strommesser: entity_id (Watt) – füllt die Hub-Karte „Server-Strom"
+            <input type="text" id="smarthome-cfg-power" placeholder="sensor.server_power"></label>
           <label>Verlaufs-Charts: entity_ids (kommagetrennt, fürs Cockpit)
             <input type="text" id="smarthome-cfg-history" placeholder="sensor.wohnzimmer_temperatur, sensor.stromverbrauch"></label>
           <p class="page-sub">Sprache läuft komplett lokal. Empfohlen für Produktion:

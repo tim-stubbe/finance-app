@@ -37,9 +37,10 @@
 // (auffindbar) -> Browser bietet auch Bitwarden/Telefon an statt nur Geraet.
 // v53: Multi-User Phase 1 - User-Tabelle, Login mit Name, Personen-Verwaltung
 // in den Einstellungen. Auth haengt jetzt an models.User statt am Settings-Singleton.
-// v89: Hub-Karten "Kies-Vorschläge", "Was Kies sich gemerkt hat", "Server-Strom"
-// (js/hub-proactive.js, routers/proactive.py + assistant_memory_routes.py + energy.py).
-const CACHE_NAME = "finanztool-shell-v89";
+// v90: Hub-Karten "Kies-Vorschläge", "Was Kies sich gemerkt hat", "Server-Strom"
+// (js/hub-proactive.js, routers/proactive.py + assistant_memory_routes.py + energy.py),
+// Server-Strommesser-Feld in den Smart-Home-Einstellungen.
+const CACHE_NAME = "finanztool-shell-v90";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.jpg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",
