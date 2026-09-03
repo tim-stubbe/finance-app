@@ -285,7 +285,11 @@ def _health_lines(db) -> list[str]:
 
 
 def _chat_model(settings) -> str | None:
-    return settings.ollama_model or settings.beleg_chat_model or None
+    # Der proaktive Job (alle paar Stunden, reines JSON-Ergebnis) nutzt das
+    # schnelle Routine-Modell - spart CPU-Zeit/Strom. Fällt auf das normale
+    # Modell zurück, wenn KIES_OLLAMA_MODEL_FAST nicht gesetzt ist.
+    from . import auth
+    return auth.fast_ollama_model(settings)
 
 
 def _feedback_hint(db) -> str:

@@ -251,7 +251,8 @@ def compress_old_turns(db, settings, keep_chars: int = 6000,
     der KI zusammenfassen lassen, als `zusammenfassung`-Memory ablegen (Upsert
     pro ISO-Woche) und die Züge löschen. Committet. Gibt die Memory zurück
     oder None."""
-    model = settings.ollama_model or settings.beleg_chat_model or None
+    from . import auth
+    model = auth.fast_ollama_model(settings)
     if not (settings.ollama_url and model):
         return None
 
@@ -314,7 +315,8 @@ def distill_recent(db, settings, max_new: int = 5) -> list:
     """Liest die letzten 24 h Gespräch + beantwortete Vorschläge und legt
     daraus leise neue Merksätze an (nie importance 3, nie pinned). Committet.
     Gibt die neuen Zeilen zurück."""
-    model = settings.ollama_model or settings.beleg_chat_model or None
+    from . import auth
+    model = auth.fast_ollama_model(settings)
     if not (settings.ollama_url and model):
         return []
 

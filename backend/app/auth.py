@@ -54,6 +54,15 @@ def get_or_create_settings(db: Session) -> models.Settings:
     return settings
 
 
+def fast_ollama_model(settings) -> str | None:
+    """Kleineres/schnelleres Modell fuer haeufige Routine-Jobs (proaktiver
+    Assistent, Gedaechtnis-Destillation) - spart CPU-Zeit und damit Strom.
+    `KIES_OLLAMA_MODEL_FAST` in der Env, sonst faellt es auf das normale
+    Modell zurueck. Chat/Jarvis nutzen weiter das grosse Modell (Qualitaet)."""
+    return (os.environ.get("KIES_OLLAMA_MODEL_FAST")
+            or settings.ollama_model or settings.beleg_chat_model or None)
+
+
 def get_active_space_id(request: Request, db: Session = Depends(get_db)) -> int:
     # Multi-User Phase 2: nur Bereiche berücksichtigen, die dem angemeldeten
     # Nutzer gehören (owner_id == user.id) oder noch nicht migriert sind

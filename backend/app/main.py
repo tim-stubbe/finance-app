@@ -2545,8 +2545,13 @@ scheduler.add_job(
     id="smarthome_automation_suggestions", misfire_grace_time=3600,
 )
 scheduler.add_job(
-    _scheduled_proactive_assistant, CronTrigger(minute="*/5"),
-    id="proactive_assistant", misfire_grace_time=300, max_instances=1, coalesce=True,
+    # 3x taeglich statt alle 5 min: proactive.run() ruft jedes Mal die lokale
+    # KI (gemma3:4b) - alle 5 min waren ~230 Inferenzen/Tag = viel CPU/Strom
+    # ohne Mehrwert (die Vorschlaege sind nicht minutenkritisch; Dringendes
+    # laeuft ueber _scheduled_anomaly_check). Feste Zeiten, ausserhalb der
+    # Ruhezeiten 02-07.
+    _scheduled_proactive_assistant, CronTrigger(hour="8,14,20", minute=7),
+    id="proactive_assistant", misfire_grace_time=1800, max_instances=1, coalesce=True,
 )
 scheduler.add_job(
     _scheduled_tax_reminder, CronTrigger(day_of_week="mon", hour=9, minute=0),
