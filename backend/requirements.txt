@@ -6,7 +6,7 @@ sqlalchemy==2.0.52
 # das schlanke python:3.14-slim-Image.
 alembic==1.19.1
 python-multipart==0.0.32
-pydantic==2.13.4
+pydantic==2.13.5
 itsdangerous==2.2.0
 # Web-Login (siehe backend/app/auth.py/routers/auth_login.py) - Passwort-
 # Hashing (Argon2id), TOTP (2FA), Passkeys (WebAuthn), QR-Code fuers TOTP-
@@ -26,7 +26,7 @@ APScheduler==3.11.3
 PyYAML==6.0.3
 # WebSocket-Client fuer die HA-Live-Zustaende (smarthome_ws.py) - ein
 # Hintergrund-Thread haelt die Verbindung, kein async noetig. Reines Wheel.
-websocket-client==1.9.0
+websocket-client==1.9.2
 PyMuPDF==1.28.2
 # Fuer den Bildvergleich der Immich-Duplikate. Noetig, weil Immich seine
 # Vorschaubilder als WebP ausliefert und PyMuPDF dieses Format nicht liest.
