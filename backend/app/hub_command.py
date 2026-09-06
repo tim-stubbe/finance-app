@@ -6,14 +6,15 @@ statt fester Slash-Syntax wie beim Telegram-Bot.
 
 Leitprinzip: irreversible / geldbezogene Aktionen werden NUR vorgeschlagen
 (der Nutzer bucht selbst), alles andere direkt mit kurzer Rueckmeldung.
-Faellt nichts, antwortet Ollama frei bzw. beantwortet eine Frage mit
-Faktenkontext. Einzige KI: die lokale Ollama-Instanz.
+Faellt nichts, übernimmt der Kies Agent Core: private Daten werden nur über
+gezielte Tools geholt, aktuelle Fragen können Web-Recherche nutzen. Die
+bestehenden Aktions-Domänen bleiben unverändert.
 """
 
 import re
 from datetime import date, datetime
 
-from . import crud, schemas, ollama_client, smarthome
+from . import agent_core, crud, schemas, ollama_client, smarthome
 
 NAV_TABS = {
     "hub", "dashboard", "transactions", "accounts", "recurring", "categories",
@@ -34,7 +35,7 @@ SYSTEM = (
     '- "ausgabe": {"amount": Zahl, "merchant": "...", "note": "..."} - wird NICHT '
     "gebucht, nur vorgeschlagen.\n"
     f'- "navigation": {{"tab": "einer von: {", ".join(sorted(NAV_TABS))}"}}\n'
-    '- "frage": {} - Frage zu den eigenen Daten/Finanzen; beantworte sie in reply.\n'
+    '- "frage": {} - Frage zu eigenen Daten, Finanzen, Organisation, Steuer/Recht oder aktuellem Wissen.\n'
     '- "chat": {} - Smalltalk / alles andere.\n'
     '- "clarify": {} - unklar, Rueckfrage in reply.\n'
     "Heutiges Datum: {today}."
@@ -81,7 +82,10 @@ def route(db, settings, text: str, space_id: int, confirm: bool = False) -> dict
     try:
         p = smarthome.parse_json_lenient(raw)
     except ValueError:
-        return _r(True, "chat", re.sub(r"```.*?```", "", raw, flags=re.DOTALL).strip()[:600] or "Ok.")
+        # Falls schon der Intent-Classifier nur Freitext liefert, geben wir die
+        # ursprüngliche Frage trotzdem an den Agent Core statt private Daten als
+        # pauschalen Faktenblock anzuhängen.
+        return agent_core.handle(db, settings, text, space_id)
 
     domain = (p.get("domain") or "chat").lower()
     reply = (p.get("reply") or "").strip()
@@ -144,17 +148,8 @@ def route(db, settings, text: str, space_id: int, confirm: bool = False) -> dict
     if domain == "clarify":
         return _r(True, "clarify", reply or "Kannst du das genauer sagen?")
 
-    # frage / chat -> zweiter Ollama-Call mit Faktenkontext
-    try:
-        from .telegram_bot import _context_facts, TELEGRAM_SYSTEM_PROMPT
-        facts = _context_facts(db, space_id)
-        answer = ollama_client.chat(
-            settings.ollama_url, settings.ollama_model,
-            [{"role": "system", "content": TELEGRAM_SYSTEM_PROMPT + "\n\n" + facts},
-             {"role": "user", "content": text}],
-            timeout=120,
-        )
-        answer = re.sub(r"```.*?```", "", answer, flags=re.DOTALL).strip()
-        return _r(True, "frage" if domain == "frage" else "chat", answer or reply or "Ok.")
-    except Exception as exc:  # noqa: BLE001
-        return _r(True, "chat", reply or f"Ich konnte das nicht beantworten: {exc}")
+    # frage / chat -> Agent Core. Anders als der alte _context_facts-Pfad
+    # bekommt das Modell nicht mehr vorsorglich alle Finanz-/Life-Daten, sondern
+    # ruft nur die für diese Frage benötigten Tools ab. Aktuelle Steuer-/Rechts-
+    # fragen erzwingen dort zuerst Web-Recherche.
+    return agent_core.handle(db, settings, text, space_id)
