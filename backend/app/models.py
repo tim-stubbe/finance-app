@@ -604,6 +604,31 @@ class PasskeyCredential(Base):
     last_used_at = Column(DateTime, nullable=True)
 
 
+class Device(Base):
+    """Ein registriertes Gerät für native Agent-/Sync-Zugriffe (P1 aus der
+    Agent-v1-Roadmap, siehe [[Kies Agent v1 Vision]]). Löst schrittweise das
+    bisherige globale `Settings.native_sync_secret_encrypted` ab, das für
+    ALLE nativen Clients identisch war und sich nicht einzeln widerrufen
+    ließ. Ein Device-Token wird nur bei der Erstellung (`/api/devices`,
+    Web-Session-Auth) im Klartext zurückgegeben, danach nur noch als Hash
+    gespeichert - exakt dasselbe Muster wie `User.password_hash` (siehe
+    auth.hash_password/verify_password, hier bewusst wiederverwendet statt
+    einer eigenen Hash-Funktion).
+
+    Bewusst (noch) ohne user_id/space_id-Bindung - die App ist weiterhin
+    faktisch Single-User (siehe sync.py-Docstring); das kommt erst mit dem
+    echten Multi-User-Ausbau."""
+
+    __tablename__ = "devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    token_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+
 class BasiszinsRate(Base):
     __tablename__ = "basiszins_rates"
 

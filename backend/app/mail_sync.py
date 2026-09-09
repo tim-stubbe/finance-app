@@ -115,7 +115,7 @@ def fetch_attachments(host: str, port: int, user: str, password: str,
                 if mail_datum and mail_datum.tzinfo:
                     mail_datum = mail_datum.replace(tzinfo=None)
             except Exception:
-                mail_datum = None
+
 
             for part in msg.walk():
                 if part.get_content_maintype() == "multipart":

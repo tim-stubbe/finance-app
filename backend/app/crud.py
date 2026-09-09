@@ -105,6 +105,9 @@ from .crud_meals import (
     get_recipes, get_recipe, create_recipe, update_recipe, delete_recipe,
     get_meal_plan, set_meal_plan_entry, clear_meal_plan_entry, shopping_list,
 )
+from .crud_devices import (
+    list_devices, create_device, revoke_device, authenticate_device,
+)
 
 CACHE_TTL = timedelta(hours=24)
 
