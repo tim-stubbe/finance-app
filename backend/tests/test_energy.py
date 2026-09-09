@@ -8,8 +8,10 @@ from app.routers.energy import _kwh, energy_summary
 
 def test_kwh_trapezoidal():
     t0 = datetime(2027, 1, 1, 0, 0)
-    # 2 h konstant 100 W = 0,2 kWh
-    rows = [(t0, 100.0), (t0 + timedelta(hours=2), 100.0)]
+    # 2 h konstant 100 W = 0,2 kWh. Zwei Segmente à 1 h statt eines einzigen
+    # 2h-Sprungs, weil _kwh() Lücken > _MAX_GAP_S (1 h) bewusst als
+    # "Sampler war aus" verwirft und nicht integriert.
+    rows = [(t0, 100.0), (t0 + timedelta(hours=1), 100.0), (t0 + timedelta(hours=2), 100.0)]
     assert abs(_kwh(rows) - 0.2) < 1e-6
     # Rampe 0 -> 200 W über 1 h = Mittel 100 W = 0,1 kWh
     rows = [(t0, 0.0), (t0 + timedelta(hours=1), 200.0)]

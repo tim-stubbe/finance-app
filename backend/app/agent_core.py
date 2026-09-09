@@ -25,7 +25,7 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -377,6 +377,7 @@ def handle(
     sources: list[dict] = []
     actions: list[dict] = []
     used_tools: set[str] = set()
+    seen_calls: set[tuple[str, str]] = set()
 
     # Current tax/legal/current-information questions are researched before the
     # first model answer. This prevents a small local model from confidently
@@ -411,7 +412,27 @@ def handle(
         name = str(plan.get("name") or "").strip()
         args = plan.get("arguments") if isinstance(plan.get("arguments"), dict) else {}
         policy = TOOL_POLICIES.get(name)
-        result, new_sources, new_actions = _execute_tool(db, settings, space_id, name, args)
+
+        # Loop detection: a model that repeats the exact same tool call instead
+        # of progressing would otherwise burn through MAX_TOOL_STEPS without
+        # new information. Stop early and force a final answer instead.
+        call_signature = (name, json.dumps(args, sort_keys=True, default=str))
+        if call_signature in seen_calls:
+            messages.append({"role": "user", "content": (
+                f"TOOL_RESULT {name}: Dieser Tool-Aufruf mit denselben Argumenten wurde bereits "
+                "ausgeführt. Antworte jetzt final als JSON vom Typ answer mit den bereits vorliegenden Ergebnissen."
+            )})
+            trace.append({"tool": name, "risk": policy.risk if policy else "unknown", "arguments": args, "ok": False, "note": "duplicate_call_skipped"})
+            continue
+        seen_calls.add(call_signature)
+
+        try:
+            result, new_sources, new_actions = _execute_tool(db, settings, space_id, name, args)
+        except Exception as exc:  # noqa: BLE001
+            # A single failing tool (DB error, unexpected data shape, ...) must
+            # not crash the whole agent turn - surface it to the model like any
+            # other tool error so it can explain or try something else.
+            result, new_sources, new_actions = {"ok": False, "error": f"Tool-Fehler: {exc}"}, [], []
         trace.append({
             "tool": name,
             "risk": policy.risk if policy else "unknown",

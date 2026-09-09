@@ -82,17 +82,21 @@ def test_routes_smarthome(hub, monkeypatch):
     assert ("light", "turn_off") in calls
 
 
-def test_unparseable_falls_back_to_chat(hub, monkeypatch):
+def test_unparseable_falls_back_to_agent(hub, monkeypatch):
+    # Kein JSON vom Intent-Classifier -> geht an den Agent Core statt an
+    # einen zweiten Freitext-Call mit pauschalem Faktenkontext.
     _chat_returns(monkeypatch, "kein json, nur text")
     r = _cmd(hub, "hallo")
-    assert r["domain"] == "chat" and r["ok"] is True
+    assert r["domain"] == "agent" and r["ok"] is True
     assert "text" in r["reply"].lower() or r["reply"]
 
 
-def test_question_uses_second_call(hub, monkeypatch):
+def test_question_routes_to_agent(hub, monkeypatch):
+    # "frage"/"chat" laufen seit Agent v1 über agent_core.handle statt einen
+    # zweiten Ollama-Call mit vollem Faktenblock zu machen.
     _chat_returns(monkeypatch,
                   json.dumps({"domain": "frage", "reply": ""}),
                   "Du hast diesen Monat 0 € ausgegeben.")
     r = _cmd(hub, "wie viel habe ich diesen monat ausgegeben")
-    assert r["domain"] == "frage"
+    assert r["domain"] == "agent"
     assert "ausgegeben" in r["reply"]

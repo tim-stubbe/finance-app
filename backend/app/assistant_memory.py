@@ -95,6 +95,15 @@ def add_memory(db, *, text: str, category: str = "fakt", source: str = "manuell"
         category = "fakt"
     importance = max(1, min(3, int(importance or 2)))
 
+    # Die Session läuft mit autoflush=False (siehe database.py) - ohne
+    # expliziten Flush sieht die Dedup-Query unten eine in DERSELBEN Session
+    # zuvor hinzugefügte, aber noch nicht committete Zeile nicht (z.B. zwei
+    # fast identische Fakten aus einem einzigen distill_recent-Lauf) und legt
+    # sie dann als Duplikat mit demselben Key an -> IntegrityError erst beim
+    # Commit. Ein Flush macht anhängige Inserts für die folgenden Queries
+    # sichtbar, ohne sie schon zu committen.
+    db.flush()
+
     # Schon (fast) wörtlich vorhanden? -> nichts Neues anlegen.
     existing_similar = None
     for row in db.query(models.AssistantMemory).filter(

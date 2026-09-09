@@ -94,6 +94,44 @@ def test_agent_finance_mutation_is_proposal_only(auth_client, monkeypatch):
     assert body["tool_trace"][0]["risk"] == "propose_only"
 
 
+def test_agent_stops_on_repeated_identical_tool_call(auth_client, monkeypatch):
+    # A model that keeps requesting the same tool with the same arguments
+    # instead of progressing must not burn through all MAX_TOOL_STEPS - the
+    # second identical call should be short-circuited into a forced answer.
+    _configure_ollama()
+    _chat_sequence(monkeypatch, [
+        '{"type":"tool","name":"get_todos","arguments":{"include_done":false}}',
+        '{"type":"tool","name":"get_todos","arguments":{"include_done":false}}',
+        '{"type":"answer","reply":"Du hast keine offenen Aufgaben."}',
+    ])
+
+    r = auth_client.post("/api/jarvis/chat", json={"message": "Was steht bei mir an?"})
+    body = r.json()
+    assert body["ok"] is True
+    assert body["tool_trace"][1]["note"] == "duplicate_call_skipped"
+    assert body["tool_trace"][1]["ok"] is False
+
+
+def test_agent_survives_failing_tool(auth_client, monkeypatch):
+    # An unexpected exception inside a tool (e.g. a DB error) must be
+    # surfaced to the model as a normal tool failure instead of crashing
+    # the whole request.
+    _configure_ollama()
+    monkeypatch.setattr(agent_core, "crud", type("Crud", (), {
+        "get_accounts": staticmethod(lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("db down"))),
+    }))
+    _chat_sequence(monkeypatch, [
+        '{"type":"tool","name":"get_account_balances","arguments":{}}',
+        '{"type":"answer","reply":"Ich konnte deine Kontostände gerade nicht abrufen."}',
+    ])
+
+    r = auth_client.post("/api/jarvis/chat", json={"message": "Wie viel Geld habe ich?"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["tool_trace"][0]["ok"] is False
+
+
 def test_capabilities_publish_security_contract(auth_client):
     body = auth_client.get("/api/jarvis/capabilities").json()
     assert body["mode"] == "agent_v1"

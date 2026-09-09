@@ -11,7 +11,6 @@ gezielte Tools geholt, aktuelle Fragen können Web-Recherche nutzen. Die
 bestehenden Aktions-Domänen bleiben unverändert.
 """
 
-import re
 from datetime import date, datetime
 
 from . import agent_core, crud, schemas, ollama_client, smarthome
