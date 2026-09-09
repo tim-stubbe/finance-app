@@ -629,6 +629,31 @@ class Device(Base):
     revoked_at = Column(DateTime, nullable=True)
 
 
+class AuthenticatedPrincipal:
+    """Gemeinsames Ergebnis von `auth.require_session_or_device` - fasst
+    Web-Session- und Device-Token-Auth hinter einer Form zusammen, damit
+    aufrufender Code (z.B. der Agent Core über routers/jarvis.py) nicht
+    zwischen den beiden Auth-Wegen unterscheiden muss. Genau eines von
+    `user`/`device` ist gesetzt, nie beide, nie keines (siehe
+    require_session_or_device).
+
+    `allowed_scopes` ist bewusst schon jetzt vorhanden, auch wenn Agent v1
+    nur den einen Scope "agent:read" kennt - spätere Scopes (z.B.
+    "sync:write", "notifications") sollen keinen erneuten Umbau der
+    Principal-Form brauchen, nur eine differenziertere Befüllung hier."""
+
+    def __init__(self, user=None, device: Device | None = None,
+                 auth_method: str = "session",
+                 allowed_scopes: tuple[str, ...] = ("agent:read",)):
+        self.user = user
+        self.device = device
+        self.auth_method = auth_method
+        self.allowed_scopes = allowed_scopes
+
+    def has_scope(self, scope: str) -> bool:
+        return scope in self.allowed_scopes
+
+
 class BasiszinsRate(Base):
     __tablename__ = "basiszins_rates"
 

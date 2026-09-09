@@ -52,7 +52,7 @@ from .routers.hub import hub_router
 from .routers.proactive import proactive_router
 from .routers.assistant_memory_routes import assistant_memory_router
 from .routers.energy import energy_router
-from .routers.jarvis import jarvis_router
+from .routers.jarvis import jarvis_chat_router, jarvis_router
 from .routers.meals import meals_router
 from .database import engine, get_db, SessionLocal, DATA_DIR, ensure_columns
 from .db_migrate import run_migrations, verify_and_heal_schema
@@ -1066,6 +1066,10 @@ app.include_router(proactive_router, dependencies=_require_auth)
 app.include_router(assistant_memory_router, dependencies=_require_auth)
 app.include_router(energy_router, dependencies=_require_auth)
 app.include_router(jarvis_router, dependencies=_require_auth)
+# Eigene Registrierung ohne die pauschale Web-Session-Dependency: der Chat-
+# Endpoint prüft seine Auth selbst (Session ODER Device-Token), siehe
+# routers/jarvis.py:jarvis_chat_router / auth.require_session_or_device.
+app.include_router(jarvis_chat_router)
 app.include_router(meals_router, dependencies=_require_auth)
 app.include_router(sync_router)
 

@@ -236,3 +236,44 @@ def require_auth(request: Request, db: Session = Depends(get_db)) -> None:
 
 def new_csrf_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+# Header, über den native Clients (z.B. die iOS-App) ihr Device-Token
+# mitschicken. Bewusst ein eigener, klar benannter Header statt Authorization/
+# Bearer - macht Log-Greps und Reverse-Proxy-Konfiguration eindeutig und
+# verwechselt sich nicht mit einem evtl. zukünftigen Bearer-Schema.
+DEVICE_TOKEN_HEADER = "x-kies-device-token"
+
+
+def require_session_or_device(request: Request, db: Session = Depends(get_db)) -> models.AuthenticatedPrincipal:
+    """Gemeinsame Auth-Dependency für Endpunkte, die sowohl von der Web-App
+    (Session-Cookie) als auch von nativen Clients (Device-Token-Header)
+    erreichbar sein sollen - aktuell nur `/api/jarvis/chat` (siehe
+    routers/jarvis.py). Liefert eine `AuthenticatedPrincipal`, damit der
+    aufrufende Code (und erst recht der Agent Core) nicht zwischen den beiden
+    Auth-Wegen unterscheiden muss.
+
+    Web-Session hat Vorrang: ist der Nutzer eingeloggt, gilt exakt dasselbe
+    Verhalten wie `require_auth` (Idle-Timeout, CSRF-Check). Erst wenn keine
+    gültige Session vorliegt, wird das Device-Token geprüft. So bleibt der
+    bestehende Web-Flow unverändert und Geräte können nur das zusätzlich, was
+    hier explizit erlaubt wird.
+    """
+    user = get_user(db, request.session.get("user_id"))
+    if user and user.is_active:
+        require_auth(request, db)
+        return models.AuthenticatedPrincipal(user=user, auth_method="session")
+
+    token = request.headers.get(DEVICE_TOKEN_HEADER)
+    if not token:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+
+    # Lokaler Import, um einen Zirkularimport zu vermeiden: crud_devices
+    # importiert seinerseits `auth` (für hash_password/verify_password).
+    from . import crud_devices
+
+    device = crud_devices.authenticate_device(db, token)
+    if device is None:
+        raise HTTPException(status_code=401, detail="Ungültiges oder widerrufenes Gerätetoken.")
+
+    return models.AuthenticatedPrincipal(user=None, device=device, auth_method="device")

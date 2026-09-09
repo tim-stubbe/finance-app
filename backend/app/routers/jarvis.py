@@ -15,10 +15,18 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import agent_core, auth, jarvis, schemas, smarthome
+from .. import agent_core, auth, jarvis, models, schemas, smarthome
 from ..database import get_db
 
 jarvis_router = APIRouter(prefix="/api")
+
+# `/jarvis/chat` bekommt in main.py bewusst KEINE der beiden pauschalen
+# Router-Dependencies (Web-Session via `jarvis_router`), sondern hängt seine
+# Auth direkt am Endpoint via `auth.require_session_or_device` - das ist der
+# einzige Jarvis-Endpunkt, den native Clients per Device-Token erreichen
+# dürfen. Alle anderen Endpunkte in `jarvis_router` bleiben ausschließlich
+# über die Web-Session erreichbar (siehe main.py: dependencies=_require_auth).
+jarvis_chat_router = APIRouter(prefix="/api")
 
 
 class JarvisChatIn(BaseModel):
@@ -37,13 +45,24 @@ def jarvis_command(
                          source="web", confirm=data.confirm)
 
 
-@jarvis_router.post("/jarvis/chat")
+@jarvis_chat_router.post("/jarvis/chat")
 def jarvis_chat(
     data: JarvisChatIn,
     db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
     space_id: int = Depends(auth.get_active_space_id),
 ):
-    """Conversation-first assistant endpoint with private-data tool calling."""
+    """Conversation-first assistant endpoint with private-data tool calling.
+
+    Erreichbar per Web-Session ODER Device-Token (siehe
+    `auth.require_session_or_device`). Der Agent Core selbst bekommt davon
+    nichts mit - er sieht nur `settings`/`space_id`, genau wie beim
+    Web-Aufruf. `space_id` wird bewusst weiterhin über
+    `auth.get_active_space_id` aufgelöst statt aus `principal`, weil Device
+    (noch) nicht an einen Space gebunden ist (Single-User-App, siehe
+    models.Device) - die Funktion behandelt "kein Nutzer in der Session"
+    bereits korrekt.
+    """
     settings = auth.get_or_create_settings(db)
     return agent_core.handle(db, settings, data.message, space_id, history=data.history)
 
