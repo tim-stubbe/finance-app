@@ -38,6 +38,12 @@ def _base(url: str) -> str:
 
 
 def list_models(url: str) -> list[str]:
+    if _headers():
+        resp = requests.get(f"{_base(url)}/v1/models", headers=_headers(), timeout=10,
+                            allow_redirects=False)
+        resp.raise_for_status()
+        data = resp.json()
+        return [m.get("id") for m in (data.get("data") or []) if m.get("id")]
     resp = requests.get(f"{_base(url)}/api/tags", headers=_headers(), timeout=10,
                         allow_redirects=False)
     resp.raise_for_status()
@@ -73,7 +79,37 @@ def _stream(url: str, path: str, body: dict, timeout):
                 break
 
 
+def _openai_stream(url: str, body: dict, timeout):
+    """OpenAI-kompatibler SSE-Stream fuer OmniRoute."""
+    body = {**body, "stream": True}
+    with requests.post(f"{_base(url)}/v1/chat/completions", json=body,
+                       headers=_headers(), timeout=timeout,
+                       allow_redirects=False, stream=True) as resp:
+        if not resp.ok:
+            try:
+                detail = resp.json().get("error")
+            except Exception:
+                detail = resp.text[:300]
+            raise requests.HTTPError(
+                f"{resp.status_code} von OmniRoute: {detail or resp.reason}", response=resp)
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                obj = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("error"):
+                raise ValueError(obj["error"])
+            yield obj
+
+
 def generate(url: str, model: str, prompt: str, timeout: int = 600) -> str:
+    if _headers():
+        return chat(url, model, [{"role": "user", "content": prompt}], timeout=timeout)
     parts = [obj.get("response") or "" for obj in
              _stream(url, "/api/generate", {"model": model, "prompt": prompt}, timeout)]
     text = "".join(parts).strip()
@@ -86,6 +122,8 @@ def pull_model(url: str, model: str, timeout: int = 1800) -> str:
     """Laedt ein Modell aus der Ollama-Bibliothek auf den Server. Nicht-streamend
     (stream: false) - der Pull-Endpunkt haelt die Verbindung selbst mit
     Status-Zeilen wach, kein 120-s-Problem."""
+    if _headers():
+        raise ValueError("Modelle werden bei OmniRoute zentral verwaltet")
     resp = requests.post(
         f"{_base(url)}/api/pull",
         json={"name": model, "stream": False},
@@ -112,6 +150,20 @@ def chat(url: str, model: str, messages: list[dict], timeout: int = 600,
     (grammar-constrained) - robuster als hinterher zu parsen. `options` reicht
     z.B. {"num_predict": 900} oder {"num_ctx": 8192} durch."""
     body: dict = {"model": model, "messages": messages}
+    if _headers():
+        if format:
+            body["response_format"] = {"type": "json_object"}
+        if options and options.get("num_predict"):
+            body["max_tokens"] = options["num_predict"]
+        parts = []
+        for obj in _openai_stream(url, body, timeout):
+            choices = obj.get("choices") or []
+            if choices:
+                parts.append((choices[0].get("delta") or {}).get("content") or "")
+        content = "".join(parts).strip()
+        if not content:
+            raise ValueError("OmniRoute hat keine Antwort geliefert")
+        return content
     if format:
         body["format"] = format
     if options:
