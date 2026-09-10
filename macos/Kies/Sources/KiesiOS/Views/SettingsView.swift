@@ -9,6 +9,9 @@ struct SettingsView: View {
     @ObservedObject private var pairing = PairingStore.shared
     @ObservedObject private var notifications = NotificationManager.shared
     @ObservedObject private var health = HealthKitSync.shared
+    @ObservedObject private var deviceToken = DeviceTokenStore.shared
+
+    @State private var deviceTokenInput: String = ""
 
     var body: some View {
         Form {
@@ -56,6 +59,27 @@ struct SettingsView: View {
                 Button("Verbindung trennen", role: .destructive) {
                     pairing.secret = ""
                 }
+            }
+            Section {
+                if deviceToken.token != nil {
+                    LabeledContent("Gerät", value: "Gekoppelt")
+                    Button("Gerätetoken entfernen", role: .destructive) {
+                        deviceToken.setToken(nil)
+                    }
+                } else {
+                    SecureField("Gerätetoken einfügen", text: $deviceTokenInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button("Token speichern") {
+                        deviceToken.setToken(deviceTokenInput)
+                        deviceTokenInput = ""
+                    }
+                    .disabled(deviceTokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } header: {
+                Text("Assistent")
+            } footer: {
+                Text("Einmaliges Gerätetoken aus den Web-Einstellungen (Geräte) hier einfügen, um den Assistenten auf diesem Gerät zu koppeln. Wird nur lokal im Schlüsselbund gespeichert.")
             }
         }
         .kListChrome()

@@ -10,10 +10,23 @@ ist der proaktive Assistent monatelang still gescheitert. Beim Streamen
 fliessen laufend Tokens, der Proxy sieht Aktivitaet, nichts bricht ab.
 """
 import json
+import os
 
 import requests
 
 from . import net_guard
+
+
+def _headers() -> dict[str, str]:
+    """Authentifizierung fuer einen Ollama-kompatiblen Gateway wie OmniRoute.
+
+    Bei direktem Ollama-Betrieb bleibt der Header leer. Der Schluessel kommt
+    ausschliesslich aus der Container-Umgebung und wird nie protokolliert.
+    """
+    key = os.environ.get("KIES_OLLAMA_API_KEY", "").strip()
+    if not key:
+        return {}
+    return {"x-api-key": key, "Authorization": f"Bearer {key}"}
 
 
 def _base(url: str) -> str:
@@ -25,7 +38,8 @@ def _base(url: str) -> str:
 
 
 def list_models(url: str) -> list[str]:
-    resp = requests.get(f"{_base(url)}/api/tags", timeout=10, allow_redirects=False)
+    resp = requests.get(f"{_base(url)}/api/tags", headers=_headers(), timeout=10,
+                        allow_redirects=False)
     resp.raise_for_status()
     data = resp.json()
     return [m.get("name") for m in (data.get("models") or []) if m.get("name")]
@@ -36,7 +50,7 @@ def _stream(url: str, path: str, body: dict, timeout):
     Abstand zwischen zwei Bytes (Connect + Read), NICHT die Gesamtdauer -
     solange Tokens fliessen, laeuft es weiter."""
     body = {**body, "stream": True}
-    with requests.post(f"{_base(url)}{path}", json=body, timeout=timeout,
+    with requests.post(f"{_base(url)}{path}", json=body, headers=_headers(), timeout=timeout,
                        allow_redirects=False, stream=True) as resp:
         if not resp.ok:
             try:
@@ -75,6 +89,7 @@ def pull_model(url: str, model: str, timeout: int = 1800) -> str:
     resp = requests.post(
         f"{_base(url)}/api/pull",
         json={"name": model, "stream": False},
+        headers=_headers(),
         timeout=timeout,
         allow_redirects=False,
     )

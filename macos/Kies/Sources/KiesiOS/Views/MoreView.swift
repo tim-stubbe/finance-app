@@ -59,6 +59,7 @@ struct MoreView: View {
     private var toolsSection: some View {
         featureGroup("Tools", icon: "square.grid.2x2.fill", color: KColor.violet) {
             NavigationLink { SearchView() } label: { feature("Suche", "Alles in Kies sofort finden", "magnifyingglass") }
+            NavigationLink { AssistantView() } label: { feature("Assistent", "KI-Antworten mit Device-Auth", "sparkles") }
             NavigationLink { SettingsView() } label: { feature("Einstellungen", "Sync, Sicherheit und App", "gearshape") }
         }
     }

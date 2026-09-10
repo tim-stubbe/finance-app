@@ -51,6 +51,9 @@ def get_or_create_settings(db: Session) -> models.Settings:
     _env_model = os.environ.get("KIES_OLLAMA_MODEL")
     if _env_model and settings.ollama_model != _env_model:
         settings.ollama_model = _env_model
+    _env_url = os.environ.get("KIES_OLLAMA_URL")
+    if _env_url and settings.ollama_url != _env_url:
+        settings.ollama_url = _env_url.rstrip("/")
     return settings
 
 

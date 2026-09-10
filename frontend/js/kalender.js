@@ -283,6 +283,7 @@ async function loadSettingsTab() {
   await loadImmichSettings();
   await loadWebhookSettings();
   await loadNativeSyncSettings();
+  await loadDevices();
   await loadScalableSettings();
   await loadMailSettings();
   await loadCreditCardSettings();

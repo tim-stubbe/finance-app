@@ -102,3 +102,68 @@ document.getElementById("native-sync-remove").addEventListener("click", async ()
   toast("Sync deaktiviert.");
 });
 
+async function loadDevices() {
+  const tbody = document.getElementById("devices-tbody");
+  if (!tbody) return;
+  tbody.replaceChildren();
+  const devices = await api("/devices");
+  if (!devices.length) {
+    const row = tbody.insertRow();
+    const cell = row.insertCell();
+    cell.colSpan = 4;
+    cell.className = "page-sub";
+    cell.textContent = "Noch keine Geräte gekoppelt.";
+    return;
+  }
+  devices.forEach(d => {
+    const row = tbody.insertRow();
+    const nameCell = row.insertCell();
+    nameCell.textContent = d.name || "";
+    if (d.revoked) {
+      const mark = document.createElement("em");
+      mark.textContent = " (widerrufen)";
+      nameCell.appendChild(mark);
+    }
+    row.insertCell().textContent = d.created_at ? new Date(d.created_at).toLocaleString("de-DE") : "–";
+    row.insertCell().textContent = d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("de-DE") : "–";
+    const actionCell = row.insertCell();
+    if (!d.revoked) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-ghost btn-sm";
+      btn.dataset.revokeDevice = String(d.id);
+      btn.textContent = "Widerrufen";
+      actionCell.appendChild(btn);
+    }
+  });
+}
+
+document.getElementById("device-create").addEventListener("click", async () => {
+  const nameInput = document.getElementById("device-new-name");
+  const name = (nameInput.value || "").trim();
+  if (!name) { toast("Gerätename fehlt."); return; }
+  const created = await api("/devices", { method: "POST", body: JSON.stringify({ name }) });
+  nameInput.value = "";
+  const once = document.getElementById("device-token-once");
+  document.getElementById("device-token-value").textContent = created.token || "";
+  once.classList.remove("hidden");
+  await loadDevices();
+  toast("Gerät gekoppelt – Token jetzt kopieren.");
+});
+
+document.getElementById("device-token-copy").addEventListener("click", () => {
+  const value = document.getElementById("device-token-value").textContent;
+  if (!value) return;
+  navigator.clipboard.writeText(value);
+  toast("Gerätetoken kopiert.");
+});
+
+document.getElementById("devices-tbody").addEventListener("click", async e => {
+  const btn = e.target.closest("[data-revoke-device]");
+  if (!btn) return;
+  if (!confirm("Dieses Gerät widerrufen? Der Assistent auf dem Gerät funktioniert danach sofort nicht mehr.")) return;
+  await api(`/devices/${btn.dataset.revokeDevice}`, { method: "DELETE" });
+  await loadDevices();
+  toast("Gerät widerrufen.");
+});
+

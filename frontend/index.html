@@ -3574,6 +3574,30 @@
         </div>
       </div>
 
+      <div class="panel" data-integration-key="native-devices">
+        <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg> Geräte für den Assistenten</h3>
+        <p class="page-sub">
+          Eigenes Gerätetoken für den nativen Kies-Assistenten (iPhone). Wird nur
+          <strong>einmal</strong> angezeigt, danach nur noch als Hash gespeichert.
+          Unabhängig vom Offline-Sync-Secret oben – Sync bleibt unverändert.
+        </p>
+        <div class="filter-row">
+          <input type="text" id="device-new-name" placeholder="Gerätename, z.B. iPhone" style="max-width:220px">
+          <button type="button" id="device-create" class="btn-primary">Gerät koppeln</button>
+        </div>
+        <p class="page-sub hidden" id="device-token-once">
+          Token jetzt in die iOS-App eintragen (Keychain) – danach nicht mehr sichtbar:
+          <code id="device-token-value"></code>
+          <button type="button" id="device-token-copy" class="btn-ghost btn-sm">Kopieren</button>
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Name</th><th>Angelegt</th><th>Zuletzt gesehen</th><th></th></tr>
+          </thead>
+          <tbody id="devices-tbody"></tbody>
+        </table>
+      </div>
+
       <div class="panel" data-integration-key="scalable">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg> Scalable Capital (Investments)</h3>
         <p class="page-sub">
