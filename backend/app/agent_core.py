@@ -30,7 +30,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from . import bank_sync, crud, ollama_client, smarthome, websearch
+from . import assistant_memory, bank_sync, crud, ollama_client, smarthome, websearch
 
 MAX_TOOL_STEPS = 5
 MAX_HISTORY_MESSAGES = 10
@@ -361,16 +361,31 @@ def handle(
     space_id: int,
     *,
     history: list[dict] | None = None,
+    chat_id: str | None = None,
 ) -> dict:
-    """Run one agent turn and return the common Jarvis-style response shape."""
+    """Run one agent turn and return the common Jarvis-style response shape.
+
+    If `chat_id` is given, the conversation is persisted server-side via the
+    same `ConversationTurn` storage the Telegram bot already uses
+    (`assistant_memory.append_turn`/`load_history_for_prompt`) - this is the
+    "Conversation Threads" feature. The persisted thread then takes priority
+    over the (legacy, client-supplied) `history` argument, which stays only
+    as a fallback for callers that don't pass `chat_id` (e.g. `hub_command.py`).
+    """
     text = (text or "").strip()
     if not text:
         return {"ok": False, "domain": "agent", "reply": "Bitte sag oder schreib mir, wobei ich helfen soll.", "actions": []}
     if not getattr(settings, "ollama_url", None) or not getattr(settings, "ollama_model", None):
         return {"ok": False, "domain": "agent", "reply": "Kein lokales Ollama-Modell eingerichtet.", "actions": []}
 
+    if chat_id:
+        persisted = assistant_memory.load_history_for_prompt(db, chat_id=chat_id)
+        effective_history = persisted or history
+    else:
+        effective_history = history
+
     messages: list[dict] = [{"role": "system", "content": _system_prompt(settings)}]
-    messages.extend(_clean_history(history))
+    messages.extend(_clean_history(effective_history))
     messages.append({"role": "user", "content": text})
 
     trace: list[dict] = []
@@ -403,6 +418,7 @@ def handle(
         plan = _parse_plan(raw)
         if plan.get("type") != "tool":
             reply = str(plan.get("reply") or raw or "Ok.").strip()
+            _persist_turn(db, settings, chat_id, text, reply)
             return {
                 "ok": True, "domain": "agent", "reply": reply,
                 "actions": actions, "sources": sources, "tool_trace": trace,
@@ -453,8 +469,23 @@ def handle(
         reply = str(plan.get("reply") or raw or "Ich habe die nötigen Daten gesammelt, konnte die Antwort aber nicht sauber formatieren.").strip()
     except Exception as exc:  # noqa: BLE001
         reply = f"Ich habe die nötigen Daten gesammelt, aber die finale Antwort ist fehlgeschlagen: {exc}"
+    _persist_turn(db, settings, chat_id, text, reply)
     return {
         "ok": True, "domain": "agent", "reply": reply,
         "actions": actions, "sources": sources, "tool_trace": trace,
         "privacy": {"full_database_shared": False, "tools_used": sorted(used_tools)},
     }
+
+
+def _persist_turn(db: Session, settings, chat_id: str | None, user_text: str, reply: str) -> None:
+    """Persist one user/assistant turn pair for `chat_id` and opportunistically
+    compress the thread once it grows past budget. Best effort - a storage
+    hiccup must not fail the already-computed answer."""
+    if not chat_id:
+        return
+    try:
+        assistant_memory.append_turn(db, "user", user_text, chat_id=chat_id)
+        assistant_memory.append_turn(db, "assistant", reply, chat_id=chat_id)
+        assistant_memory.compress_old_turns(db, settings, chat_id=chat_id)
+    except Exception:  # noqa: BLE001
+        db.rollback()

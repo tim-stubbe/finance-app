@@ -254,6 +254,19 @@ def load_history_for_prompt(db, char_budget: int = 6000, chat_id: str | None = N
     return [{"role": r.role, "content": r.content} for r in picked]
 
 
+def list_thread(db, chat_id: str, limit: int = 200) -> list[dict]:
+    """Persistierter Thread für die UI (Web/iOS) - im Unterschied zu
+    `load_history_for_prompt()` mit id/Zeitstempel und ohne Budget-Kappung
+    (nur Anzahl-Limit), chronologisch."""
+    rows = (db.query(models.ConversationTurn)
+            .filter(models.ConversationTurn.chat_id == str(chat_id))
+            .order_by(models.ConversationTurn.id.desc()).limit(limit).all())
+    rows.reverse()
+    return [{"id": r.id, "role": r.role, "content": r.content,
+             "created_at": r.created_at.isoformat() if r.created_at else None}
+            for r in rows]
+
+
 def compress_old_turns(db, settings, keep_chars: int = 6000,
                        chat_id: str | None = None):
     """Wenn der Verlauf das Budget sprengt: die ältesten überzähligen Züge von

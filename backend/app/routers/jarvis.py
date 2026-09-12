@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import agent_core, auth, jarvis, models, schemas, smarthome
+from .. import agent_core, assistant_memory, auth, jarvis, models, schemas, smarthome
 from ..database import get_db
 
 jarvis_router = APIRouter(prefix="/api")
@@ -62,9 +62,17 @@ def jarvis_chat(
     (noch) nicht an einen Space gebunden ist (Single-User-App, siehe
     models.Device) - die Funktion behandelt "kein Nutzer in der Session"
     bereits korrekt.
+
+    Der Verlauf wird server-seitig persistiert (Conversation Threads, siehe
+    `assistant_memory.py`/`agent_core._persist_turn`), gebunden per
+    `chat_id="jarvis:{space_id}"`. `data.history` bleibt nur noch als Fallback
+    für den (unwahrscheinlichen) Fall bestehen, dass noch kein persistierter
+    Verlauf existiert.
     """
     settings = auth.get_or_create_settings(db)
-    return agent_core.handle(db, settings, data.message, space_id, history=data.history)
+    chat_id = f"jarvis:{space_id}"
+    return agent_core.handle(db, settings, data.message, space_id,
+                             history=data.history, chat_id=chat_id)
 
 
 @jarvis_router.get("/jarvis/capabilities")
@@ -100,3 +108,27 @@ def jarvis_memory(db: Session = Depends(get_db)):
 def jarvis_memory_clear():
     jarvis.forget()
     return {"ok": True}
+
+
+@jarvis_chat_router.get("/jarvis/chat/history")
+def jarvis_chat_history(
+    db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    """Persistierter Chat-Thread für den aktuellen Space, chronologisch - zum
+    Laden beim App-/Seitenstart (siehe `assistant_memory.list_thread`)."""
+    turns = assistant_memory.list_thread(db, chat_id=f"jarvis:{space_id}")
+    return {"ok": True, "turns": turns}
+
+
+@jarvis_chat_router.delete("/jarvis/chat/history")
+def jarvis_chat_history_clear(
+    db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
+    space_id: int = Depends(auth.get_active_space_id),
+):
+    """Löscht den persistierten Chat-Thread für den aktuellen Space (Langzeit-
+    Gedächtnis/`AssistantMemory` bleibt unberührt, siehe `clear_history`)."""
+    n = assistant_memory.clear_history(db, chat_id=f"jarvis:{space_id}")
+    return {"ok": True, "deleted": n}
