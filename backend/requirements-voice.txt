@@ -11,7 +11,7 @@
 # nach $DATA_DIR und ueberleben dank des Volumes einen Neustart.
 
 faster-whisper==1.2.1
-piper-tts==1.7.0
+piper-tts==1.8.0
 # Serverseitiges Weckwort ("hey jarvis") fuer den Freihand-Stream
 # (voice/wakeword.py). Nutzt onnxruntime (schon durch faster-whisper da),
 # Modelle sind ~8 MB und laden beim ersten Start nach $DATA_DIR.
