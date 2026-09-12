@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, date
 from sqlalchemy import (
-    Column, Integer, String, Float, Date, DateTime, ForeignKey, Enum, Text, UniqueConstraint, Boolean
+    Column, Integer, String, Float, Date, DateTime, ForeignKey, Enum, Text, UniqueConstraint, Boolean, JSON
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -1861,6 +1861,11 @@ class ConversationTurn(Base):
     role = Column(String, nullable=False)                      # user | assistant
     content = Column(Text, nullable=False)
     summarized = Column(Boolean, nullable=False, default=False)
+    # Nur bei role="assistant" gesetzt: welche Tools der Agent Core für diese
+    # Antwort aufgerufen hat (agent_core.handle()'s `tool_trace`), zur
+    # nachträglichen Einsicht in der Chat-Historie. Bei Telegram-Turns (kein
+    # Agent Core) bleibt es None.
+    tool_trace = Column(JSON, nullable=True)
 
 
 class PowerReading(Base):

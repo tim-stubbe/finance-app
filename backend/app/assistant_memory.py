@@ -222,14 +222,19 @@ def build_memory_block(db, char_budget: int = 1500) -> str:
 # --------------------------------------------------------------------------- #
 # Kurzzeit: Chatverlauf
 # --------------------------------------------------------------------------- #
-def append_turn(db, role: str, content: str, chat_id: str | None = None) -> None:
-    """Einen Chat-Zug persistieren. Committet."""
+def append_turn(db, role: str, content: str, chat_id: str | None = None,
+                tool_trace: list[dict] | None = None) -> None:
+    """Einen Chat-Zug persistieren. Committet. `tool_trace` (nur für
+    role="assistant" sinnvoll) hält fest, welche Agent-Core-Tools für diese
+    Antwort aufgerufen wurden - zur nachträglichen Einsicht, siehe
+    `list_thread()`."""
     content = (content or "").strip()
     if not content:
         return
     db.add(models.ConversationTurn(
         role="assistant" if role == "assistant" else "user",
-        content=content, chat_id=str(chat_id) if chat_id is not None else None))
+        content=content, chat_id=str(chat_id) if chat_id is not None else None,
+        tool_trace=tool_trace or None))
     db.commit()
 
 
@@ -263,7 +268,8 @@ def list_thread(db, chat_id: str, limit: int = 200) -> list[dict]:
             .order_by(models.ConversationTurn.id.desc()).limit(limit).all())
     rows.reverse()
     return [{"id": r.id, "role": r.role, "content": r.content,
-             "created_at": r.created_at.isoformat() if r.created_at else None}
+             "created_at": r.created_at.isoformat() if r.created_at else None,
+             "tool_trace": r.tool_trace}
             for r in rows]
 
 

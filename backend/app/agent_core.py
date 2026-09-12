@@ -418,7 +418,7 @@ def handle(
         plan = _parse_plan(raw)
         if plan.get("type") != "tool":
             reply = str(plan.get("reply") or raw or "Ok.").strip()
-            _persist_turn(db, settings, chat_id, text, reply)
+            _persist_turn(db, settings, chat_id, text, reply, tool_trace=trace)
             return {
                 "ok": True, "domain": "agent", "reply": reply,
                 "actions": actions, "sources": sources, "tool_trace": trace,
@@ -469,7 +469,7 @@ def handle(
         reply = str(plan.get("reply") or raw or "Ich habe die nötigen Daten gesammelt, konnte die Antwort aber nicht sauber formatieren.").strip()
     except Exception as exc:  # noqa: BLE001
         reply = f"Ich habe die nötigen Daten gesammelt, aber die finale Antwort ist fehlgeschlagen: {exc}"
-    _persist_turn(db, settings, chat_id, text, reply)
+    _persist_turn(db, settings, chat_id, text, reply, tool_trace=trace)
     return {
         "ok": True, "domain": "agent", "reply": reply,
         "actions": actions, "sources": sources, "tool_trace": trace,
@@ -477,15 +477,17 @@ def handle(
     }
 
 
-def _persist_turn(db: Session, settings, chat_id: str | None, user_text: str, reply: str) -> None:
+def _persist_turn(db: Session, settings, chat_id: str | None, user_text: str, reply: str,
+                  tool_trace: list[dict] | None = None) -> None:
     """Persist one user/assistant turn pair for `chat_id` and opportunistically
     compress the thread once it grows past budget. Best effort - a storage
-    hiccup must not fail the already-computed answer."""
+    hiccup must not fail the already-computed answer. `tool_trace` wird nur am
+    assistant-Turn gespeichert (siehe assistant_memory.append_turn)."""
     if not chat_id:
         return
     try:
         assistant_memory.append_turn(db, "user", user_text, chat_id=chat_id)
-        assistant_memory.append_turn(db, "assistant", reply, chat_id=chat_id)
+        assistant_memory.append_turn(db, "assistant", reply, chat_id=chat_id, tool_trace=tool_trace)
         assistant_memory.compress_old_turns(db, settings, chat_id=chat_id)
     except Exception:  # noqa: BLE001
         db.rollback()
