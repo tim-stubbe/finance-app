@@ -9,6 +9,7 @@ import SwiftUI
 struct KiesWidgetBundle: WidgetBundle {
     var body: some Widget {
         KiesTodayWidget()
+        KiesQuickActionsWidget()
         TimerLiveActivity()
     }
 }

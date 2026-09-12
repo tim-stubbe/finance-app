@@ -15,7 +15,11 @@ struct QuickCaptureView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @State private var kind: Kind = .transaction
+    @State private var kind: Kind
+
+    init(initialKind: Kind = .transaction) {
+        _kind = State(initialValue: initialKind)
+    }
 
     // Buchung
     @StateObject private var accounts = Box<[Account]>([])

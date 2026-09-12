@@ -4,6 +4,7 @@ import KiesCore
 struct RootTabView: View {
     @State private var showQuickCapture = false
     @ObservedObject private var router = TabRouter.shared
+    @ObservedObject private var quickCaptureRouter = QuickCaptureRouter.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -45,10 +46,13 @@ struct RootTabView: View {
             .accessibilityLabel("Schnell erfassen")
             .padding(.bottom, 67)
         }
-        .sheet(isPresented: $showQuickCapture) {
-            QuickCaptureView()
+        .sheet(isPresented: $showQuickCapture, onDismiss: { quickCaptureRouter.clear() }) {
+            QuickCaptureView(initialKind: quickCaptureRouter.pendingKind ?? .transaction)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .onChange(of: quickCaptureRouter.pendingKind) { _, newValue in
+            if newValue != nil { showQuickCapture = true }
         }
     }
 }

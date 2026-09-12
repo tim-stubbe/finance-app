@@ -36,6 +36,7 @@
 		A7639249067C0E142E4E2199 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F34C70844AA4048F50145115 /* ShareViewController.swift */; };
 		ABCA0E018FDA3A5D956058D4 /* TabRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EB950D2FFE4CA505B7AFCF /* TabRouter.swift */; };
 		B1273FC86E1A640FB018622C /* KiesWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85AEA2E4BEAAA721535994E7 /* KiesWidgetBundle.swift */; };
+		B20B849763DE15C5B1992056 /* KiesQuickActionsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D0BFEDACD8FB94F0C5D29F /* KiesQuickActionsWidget.swift */; };
 		B306D0975AB3E6DF5DB551CC /* WishlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D085F7AB71F06EA7FFDA2B4A /* WishlistView.swift */; };
 		BA11003F352EDA97A72E56AB /* AccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D5CE16E4B51C7516057F1E /* AccountsView.swift */; };
 		CBD004D4CA23464799D0FEDF /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADF728876ACF7EE6CE1390A3 /* TransactionsView.swift */; };
@@ -47,6 +48,7 @@
 		E873314659947D7894EE885C /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51202F5D0B27831072944595 /* AssistantView.swift */; };
 		F3C8B0F2B1B6D04F206C91B7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */; };
 		F5AD507D32FCC36D3AD9640D /* KiesShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B07429E1CD635C2287F7651F /* KiesShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F816F0002EBEC15B5974B803 /* QuickCaptureRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0911D61146F6B94DEA9A38 /* QuickCaptureRouter.swift */; };
 		FAFF51A8EF6AACA402ADC33A /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44C034838E984EFE80BB21E /* SearchView.swift */; };
 /* End PBXBuildFile section */
 
@@ -93,6 +95,7 @@
 		3329E7178B1F2338F8D33732 /* KiesWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KiesWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B680F6717ADE402F1BF17A0 /* HealthKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSync.swift; sourceTree = "<group>"; };
 		4BB383E45F1D2E267830E6E5 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		4E0911D61146F6B94DEA9A38 /* QuickCaptureRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCaptureRouter.swift; sourceTree = "<group>"; };
 		51202F5D0B27831072944595 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		5357355D6AA09CC225075155 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		5358C2F69A3B288B580B3AD8 /* KiesShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesShare.entitlements; sourceTree = "<group>"; };
@@ -117,6 +120,7 @@
 		BD059D6300EF22443705B4AE /* TimeTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeTrackingView.swift; sourceTree = "<group>"; };
 		C44C034838E984EFE80BB21E /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		C74509D10A3977DA216A7CF4 /* TimerLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerLiveActivity.swift; sourceTree = "<group>"; };
+		C8D0BFEDACD8FB94F0C5D29F /* KiesQuickActionsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesQuickActionsWidget.swift; sourceTree = "<group>"; };
 		CB7A1C1E633670BAFEAB10C3 /* Kies */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Kies; path = .; sourceTree = SOURCE_ROOT; };
 		D085F7AB71F06EA7FFDA2B4A /* WishlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishlistView.swift; sourceTree = "<group>"; };
 		D573748D2D41F520FEAB9035 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
@@ -209,6 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				6B3E6AF14DFA864224B805F2 /* Info.plist */,
+				C8D0BFEDACD8FB94F0C5D29F /* KiesQuickActionsWidget.swift */,
 				B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */,
 				D83EE951DD03CAD6FF1BEA47 /* KiesWidget.entitlements */,
 				85AEA2E4BEAAA721535994E7 /* KiesWidgetBundle.swift */,
@@ -225,6 +230,7 @@
 				D5BB7A56FDD4FA1874F0FCBD /* KiesAskIntent.swift */,
 				E581F3707BA30C9B425A56BB /* KiesiOS.entitlements */,
 				003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */,
+				4E0911D61146F6B94DEA9A38 /* QuickCaptureRouter.swift */,
 				72EB950D2FFE4CA505B7AFCF /* TabRouter.swift */,
 				30438CFC92D36BE4CBFCB041 /* AppLock */,
 				9BE38C2CE70B21C2095B04E9 /* Health */,
@@ -407,6 +413,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B20B849763DE15C5B1992056 /* KiesQuickActionsWidget.swift in Sources */,
 				58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */,
 				B1273FC86E1A640FB018622C /* KiesWidgetBundle.swift in Sources */,
 				9F1EF21F2306B3D29A9152B4 /* TimerLiveActivity.swift in Sources */,
@@ -436,6 +443,7 @@
 				326F90F46B74CA76DD560D57 /* PairingView.swift in Sources */,
 				7B96B5D9926A00C92DC0A570 /* PremiumInvestmentsView.swift in Sources */,
 				37D64962C98845ECBAC0A905 /* PremiumTodayView.swift in Sources */,
+				F816F0002EBEC15B5974B803 /* QuickCaptureRouter.swift in Sources */,
 				3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */,
 				E0F43EA44B23B0CB186047C5 /* RootTabView.swift in Sources */,
 				FAFF51A8EF6AACA402ADC33A /* SearchView.swift in Sources */,

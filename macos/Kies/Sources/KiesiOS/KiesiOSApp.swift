@@ -56,7 +56,21 @@ struct RootView: View {
             }
             .onAppear { lock.lockIfEnabled() }
             .onOpenURL { url in
-                guard url.scheme == "kies", let tab = AppTab(rawValue: url.host ?? "") else { return }
+                guard url.scheme == "kies" else { return }
+                if url.host == "quick-capture" {
+                    let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                        .queryItems?.first(where: { $0.name == "kind" })?.value
+                    let kind: QuickCaptureView.Kind
+                    switch raw {
+                    case "todo": kind = .todo
+                    case "checkin": kind = .checkin
+                    default: kind = .transaction
+                    }
+                    router.jump(to: .today)
+                    QuickCaptureRouter.shared.request(kind)
+                    return
+                }
+                guard let tab = AppTab(rawValue: url.host ?? "") else { return }
                 router.jump(to: tab)
             }
 
