@@ -26,7 +26,7 @@ from .routers.trips import trips_router
 from .routers.vehicle import vehicle_router
 from .routers.devices import devices_router
 from .routers.wishlist import wishlist_router
-from .routers.personal import personal_router
+from .routers.personal import personal_router, personal_device_router
 from .routers.business_life import business_life_router
 from .routers.budgets_alerts import budgets_alerts_router
 from .routers.deadlines import deadlines_router
@@ -1040,6 +1040,11 @@ app.include_router(vehicle_router, dependencies=_require_auth)
 app.include_router(devices_router, dependencies=_require_auth)
 app.include_router(wishlist_router, dependencies=_require_auth)
 app.include_router(personal_router, dependencies=_require_auth)
+# Zeiterfassung per Device-Token (native Live Activity/Lock-Screen-Widget) -
+# bewusst ohne _require_auth, Auth hängt pro Route an require_session_or_device.
+# Siehe routers/personal.py:personal_device_router und die analoge
+# routers/jarvis.py:jarvis_chat_router.
+app.include_router(personal_device_router)
 app.include_router(business_life_router, dependencies=_require_auth)
 app.include_router(budgets_alerts_router, dependencies=_require_auth)
 app.include_router(deadlines_router, dependencies=_require_auth)

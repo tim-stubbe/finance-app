@@ -48,6 +48,11 @@ struct RootView: View {
                     WidgetCenter.shared.reloadAllTimelines()
                 }
                 await HealthKitSync.shared.syncNow()
+                await LiveActivityManager.shared.loadProjects()
+                let liveActivity = LiveActivityManager.shared
+                await liveActivity.restoreIfNeeded { projectId in
+                    liveActivity.projects.first { $0.id == projectId }?.name
+                }
             }
             .onAppear { lock.lockIfEnabled() }
             .onOpenURL { url in

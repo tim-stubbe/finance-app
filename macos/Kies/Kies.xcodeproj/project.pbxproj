@@ -28,6 +28,8 @@
 		7B96B5D9926A00C92DC0A570 /* PremiumInvestmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA444C3D09AEA9938B77FE2F /* PremiumInvestmentsView.swift */; };
 		807B16A7ED8092320C57D7A9 /* DesignKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7FBB02C92E905A937C99DD /* DesignKit.swift */; };
 		990146C5809F4FA34F5EA3BC /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C96DEEF5122EF2D08A40156 /* GoalsView.swift */; };
+		99CB72E359CF566E9455F26D /* TimeTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD059D6300EF22443705B4AE /* TimeTrackingView.swift */; };
+		9F1EF21F2306B3D29A9152B4 /* TimerLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74509D10A3977DA216A7CF4 /* TimerLiveActivity.swift */; };
 		A400936DEEE7E1471D4D07E4 /* KiesiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */; };
 		A4D6A8FA6AFC2866084C862E /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 34A4B10B21EFD0D7AC250E33 /* KiesCore */; };
 		A55304628638B35FB4B53DA0 /* KiesWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3329E7178B1F2338F8D33732 /* KiesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -112,7 +114,9 @@
 		B8BFEBBA631B1F700D31671F /* Box.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Box.swift; sourceTree = "<group>"; };
 		B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesTodayWidget.swift; sourceTree = "<group>"; };
 		BAF7F13B45D24949F8E83877 /* KiesAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesAppearance.swift; sourceTree = "<group>"; };
+		BD059D6300EF22443705B4AE /* TimeTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeTrackingView.swift; sourceTree = "<group>"; };
 		C44C034838E984EFE80BB21E /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		C74509D10A3977DA216A7CF4 /* TimerLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerLiveActivity.swift; sourceTree = "<group>"; };
 		CB7A1C1E633670BAFEAB10C3 /* Kies */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Kies; path = .; sourceTree = SOURCE_ROOT; };
 		D085F7AB71F06EA7FFDA2B4A /* WishlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishlistView.swift; sourceTree = "<group>"; };
 		D573748D2D41F520FEAB9035 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
@@ -208,6 +212,7 @@
 				B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */,
 				D83EE951DD03CAD6FF1BEA47 /* KiesWidget.entitlements */,
 				85AEA2E4BEAAA721535994E7 /* KiesWidgetBundle.swift */,
+				C74509D10A3977DA216A7CF4 /* TimerLiveActivity.swift */,
 			);
 			path = KiesWidget;
 			sourceTree = "<group>";
@@ -269,6 +274,7 @@
 				C44C034838E984EFE80BB21E /* SearchView.swift */,
 				008EF147F6F711851A57C502 /* SettingsView.swift */,
 				688EF710F5CAC80ACBAD0D85 /* SyncStatusBar.swift */,
+				BD059D6300EF22443705B4AE /* TimeTrackingView.swift */,
 				D573748D2D41F520FEAB9035 /* TodayView.swift */,
 				F85F5ED97A93ECD9BC83743D /* TodosView.swift */,
 				ADF728876ACF7EE6CE1390A3 /* TransactionsView.swift */,
@@ -403,6 +409,7 @@
 			files = (
 				58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */,
 				B1273FC86E1A640FB018622C /* KiesWidgetBundle.swift in Sources */,
+				9F1EF21F2306B3D29A9152B4 /* TimerLiveActivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -435,6 +442,7 @@
 				D43A5A9488E7F7D21E19D705 /* SettingsView.swift in Sources */,
 				73EEE66A7C60EAC7ABB62CDD /* SyncStatusBar.swift in Sources */,
 				ABCA0E018FDA3A5D956058D4 /* TabRouter.swift in Sources */,
+				99CB72E359CF566E9455F26D /* TimeTrackingView.swift in Sources */,
 				D5DA9586FA47BDBE13636A9E /* TodayView.swift in Sources */,
 				2793BCA37DC0162FE03AE6D8 /* TodosView.swift in Sources */,
 				CBD004D4CA23464799D0FEDF /* TransactionsView.swift in Sources */,

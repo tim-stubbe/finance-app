@@ -20,6 +20,14 @@ from ..database import get_db
 
 personal_router = APIRouter(prefix="/api")
 
+# Zeiterfassung ist zusätzlich per Device-Token erreichbar (native Live
+# Activity / Lock-Screen-Widget auf iOS, siehe ROADMAP.md), analog zu
+# `jarvis_chat_router` in routers/jarvis.py: bewusst KEIN pauschales
+# `dependencies=_require_auth` in main.py, sondern `auth.require_session_or_device`
+# direkt an jedem Endpunkt. Deshalb liegen diese Routen in einem eigenen
+# Router statt im session-only `personal_router`.
+personal_device_router = APIRouter(prefix="/api")
+
 
 # ---------------- Kontextbezogene Notizen ----------------
 def _note_entity_label(db: Session, entity_type: str, entity_id: int,
@@ -102,21 +110,26 @@ def global_search(q: str, db: Session = Depends(get_db), space_id: int = Depends
 
 
 # ---------------- Zeiterfassung ----------------
-@personal_router.get("/projects/{project_id}/time-entries", response_model=List[schemas.TimeEntryOut])
-def list_time_entries(project_id: int, db: Session = Depends(get_db)):
+# Per Device-Token erreichbar (siehe personal_device_router oben) für die
+# native Live Activity / das Lock-Screen-Widget - nicht nur per Web-Session.
+@personal_device_router.get("/projects/{project_id}/time-entries", response_model=List[schemas.TimeEntryOut])
+def list_time_entries(project_id: int, db: Session = Depends(get_db),
+                      principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
     return [crud._time_entry_out(e) for e in crud.get_time_entries(db, project_id)]
 
 
-@personal_router.post("/projects/{project_id}/time-entries/start", response_model=schemas.TimeEntryOut)
-def start_time_entry(project_id: int, note: Optional[str] = None, db: Session = Depends(get_db)):
+@personal_device_router.post("/projects/{project_id}/time-entries/start", response_model=schemas.TimeEntryOut)
+def start_time_entry(project_id: int, note: Optional[str] = None, db: Session = Depends(get_db),
+                     principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
     if crud.get_running_time_entry(db, project_id):
         raise HTTPException(400, "Für dieses Projekt läuft schon eine Zeiterfassung")
     entry = crud.start_time_entry(db, project_id, note)
     return crud._time_entry_out(entry)
 
 
-@personal_router.post("/time-entries/{entry_id}/stop", response_model=schemas.TimeEntryOut)
-def stop_time_entry(entry_id: int, db: Session = Depends(get_db)):
+@personal_device_router.post("/time-entries/{entry_id}/stop", response_model=schemas.TimeEntryOut)
+def stop_time_entry(entry_id: int, db: Session = Depends(get_db),
+                    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
     entry = db.query(models.TimeEntry).filter(models.TimeEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(404, "Eintrag nicht gefunden")
@@ -125,21 +138,48 @@ def stop_time_entry(entry_id: int, db: Session = Depends(get_db)):
     return crud._time_entry_out(crud.stop_time_entry(db, entry))
 
 
-@personal_router.post("/time-entries", response_model=schemas.TimeEntryOut)
-def create_time_entry(data: schemas.TimeEntryCreate, db: Session = Depends(get_db)):
+@personal_device_router.post("/time-entries", response_model=schemas.TimeEntryOut)
+def create_time_entry(data: schemas.TimeEntryCreate, db: Session = Depends(get_db),
+                      principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
     return crud._time_entry_out(crud.create_manual_time_entry(db, data))
 
 
-@personal_router.delete("/time-entries/{entry_id}")
-def remove_time_entry(entry_id: int, db: Session = Depends(get_db)):
+@personal_device_router.delete("/time-entries/{entry_id}")
+def remove_time_entry(entry_id: int, db: Session = Depends(get_db),
+                      principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
     if not crud.delete_time_entry(db, entry_id):
         raise HTTPException(404, "Eintrag nicht gefunden")
     return {"ok": True}
 
 
-@personal_router.get("/time-entries/summary", response_model=List[schemas.ProjectTimeSummary])
-def get_time_summary(db: Session = Depends(get_db)):
+@personal_device_router.get("/time-entries/summary", response_model=List[schemas.ProjectTimeSummary])
+def get_time_summary(db: Session = Depends(get_db),
+                     principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
     return crud.project_time_summaries(db)
+
+
+@personal_device_router.get("/time-entries/running", response_model=Optional[schemas.TimeEntryOut])
+def get_running_time_entry_any(db: Session = Depends(get_db),
+                               principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
+    """Läuft gerade irgendwo eine Zeiterfassung? Für die native App, um nach
+    Neustart/Resume eine Live Activity wiederherzustellen, ohne die
+    Projekt-ID schon zu kennen."""
+    summaries = crud.project_time_summaries(db)
+    for s in summaries:
+        if s.running_entry_id:
+            entry = db.query(models.TimeEntry).filter(models.TimeEntry.id == s.running_entry_id).first()
+            if entry:
+                return crud._time_entry_out(entry)
+    return None
+
+
+@personal_device_router.get("/projects", response_model=List[schemas.BusinessProjectOut])
+def list_projects_for_device(db: Session = Depends(get_db),
+                             principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device)):
+    """Schlanke Projektliste für die native App (Live Activity: Projekt
+    auswählen, um eine Zeiterfassung zu starten). Nur aktive Projekte, keine
+    Web-Session nötig - siehe personal_device_router oben."""
+    return crud.get_business_projects(db, include_inactive=False)
 
 
 # ---------------- People / CRM-Light ----------------
