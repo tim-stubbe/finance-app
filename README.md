@@ -125,7 +125,9 @@ Freizeitprojekt für den Eigenbedarf, das nach Bedarf weiterwächst.
   Bestätigen
 
 **KI-Funktionen** (über einen selbst betriebenen [Ollama](https://ollama.com)-Server)
-- Chat-Schaltfläche auf jeder Seite für Anweisungen in normaler Sprache
+- Chat-Schaltfläche auf jeder Seite für Anweisungen in normaler Sprache, mit
+  serverseitig dauerhaft gespeichertem Gesprächsverlauf (Web und native Apps
+  teilen sich denselben Thread, überlebt App-Neustart und -Wechsel)
 - Stündliche automatische Kategorisierung noch nicht zugeordneter Buchungen –
   nur wenn das Modell hinreichend sicher ist
 - Belege und Kontoauszüge als PDF oder Bild auslesen und in Buchungen umwandeln
@@ -183,6 +185,9 @@ nach ausdrücklicher Bestätigung.
 - iOS-App mit Heute-Fokus, Konten/Buchungen, To-Dos/Kalender, Zielen,
   Lebensbereichen, Wunschliste und Kategorien; Face ID/Touch-ID-Sperre,
   Quick-Capture-Button für Buchung/To-Do/Check-in in einem Sheet
+- Zeiterfassung mit Live Activity/Lock-Screen-Widget (iOS): laufender Timer
+  bleibt auf dem Sperrbildschirm und in der Dynamic Island sichtbar, ohne die
+  App offen zu halten
 - macOS-App mit denselben Kernbereichen, gleiche Sync-Basis
 
 **Smart Home & Jarvis-OS (Home Assistant, komplett lokal)**
