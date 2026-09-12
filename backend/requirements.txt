@@ -4,7 +4,7 @@ sqlalchemy==2.0.52
 # Schema-Migrationen (backend/alembic/, app/db_migrate.py laeuft beim Start).
 # Reines Python-Wheel (nur Mako als Extra-Abhaengigkeit), unbedenklich fuer
 # das schlanke python:3.14-slim-Image.
-alembic==1.19.1
+alembic==1.19.2
 python-multipart==0.0.32
 pydantic==2.13.5
 itsdangerous==2.2.0
