@@ -922,10 +922,52 @@ def _handle_classify_trips_command(db, settings, token: str, chat_id: str, text:
         return False
     purpose = "privat" if re.search(r"privat", t, re.IGNORECASE) else "geschaeftlich"
     only_open = not re.search(r"\balle\s+(gesamt|fahrt)|jede|s(ä|ae)mtliche|komplett", t, re.IGNORECASE)
-    reply = _execute_action(db, settings, {"type": "classify_trips",
-                                           "purpose": "privat" if purpose == "privat" else "geschäftlich",
-                                           "only_open": only_open})
-    _send(token, chat_id, reply)
+    veh = db.query(models.Vehicle).order_by(models.Vehicle.id).first()
+    if not veh:
+        _send(token, chat_id, "Es ist noch kein Fahrzeug angelegt.")
+        return True
+    q = db.query(models.VehicleTrip).filter_by(vehicle_id=veh.id)
+    if only_open:
+        q = q.filter(models.VehicleTrip.purpose == "unbekannt")
+    count = q.count()
+    label = "privat" if purpose == "privat" else "geschäftlich"
+    proposal = models.ProactiveProposal(
+        kind="bestaetigen", urgency="mittel",
+        title=f"{count} Fahrt(en) als {label} klassifizieren?",
+        body="Nach deiner Bestätigung führe ich die Änderung direkt aus.",
+        options_json=json.dumps([
+            {"key": "yes", "label": "Ja, ausführen", "action": {
+                "type": "trips_classify_all", "params": {
+                    "purpose": purpose, "all": not only_open}}},
+            {"key": "no", "label": "Nein", "action": {"type": "dismiss", "params": {}}},
+        ]),
+        dedup_key=f"trip-classify:{purpose}:{count}:{date.today().isoformat()}",
+        expires_at=datetime.utcnow() + timedelta(hours=24),
+    )
+    db.add(proposal)
+    db.commit()
+    send_proposal(db, settings, proposal)
+    return True
+
+
+_YES_RE = re.compile(r"^\s*(ja|jep|jawohl|okay|ok|mach(?:en)?|bestätig(?:e|t)?|bestaetig(?:e|t)?)\s*[.!]?\s*$", re.I)
+_NO_RE = re.compile(r"^\s*(nein|nee|abbrechen|lass(?:en)?|stopp?)\s*[.!]?\s*$", re.I)
+
+
+def _handle_pending_confirmation(db, settings, token: str, chat_id: str, text: str) -> bool:
+    """Kurzes Ja/Nein ohne erneuten Modellaufruf ausführen."""
+    key = "yes" if _YES_RE.match(text or "") else "no" if _NO_RE.match(text or "") else None
+    if key is None:
+        return False
+    rows = (db.query(models.ProactiveProposal)
+            .filter(models.ProactiveProposal.status == "offen",
+                    models.ProactiveProposal.kind == "bestaetigen")
+            .order_by(models.ProactiveProposal.id.desc()).limit(10).all())
+    proposal = next((p for p in rows if any(
+        o.get("key") == key for o in json.loads(p.options_json or "[]"))), None)
+    if proposal is None:
+        return False
+    _send(token, chat_id, proactive.answer(db, settings, proposal.id, key))
     return True
 
 
@@ -1197,6 +1239,8 @@ def _execute_action(db, settings, action: dict) -> str:
 
 
 def _handle_message(db, settings, token: str, chat_id: str, text: str) -> None:
+    if _handle_pending_confirmation(db, settings, token, chat_id, text):
+        return
     if _handle_balance_command(db, token, chat_id, text):
         return
     if _handle_todo_command(db, settings, token, chat_id, text):
@@ -1338,6 +1382,41 @@ def _transcribe_voice(token: str, file_id: str) -> str:
     return voice.get_stt().transcribe(audio.content).strip()
 
 
+def _download_telegram_file(token: str, file_id: str) -> bytes:
+    info = requests.get(f"{TELEGRAM_API.format(token=token)}/getFile",
+                        params={"file_id": file_id}, timeout=20)
+    info.raise_for_status()
+    path = info.json()["result"]["file_path"]
+    result = requests.get(f"https://api.telegram.org/file/bot{token}/{path}", timeout=60)
+    result.raise_for_status()
+    return result.content
+
+
+def _handle_meal_photo(db, settings, token: str, chat_id: str, photo: dict,
+                       caption: str = "") -> bool:
+    pending = (db.query(models.ProactiveProposal)
+               .filter(models.ProactiveProposal.status == "offen",
+                       models.ProactiveProposal.dedup_key.like("meal-checkin:%"),
+                       models.ProactiveProposal.expires_at > datetime.utcnow())
+               .order_by(models.ProactiveProposal.id.desc()).first())
+    if pending is None:
+        return False
+    image = _download_telegram_file(token, photo["file_id"])
+    prompt = (
+        "Analysiere dieses Essensfoto auf Deutsch. Nenne erkannte Speisen und geschätzte "
+        "Portionsgrößen. Schätze Gesamtkalorien als realistische Spanne und Mittelwert sowie "
+        "Protein, Kohlenhydrate und Fett grob. Sage klar, was unsicher ist. Antworte kompakt, "
+        "aber hilfreich. Zusatz des Nutzers: " + (caption.strip() or "keiner"))
+    model = settings.ollama_model or settings.beleg_chat_model
+    result = ollama_client.analyze_image(settings.ollama_url, model, image, prompt)
+    pending.status = "beantwortet"
+    pending.result_text = result
+    pending.answered_at = datetime.utcnow()
+    db.commit()
+    _send(token, chat_id, "🍽️ Meine grobe Schätzung:\n\n" + result)
+    return True
+
+
 def _poll_once(db) -> None:
     settings = auth.get_or_create_settings(db)
     if not (settings.notifications_enabled and settings.telegram_bot_token_encrypted and settings.telegram_chat_id):
@@ -1374,6 +1453,18 @@ def _poll_once(db) -> None:
         msg = upd.get("message") or {}
         incoming_chat_id = str((msg.get("chat") or {}).get("id", ""))
         text = msg.get("text")
+
+        photos = msg.get("photo") or []
+        if photos and incoming_chat_id == configured_chat_id:
+            try:
+                if _handle_meal_photo(db, settings, token, configured_chat_id,
+                                      photos[-1], msg.get("caption") or ""):
+                    db.commit()
+                    continue
+            except Exception as e:  # noqa: BLE001
+                _send(token, configured_chat_id, f"Das Essensfoto konnte ich nicht auswerten: {e}")
+                db.commit()
+                continue
 
         # Sprachnachricht (oder gesendete Audiodatei / Video-Notiz) -> lokal
         # zu Text machen und dann wie eine getippte Nachricht behandeln.

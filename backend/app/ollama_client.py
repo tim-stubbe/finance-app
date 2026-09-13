@@ -11,6 +11,7 @@ fliessen laufend Tokens, der Proxy sieht Aktivitaet, nichts bricht ab.
 """
 import json
 import os
+import base64
 
 import requests
 
@@ -174,3 +175,19 @@ def chat(url: str, model: str, messages: list[dict], timeout: int = 600,
     if not content:
         raise ValueError("Ollama hat keine Antwort geliefert")
     return content
+
+
+def analyze_image(url: str, model: str, image: bytes, prompt: str,
+                  mime_type: str = "image/jpeg", timeout: int = 600) -> str:
+    """Bild zusammen mit einer Frage an das konfigurierte multimodale Modell."""
+    encoded = base64.b64encode(image).decode("ascii")
+    if _headers():
+        messages = [{"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {
+                "url": f"data:{mime_type};base64,{encoded}"}},
+        ]}]
+    else:
+        messages = [{"role": "user", "content": prompt, "images": [encoded]}]
+    return chat(url, model, messages, timeout=timeout,
+                options={"num_predict": 1200, "num_ctx": 8192})

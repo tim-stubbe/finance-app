@@ -93,11 +93,15 @@ def _trips_classify_all(db, settings, p) -> str:
     veh = db.query(models.Vehicle).order_by(models.Vehicle.id).first()
     if not veh:
         return "Kein Fahrzeug angelegt."
-    rows = db.query(models.VehicleTrip).filter_by(vehicle_id=veh.id, purpose="unbekannt").all()
+    q = db.query(models.VehicleTrip).filter_by(vehicle_id=veh.id)
+    if not p.get("all", False):
+        q = q.filter(models.VehicleTrip.purpose == "unbekannt")
+    rows = q.all()
     for t in rows:
         t.purpose = purpose
     db.commit()
-    return f"{len(rows)} unklassifizierte Fahrt(en) auf {_q(purpose)} gesetzt."
+    scope = "Fahrt(en)" if p.get("all", False) else "unklassifizierte Fahrt(en)"
+    return f"{len(rows)} {scope} auf {_q(purpose)} gesetzt."
 
 
 def _meal_plan_fill(db, settings, p) -> str:

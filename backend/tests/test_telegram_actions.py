@@ -32,3 +32,11 @@ def test_classify_trips_command_matches_clear_instructions():
     assert hits("dann möchte ich, dass du alle 190 Fahrten als privat klassifizierst")
     assert not hits("Wie viele Fahrten sind noch offen?")
     assert not hits("Ich fahre morgen privat nach Hause")
+
+
+def test_confirmation_words_are_deterministic():
+    from app.telegram_bot import _YES_RE, _NO_RE
+    assert _YES_RE.match("Ja")
+    assert _YES_RE.match("okay!")
+    assert _NO_RE.match("abbrechen")
+    assert not _YES_RE.match("Ja, aber morgen")

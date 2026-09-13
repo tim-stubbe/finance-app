@@ -2146,6 +2146,32 @@ def _scheduled_proactive_assistant():
         db.close()
 
 
+def _scheduled_meal_checkin(meal_key: str, meal_label: str):
+    """Einmal pro Mahlzeit und Tag aktiv nachfragen und die Fotoantwort
+    dauerhaft mit diesem Check-in verbinden."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not (settings.notifications_enabled and settings.proactive_assistant_enabled):
+            return
+        dedup = f"meal-checkin:{date.today().isoformat()}:{meal_key}"
+        if db.query(models.ProactiveProposal).filter_by(dedup_key=dedup).first():
+            return
+        row = models.ProactiveProposal(
+            kind="info", urgency="niedrig",
+            title=f"🍽️ {meal_label}: Was hast du gegessen?",
+            body=("Schick mir einfach ein Foto und ergänze bei Bedarf kurz Menge oder Zutaten. "
+                  "Ich schätze Kalorien und Makros anschließend als realistische Spanne."),
+            options_json="[]", dedup_key=dedup,
+            expires_at=datetime.utcnow() + timedelta(hours=8),
+        )
+        db.add(row)
+        db.commit()
+        telegram_bot.send_proposal(db, settings, row)
+    finally:
+        db.close()
+
+
 def _scheduled_memory_distill():
     """Nachts: aus dem Gespräch der letzten 24 h + beantworteten Vorschlägen
     leise dauerhafte Merksätze ableiten, alten Chatverlauf zu einer
@@ -2564,6 +2590,17 @@ scheduler.add_job(
     _scheduled_proactive_assistant, CronTrigger(hour="8,14,20", minute=7),
     id="proactive_assistant", misfire_grace_time=1800, max_instances=1, coalesce=True,
 )
+for _meal_key, _meal_label, _hour, _minute in (
+    ("fruehstueck", "Frühstück", 8, 15),
+    ("mittag", "Mittagessen", 12, 30),
+    ("snack", "Nachmittags-Snack", 16, 0),
+    ("abend", "Abendessen", 19, 15),
+):
+    scheduler.add_job(
+        _scheduled_meal_checkin, CronTrigger(hour=_hour, minute=_minute),
+        args=[_meal_key, _meal_label], id=f"meal_checkin_{_meal_key}",
+        misfire_grace_time=1800, max_instances=1, coalesce=True,
+    )
 scheduler.add_job(
     _scheduled_tax_reminder, CronTrigger(day_of_week="mon", hour=9, minute=0),
     id="tax_year_end_reminder", misfire_grace_time=3600,
