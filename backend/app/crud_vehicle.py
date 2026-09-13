@@ -405,8 +405,10 @@ def import_vehicle_trips(db: Session, space_id: int, trips: list[dict], *, sourc
         purpose = purpose if purpose in _PURPOSES else "unbekannt"
         if purpose == "unbekannt":
             matched = _match_trip_rules(rules, raw.get("start_location"), raw.get("end_location"))
-            if matched:
-                purpose = matched
+            # Ohne passende Regel: Default privat statt unbekannt (Tim-Wunsch -
+            # neu importierte Fahrten sollen nicht mehr manuell nachgetaggt
+            # werden müssen; wer geschäftlich fährt, legt sich eine Regel an).
+            purpose = matched or "privat"
         db.add(models.VehicleTrip(
             vehicle_id=vehicle.id, external_id=ext,
             source=raw.get("source") or source,
