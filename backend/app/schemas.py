@@ -1808,11 +1808,13 @@ class TravelSettingsOut(BaseModel):
     home_address: Optional[str] = None
     home_geocoded: bool = False
     api_key_set: bool = False
+    fuel_api_key_set: bool = False
 
 
 class TravelSettingsUpdate(BaseModel):
     home_address: Optional[str] = None
     api_key: Optional[str] = None
+    fuel_api_key: Optional[str] = None
 
 
 class TodoCreate(BaseModel):

@@ -278,6 +278,9 @@ async function loadTravelSettings() {
   document.getElementById("travel-api-key").placeholder = s.api_key_set
     ? "gespeichert – leer lassen behält den bisherigen"
     : "wird verschlüsselt gespeichert";
+  document.getElementById("travel-fuel-api-key").placeholder = s.fuel_api_key_set
+    ? "gespeichert – leer lassen behält den bisherigen"
+    : "wird verschlüsselt gespeichert";
   const status = document.getElementById("travel-status");
   if (!s.home_address) {
     status.textContent = "";
@@ -293,9 +296,11 @@ document.getElementById("travel-settings-form").addEventListener("submit", async
   const body = {
     home_address: document.getElementById("travel-home-address").value.trim(),
     api_key: document.getElementById("travel-api-key").value.trim() || null,
+    fuel_api_key: document.getElementById("travel-fuel-api-key").value.trim() || null,
   };
   await api("/settings/travel", { method: "PUT", body: JSON.stringify(body) });
   document.getElementById("travel-api-key").value = "";
+  document.getElementById("travel-fuel-api-key").value = "";
   await loadTravelSettings();
   toast("Fahrzeit-Einstellungen gespeichert.");
 });
@@ -357,4 +362,3 @@ document.getElementById("todo-list").addEventListener("change", async e => {
     await loadTodos();
   }
 });
-

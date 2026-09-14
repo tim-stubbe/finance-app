@@ -105,7 +105,16 @@ struct DriveContentView: View {
         .overlay { if planner.isLoading { ProgressView("Route und Preise werden geladen …").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
     }
 
+    @ViewBuilder
     private var map: some View {
+        switch settings.mapAppearance {
+        case .standard: mapBase.mapStyle(.standard(elevation: .realistic))
+        case .satellite: mapBase.mapStyle(.imagery(elevation: .realistic))
+        case .hybrid: mapBase.mapStyle(.hybrid(elevation: .realistic))
+        }
+    }
+
+    private var mapBase: some View {
         Map(position: $position) {
             UserAnnotation()
             if let destination = planner.destination { Marker(item: destination) }
@@ -121,7 +130,15 @@ struct DriveContentView: View {
         }
         .mapControls { MapCompass(); MapScaleView(); MapUserLocationButton() }
         .overlay(alignment: .top) {
-            if settings.avoidTolls { Label("Vignetten/Maut vermeiden", systemImage: "checkmark.shield.fill").padding(9).background(.regularMaterial, in: Capsule()).padding() }
+            HStack {
+                if settings.avoidTolls { Label("Vignetten/Maut vermeiden", systemImage: "checkmark.shield.fill") }
+                Picker("Karte", selection: $settings.mapAppearance) {
+                    ForEach(DriveMapAppearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 280)
+            }
+            .padding(9).background(.regularMaterial, in: Capsule()).padding()
         }
     }
 
@@ -153,6 +170,7 @@ struct DriveSettingsView: View {
                     Toggle("Vignetten und Maut vermeiden", isOn: $settings.avoidTolls)
                     Toggle("Autobahnen vermeiden", isOn: $settings.avoidHighways)
                     Picker("Kraftstoff", selection: $settings.fuel) { ForEach(FuelKind.allCases) { Text($0.label).tag($0) } }
+                    Picker("Kartendarstellung", selection: $settings.mapAppearance) { ForEach(DriveMapAppearance.allCases) { Text($0.label).tag($0) } }
                 }
                 Section { Text("Der Tankpreis-Schlüssel bleibt ausschließlich auf deinem TrueNAS-Server. Der Geräte-Token liegt im Apple-Schlüsselbund.").font(.caption).foregroundStyle(.secondary) }
             }

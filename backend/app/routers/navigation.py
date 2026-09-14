@@ -13,7 +13,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from .. import auth, models
+from .. import auth, bank_sync, models
 from ..database import get_db
 
 navigation_router = APIRouter(prefix="/api/navigation", tags=["navigation"])
@@ -36,8 +36,14 @@ def fuel_stations(
     db: Session = Depends(get_db),
     principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
 ):
-    del db, principal
+    del principal
     api_key = os.environ.get("TANKERKOENIG_API_KEY", "").strip()
+    if not api_key:
+        settings = auth.get_or_create_settings(db)
+        if settings.tankerkoenig_api_key_encrypted:
+            api_key = bank_sync.decrypt_secret(
+                settings.secret_key, settings.tankerkoenig_api_key_encrypted
+            )
     if not api_key:
         raise HTTPException(503, "Tankpreis-API ist noch nicht verbunden")
     try:

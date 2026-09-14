@@ -319,6 +319,7 @@ def get_travel_settings(db: Session = Depends(get_db)):
     return schemas.TravelSettingsOut(
         home_address=s.home_address, home_geocoded=bool(s.home_lat and s.home_lon),
         api_key_set=bool(s.openroute_api_key_encrypted),
+        fuel_api_key_set=bool(s.tankerkoenig_api_key_encrypted),
     )
 
 
@@ -346,6 +347,8 @@ def update_travel_settings(data: schemas.TravelSettingsUpdate, db: Session = Dep
         s.home_address = address or None
     if changes.get("api_key"):
         s.openroute_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, changes["api_key"])
+    if changes.get("fuel_api_key"):
+        s.tankerkoenig_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, changes["fuel_api_key"])
     db.commit()
     return get_travel_settings(db)
 

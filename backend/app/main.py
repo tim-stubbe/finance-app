@@ -207,6 +207,7 @@ ensure_columns("settings", {
     "home_lat": "FLOAT",
     "home_lon": "FLOAT",
     "openroute_api_key_encrypted": "VARCHAR",
+    "tankerkoenig_api_key_encrypted": "VARCHAR",
 })
 ensure_columns("calendar_events", {
     "lat": "FLOAT",

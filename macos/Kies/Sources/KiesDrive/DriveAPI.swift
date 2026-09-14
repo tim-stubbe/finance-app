@@ -9,12 +9,14 @@ final class DriveSettings: ObservableObject {
     @Published var fuel: FuelKind { didSet { UserDefaults.standard.set(fuel.rawValue, forKey: "drive.fuel") } }
     @Published var avoidTolls: Bool { didSet { UserDefaults.standard.set(avoidTolls, forKey: "drive.avoidTolls") } }
     @Published var avoidHighways: Bool { didSet { UserDefaults.standard.set(avoidHighways, forKey: "drive.avoidHighways") } }
+    @Published var mapAppearance: DriveMapAppearance { didSet { UserDefaults.standard.set(mapAppearance.rawValue, forKey: "drive.mapAppearance") } }
 
     private init() {
         baseURL = UserDefaults.standard.string(forKey: "drive.baseURL") ?? "https://100.72.226.91:8000"
         fuel = FuelKind(rawValue: UserDefaults.standard.string(forKey: "drive.fuel") ?? "diesel") ?? .diesel
         avoidTolls = UserDefaults.standard.object(forKey: "drive.avoidTolls") as? Bool ?? true
         avoidHighways = UserDefaults.standard.object(forKey: "drive.avoidHighways") as? Bool ?? false
+        mapAppearance = DriveMapAppearance(rawValue: UserDefaults.standard.string(forKey: "drive.mapAppearance") ?? "standard") ?? .standard
     }
     var isReady: Bool { !baseURL.isEmpty && DeviceTokenStore.shared.token != nil }
 }

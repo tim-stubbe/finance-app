@@ -317,6 +317,9 @@ class Settings(Base):
     home_lat = Column(Float, nullable=True)
     home_lon = Column(Float, nullable=True)
     openroute_api_key_encrypted = Column(String, nullable=True)
+    # Live-Kraftstoffpreise für Kies Drive; bleibt verschlüsselt auf dem
+    # Server und wird nie an den nativen Client ausgegeben.
+    tankerkoenig_api_key_encrypted = Column(String, nullable=True)
     # Zeitpunkt des letzten Status-Updates - Grundlage fuer "seit dem letzten
     # Update automatisch erledigt" im Digest (siehe crud.build_digest).
     last_digest_sent_at = Column(DateTime, nullable=True)

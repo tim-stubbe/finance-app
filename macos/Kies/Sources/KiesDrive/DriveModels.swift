@@ -30,4 +30,16 @@ enum FuelKind: String, CaseIterable, Identifiable {
     var label: String { rawValue == "diesel" ? "Diesel" : rawValue.uppercased() }
 }
 
+enum DriveMapAppearance: String, CaseIterable, Identifiable {
+    case standard, satellite, hybrid
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .standard: "Standard"
+        case .satellite: "Satellit"
+        case .hybrid: "Hybrid"
+        }
+    }
+}
+
 struct DriveChatResponse: Decodable { let reply: String? }
