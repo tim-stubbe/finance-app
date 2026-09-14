@@ -46,7 +46,12 @@ def ami(action: str) -> str:
 
 @app.get("/health")
 def health():
-    return {"ok": True, "backend": "asterisk-sip"}
+    try:
+        response = ami("Action: Ping\r\n\r\n")
+        ready = "Response: Success" in response and "Ping: Pong" in response
+    except (OSError, TimeoutError):
+        ready = False
+    return {"ok": ready, "backend": "asterisk-sip", "line_ready": ready}
 
 
 @app.post("/call")

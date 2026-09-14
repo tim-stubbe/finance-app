@@ -1647,10 +1647,13 @@ class ProactiveAnswerIn(BaseModel):
     key: str
 
 
-# ---------- Echte Anrufe (Twilio) ----------
+# ---------- Echte Anrufe (lokales SIP-Gateway oder Twilio) ----------
 class CallSettingsOut(BaseModel):
     enabled: bool
     twilio_configured: bool
+    local_configured: bool
+    backend: Optional[str] = None
+    to_number: Optional[str] = None
 
 
 class CallSettingsUpdate(BaseModel):

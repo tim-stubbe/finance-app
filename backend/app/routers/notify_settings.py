@@ -12,6 +12,7 @@ standen im selben main.py-Abschnitt. Reine Verschiebung ohne
 Verhaltensaenderung."""
 
 from datetime import datetime, timedelta
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -202,17 +203,32 @@ def get_notification_log(limit: int = 40, db: Session = Depends(get_db)):
     )
 
 
-# ---------------- Echte Anrufe (Twilio) für akute Fälle ----------------
+def _local_call_configured() -> bool:
+    return all(os.environ.get(key, "").strip() for key in (
+        "KIES_LOCAL_CALL_URL", "KIES_LOCAL_CALL_TOKEN"
+    ))
+
+
+def _call_settings_out(settings) -> schemas.CallSettingsOut:
+    twilio = bool(
+        settings.twilio_account_sid and settings.twilio_auth_token_encrypted
+        and settings.twilio_from_number and settings.twilio_to_number
+    )
+    local = _local_call_configured()
+    return schemas.CallSettingsOut(
+        enabled=settings.calls_enabled,
+        twilio_configured=twilio,
+        local_configured=local,
+        backend="local" if local else ("twilio" if twilio else None),
+        to_number=settings.twilio_to_number,
+    )
+
+
+# ---------------- Echte Anrufe für akute Fälle ----------------
 @notify_settings_router.get("/settings/calls", response_model=schemas.CallSettingsOut)
 def get_call_settings(db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
-    return schemas.CallSettingsOut(
-        enabled=settings.calls_enabled,
-        twilio_configured=bool(
-            settings.twilio_account_sid and settings.twilio_auth_token_encrypted
-            and settings.twilio_from_number and settings.twilio_to_number
-        ),
-    )
+    return _call_settings_out(settings)
 
 
 @notify_settings_router.put("/settings/calls", response_model=schemas.CallSettingsOut)
@@ -228,13 +244,7 @@ def update_call_settings(data: schemas.CallSettingsUpdate, db: Session = Depends
     if data.twilio_to_number:
         settings.twilio_to_number = data.twilio_to_number.strip()
     db.commit()
-    return schemas.CallSettingsOut(
-        enabled=settings.calls_enabled,
-        twilio_configured=bool(
-            settings.twilio_account_sid and settings.twilio_auth_token_encrypted
-            and settings.twilio_from_number and settings.twilio_to_number
-        ),
-    )
+    return _call_settings_out(settings)
 
 
 @notify_settings_router.delete("/settings/calls/twilio", response_model=schemas.CallSettingsOut)
@@ -245,21 +255,34 @@ def remove_twilio_settings(db: Session = Depends(get_db)):
     settings.twilio_from_number = None
     settings.twilio_to_number = None
     db.commit()
-    return schemas.CallSettingsOut(enabled=settings.calls_enabled, twilio_configured=False)
+    return _call_settings_out(settings)
 
 
 @notify_settings_router.post("/calls/test", response_model=schemas.NotificationTestResult)
 def send_test_call(db: Session = Depends(get_db)):
     settings = auth.get_or_create_settings(db)
-    if not (settings.twilio_account_sid and settings.twilio_auth_token_encrypted
-            and settings.twilio_from_number and settings.twilio_to_number):
-        return schemas.NotificationTestResult(ok=False, message="Twilio-Zugangsdaten und Nummern zuerst speichern.")
     try:
-        token = bank_sync.decrypt_secret(settings.secret_key, settings.twilio_auth_token_encrypted)
-        calls.make_call(
-            settings.twilio_account_sid, token, settings.twilio_from_number, settings.twilio_to_number,
-            "Testanruf von Kies. Wenn du das hörst, ist Twilio korrekt eingerichtet.",
-        )
+        if _local_call_configured():
+            to_number = (os.environ.get("KIES_CALL_TO", "").strip()
+                         or (settings.twilio_to_number or "").strip())
+            if not to_number:
+                return schemas.NotificationTestResult(
+                    ok=False, message="Bitte zuerst deine Handynummer als Ziel speichern."
+                )
+            calls.make_local_call(
+                os.environ["KIES_LOCAL_CALL_URL"], os.environ["KIES_LOCAL_CALL_TOKEN"],
+                to_number,
+                "Testanruf von Kies. Wenn du das hörst, ist die lokale Telefonleitung korrekt eingerichtet.",
+            )
+        elif settings.twilio_account_sid and settings.twilio_auth_token_encrypted \
+                and settings.twilio_from_number and settings.twilio_to_number:
+            token = bank_sync.decrypt_secret(settings.secret_key, settings.twilio_auth_token_encrypted)
+            calls.make_call(
+                settings.twilio_account_sid, token, settings.twilio_from_number, settings.twilio_to_number,
+                "Testanruf von Kies. Wenn du das hörst, ist Twilio korrekt eingerichtet.",
+            )
+        else:
+            return schemas.NotificationTestResult(ok=False, message="Noch keine lokale oder Twilio-Telefonleitung eingerichtet.")
     except Exception as e:
         return schemas.NotificationTestResult(ok=False, message=f"Fehlgeschlagen: {e}")
     return schemas.NotificationTestResult(ok=True, message="Anruf ausgelöst - dein Telefon sollte gleich klingeln.")

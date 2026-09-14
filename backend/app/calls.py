@@ -47,7 +47,8 @@ def call(settings, text: str) -> None:
         return
     local_url = os.environ.get("KIES_LOCAL_CALL_URL", "").strip()
     local_token = os.environ.get("KIES_LOCAL_CALL_TOKEN", "").strip()
-    local_to = os.environ.get("KIES_CALL_TO", "").strip()
+    local_to = (os.environ.get("KIES_CALL_TO", "").strip()
+                or (settings.twilio_to_number or "").strip())
     if local_url and local_token and local_to:
         try:
             make_local_call(local_url, local_token, local_to, text)

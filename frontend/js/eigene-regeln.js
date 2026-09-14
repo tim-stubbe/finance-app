@@ -98,6 +98,10 @@ document.getElementById("alert-rules-list").addEventListener("click", async e =>
 async function loadCallSettings() {
   const s = await api("/settings/calls");
   document.getElementById("calls-enabled").checked = s.enabled;
+  document.getElementById("twilio-to").value = s.to_number || "";
+  document.getElementById("calls-backend-status").textContent = s.backend === "local"
+    ? "Lokales Telefon-Gateway verbunden"
+    : (s.backend === "twilio" ? "Twilio verbunden" : "Noch keine Telefonleitung verbunden");
   document.getElementById("twilio-remove").classList.toggle("hidden", !s.twilio_configured);
   document.getElementById("twilio-token").placeholder = s.twilio_configured
     ? "gespeichert – zum Ändern neuen Token eingeben" : "wird verschlüsselt gespeichert";
@@ -118,7 +122,7 @@ document.getElementById("calls-settings-form").addEventListener("submit", async 
   };
   await api("/settings/calls", { method: "PUT", body: JSON.stringify(payload) });
   tokenInput.value = "";
-  toast("Gespeichert.");
+  toast("Telefon-Einstellungen gespeichert.");
   loadCallSettings();
 });
 
@@ -145,4 +149,3 @@ document.getElementById("sync-schedule-form").addEventListener("submit", async e
   await api("/settings/sync-schedule", { method: "PUT", body: JSON.stringify({ hour }) });
   toast(`Gespeichert – automatischer Sync läuft künftig um ${String(hour).padStart(2, "0")}:00 Uhr.`);
 });
-
