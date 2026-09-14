@@ -1804,6 +1804,21 @@ class CalendarCollectionOut(BaseModel):
     name: str
 
 
+class WebUntisSettingsOut(BaseModel):
+    url: Optional[str] = None
+    username: Optional[str] = None
+    password_set: bool = False
+    calendar_url: Optional[str] = None
+    last_sync_at: Optional[datetime] = None
+
+
+class WebUntisSettingsUpdate(BaseModel):
+    url: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    calendar_url: Optional[str] = None
+
+
 class TravelSettingsOut(BaseModel):
     home_address: Optional[str] = None
     home_geocoded: bool = False

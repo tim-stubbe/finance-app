@@ -309,6 +309,14 @@ class Settings(Base):
     # in zwei verschiedenen Listen fuehrt. Nur lesend synchronisiert (siehe
     # CalendarEvent) - Termine werden im echten Kalender angelegt, nicht hier.
     radicale_calendar_url = Column(String, nullable=True)
+    # WebUntis wird lesend abgefragt; nur von Kies verwaltete Termine werden
+    # in die gewählte Radicale-Collection geschrieben.
+    webuntis_url = Column(String, nullable=True)
+    webuntis_username = Column(String, nullable=True)
+    webuntis_password_encrypted = Column(String, nullable=True)
+    webuntis_calendar_url = Column(String, nullable=True)
+    webuntis_state_json = Column(Text, nullable=True)
+    webuntis_last_sync_at = Column(DateTime, nullable=True)
     # --- Fahrzeit zu Terminen (siehe travel_time.py) ---
     # lat/lon werden beim Speichern der Adresse einmalig geokodiert und
     # zwischengespeichert, statt bei jedem Digest-Lauf erneut Nominatim zu

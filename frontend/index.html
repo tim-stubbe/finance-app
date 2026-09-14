@@ -3651,6 +3651,23 @@
         <p id="radicale-status" class="page-sub"></p>
       </div>
 
+      <div class="panel" data-integration-key="webuntis">
+        <h3 class="panel-title">🎓 WebUntis → Arbeit Stubbe</h3>
+        <p class="page-sub">Übernimmt Stunden, Vertretungen, Räume und Entfälle automatisch in deinen Radicale-Kalender. Das Passwort bleibt verschlüsselt auf TrueNAS.</p>
+        <form id="webuntis-settings-form" class="form-grid">
+          <label class="wide">WebUntis-Link <input type="url" id="webuntis-url"></label>
+          <label>Benutzername <input type="text" id="webuntis-username" autocomplete="username"></label>
+          <label>Passwort <input type="password" id="webuntis-password" autocomplete="current-password" placeholder="wird verschlüsselt gespeichert"></label>
+          <label class="wide">Zielkalender <input type="url" id="webuntis-calendar-url"></label>
+          <div class="form-actions">
+            <button type="button" id="webuntis-test" class="btn-ghost">Verbindung testen</button>
+            <button type="button" id="webuntis-sync" class="btn-ghost">Jetzt abgleichen</button>
+            <button type="submit" class="btn-primary">Speichern</button>
+          </div>
+        </form>
+        <p id="webuntis-status" class="page-sub"></p>
+      </div>
+
       <div class="panel" data-integration-key="travel">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3l9 9-9 9"/></svg> Navigation und Tankpreise</h3>
         <p class="page-sub">

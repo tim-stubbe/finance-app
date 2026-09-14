@@ -271,6 +271,52 @@ document.getElementById("radicale-test").addEventListener("click", async () => {
     : `✗ ${r.error}`;
 });
 
+// ---------- WebUntis → Radicale ----------
+async function loadWebUntisSettings() {
+  const s = await api("/settings/webuntis");
+  document.getElementById("webuntis-url").value = s.url || "";
+  document.getElementById("webuntis-username").value = s.username || "";
+  document.getElementById("webuntis-calendar-url").value = s.calendar_url || "";
+  document.getElementById("webuntis-password").placeholder = s.password_set
+    ? "gespeichert – leer lassen behält den bisherigen"
+    : "wird verschlüsselt gespeichert";
+  document.getElementById("webuntis-status").textContent = s.last_sync_at
+    ? `Zuletzt synchronisiert: ${new Date(s.last_sync_at).toLocaleString("de-DE")}`
+    : (s.password_set ? "Bereit für den ersten Abgleich." : "WebUntis-Anmeldung fehlt noch.");
+}
+
+document.getElementById("webuntis-settings-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const body = {
+    url: document.getElementById("webuntis-url").value.trim(),
+    username: document.getElementById("webuntis-username").value.trim(),
+    password: document.getElementById("webuntis-password").value || null,
+    calendar_url: document.getElementById("webuntis-calendar-url").value.trim(),
+  };
+  await api("/settings/webuntis", { method: "PUT", body: JSON.stringify(body) });
+  document.getElementById("webuntis-password").value = "";
+  await loadWebUntisSettings();
+  toast("WebUntis-Verbindung gespeichert.");
+});
+
+document.getElementById("webuntis-test").addEventListener("click", async () => {
+  const el = document.getElementById("webuntis-status");
+  el.textContent = "WebUntis wird geprüft …";
+  try {
+    const r = await api("/webuntis/test", { method: "POST" });
+    el.textContent = `✓ Verbunden – ${r.periods} Stunden in den nächsten zwei Wochen gefunden.`;
+  } catch (e) { el.textContent = `✗ ${e.message}`; }
+});
+
+document.getElementById("webuntis-sync").addEventListener("click", async () => {
+  const el = document.getElementById("webuntis-status");
+  el.textContent = "Stundenplan wird abgeglichen …";
+  try {
+    const r = await api("/webuntis/sync", { method: "POST" });
+    el.textContent = `✓ ${r.periods} Stunden: ${r.created} neu, ${r.changed} geändert, ${r.removed} entfernt.`;
+  } catch (e) { el.textContent = `✗ ${e.message}`; }
+});
+
 // ---------- Fahrzeit-Einstellungen ----------
 async function loadTravelSettings() {
   const s = await api("/settings/travel");

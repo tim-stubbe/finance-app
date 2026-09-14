@@ -310,6 +310,6 @@ async function loadSettingsTab() {
   await loadEbaySettings();
   await loadEbayConnections();
   await loadRadicaleSettings();
+  await loadWebUntisSettings();
   await loadTravelSettings();
 }
-

@@ -11,7 +11,7 @@ Test-Verbindung-Domaenen (jeweils Settings speichern + Testendpunkt),
 standen im selben main.py-Abschnitt. Reine Verschiebung ohne
 Verhaltensaenderung."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from typing import List
 
-from .. import schemas, auth, bank_sync, notifications, calls, radicale_sync, travel_time, models, proactive
+from .. import schemas, auth, bank_sync, notifications, calls, radicale_sync, webuntis_sync, travel_time, models, proactive
 from ..database import get_db
 
 notify_settings_router = APIRouter(prefix="/api")
@@ -311,6 +311,65 @@ def update_radicale_settings(data: schemas.RadicaleSettingsUpdate, db: Session =
         url=settings.radicale_url, username=settings.radicale_username, password_set=True,
         calendar_url=settings.radicale_calendar_url,
     )
+
+
+@notify_settings_router.get("/settings/webuntis", response_model=schemas.WebUntisSettingsOut)
+def get_webuntis_settings(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    return schemas.WebUntisSettingsOut(
+        url=settings.webuntis_url, username=settings.webuntis_username,
+        password_set=bool(settings.webuntis_password_encrypted),
+        calendar_url=settings.webuntis_calendar_url,
+        last_sync_at=settings.webuntis_last_sync_at,
+    )
+
+
+@notify_settings_router.put("/settings/webuntis", response_model=schemas.WebUntisSettingsOut)
+def update_webuntis_settings(data: schemas.WebUntisSettingsUpdate, db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    changes = data.model_dump(exclude_unset=True)
+    if "url" in changes:
+        settings.webuntis_url = (changes["url"] or "").strip() or None
+    if "username" in changes:
+        settings.webuntis_username = (changes["username"] or "").strip() or None
+    if changes.get("password"):
+        settings.webuntis_password_encrypted = bank_sync.encrypt_secret(settings.secret_key, changes["password"])
+    if "calendar_url" in changes:
+        settings.webuntis_calendar_url = (changes["calendar_url"] or "").strip() or None
+    db.commit()
+    return get_webuntis_settings(db)
+
+
+def _run_webuntis_sync(db: Session):
+    settings = auth.get_or_create_settings(db)
+    if not all((settings.webuntis_url, settings.webuntis_username,
+                settings.webuntis_password_encrypted, settings.webuntis_calendar_url,
+                settings.radicale_password_encrypted)):
+        raise HTTPException(400, "WebUntis oder Radicale ist noch nicht vollständig verbunden")
+    password = bank_sync.decrypt_secret(settings.secret_key, settings.webuntis_password_encrypted)
+    radicale_password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
+    result = webuntis_sync.sync(settings, password, radicale_password)
+    db.commit()
+    return result
+
+
+@notify_settings_router.post("/webuntis/test")
+def test_webuntis(db: Session = Depends(get_db)):
+    settings = auth.get_or_create_settings(db)
+    if not settings.webuntis_url or not settings.webuntis_password_encrypted:
+        raise HTTPException(400, "Bitte WebUntis-Link und Zugangsdaten eintragen")
+    password = bank_sync.decrypt_secret(settings.secret_key, settings.webuntis_password_encrypted)
+    today = date.today()
+    periods = webuntis_sync.fetch_periods(
+        settings.webuntis_url, settings.webuntis_username, password,
+        today - timedelta(days=1), today + timedelta(days=14),
+    )
+    return {"ok": True, "periods": len(periods)}
+
+
+@notify_settings_router.post("/webuntis/sync")
+def sync_webuntis(db: Session = Depends(get_db)):
+    return _run_webuntis_sync(db)
 
 
 @notify_settings_router.get("/settings/travel", response_model=schemas.TravelSettingsOut)

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 import threading
 
-from . import models, schemas, crud, auth, bank_sync, radicale_sync, ollama_client, document_extract, goals, websearch, notifications, telegram_bot, calls, immich, travel_time, weather
+from . import models, schemas, crud, auth, bank_sync, radicale_sync, webuntis_sync, ollama_client, document_extract, goals, websearch, notifications, telegram_bot, calls, immich, travel_time, weather
 from . import sync_tombstones  # noqa: F401 - Seiteneffekt: registriert die Tombstone-Session-Events
 from . import proactive
 from .sync import sync_router
@@ -201,6 +201,12 @@ ensure_columns("settings", {
     "radicale_username": "VARCHAR",
     "radicale_password_encrypted": "VARCHAR",
     "radicale_calendar_url": "VARCHAR",
+    "webuntis_url": "VARCHAR",
+    "webuntis_username": "VARCHAR",
+    "webuntis_password_encrypted": "VARCHAR",
+    "webuntis_calendar_url": "VARCHAR",
+    "webuntis_state_json": "TEXT",
+    "webuntis_last_sync_at": "DATETIME",
 })
 ensure_columns("settings", {
     "home_address": "VARCHAR",
@@ -2527,6 +2533,36 @@ def _scheduled_radicale_sync():
         db.close()
 
 
+def _scheduled_webuntis_sync():
+    """Spiegelt den Schülerplan nach Radicale und meldet echte Änderungen.
+    Der erste Import bleibt still, damit nicht jede Unterrichtsstunde als
+    vermeintlich neue Änderung gemeldet wird."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not all((settings.webuntis_url, settings.webuntis_username,
+                    settings.webuntis_password_encrypted, settings.webuntis_calendar_url,
+                    settings.radicale_password_encrypted)):
+            return
+        first_sync = not bool(settings.webuntis_state_json)
+        password = bank_sync.decrypt_secret(settings.secret_key, settings.webuntis_password_encrypted)
+        radicale_password = bank_sync.decrypt_secret(settings.secret_key, settings.radicale_password_encrypted)
+        result = webuntis_sync.sync(settings, password, radicale_password)
+        db.commit()
+        changes = result["created"] + result["changed"] + result["removed"]
+        if changes and not first_sync and not result["errors"]:
+            notifications.notify(
+                settings,
+                f"🎓 WebUntis geändert: {result['created']} neu, "
+                f"{result['changed']} geändert, {result['removed']} entfallen. "
+                "Der Kalender „Arbeit Stubbe“ ist aktualisiert.",
+            )
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
 RECEIPT_INDEX_BATCH_SIZE = 5
 
 
@@ -2652,6 +2688,10 @@ scheduler.add_job(
 scheduler.add_job(
     _scheduled_radicale_sync, CronTrigger(minute="*/3"),
     id="radicale_sync", misfire_grace_time=300,
+)
+scheduler.add_job(
+    _scheduled_webuntis_sync, CronTrigger(minute="*/5"),
+    id="webuntis_sync", misfire_grace_time=300,
 )
 scheduler.add_job(
     _scheduled_anomaly_check, CronTrigger(minute="*/30"),
