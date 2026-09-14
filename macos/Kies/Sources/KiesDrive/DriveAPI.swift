@@ -56,7 +56,7 @@ enum DriveAPI {
 
     static func stations(near coordinate: CLLocationCoordinate2D, fuel: FuelKind) async throws -> [FuelStation] {
         let path = String(format: "/api/navigation/fuel-stations?lat=%.6f&lon=%.6f&radius_km=25&fuel=%@",
-                          coordinate.latitude, coordinate.longitude, fuel.rawValue)
+                          coordinate.latitude, coordinate.longitude, fuel.apiValue)
         let payload = try await data(for: try request(path: path))
         return try JSONDecoder().decode(FuelStationEnvelope.self, from: payload).stations
     }

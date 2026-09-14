@@ -25,9 +25,19 @@ struct FuelStation: Codable, Identifiable, Hashable {
 struct FuelStationEnvelope: Decodable { let stations: [FuelStation] }
 
 enum FuelKind: String, CaseIterable, Identifiable {
-    case diesel, e5, e10
+    case diesel, e5, e10, superplus
     var id: String { rawValue }
-    var label: String { rawValue == "diesel" ? "Diesel" : rawValue.uppercased() }
+    var label: String {
+        switch self {
+        case .diesel: "Diesel"
+        case .superplus: "Super Plus*"
+        default: rawValue.uppercased()
+        }
+    }
+    /// Tankerkönig (die von Kies genutzte Preisquelle) kennt keinen eigenen
+    /// SuperPlus-Preis - nur Diesel/E5/E10. Als Näherung wird für SuperPlus
+    /// der Super-(E5)-Preis abgefragt (Stern im Label weist darauf hin).
+    var apiValue: String { self == .superplus ? "e5" : rawValue }
 }
 
 enum DriveMapAppearance: String, CaseIterable, Identifiable {
