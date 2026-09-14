@@ -1,0 +1,68 @@
+import Foundation
+import CoreLocation
+import KiesCore
+
+@MainActor
+final class DriveSettings: ObservableObject {
+    static let shared = DriveSettings()
+    @Published var baseURL: String { didSet { UserDefaults.standard.set(baseURL, forKey: "drive.baseURL") } }
+    @Published var fuel: FuelKind { didSet { UserDefaults.standard.set(fuel.rawValue, forKey: "drive.fuel") } }
+    @Published var avoidTolls: Bool { didSet { UserDefaults.standard.set(avoidTolls, forKey: "drive.avoidTolls") } }
+    @Published var avoidHighways: Bool { didSet { UserDefaults.standard.set(avoidHighways, forKey: "drive.avoidHighways") } }
+
+    private init() {
+        baseURL = UserDefaults.standard.string(forKey: "drive.baseURL") ?? "https://100.72.226.91:8000"
+        fuel = FuelKind(rawValue: UserDefaults.standard.string(forKey: "drive.fuel") ?? "diesel") ?? .diesel
+        avoidTolls = UserDefaults.standard.object(forKey: "drive.avoidTolls") as? Bool ?? true
+        avoidHighways = UserDefaults.standard.object(forKey: "drive.avoidHighways") as? Bool ?? false
+    }
+    var isReady: Bool { !baseURL.isEmpty && DeviceTokenStore.shared.token != nil }
+}
+
+enum DriveAPIError: LocalizedError {
+    case configuration, response(Int), invalidData
+    var errorDescription: String? {
+        switch self {
+        case .configuration: "Server-Adresse oder Geräte-Token fehlt."
+        case .response(let code): "Serverfehler (HTTP \(code))."
+        case .invalidData: "Die Serverantwort konnte nicht gelesen werden."
+        }
+    }
+}
+
+@MainActor
+enum DriveAPI {
+    private static func request(path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
+        let settings = DriveSettings.shared
+        guard let token = DeviceTokenStore.shared.token, !token.isEmpty,
+              let url = URL(string: settings.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path)
+        else { throw DriveAPIError.configuration }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.httpBody = body
+        request.setValue(token, forHTTPHeaderField: "X-Kies-Device-Token")
+        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        return request
+    }
+
+    private static func data(for request: URLRequest) async throws -> Data {
+        let (data, response) = try await KiesHTTP.session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DriveAPIError.invalidData }
+        guard 200..<300 ~= http.statusCode else { throw DriveAPIError.response(http.statusCode) }
+        return data
+    }
+
+    static func stations(near coordinate: CLLocationCoordinate2D, fuel: FuelKind) async throws -> [FuelStation] {
+        let path = String(format: "/api/navigation/fuel-stations?lat=%.6f&lon=%.6f&radius_km=25&fuel=%@",
+                          coordinate.latitude, coordinate.longitude, fuel.rawValue)
+        let payload = try await data(for: try request(path: path))
+        return try JSONDecoder().decode(FuelStationEnvelope.self, from: payload).stations
+    }
+
+    static func askJarvis(_ message: String) async throws -> String {
+        let body = try JSONSerialization.data(withJSONObject: ["message": message, "history": []])
+        let payload = try await data(for: try request(path: "/api/jarvis/chat", method: "POST", body: body))
+        let result = try JSONDecoder().decode(DriveChatResponse.self, from: payload)
+        return result.reply ?? "Jarvis hat keine Antwort geliefert."
+    }
+}

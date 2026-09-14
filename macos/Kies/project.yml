@@ -132,6 +132,51 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
 
+  KiesDriveiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources/KiesDrive
+        excludes:
+          - Info-macOS.plist
+    dependencies:
+      - package: KiesCorePackage
+        product: KiesCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.kies.drive.ios
+        PRODUCT_NAME: Kies Drive
+        INFOPLIST_FILE: Sources/KiesDrive/Info-iOS.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+
+  KiesDriveMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/KiesDrive
+        excludes:
+          - Info-iOS.plist
+    dependencies:
+      - package: KiesCorePackage
+        product: KiesCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.kies.drive.macos
+        PRODUCT_NAME: Kies Drive
+        INFOPLIST_FILE: Sources/KiesDrive/Info-macOS.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.9"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+
 schemes:
   KiesiOS:
     build:
@@ -143,3 +188,15 @@ schemes:
       config: Debug
     archive:
       config: Release
+  KiesDriveiOS:
+    build:
+      targets:
+        KiesDriveiOS: all
+    run:
+      config: Debug
+  KiesDriveMac:
+    build:
+      targets:
+        KiesDriveMac: all
+    run:
+      config: Debug

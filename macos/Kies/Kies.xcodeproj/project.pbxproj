@@ -12,9 +12,12 @@
 		13C8EB9492779EA87C304DC1 /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 65BF779BF24FCE8A842FCB93 /* KiesCore */; };
 		17E2FB83B1FA148965C2D5D8 /* LifeAreasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67BDE07271DA65961F2A88CB /* LifeAreasView.swift */; };
 		21D1BF72568D488C08239C68 /* KiesAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAF7F13B45D24949F8E83877 /* KiesAppearance.swift */; };
+		24523600E4AB04852B74FD55 /* KiesDriveApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A5155E6807CB2B5DB33421 /* KiesDriveApp.swift */; };
 		24620312A0728058A1235360 /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = D8690335D4F34894C7985659 /* KiesCore */; };
+		249543CF88D90EC5A55D31B6 /* RoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBB42BB1EA7C553F2B5FD4E /* RoutePlanner.swift */; };
 		2793BCA37DC0162FE03AE6D8 /* TodosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85F5ED97A93ECD9BC83743D /* TodosView.swift */; };
 		28B336A146960054E6B7890D /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C557578D4B70FD785495CC8 /* CategoriesView.swift */; };
+		2E764946EFF1224CC8B66097 /* DriveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FD841C7B4E4E02FDD1F2C5 /* DriveModels.swift */; };
 		326F90F46B74CA76DD560D57 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB383E45F1D2E267830E6E5 /* PairingView.swift */; };
 		37D64962C98845ECBAC0A905 /* PremiumTodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAC87F526ED9B0E6059BFBF /* PremiumTodayView.swift */; };
 		3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */; };
@@ -25,27 +28,38 @@
 		73EEE66A7C60EAC7ABB62CDD /* SyncStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688EF710F5CAC80ACBAD0D85 /* SyncStatusBar.swift */; };
 		761FB9FD89FC2A446959E6B7 /* Box.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BFEBBA631B1F700D31671F /* Box.swift */; };
 		77A8121258C229BD13A889F2 /* AppLockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C2FAFA9FA014943AD1D181 /* AppLockView.swift */; };
+		7AA99D5BF9FDB6D06BEED997 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52564A3A989C08C032DF2C4A /* ContentView.swift */; };
 		7B96B5D9926A00C92DC0A570 /* PremiumInvestmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA444C3D09AEA9938B77FE2F /* PremiumInvestmentsView.swift */; };
+		7C9080637D9BBEA83051523B /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B887C8AB72E39018623B76 /* LocationService.swift */; };
+		7DD62AA16E698118784A8117 /* KiesDriveApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A5155E6807CB2B5DB33421 /* KiesDriveApp.swift */; };
 		807B16A7ED8092320C57D7A9 /* DesignKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7FBB02C92E905A937C99DD /* DesignKit.swift */; };
+		85EB1CD8D343398FC81C33E2 /* DriveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FD841C7B4E4E02FDD1F2C5 /* DriveModels.swift */; };
+		92D231FAA03A1B222EC0C113 /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = B0080C5841AB7B363DDE7179 /* KiesCore */; };
 		990146C5809F4FA34F5EA3BC /* GoalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C96DEEF5122EF2D08A40156 /* GoalsView.swift */; };
 		99CB72E359CF566E9455F26D /* TimeTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD059D6300EF22443705B4AE /* TimeTrackingView.swift */; };
 		9F1EF21F2306B3D29A9152B4 /* TimerLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74509D10A3977DA216A7CF4 /* TimerLiveActivity.swift */; };
+		A19CCF3B888605412FB94B9D /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B887C8AB72E39018623B76 /* LocationService.swift */; };
 		A400936DEEE7E1471D4D07E4 /* KiesiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */; };
 		A4D6A8FA6AFC2866084C862E /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 34A4B10B21EFD0D7AC250E33 /* KiesCore */; };
 		A55304628638B35FB4B53DA0 /* KiesWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3329E7178B1F2338F8D33732 /* KiesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A7639249067C0E142E4E2199 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F34C70844AA4048F50145115 /* ShareViewController.swift */; };
 		ABCA0E018FDA3A5D956058D4 /* TabRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EB950D2FFE4CA505B7AFCF /* TabRouter.swift */; };
 		B1273FC86E1A640FB018622C /* KiesWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85AEA2E4BEAAA721535994E7 /* KiesWidgetBundle.swift */; };
+		B1DAAE8FB39C6E7CC2EDD5EA /* RoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBB42BB1EA7C553F2B5FD4E /* RoutePlanner.swift */; };
 		B20B849763DE15C5B1992056 /* KiesQuickActionsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D0BFEDACD8FB94F0C5D29F /* KiesQuickActionsWidget.swift */; };
 		B306D0975AB3E6DF5DB551CC /* WishlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D085F7AB71F06EA7FFDA2B4A /* WishlistView.swift */; };
 		BA11003F352EDA97A72E56AB /* AccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D5CE16E4B51C7516057F1E /* AccountsView.swift */; };
+		BEFD601603A357F1E8C9A16E /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = A3DF92616062303AA2141624 /* KiesCore */; };
+		CBCE4DD978935EB1B7824AC3 /* DriveAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30798DDC02B3DB84371856C0 /* DriveAPI.swift */; };
 		CBD004D4CA23464799D0FEDF /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADF728876ACF7EE6CE1390A3 /* TransactionsView.swift */; };
 		CD92EC1BA139315BC97F3DCB /* KiesAskIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BB7A56FDD4FA1874F0FCBD /* KiesAskIntent.swift */; };
 		D43A5A9488E7F7D21E19D705 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008EF147F6F711851A57C502 /* SettingsView.swift */; };
 		D5DA9586FA47BDBE13636A9E /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D573748D2D41F520FEAB9035 /* TodayView.swift */; };
 		DFDE08A878C8382E0773D12F /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F978820985500BDF909AE62D /* HealthView.swift */; };
 		E0F43EA44B23B0CB186047C5 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 269859CF78204993C6524A99 /* RootTabView.swift */; };
+		E69AB7F4D9C06D081942E537 /* DriveAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30798DDC02B3DB84371856C0 /* DriveAPI.swift */; };
 		E873314659947D7894EE885C /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51202F5D0B27831072944595 /* AssistantView.swift */; };
+		F2BA5AC0C5701A5E4E33CEA4 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52564A3A989C08C032DF2C4A /* ContentView.swift */; };
 		F3C8B0F2B1B6D04F206C91B7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */; };
 		F5AD507D32FCC36D3AD9640D /* KiesShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B07429E1CD635C2287F7651F /* KiesShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F816F0002EBEC15B5974B803 /* QuickCaptureRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0911D61146F6B94DEA9A38 /* QuickCaptureRouter.swift */; };
@@ -87,19 +101,25 @@
 /* Begin PBXFileReference section */
 		003E9FBFBFF00CB59ED2679D /* KiesiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesiOSApp.swift; sourceTree = "<group>"; };
 		008EF147F6F711851A57C502 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0FBF1BC4F0C5F02F5450EFD1 /* KiesDriveiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KiesDriveiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1271CBA7F3E039E326A7D4A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		139D81983F28F707A0312AC6 /* KiesiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KiesiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C96DEEF5122EF2D08A40156 /* GoalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsView.swift; sourceTree = "<group>"; };
 		1FAC87F526ED9B0E6059BFBF /* PremiumTodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumTodayView.swift; sourceTree = "<group>"; };
 		269859CF78204993C6524A99 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		2CBB42BB1EA7C553F2B5FD4E /* RoutePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlanner.swift; sourceTree = "<group>"; };
+		30798DDC02B3DB84371856C0 /* DriveAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveAPI.swift; sourceTree = "<group>"; };
 		3329E7178B1F2338F8D33732 /* KiesWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KiesWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		41C5A463FD0B7C945894B428 /* Info-macOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-macOS.plist"; sourceTree = "<group>"; };
 		4B680F6717ADE402F1BF17A0 /* HealthKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSync.swift; sourceTree = "<group>"; };
 		4BB383E45F1D2E267830E6E5 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		4E0911D61146F6B94DEA9A38 /* QuickCaptureRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCaptureRouter.swift; sourceTree = "<group>"; };
 		51202F5D0B27831072944595 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
+		52564A3A989C08C032DF2C4A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5357355D6AA09CC225075155 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		5358C2F69A3B288B580B3AD8 /* KiesShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KiesShare.entitlements; sourceTree = "<group>"; };
 		5E7FBB02C92E905A937C99DD /* DesignKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignKit.swift; sourceTree = "<group>"; };
+		66AA0433683B98BD050E3A20 /* KiesDriveMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KiesDriveMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		67BDE07271DA65961F2A88CB /* LifeAreasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAreasView.swift; sourceTree = "<group>"; };
 		688EF710F5CAC80ACBAD0D85 /* SyncStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusBar.swift; sourceTree = "<group>"; };
 		6B3E6AF14DFA864224B805F2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -110,10 +130,13 @@
 		7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCaptureView.swift; sourceTree = "<group>"; };
 		85AEA2E4BEAAA721535994E7 /* KiesWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesWidgetBundle.swift; sourceTree = "<group>"; };
 		88B5A0449D8D65E38F7C81F5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		908A69E1CD1167980A8C10B2 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
+		93B887C8AB72E39018623B76 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		ADF728876ACF7EE6CE1390A3 /* TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsView.swift; sourceTree = "<group>"; };
 		B07429E1CD635C2287F7651F /* KiesShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KiesShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2D5CE16E4B51C7516057F1E /* AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsView.swift; sourceTree = "<group>"; };
 		B3F9F33F1FD689F6223BF5A0 /* ShareComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposeView.swift; sourceTree = "<group>"; };
+		B6A5155E6807CB2B5DB33421 /* KiesDriveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesDriveApp.swift; sourceTree = "<group>"; };
 		B8BFEBBA631B1F700D31671F /* Box.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Box.swift; sourceTree = "<group>"; };
 		B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesTodayWidget.swift; sourceTree = "<group>"; };
 		BAF7F13B45D24949F8E83877 /* KiesAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesAppearance.swift; sourceTree = "<group>"; };
@@ -131,6 +154,7 @@
 		EA444C3D09AEA9938B77FE2F /* PremiumInvestmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumInvestmentsView.swift; sourceTree = "<group>"; };
 		EFDC5EE202B4C70D2EC672AB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F34C70844AA4048F50145115 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		F7FD841C7B4E4E02FDD1F2C5 /* DriveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveModels.swift; sourceTree = "<group>"; };
 		F85F5ED97A93ECD9BC83743D /* TodosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodosView.swift; sourceTree = "<group>"; };
 		F978820985500BDF909AE62D /* HealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -141,6 +165,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				24620312A0728058A1235360 /* KiesCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		29C1276FEA431EC4BBDCF6D1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				92D231FAA03A1B222EC0C113 /* KiesCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C203C8E1096DCC0DCA6F1B1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BEFD601603A357F1E8C9A16E /* KiesCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -166,6 +206,7 @@
 		0426986CA4D92D57457D8864 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				C2B546B5480A9660C45622C8 /* KiesDrive */,
 				AFFD80D94B400C933BF7088C /* KiesiOS */,
 				36DA0ECFA89BACF0B3BF2C25 /* KiesShare */,
 				AFC3670357A52D117DF2290F /* KiesWidget */,
@@ -239,9 +280,26 @@
 			path = KiesiOS;
 			sourceTree = "<group>";
 		};
+		C2B546B5480A9660C45622C8 /* KiesDrive */ = {
+			isa = PBXGroup;
+			children = (
+				52564A3A989C08C032DF2C4A /* ContentView.swift */,
+				30798DDC02B3DB84371856C0 /* DriveAPI.swift */,
+				F7FD841C7B4E4E02FDD1F2C5 /* DriveModels.swift */,
+				908A69E1CD1167980A8C10B2 /* Info-iOS.plist */,
+				41C5A463FD0B7C945894B428 /* Info-macOS.plist */,
+				B6A5155E6807CB2B5DB33421 /* KiesDriveApp.swift */,
+				93B887C8AB72E39018623B76 /* LocationService.swift */,
+				2CBB42BB1EA7C553F2B5FD4E /* RoutePlanner.swift */,
+			);
+			path = KiesDrive;
+			sourceTree = "<group>";
+		};
 		CE7D7DB2296308041ABA31BF /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				0FBF1BC4F0C5F02F5450EFD1 /* KiesDriveiOS.app */,
+				66AA0433683B98BD050E3A20 /* KiesDriveMac.app */,
 				139D81983F28F707A0312AC6 /* KiesiOS.app */,
 				B07429E1CD635C2287F7651F /* KiesShare.appex */,
 				3329E7178B1F2338F8D33732 /* KiesWidget.appex */,
@@ -311,6 +369,25 @@
 			productReference = B07429E1CD635C2287F7651F /* KiesShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		412D077BC7C34E758E480E87 /* KiesDriveiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 56998140F9AB6E5FB0B1C8A8 /* Build configuration list for PBXNativeTarget "KiesDriveiOS" */;
+			buildPhases = (
+				2067DA8D03A55BB632B096C5 /* Sources */,
+				29C1276FEA431EC4BBDCF6D1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KiesDriveiOS;
+			packageProductDependencies = (
+				B0080C5841AB7B363DDE7179 /* KiesCore */,
+			);
+			productName = KiesDriveiOS;
+			productReference = 0FBF1BC4F0C5F02F5450EFD1 /* KiesDriveiOS.app */;
+			productType = "com.apple.product-type.application";
+		};
 		49AF7C9601DAD573B37FAABB /* KiesiOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 21454B39E637BA1761F6E70C /* Build configuration list for PBXNativeTarget "KiesiOS" */;
@@ -332,6 +409,25 @@
 			);
 			productName = KiesiOS;
 			productReference = 139D81983F28F707A0312AC6 /* KiesiOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9A2E285FB6268AC33CC4D935 /* KiesDriveMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA6AC3D5F07E888C2D6230D6 /* Build configuration list for PBXNativeTarget "KiesDriveMac" */;
+			buildPhases = (
+				A4B23C187B9442B68D15DDB7 /* Sources */,
+				5C203C8E1096DCC0DCA6F1B1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KiesDriveMac;
+			packageProductDependencies = (
+				A3DF92616062303AA2141624 /* KiesCore */,
+			);
+			productName = KiesDriveMac;
+			productReference = 66AA0433683B98BD050E3A20 /* KiesDriveMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 		C71A5B613D2DAACFA35C9FBA /* KiesWidget */ = {
@@ -365,7 +461,13 @@
 					0AB9BE412D9D65A370ADA72A = {
 						ProvisioningStyle = Automatic;
 					};
+					412D077BC7C34E758E480E87 = {
+						ProvisioningStyle = Automatic;
+					};
 					49AF7C9601DAD573B37FAABB = {
+						ProvisioningStyle = Automatic;
+					};
+					9A2E285FB6268AC33CC4D935 = {
 						ProvisioningStyle = Automatic;
 					};
 					C71A5B613D2DAACFA35C9FBA = {
@@ -393,6 +495,8 @@
 				49AF7C9601DAD573B37FAABB /* KiesiOS */,
 				C71A5B613D2DAACFA35C9FBA /* KiesWidget */,
 				0AB9BE412D9D65A370ADA72A /* KiesShare */,
+				412D077BC7C34E758E480E87 /* KiesDriveiOS */,
+				9A2E285FB6268AC33CC4D935 /* KiesDriveMac */,
 			);
 		};
 /* End PBXProject section */
@@ -417,6 +521,32 @@
 				58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */,
 				B1273FC86E1A640FB018622C /* KiesWidgetBundle.swift in Sources */,
 				9F1EF21F2306B3D29A9152B4 /* TimerLiveActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2067DA8D03A55BB632B096C5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F2BA5AC0C5701A5E4E33CEA4 /* ContentView.swift in Sources */,
+				CBCE4DD978935EB1B7824AC3 /* DriveAPI.swift in Sources */,
+				85EB1CD8D343398FC81C33E2 /* DriveModels.swift in Sources */,
+				24523600E4AB04852B74FD55 /* KiesDriveApp.swift in Sources */,
+				A19CCF3B888605412FB94B9D /* LocationService.swift in Sources */,
+				249543CF88D90EC5A55D31B6 /* RoutePlanner.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A4B23C187B9442B68D15DDB7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7AA99D5BF9FDB6D06BEED997 /* ContentView.swift in Sources */,
+				E69AB7F4D9C06D081942E537 /* DriveAPI.swift in Sources */,
+				2E764946EFF1224CC8B66097 /* DriveModels.swift in Sources */,
+				7DD62AA16E698118784A8117 /* KiesDriveApp.swift in Sources */,
+				7C9080637D9BBEA83051523B /* LocationService.swift in Sources */,
+				B1DAAE8FB39C6E7CC2EDD5EA /* RoutePlanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -502,6 +632,29 @@
 				PRODUCT_NAME = KiesWidget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		474C4CCC6DCEE98237891C4D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Sources/KiesDrive/Info-iOS.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kies.drive.ios;
+				PRODUCT_NAME = "Kies Drive";
+				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -629,6 +782,51 @@
 			};
 			name = Release;
 		};
+		CC0237CF01F67D8511705D7F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Sources/KiesDrive/Info-macOS.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kies.drive.macos;
+				PRODUCT_NAME = "Kies Drive";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		D431172644C2CEA7775324EB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Sources/KiesDrive/Info-iOS.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kies.drive.ios;
+				PRODUCT_NAME = "Kies Drive";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		E3281D37B7A0BA9E5F82235A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -678,7 +876,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -741,10 +938,31 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F6F7E4659C98AD72D26E6946 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Sources/KiesDrive/Info-macOS.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kies.drive.macos;
+				PRODUCT_NAME = "Kies Drive";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
 			};
 			name = Debug;
 		};
@@ -778,11 +996,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		56998140F9AB6E5FB0B1C8A8 /* Build configuration list for PBXNativeTarget "KiesDriveiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D431172644C2CEA7775324EB /* Debug */,
+				474C4CCC6DCEE98237891C4D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		C4BA287628EF7DF0AD135E51 /* Build configuration list for PBXProject "Kies" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E823DACA71D613193B7A6A81 /* Debug */,
 				E3281D37B7A0BA9E5F82235A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FA6AC3D5F07E888C2D6230D6 /* Build configuration list for PBXNativeTarget "KiesDriveMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F6F7E4659C98AD72D26E6946 /* Debug */,
+				CC0237CF01F67D8511705D7F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -802,6 +1038,14 @@
 			productName = KiesCore;
 		};
 		65BF779BF24FCE8A842FCB93 /* KiesCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KiesCore;
+		};
+		A3DF92616062303AA2141624 /* KiesCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KiesCore;
+		};
+		B0080C5841AB7B363DDE7179 /* KiesCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KiesCore;
 		};
