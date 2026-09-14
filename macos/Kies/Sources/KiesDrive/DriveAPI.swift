@@ -10,6 +10,7 @@ final class DriveSettings: ObservableObject {
     @Published var avoidTolls: Bool { didSet { UserDefaults.standard.set(avoidTolls, forKey: "drive.avoidTolls") } }
     @Published var avoidHighways: Bool { didSet { UserDefaults.standard.set(avoidHighways, forKey: "drive.avoidHighways") } }
     @Published var mapAppearance: DriveMapAppearance { didSet { UserDefaults.standard.set(mapAppearance.rawValue, forKey: "drive.mapAppearance") } }
+    @Published var voiceGuidance: Bool { didSet { UserDefaults.standard.set(voiceGuidance, forKey: "drive.voiceGuidance") } }
 
     private init() {
         baseURL = UserDefaults.standard.string(forKey: "drive.baseURL") ?? "https://100.72.226.91:8000"
@@ -17,8 +18,17 @@ final class DriveSettings: ObservableObject {
         avoidTolls = UserDefaults.standard.object(forKey: "drive.avoidTolls") as? Bool ?? true
         avoidHighways = UserDefaults.standard.object(forKey: "drive.avoidHighways") as? Bool ?? false
         mapAppearance = DriveMapAppearance(rawValue: UserDefaults.standard.string(forKey: "drive.mapAppearance") ?? "standard") ?? .standard
+        voiceGuidance = UserDefaults.standard.object(forKey: "drive.voiceGuidance") as? Bool ?? true
     }
     var isReady: Bool { !baseURL.isEmpty && DeviceTokenStore.shared.token != nil }
+    /// App-Version + Build, z.B. "1.0 (3)" - zur Diagnose, ob ein Gerät noch
+    /// eine veraltete Build-Version ausführt.
+    static var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
+    }
 }
 
 enum DriveAPIError: LocalizedError {

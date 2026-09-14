@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import Combine
 import KiesCore
 
 struct DriveContentView: View {
@@ -26,7 +27,11 @@ struct DriveContentView: View {
             location.start()
             if !settings.isReady { showSettings = true }
         }
-        .sheet(isPresented: $showSettings) { DriveSettingsView() }
+        .onReceive(location.$location) { newValue in
+            guard let newValue, !planner.legs.isEmpty else { return }
+            planner.updateProgress(at: newValue, settings: settings)
+        }
+        .sheet(isPresented: $showSettings) { DriveSettingsView(planner: planner) }
         .sheet(isPresented: $showJarvis) { JarvisDriveView(route: planner.route, destination: planner.destination) }
     }
 
@@ -130,9 +135,16 @@ struct DriveContentView: View {
                     }
                 }
             }
-            if let error = planner.errorMessage { Section { Text(error).foregroundStyle(.red) } }
+            if let error = planner.errorMessage {
+                Section {
+                    Text(error).foregroundStyle(.red)
+                    if let offline = planner.offlineRoute {
+                        offlineRouteView(offline)
+                    }
+                }
+            }
         }
-        .overlay { if planner.isLoading { ProgressView("Route und Preise werden geladen …").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
+        .overlay { if planner.isLoading || planner.isRecalculating { ProgressView(planner.isRecalculating ? "Route wird neu berechnet …" : "Route und Preise werden geladen …").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)) } }
     }
 
     @ViewBuilder
@@ -178,6 +190,47 @@ struct DriveContentView: View {
             }
             .padding(9).background(.regularMaterial, in: Capsule()).padding()
         }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 8) {
+                if planner.speedWarning {
+                    Label("Zu schnell - Tempolimit beachten", systemImage: "exclamationmark.triangle.fill")
+                        .padding(9).background(.red, in: Capsule()).foregroundStyle(.white)
+                }
+                if let announcement = planner.lastAnnouncement {
+                    Label(announcement, systemImage: "speaker.wave.2.fill")
+                        .padding(9).background(.regularMaterial, in: Capsule())
+                }
+            }
+            .padding()
+        }
+    }
+
+    /// Zeigt die zuletzt zwischengespeicherte Route (Ziel, Fahrhinweise,
+    /// Tankstellen) an, damit unterwegs auch ohne Verbindung noch eine
+    /// Orientierung möglich ist - ohne Kartenmaterial, nur als Textliste.
+    @ViewBuilder
+    private func offlineRouteView(_ cached: CachedRoute) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Zwischengespeicherte Route (offline)", systemImage: "icloud.slash")
+                .font(.headline)
+            Text("Ziel: \(cached.destinationName)")
+            ForEach(Array(cached.legs.enumerated()), id: \.offset) { _, leg in
+                Label("\(formatDistance(leg.distance)) · \(formatTime(leg.travelTime))", systemImage: "road.lanes")
+                ForEach(Array(leg.steps.enumerated()), id: \.offset) { _, step in
+                    Text(step.instructions.isEmpty ? "Weiter" : step.instructions)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if !cached.stations.isEmpty {
+                Text("Tankstellen (zuletzt bekannt):").font(.caption).bold()
+                ForEach(cached.stations) { station in
+                    Text("\(station.brand.isEmpty ? station.name : station.brand): \(String(format: "%.3f €", station.price))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Text("Stand: \(cached.savedAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
     }
 
     /// Rundes, deutsches Tempolimit-Schild - weißer Grund mit rotem Ring,
@@ -209,6 +262,7 @@ struct DriveContentView: View {
 }
 
 struct DriveSettingsView: View {
+    @ObservedObject var planner: RoutePlanner
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var settings = DriveSettings.shared
     @ObservedObject private var tokens = DeviceTokenStore.shared
@@ -225,8 +279,16 @@ struct DriveSettingsView: View {
                 Section("Route") {
                     Toggle("Vignetten und Maut vermeiden", isOn: $settings.avoidTolls)
                     Toggle("Autobahnen vermeiden", isOn: $settings.avoidHighways)
+                    Toggle("Sprachansagen", isOn: $settings.voiceGuidance)
                     Picker("Kraftstoff", selection: $settings.fuel) { ForEach(FuelKind.allCases) { Text($0.label).tag($0) } }
                     Picker("Kartendarstellung", selection: $settings.mapAppearance) { ForEach(DriveMapAppearance.allCases) { Text($0.label).tag($0) } }
+                }
+                Section("Offline-Zwischenspeicher") {
+                    Button("Zwischengespeicherte Route löschen", role: .destructive) { planner.clearOfflineCache() }
+                        .disabled(planner.offlineRoute == nil)
+                }
+                Section("Über") {
+                    LabeledContent("App-Version", value: DriveSettings.appVersionString)
                 }
                 Section { Text("Der Tankpreis-Schlüssel bleibt ausschließlich auf deinem TrueNAS-Server. Der Geräte-Token liegt im Apple-Schlüsselbund.").font(.caption).foregroundStyle(.secondary) }
             }

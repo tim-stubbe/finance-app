@@ -1,12 +1,26 @@
 import Foundation
 import MapKit
+import AVFoundation
 
 private extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
 
+/// Für den Offline-Fallback zwischengespeicherte Routen- und Tankstellendaten -
+/// bewusst schlank (kein `MKRoute`, das ist nicht `Codable`), damit die letzte
+/// berechnete Route auch ohne Netzverbindung als Text/Liste angezeigt werden kann.
+/// Eine echte Offline-Kartendarstellung bietet MapKit über keine öffentliche API an.
+struct CachedRoute: Codable {
+    struct Step: Codable { let instructions: String; let distance: Double }
+    struct Leg: Codable { let distance: Double; let travelTime: TimeInterval; let steps: [Step] }
+    let destinationName: String
+    let legs: [Leg]
+    let stations: [FuelStation]
+    let savedAt: Date
+}
+
 @MainActor
-final class RoutePlanner: ObservableObject {
+final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     @Published var destinationText = ""
     @Published var suggestions: [MKMapItem] = []
     @Published var destination: MKMapItem?
@@ -16,10 +30,25 @@ final class RoutePlanner: ObservableObject {
     @Published var stations: [FuelStation] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var isRecalculating = false
+    @Published var lastAnnouncement: String?
+    @Published var speedWarning: Bool = false
+    @Published var offlineRoute: CachedRoute?
 
     /// Tempolimits entlang der Route, parallel zu `speedLimitPoints` indiziert.
     private var speedLimitPoints: [CLLocationCoordinate2D] = []
     private var speedLimits: [SpeedLimitResult] = []
+
+    private let synthesizer = AVSpeechSynthesizer()
+    private var announcedStepKeys: Set<String> = []
+    private var offRouteStrikes = 0
+    private static let cacheKey = "drive.offlineRoute"
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+        offlineRoute = Self.loadCache()
+    }
 
     /// Erste Teilstrecke - für Rückwärtskompatibilität und schnellen Zugriff
     /// auf die "Hauptroute" (ohne Zwischenstopp identisch mit der Gesamtroute).
@@ -57,9 +86,110 @@ final class RoutePlanner: ObservableObject {
                 alternatives = routes
                 legs = routes.first.map { [$0] } ?? []
             }
+            announcedStepKeys = []
+            offRouteStrikes = 0
             await loadStations(fuel: settings.fuel)
             await loadSpeedLimits()
+            cacheForOffline()
         } catch { errorMessage = "Route konnte nicht berechnet werden: \(error.localizedDescription)" }
+    }
+
+    /// Speichert die aktuell berechnete Route + Tankstellenliste lokal, damit
+    /// sie bei fehlender Verbindung (z.B. Funkloch unterwegs) weiter als Text
+    /// angezeigt werden kann - kein Kartenmaterial, nur Fahrhinweise und Preise.
+    private func cacheForOffline() {
+        guard !legs.isEmpty else { return }
+        let cached = CachedRoute(
+            destinationName: destination?.name ?? destinationText,
+            legs: legs.map { leg in
+                CachedRoute.Leg(distance: leg.distance, travelTime: leg.expectedTravelTime,
+                                 steps: leg.steps.map { .init(instructions: $0.instructions, distance: $0.distance) })
+            },
+            stations: stations,
+            savedAt: Date()
+        )
+        offlineRoute = cached
+        if let data = try? JSONEncoder().encode(cached) { UserDefaults.standard.set(data, forKey: Self.cacheKey) }
+    }
+
+    private static func loadCache() -> CachedRoute? {
+        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey) else { return nil }
+        return try? JSONDecoder().decode(CachedRoute.self, from: data)
+    }
+
+    /// Löscht die zwischengespeicherte Offline-Route (z.B. wenn sie veraltet ist).
+    func clearOfflineCache() {
+        offlineRoute = nil
+        UserDefaults.standard.removeObject(forKey: Self.cacheKey)
+    }
+
+    // MARK: - Navigation live: Ansagen, Tempowarnung, automatische Neuberechnung
+
+    /// Wird laufend mit der aktuellen Position während der Fahrt aufgerufen.
+    /// Kümmert sich um drei Dinge: nächste Fahranweisung ansagen, Tempolimit-
+    /// Überschreitung erkennen und bei Abweichung von der Route automatisch
+    /// neu berechnen.
+    func updateProgress(at location: CLLocation, settings: DriveSettings) {
+        guard let route = legs.first else { return }
+        checkSpeedLimit(at: location.coordinate, speedMps: location.speed)
+        if settings.voiceGuidance { announceNextStep(near: location.coordinate, in: route) }
+        checkForDeviation(from: location.coordinate, route: route, settings: settings)
+    }
+
+    private func checkSpeedLimit(at coordinate: CLLocationCoordinate2D, speedMps: Double) {
+        guard speedMps >= 0, let limit = currentSpeedLimit(near: coordinate), let maxspeed = limit.maxspeed else {
+            speedWarning = false
+            return
+        }
+        let speedKmh = speedMps * 3.6
+        // 5 km/h Toleranz für GPS-Ungenauigkeit / Tacho-Rundung.
+        speedWarning = speedKmh > Double(maxspeed) + 5
+    }
+
+    private func announceNextStep(near coordinate: CLLocationCoordinate2D, in route: MKRoute) {
+        let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        for (index, step) in route.steps.enumerated() where index > 0 {
+            let key = "\(index):\(step.instructions)"
+            guard !announcedStepKeys.contains(key) else { continue }
+            let stepStart = step.polyline.coordinate
+            let distance = here.distance(from: CLLocation(latitude: stepStart.latitude, longitude: stepStart.longitude))
+            if distance <= 120 {
+                announcedStepKeys.insert(key)
+                speak(step.instructions.isEmpty ? "Weiter geradeaus" : step.instructions)
+                lastAnnouncement = step.instructions
+                break
+            }
+        }
+    }
+
+    private func speak(_ text: String) {
+        guard !text.isEmpty else { return }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+        synthesizer.speak(utterance)
+    }
+
+    /// Zählt aufeinanderfolgende Positionsmeldungen weit abseits der Route und
+    /// löst nach ein paar Treffern (nicht schon beim ersten GPS-Ausreißer) eine
+    /// automatische Neuberechnung ab der aktuellen Position aus.
+    private func checkForDeviation(from coordinate: CLLocationCoordinate2D, route: MKRoute, settings: DriveSettings) {
+        guard !isLoading, !isRecalculating else { return }
+        let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let samples = sample(route.polyline, maximum: 120)
+        let nearest = samples.map { here.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) }.min() ?? 0
+        if nearest > 80 {
+            offRouteStrikes += 1
+        } else {
+            offRouteStrikes = 0
+        }
+        guard offRouteStrikes >= 3 else { return }
+        offRouteStrikes = 0
+        Task {
+            isRecalculating = true
+            lastAnnouncement = "Route wird neu berechnet …"
+            await calculate(from: coordinate, settings: settings)
+            isRecalculating = false
+        }
     }
 
     /// Lädt Tempolimits für abgetastete Routenpunkte (OpenStreetMap/Overpass).
