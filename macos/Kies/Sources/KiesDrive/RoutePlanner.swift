@@ -21,6 +21,10 @@ struct CachedRoute: Codable {
 
 @MainActor
 final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    /// Eine gemeinsame Instanz für die SwiftUI-Oberfläche und die
+    /// CarPlay-Szene, damit beide dieselbe Route/Tankstellenliste sehen.
+    static let shared = RoutePlanner()
+
     @Published var destinationText = ""
     @Published var suggestions: [MKMapItem] = []
     @Published var destination: MKMapItem?

@@ -3,6 +3,9 @@ import CoreLocation
 
 @MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
+    /// Gemeinsame Instanz für die SwiftUI-Oberfläche und die CarPlay-Szene.
+    static let shared = LocationService()
+
     @Published var location: CLLocation?
     @Published var authorization: CLAuthorizationStatus = .notDetermined
     private let manager = CLLocationManager()
@@ -17,7 +20,11 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     func start() {
         #if os(iOS)
-        manager.requestWhenInUseAuthorization()
+        // "Always" statt nur "when in use", damit Ansagen und CarPlay-
+        // Navigation auch bei gesperrtem Bildschirm weiterlaufen.
+        manager.requestAlwaysAuthorization()
+        manager.allowsBackgroundLocationUpdates = true
+        manager.pausesLocationUpdatesAutomatically = false
         #else
         manager.requestAlwaysAuthorization()
         #endif

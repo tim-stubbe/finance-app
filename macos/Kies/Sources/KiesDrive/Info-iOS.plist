@@ -8,6 +8,22 @@
 <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 <key>NSLocationWhenInUseUsageDescription</key><string>Kies Drive benötigt deinen Standort für Routen, Navigation und Tankstellen entlang des Weges.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>Kies Drive benötigt deinen Standort auch bei gesperrtem Bildschirm, damit Navigation und Ansagen über CarPlay weiterlaufen.</string>
+<key>UIBackgroundModes</key><array><string>location</string></array>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>
 <key>UILaunchScreen</key><dict/>
+<key>UIApplicationSceneManifest</key>
+<dict>
+<key>UIApplicationSupportsMultipleScenes</key><true/>
+<key>UISceneConfigurations</key>
+<dict>
+<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+<array>
+<dict>
+<key>UISceneConfigurationName</key><string>CarPlay Configuration</string>
+<key>UISceneDelegateClassName</key><string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+</dict>
+</array>
+</dict>
+</dict>
 </dict></plist>

@@ -5,8 +5,8 @@ import KiesCore
 
 struct DriveContentView: View {
     @StateObject private var settings = DriveSettings.shared
-    @StateObject private var location = LocationService()
-    @StateObject private var planner = RoutePlanner()
+    @StateObject private var location = LocationService.shared
+    @StateObject private var planner = RoutePlanner.shared
     @State private var position: MapCameraPosition = .automatic
     @State private var showSettings = false
     @State private var showJarvis = false
