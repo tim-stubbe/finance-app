@@ -1,0 +1,27 @@
+services:
+  asterisk:
+    build: ./asterisk
+    restart: unless-stopped
+    environment:
+      SIP_HOST: ${SIP_HOST}
+      SIP_PORT: ${SIP_PORT:-5060}
+      SIP_USERNAME: ${SIP_USERNAME}
+      SIP_PASSWORD: ${SIP_PASSWORD}
+      AMI_SECRET: ${AMI_SECRET}
+    volumes:
+      - call_sounds:/var/lib/asterisk/sounds/custom
+
+  gateway:
+    build: .
+    restart: unless-stopped
+    depends_on: [asterisk]
+    environment:
+      CALL_GATEWAY_TOKEN: ${CALL_GATEWAY_TOKEN}
+      AMI_SECRET: ${AMI_SECRET}
+    volumes:
+      - call_sounds:/sounds
+    ports:
+      - "18081:8080"
+
+volumes:
+  call_sounds:
