@@ -1,6 +1,8 @@
 import os
 import shutil
 import uuid
+import hashlib
+import json
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 
@@ -2172,6 +2174,128 @@ def _scheduled_meal_checkin(meal_key: str, meal_label: str):
         db.close()
 
 
+def _nutrition_targets(db, settings) -> dict:
+    weight = None
+    try:
+        rows = crud.get_health_metrics(db, models.HealthMetricType.gewicht, days=120)
+        weight = rows[-1].value if rows else None
+    except Exception:
+        pass
+    protein_factor = 1.6 if settings.nutrition_goal == "muskelaufbau" else 1.2
+    kcal = settings.nutrition_kcal_target
+    if not kcal and weight:
+        adjustment = 300 if settings.nutrition_goal in ("zunehmen", "muskelaufbau") else -300 if settings.nutrition_goal == "abnehmen" else 0
+        kcal = max(1200, round(weight * 30 + adjustment, -1))
+    return {"kcal": kcal,
+            "protein_g": round(weight * protein_factor) if weight else None,
+            "fat_g": round(weight * 0.7) if weight else None}
+
+
+def _scheduled_nutrition_status(final: bool = False):
+    """Nachmittags nur bei deutlichem Defizit warnen, abends stets bilanzieren."""
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not (settings.notifications_enabled and settings.proactive_assistant_enabled):
+            return
+        targets = _nutrition_targets(db, settings)
+        summary = crud.meal_day_summary(db, date.today(), targets["kcal"])
+        totals = summary["totals"]
+        if not summary["entries"] and not final:
+            return
+        low = []
+        for key, label in (("kcal", "Kalorien"), ("protein_g", "Eiweiß"), ("fat_g", "Fett")):
+            target = targets.get(key)
+            threshold = .8 if final else .55
+            if target and totals.get(key, 0) < target * threshold:
+                low.append(f"{label} {totals.get(key, 0)}/{target}")
+        if not final and not low:
+            return
+        kcal_line = (f"{totals['kcal']}/{targets['kcal']} kcal"
+                     if targets.get("kcal") else f"{totals['kcal']} kcal (noch kein Ziel hinterlegt)")
+        if final:
+            text = (f"🍽️ Tagesbilanz: {kcal_line}; Eiweiß {totals['protein_g']} g, "
+                    f"Kohlenhydrate {totals['carbs_g']} g, Fett {totals['fat_g']} g.")
+            if low:
+                text += "\nHeute noch deutlich unter Ziel: " + ", ".join(low) + "."
+        else:
+            text = ("🥗 Zwischenstand: bisher deutlich unter deinem Tagesziel bei "
+                    + ", ".join(low)
+                    + ". Plane für heute noch eine passende, nährstoffreiche Mahlzeit ein.")
+        notifications.notify(settings, text)
+    finally:
+        db.close()
+
+
+DOCUMENT_INBOX = os.environ.get("KIES_DOCUMENT_INBOX", "/inbox")
+DOCUMENT_SCAN_BATCH = 2
+
+
+def _scheduled_document_insights():
+    """Neue Mail-Anhänge in kleinen Batches lesen und bei Handlungsbedarf melden."""
+    if not os.path.isdir(DOCUMENT_INBOX):
+        return
+    db = SessionLocal()
+    try:
+        settings = auth.get_or_create_settings(db)
+        if not (settings.notifications_enabled and settings.ollama_url and settings.ollama_model):
+            return
+        supported = {".pdf", ".png", ".jpg", ".jpeg", ".txt"}
+        done = 0
+        for root, _, files in os.walk(DOCUMENT_INBOX):
+            for name in sorted(files):
+                if done >= DOCUMENT_SCAN_BATCH:
+                    return
+                path = os.path.join(root, name)
+                if os.path.splitext(name)[1].lower() not in supported:
+                    continue
+                try:
+                    with open(path, "rb") as fh:
+                        content = fh.read(20 * 1024 * 1024)
+                    digest = hashlib.sha256(content).hexdigest()
+                    if db.query(models.DocumentInsight).filter_by(content_hash=digest).first():
+                        continue
+                    text = (content.decode("utf-8", "replace")[:8000]
+                            if name.lower().endswith(".txt") else
+                            document_extract.extract_receipt_text(
+                                settings.ollama_url, settings.ollama_model,
+                                settings.beleg_chat_model, content, name, max_chars=8000))
+                    if not text:
+                        text = "[Kein sicher lesbarer Text]"
+                    prompt = ("Bewerte dieses private Dokument aus Deutschland oder der Schweiz. "
+                              "Antworte nur als JSON: summary (maximal 2 Sätze), relevant (bool), "
+                              "action_required (bool), deadline (JJJJ-MM-TT oder null), reason. "
+                              "Handlungsbedarf nur bei konkreter Frist, Zahlung, Kündigung, Antwort, "
+                              "Vertragsänderung oder erkennbarem Risiko. Dokument:\n" + text[:8000])
+                    raw = ollama_client.chat(settings.ollama_url, settings.ollama_model,
+                                             [{"role": "user", "content": prompt}],
+                                             options={"num_ctx": 12288, "num_predict": 700})
+                    match = __import__("re").search(r"\{.*\}", raw, __import__("re").DOTALL)
+                    data = json.loads(match.group(0) if match else raw)
+                    deadline = None
+                    if data.get("deadline"):
+                        try: deadline = date.fromisoformat(str(data["deadline"])[:10])
+                        except ValueError: pass
+                    row = models.DocumentInsight(
+                        content_hash=digest, path=os.path.relpath(path, DOCUMENT_INBOX),
+                        summary=str(data.get("summary") or "")[:2000],
+                        relevant=bool(data.get("relevant")),
+                        action_required=bool(data.get("action_required")), deadline=deadline,
+                        reason=str(data.get("reason") or "")[:2000])
+                    db.add(row)
+                    db.commit()
+                    done += 1
+                    if row.relevant or row.action_required:
+                        deadline_text = f"\nFrist: {deadline.strftime('%d.%m.%Y')}" if deadline else ""
+                        notifications.notify(settings,
+                            f"📄 Neues wichtiges Dokument: {name}\n{row.summary}{deadline_text}"
+                            + (f"\nZu tun: {row.reason}" if row.action_required else ""))
+                except Exception:
+                    continue
+    finally:
+        db.close()
+
+
 def _scheduled_memory_distill():
     """Nachts: aus dem Gespräch der letzten 24 h + beantworteten Vorschlägen
     leise dauerhafte Merksätze ableiten, alten Chatverlauf zu einer
@@ -2601,6 +2725,18 @@ for _meal_key, _meal_label, _hour, _minute in (
         args=[_meal_key, _meal_label], id=f"meal_checkin_{_meal_key}",
         misfire_grace_time=1800, max_instances=1, coalesce=True,
     )
+scheduler.add_job(
+    _scheduled_nutrition_status, CronTrigger(hour=17, minute=30), args=[False],
+    id="nutrition_status", misfire_grace_time=1800, max_instances=1, coalesce=True,
+)
+scheduler.add_job(
+    _scheduled_nutrition_status, CronTrigger(hour=21, minute=0), args=[True],
+    id="nutrition_daily_summary", misfire_grace_time=3600, max_instances=1, coalesce=True,
+)
+scheduler.add_job(
+    _scheduled_document_insights, CronTrigger(minute="5,20,35,50"),
+    id="document_insights", misfire_grace_time=600, max_instances=1, coalesce=True,
+)
 scheduler.add_job(
     _scheduled_tax_reminder, CronTrigger(day_of_week="mon", hour=9, minute=0),
     id="tax_year_end_reminder", misfire_grace_time=3600,

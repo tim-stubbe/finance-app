@@ -46,11 +46,17 @@ def _nutrition_profile_dict(db) -> dict:
         "nutrition_kcal_target": s.nutrition_kcal_target,
         "height_cm": s.height_cm,
         "weight_kg": None, "bmi": None, "bmi_label": None,
+        "effective_kcal_target": s.nutrition_kcal_target,
+        "kcal_target_estimated": False,
     }
     try:
         rows = crud.get_health_metrics(db, models.HealthMetricType.gewicht, days=120)
         if rows:
             out["weight_kg"] = round(rows[-1].value, 1)
+            if not out["effective_kcal_target"]:
+                adjustment = 300 if goal in ("zunehmen", "muskelaufbau") else -300 if goal == "abnehmen" else 0
+                out["effective_kcal_target"] = max(1200, round(rows[-1].value * 30 + adjustment, -1))
+                out["kcal_target_estimated"] = True
             if s.height_cm:
                 m = s.height_cm / 100.0
                 bmi = rows[-1].value / (m * m)
@@ -92,6 +98,14 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
 @meals_router.get("/profile")
 def get_nutrition_profile(db: Session = Depends(get_db)):
     return _nutrition_profile_dict(db)
+
+
+@meals_router.get("/journal")
+def get_meal_journal(day: date = date.today(), db: Session = Depends(get_db)):
+    profile = _nutrition_profile_dict(db)
+    out = crud.meal_day_summary(db, day, profile["effective_kcal_target"])
+    out["kcal_target_estimated"] = profile["kcal_target_estimated"]
+    return out
 
 
 @meals_router.put("/profile")

@@ -156,9 +156,11 @@ def extract_receipt_text(
     if not modell:
         return None
 
-    nachricht = {"role": "user", "content": RECEIPT_TEXT_PROMPT, "images": images[:1]}
     try:
-        antwort = ollama_client.chat(ollama_url, modell, [nachricht], timeout=timeout)
+        antwort = ollama_client.analyze_image(
+            ollama_url, modell, base64.b64decode(images[0]), RECEIPT_TEXT_PROMPT,
+            mime_type="image/png" if filename.lower().endswith(".pdf") else "image/jpeg",
+            timeout=timeout)
     except Exception:
         return None
     return antwort.strip()[:max_chars] or None

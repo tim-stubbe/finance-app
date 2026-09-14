@@ -33,6 +33,25 @@ async function loadMealsTab() {
   renderMealsPlan(days, iso);
   renderMealsRecipes();
   loadMealsProfile();
+  loadMealsJournal();
+}
+
+async function loadMealsJournal() {
+  const host = document.getElementById("meals-journal");
+  const total = document.getElementById("meals-journal-total");
+  let data;
+  try { data = await api("/meals/journal"); } catch { return; }
+  const t = data.totals || {};
+  total.textContent = data.kcal_target
+    ? `${t.kcal || 0} / ${data.kcal_target} kcal${data.kcal_target_estimated ? " (geschätzt)" : ""}`
+    : `${t.kcal || 0} kcal`;
+  host.innerHTML = data.entries.length ? `<div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Zeit</th><th>Mahlzeit</th><th>Schätzung</th><th>Makros</th></tr></thead><tbody>${data.entries.map(e => `<tr>
+      <td>${new Date(e.eaten_at).toLocaleTimeString("de-DE", {hour:"2-digit",minute:"2-digit"})}</td>
+      <td><strong>${esc(e.meal)}</strong><br><span class="page-sub">${esc(e.description)}</span></td>
+      <td>${e.kcal == null ? "–" : `${e.kcal} kcal`}<br><span class="page-sub">${e.kcal_min ?? "?"}–${e.kcal_max ?? "?"} kcal</span></td>
+      <td class="page-sub">E ${e.protein_g ?? "?"} g · K ${e.carbs_g ?? "?"} g · F ${e.fat_g ?? "?"} g</td>
+    </tr>`).join("")}</tbody></table></div>` : `<p class="page-sub">Heute ist noch keine Mahlzeit erfasst.</p>`;
 }
 
 async function loadMealsProfile() {

@@ -2195,6 +2195,43 @@ class MealPlanEntry(Base):
     __table_args__ = (UniqueConstraint("date", "meal", name="uq_mealplan_date_meal"),)
 
 
+class MealLog(Base):
+    """Tatsächlich gegessene Mahlzeit, meist aus einem Telegram-Foto geschätzt."""
+
+    __tablename__ = "meal_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    eaten_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    meal = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    kcal_min = Column(Integer, nullable=True)
+    kcal_max = Column(Integer, nullable=True)
+    kcal = Column(Integer, nullable=True)
+    protein_g = Column(Integer, nullable=True)
+    carbs_g = Column(Integer, nullable=True)
+    fat_g = Column(Integer, nullable=True)
+    uncertainty = Column(Text, nullable=True)
+    source = Column(String, nullable=False, default="telegram_foto")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class DocumentInsight(Base):
+    """Einmalige KI-Sichtung einer Datei aus dem automatischen Posteingang."""
+
+    __tablename__ = "document_insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content_hash = Column(String, nullable=False, unique=True, index=True)
+    path = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    relevant = Column(Boolean, nullable=False, default=False)
+    action_required = Column(Boolean, nullable=False, default=False)
+    deadline = Column(Date, nullable=True)
+    reason = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="neu")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class SyncTombstone(Base):
     """Lösch-Protokoll für den Offline-Sync des nativen Clients - fast alle
     Löschungen in dieser App sind Hard Deletes (siehe crud.py), ohne dieses

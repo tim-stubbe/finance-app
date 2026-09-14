@@ -1403,17 +1403,42 @@ def _handle_meal_photo(db, settings, token: str, chat_id: str, photo: dict,
         return False
     image = _download_telegram_file(token, photo["file_id"])
     prompt = (
-        "Analysiere dieses Essensfoto auf Deutsch. Nenne erkannte Speisen und geschätzte "
-        "Portionsgrößen. Schätze Gesamtkalorien als realistische Spanne und Mittelwert sowie "
-        "Protein, Kohlenhydrate und Fett grob. Sage klar, was unsicher ist. Antworte kompakt, "
-        "aber hilfreich. Zusatz des Nutzers: " + (caption.strip() or "keiner"))
+        "Analysiere dieses Essensfoto. Schätze Portionen und Nährwerte realistisch. "
+        "Antworte ausschließlich als JSON mit description, kcal_min, kcal_max, kcal, "
+        "protein_g, carbs_g, fat_g und uncertainty. Alle Nährwerte sind ganze Zahlen; "
+        "kcal ist der plausible Mittelwert. Zusatz des Nutzers: " + (caption.strip() or "keiner"))
     model = settings.ollama_model or settings.beleg_chat_model
     result = ollama_client.analyze_image(settings.ollama_url, model, image, prompt)
+    match = re.search(r"\{.*\}", result, re.DOTALL)
+    try:
+        data = json.loads(match.group(0) if match else result)
+    except (ValueError, TypeError):
+        raise ValueError("Das Modell hat keine auswertbaren Nährwerte geliefert")
+    def number(key):
+        try:
+            return max(0, int(round(float(data.get(key)))))
+        except (TypeError, ValueError):
+            return None
+    meal_key = (pending.dedup_key or "").rsplit(":", 1)[-1]
+    labels = {"fruehstueck": "Frühstück", "mittag": "Mittagessen",
+              "snack": "Nachmittags-Snack", "abend": "Abendessen"}
+    log = models.MealLog(
+        meal=labels.get(meal_key, meal_key), description=str(data.get("description") or "").strip(),
+        kcal_min=number("kcal_min"), kcal_max=number("kcal_max"), kcal=number("kcal"),
+        protein_g=number("protein_g"), carbs_g=number("carbs_g"), fat_g=number("fat_g"),
+        uncertainty=str(data.get("uncertainty") or "").strip() or None,
+    )
+    db.add(log)
+    summary = (f"{log.description or 'Mahlzeit'}\n"
+               f"Kalorien: etwa {log.kcal} kcal (Spanne {log.kcal_min}–{log.kcal_max})\n"
+               f"Eiweiß {log.protein_g} g · Kohlenhydrate {log.carbs_g} g · Fett {log.fat_g} g")
+    if log.uncertainty:
+        summary += "\nUnsicherheit: " + log.uncertainty
     pending.status = "beantwortet"
-    pending.result_text = result
+    pending.result_text = summary
     pending.answered_at = datetime.utcnow()
     db.commit()
-    _send(token, chat_id, "🍽️ Meine grobe Schätzung:\n\n" + result)
+    _send(token, chat_id, "🍽️ Meine grobe Schätzung:\n\n" + summary)
     return True
 
 

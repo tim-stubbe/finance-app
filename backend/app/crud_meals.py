@@ -4,7 +4,7 @@ crud.py zurueckimportiert.
 """
 
 import re
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -128,6 +128,33 @@ def clear_meal_plan_entry(db: Session, d: date, meal: str) -> bool:
     db.delete(e)
     db.commit()
     return True
+
+
+def meal_log_out(row: models.MealLog) -> dict:
+    return {"id": row.id, "eaten_at": row.eaten_at.isoformat(), "meal": row.meal,
+            "description": row.description or "", "kcal_min": row.kcal_min,
+            "kcal_max": row.kcal_max, "kcal": row.kcal,
+            "protein_g": row.protein_g, "carbs_g": row.carbs_g,
+            "fat_g": row.fat_g, "uncertainty": row.uncertainty or "",
+            "source": row.source}
+
+
+def get_meal_logs(db: Session, day: date) -> list[dict]:
+    start = datetime.combine(day, time.min)
+    end = start + timedelta(days=1)
+    rows = (db.query(models.MealLog)
+            .filter(models.MealLog.eaten_at >= start, models.MealLog.eaten_at < end)
+            .order_by(models.MealLog.eaten_at).all())
+    return [meal_log_out(r) for r in rows]
+
+
+def meal_day_summary(db: Session, day: date, target: int | None = None) -> dict:
+    entries = get_meal_logs(db, day)
+    keys = ("kcal", "protein_g", "carbs_g", "fat_g")
+    totals = {k: sum((e.get(k) or 0) for e in entries) for k in keys}
+    return {"date": day.isoformat(), "entries": entries, "totals": totals,
+            "kcal_target": target,
+            "kcal_remaining": (target - totals["kcal"]) if target else None}
 
 
 # ---------------- Einkaufsliste ----------------

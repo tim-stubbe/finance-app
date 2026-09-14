@@ -40,7 +40,7 @@
 // v90: Hub-Karten "Kies-Vorschläge", "Was Kies sich gemerkt hat", "Server-Strom"
 // (js/hub-proactive.js, routers/proactive.py + assistant_memory_routes.py + energy.py),
 // Server-Strommesser-Feld in den Smart-Home-Einstellungen.
-const CACHE_NAME = "finanztool-shell-v90";
+const CACHE_NAME = "finanztool-shell-v91";
 const SHELL_ASSETS = [
   "/", "/index.html", "/style.css", "/manifest.json", "/alpen-bg.jpg",
   "/js/core.js", "/js/auth-helpers.js", "/js/accounts.js", "/js/categories.js", "/js/investments.js",

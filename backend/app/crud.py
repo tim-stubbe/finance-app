@@ -104,6 +104,7 @@ from .crud_smarthome import (
 from .crud_meals import (
     get_recipes, get_recipe, create_recipe, update_recipe, delete_recipe,
     get_meal_plan, set_meal_plan_entry, clear_meal_plan_entry, shopping_list,
+    get_meal_logs, meal_day_summary,
 )
 from .crud_devices import (
     list_devices, create_device, revoke_device, authenticate_device,
