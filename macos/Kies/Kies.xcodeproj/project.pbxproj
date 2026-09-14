@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		077886866D9A8E05D4BB7600 /* InvestmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F9895247D0E91EACDAB4F0 /* InvestmentsView.swift */; };
+		07CEE19CE0352EAAA49E4BFA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8F0560CA7551793C58149F63 /* Assets.xcassets */; };
 		08518DE87B20ACB6118F5523 /* ShareComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F9F33F1FD689F6223BF5A0 /* ShareComposeView.swift */; };
 		13C8EB9492779EA87C304DC1 /* KiesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 65BF779BF24FCE8A842FCB93 /* KiesCore */; };
 		17E2FB83B1FA148965C2D5D8 /* LifeAreasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67BDE07271DA65961F2A88CB /* LifeAreasView.swift */; };
@@ -21,6 +22,7 @@
 		326F90F46B74CA76DD560D57 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB383E45F1D2E267830E6E5 /* PairingView.swift */; };
 		37D64962C98845ECBAC0A905 /* PremiumTodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAC87F526ED9B0E6059BFBF /* PremiumTodayView.swift */; };
 		3933665AC3590B87E3C2996C /* QuickCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */; };
+		3F36AEE950CFC5E321B6DB64 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8F0560CA7551793C58149F63 /* Assets.xcassets */; };
 		47108D58AF64315A96F7F14A /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5357355D6AA09CC225075155 /* MoreView.swift */; };
 		58DE16346DAA502208A0B365 /* KiesTodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B946282432CB65515E5B9F4D /* KiesTodayWidget.swift */; };
 		6AE7088E2703106A3753482B /* ConflictsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F087B937238D319A6DEBE69 /* ConflictsView.swift */; };
@@ -130,6 +132,7 @@
 		7952ED77D3051D1D14790CAC /* QuickCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCaptureView.swift; sourceTree = "<group>"; };
 		85AEA2E4BEAAA721535994E7 /* KiesWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiesWidgetBundle.swift; sourceTree = "<group>"; };
 		88B5A0449D8D65E38F7C81F5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8F0560CA7551793C58149F63 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		908A69E1CD1167980A8C10B2 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
 		93B887C8AB72E39018623B76 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		ADF728876ACF7EE6CE1390A3 /* TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsView.swift; sourceTree = "<group>"; };
@@ -283,6 +286,7 @@
 		C2B546B5480A9660C45622C8 /* KiesDrive */ = {
 			isa = PBXGroup;
 			children = (
+				8F0560CA7551793C58149F63 /* Assets.xcassets */,
 				52564A3A989C08C032DF2C4A /* ContentView.swift */,
 				30798DDC02B3DB84371856C0 /* DriveAPI.swift */,
 				F7FD841C7B4E4E02FDD1F2C5 /* DriveModels.swift */,
@@ -374,6 +378,7 @@
 			buildConfigurationList = 56998140F9AB6E5FB0B1C8A8 /* Build configuration list for PBXNativeTarget "KiesDriveiOS" */;
 			buildPhases = (
 				2067DA8D03A55BB632B096C5 /* Sources */,
+				A719A1E6469CADCDEA35B562 /* Resources */,
 				29C1276FEA431EC4BBDCF6D1 /* Frameworks */,
 			);
 			buildRules = (
@@ -416,6 +421,7 @@
 			buildConfigurationList = FA6AC3D5F07E888C2D6230D6 /* Build configuration list for PBXNativeTarget "KiesDriveMac" */;
 			buildPhases = (
 				A4B23C187B9442B68D15DDB7 /* Sources */,
+				0343B5EE150C73A823E492F7 /* Resources */,
 				5C203C8E1096DCC0DCA6F1B1 /* Frameworks */,
 			);
 			buildRules = (
@@ -502,11 +508,27 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		0343B5EE150C73A823E492F7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				07CEE19CE0352EAAA49E4BFA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		85A2EC9D15C235B36D5F7F39 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				F3C8B0F2B1B6D04F206C91B7 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A719A1E6469CADCDEA35B562 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3F36AEE950CFC5E321B6DB64 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -62,18 +62,30 @@ struct DriveContentView: View {
                 .disabled(planner.destination == nil || planner.isLoading)
             }
 
-            if let route = planner.route {
+            if !planner.legs.isEmpty {
                 Section("Route") {
-                    Label(formatDistance(route.distance), systemImage: "road.lanes")
-                    Label(formatTime(route.expectedTravelTime), systemImage: "clock")
+                    Label(formatDistance(planner.totalDistance), systemImage: "road.lanes")
+                    Label(formatTime(planner.totalTravelTime), systemImage: "clock")
                     if settings.avoidTolls { Label("Mautstraßen werden vermieden", systemImage: "eurosign.slash") }
+                    if let via = planner.viaStation {
+                        Label("Zwischenstopp: \(via.brand.isEmpty ? via.name : via.brand)", systemImage: "fuelpump.fill")
+                        Button("Zwischenstopp entfernen", systemImage: "xmark.circle") {
+                            guard let start = location.location?.coordinate else { return }
+                            Task { await planner.toggleWaypoint(via, from: start, settings: settings) }
+                        }
+                    }
                     Button("Navigation in Apple Karten starten", systemImage: "location.fill") { openInMaps() }
                 }
                 Section("Fahrhinweise") {
-                    ForEach(Array(route.steps.dropFirst().enumerated()), id: \.offset) { _, step in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(step.instructions.isEmpty ? "Weiter" : step.instructions)
-                            Text(formatDistance(step.distance)).font(.caption).foregroundStyle(.secondary)
+                    ForEach(Array(planner.legs.enumerated()), id: \.offset) { legIndex, leg in
+                        ForEach(Array(leg.steps.dropFirst().enumerated()), id: \.offset) { _, step in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(step.instructions.isEmpty ? "Weiter" : step.instructions)
+                                Text(formatDistance(step.distance)).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        if legIndex == 0 && planner.legs.count > 1 {
+                            Label("Zwischenstopp erreicht", systemImage: "fuelpump.fill").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -88,15 +100,29 @@ struct DriveContentView: View {
                     Text("Keine geöffneten Tankstellen mit Preis in Routennähe gefunden.").foregroundStyle(.secondary)
                 }
                 ForEach(planner.stations) { station in
-                    Button { selectedStation = station; position = .region(.init(center: station.coordinate, latitudinalMeters: 8_000, longitudinalMeters: 8_000)) } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(station.brand.isEmpty ? station.name : station.brand)
-                                Text("\(station.street), \(station.place)").font(.caption).foregroundStyle(.secondary)
+                    let isVia = planner.viaStation?.id == station.id
+                    HStack {
+                        Button { selectedStation = station; position = .region(.init(center: station.coordinate, latitudinalMeters: 8_000, longitudinalMeters: 8_000)) } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(station.brand.isEmpty ? station.name : station.brand)
+                                    Text("\(station.street), \(station.place)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(String(format: "%.3f €", station.price)).bold().monospacedDigit()
                             }
-                            Spacer()
-                            Text(String(format: "%.3f €", station.price)).bold().monospacedDigit()
                         }
+                        .buttonStyle(.plain)
+                        Button {
+                            guard let start = location.location?.coordinate else { return }
+                            Task { await planner.toggleWaypoint(station, from: start, settings: settings) }
+                        } label: {
+                            Image(systemName: isVia ? "checkmark.circle.fill" : "plus.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(isVia ? .green : .accentColor)
+                        .disabled(planner.route == nil)
+                        .help(isVia ? "Als Zwischenstopp entfernen" : "Als Zwischenstopp zur Route hinzufügen")
                     }
                 }
             }
@@ -108,9 +134,9 @@ struct DriveContentView: View {
     @ViewBuilder
     private var map: some View {
         switch settings.mapAppearance {
-        case .standard: mapBase.mapStyle(.standard(elevation: .realistic))
+        case .standard: mapBase.mapStyle(.standard(elevation: .realistic, showsTraffic: true))
         case .satellite: mapBase.mapStyle(.imagery(elevation: .realistic))
-        case .hybrid: mapBase.mapStyle(.hybrid(elevation: .realistic))
+        case .hybrid: mapBase.mapStyle(.hybrid(elevation: .realistic, showsTraffic: true))
         }
     }
 
@@ -118,7 +144,9 @@ struct DriveContentView: View {
         Map(position: $position) {
             UserAnnotation()
             if let destination = planner.destination { Marker(item: destination) }
-            if let route = planner.route { MapPolyline(route.polyline).stroke(.blue, lineWidth: 7) }
+            ForEach(Array(planner.legs.enumerated()), id: \.offset) { _, leg in
+                MapPolyline(leg.polyline).stroke(.blue, lineWidth: 7)
+            }
             ForEach(planner.stations) { station in
                 Annotation(station.brand.isEmpty ? station.name : station.brand, coordinate: station.coordinate) {
                     VStack(spacing: 2) {
