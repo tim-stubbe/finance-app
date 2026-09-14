@@ -53,3 +53,10 @@ enum DriveMapAppearance: String, CaseIterable, Identifiable {
 }
 
 struct DriveChatResponse: Decodable { let reply: String? }
+
+struct SpeedLimitResult: Decodable {
+    let maxspeed: Int?
+    let unlimited: Bool
+}
+
+struct SpeedLimitEnvelope: Decodable { let limits: [SpeedLimitResult] }

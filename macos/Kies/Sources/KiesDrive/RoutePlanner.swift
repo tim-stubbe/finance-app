@@ -1,6 +1,10 @@
 import Foundation
 import MapKit
 
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
 @MainActor
 final class RoutePlanner: ObservableObject {
     @Published var destinationText = ""
@@ -12,6 +16,10 @@ final class RoutePlanner: ObservableObject {
     @Published var stations: [FuelStation] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    /// Tempolimits entlang der Route, parallel zu `speedLimitPoints` indiziert.
+    private var speedLimitPoints: [CLLocationCoordinate2D] = []
+    private var speedLimits: [SpeedLimitResult] = []
 
     /// Erste Teilstrecke - für Rückwärtskompatibilität und schnellen Zugriff
     /// auf die "Hauptroute" (ohne Zwischenstopp identisch mit der Gesamtroute).
@@ -50,7 +58,33 @@ final class RoutePlanner: ObservableObject {
                 legs = routes.first.map { [$0] } ?? []
             }
             await loadStations(fuel: settings.fuel)
+            await loadSpeedLimits()
         } catch { errorMessage = "Route konnte nicht berechnet werden: \(error.localizedDescription)" }
+    }
+
+    /// Lädt Tempolimits für abgetastete Routenpunkte (OpenStreetMap/Overpass).
+    /// Fehler hier werden bewusst nicht als `errorMessage` angezeigt, damit ein
+    /// überlasteter Overpass-Dienst nicht die restliche Routenplanung blockiert.
+    func loadSpeedLimits() async {
+        guard !legs.isEmpty else { speedLimitPoints = []; speedLimits = []; return }
+        let points = legs.flatMap { sample($0.polyline, maximum: 80) }
+        speedLimitPoints = points
+        speedLimits = (try? await DriveAPI.speedLimits(along: points)) ?? []
+    }
+
+    /// Aktuelles Tempolimit für den nächstgelegenen abgetasteten Routenpunkt
+    /// zur übergebenen Position (z.B. der aktuelle Standort während der Fahrt).
+    func currentSpeedLimit(near coordinate: CLLocationCoordinate2D) -> SpeedLimitResult? {
+        guard !speedLimitPoints.isEmpty else { return nil }
+        let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        var bestIndex = 0
+        var bestDistance = Double.greatestFiniteMagnitude
+        for (i, point) in speedLimitPoints.enumerated() {
+            let dist = here.distance(from: CLLocation(latitude: point.latitude, longitude: point.longitude))
+            if dist < bestDistance { bestDistance = dist; bestIndex = i }
+        }
+        guard bestDistance <= 200 else { return nil }
+        return speedLimits[safe: bestIndex]
     }
 
     private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings, alternates: Bool) async throws -> [MKRoute] {

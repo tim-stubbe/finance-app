@@ -161,6 +161,12 @@ struct DriveContentView: View {
             }
         }
         .mapControls { MapCompass(); MapScaleView(); MapUserLocationButton() }
+        .overlay(alignment: .topLeading) {
+            if let coordinate = location.location?.coordinate,
+               let limit = planner.currentSpeedLimit(near: coordinate) {
+                speedLimitSign(limit).padding()
+            }
+        }
         .overlay(alignment: .top) {
             HStack {
                 if settings.avoidTolls { Label("Vignetten/Maut vermeiden", systemImage: "checkmark.shield.fill") }
@@ -172,6 +178,24 @@ struct DriveContentView: View {
             }
             .padding(9).background(.regularMaterial, in: Capsule()).padding()
         }
+    }
+
+    /// Rundes, deutsches Tempolimit-Schild - weißer Grund mit rotem Ring,
+    /// bei "kein Limit" (freie Autobahn) ein durchgestrichenes Schild.
+    @ViewBuilder
+    private func speedLimitSign(_ limit: SpeedLimitResult) -> some View {
+        ZStack {
+            Circle().fill(.white).frame(width: 56, height: 56)
+            if limit.unlimited {
+                Circle().strokeBorder(.black, lineWidth: 3)
+                Text("120").font(.system(size: 16, weight: .bold)).foregroundStyle(.black)
+                Rectangle().fill(.black).frame(width: 56, height: 4).rotationEffect(.degrees(-35))
+            } else if let maxspeed = limit.maxspeed {
+                Circle().strokeBorder(.red, lineWidth: 5)
+                Text("\(maxspeed)").font(.system(size: 20, weight: .bold)).foregroundStyle(.black)
+            }
+        }
+        .shadow(radius: 3)
     }
 
     private func openInMaps() {

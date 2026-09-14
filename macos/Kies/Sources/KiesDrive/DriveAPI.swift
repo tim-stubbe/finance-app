@@ -67,4 +67,13 @@ enum DriveAPI {
         let result = try JSONDecoder().decode(DriveChatResponse.self, from: payload)
         return result.reply ?? "Jarvis hat keine Antwort geliefert."
     }
+
+    static func speedLimits(along points: [CLLocationCoordinate2D]) async throws -> [SpeedLimitResult] {
+        guard !points.isEmpty else { return [] }
+        let body = try JSONSerialization.data(withJSONObject: [
+            "points": points.map { ["lat": $0.latitude, "lon": $0.longitude] },
+        ])
+        let payload = try await data(for: try request(path: "/api/navigation/speed-limits", method: "POST", body: body))
+        return try JSONDecoder().decode(SpeedLimitEnvelope.self, from: payload).limits
+    }
 }
