@@ -2226,6 +2226,7 @@ class DocumentInsight(Base):
     summary = Column(Text, nullable=True)
     relevant = Column(Boolean, nullable=False, default=False)
     action_required = Column(Boolean, nullable=False, default=False)
+    urgency = Column(String, nullable=False, default="niedrig")
     deadline = Column(Date, nullable=True)
     reason = Column(Text, nullable=True)
     status = Column(String, nullable=False, default="neu")

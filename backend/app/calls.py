@@ -1,8 +1,6 @@
-"""Echte Sprachanrufe per Twilio für die zwei Fälle, die der Nutzer als wirklich
-zeitkritisch eingestuft hat: ein akuter Cashflow-Notfall (Kontostand rutscht in
-1-3 Tagen ins Minus) und ein automatisch erreichtes Ziel. Alles andere (Budget
-überschritten, Cashflow-Warnung außerhalb des Notfall-Fensters) bleibt bei der
-Telegram-Textbenachrichtigung - ein Anruf ist bewusst die Ausnahme, nicht die Regel.
+"""Echte Sprachanrufe per Twilio für zeitkritische Fälle: akute Cashflow-
+Notfälle, erreichte Ziele sowie explizit hoch eingestufte Jarvis- und
+Dokumentenmeldungen. Gewöhnliche Hinweise bleiben Telegram-Nachrichten.
 
 Nutzt Twilios `Twiml`-Parameter direkt in der Call-Anfrage statt einer
 Callback-URL, weil die App nur über Tailscale erreichbar ist und Twilio keinen

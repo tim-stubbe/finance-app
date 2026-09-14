@@ -65,6 +65,9 @@ from .db_migrate import run_migrations, verify_and_heal_schema
 run_migrations()
 
 models.Base.metadata.create_all(bind=engine)
+ensure_columns("document_insights", {
+    "urgency": "VARCHAR DEFAULT 'niedrig'",
+})
 ensure_columns("settings", {
     "enablebanking_app_id": "VARCHAR",
     "enablebanking_private_key_encrypted": "TEXT",
@@ -2144,6 +2147,8 @@ def _scheduled_proactive_assistant():
                                             settings.ntfy_topic, "❗ " + p.title, urgent=True)
                 except Exception:
                     pass
+            if p.urgency == "hoch":
+                calls.call(settings, f"Wichtige Meldung von Kies. {p.title}. {p.body or ''}")
     finally:
         db.close()
 
@@ -2264,7 +2269,10 @@ def _scheduled_document_insights():
                         text = "[Kein sicher lesbarer Text]"
                     prompt = ("Bewerte dieses private Dokument aus Deutschland oder der Schweiz. "
                               "Antworte nur als JSON: summary (maximal 2 Sätze), relevant (bool), "
-                              "action_required (bool), deadline (JJJJ-MM-TT oder null), reason. "
+                              "action_required (bool), urgency (niedrig, mittel oder hoch), "
+                              "deadline (JJJJ-MM-TT oder null), reason. Setze hoch nur bei einer "
+                              "Frist innerhalb von 3 Tagen, drohender Sperre/Mahnung, erheblichem "
+                              "finanziellen oder rechtlichen Nachteil. "
                               "Handlungsbedarf nur bei konkreter Frist, Zahlung, Kündigung, Antwort, "
                               "Vertragsänderung oder erkennbarem Risiko. Dokument:\n" + text[:8000])
                     raw = ollama_client.chat(settings.ollama_url, settings.ollama_model,
@@ -2280,7 +2288,11 @@ def _scheduled_document_insights():
                         content_hash=digest, path=os.path.relpath(path, DOCUMENT_INBOX),
                         summary=str(data.get("summary") or "")[:2000],
                         relevant=bool(data.get("relevant")),
-                        action_required=bool(data.get("action_required")), deadline=deadline,
+                        action_required=bool(data.get("action_required")),
+                        urgency=(str(data.get("urgency") or "niedrig").lower()
+                                 if str(data.get("urgency") or "").lower() in ("niedrig", "mittel", "hoch")
+                                 else "niedrig"),
+                        deadline=deadline,
                         reason=str(data.get("reason") or "")[:2000])
                     db.add(row)
                     db.commit()
@@ -2290,6 +2302,9 @@ def _scheduled_document_insights():
                         notifications.notify(settings,
                             f"📄 Neues wichtiges Dokument: {name}\n{row.summary}{deadline_text}"
                             + (f"\nZu tun: {row.reason}" if row.action_required else ""))
+                        if row.urgency == "hoch" and row.action_required:
+                            calls.call(settings,
+                                f"Wichtiges Dokument von Kies. {name}. {row.summary}. {row.reason or ''}")
                 except Exception:
                     continue
     finally:
