@@ -1878,7 +1878,7 @@ def _scheduled_net_worth_snapshot():
         db.close()
 
 
-DIGEST_HOURS = [6, 9, 12, 15, 18, 21, 0]  # alle 3 Stunden, 06:30 bis 00:30
+DIGEST_HOURS = [8, 14, 20]  # genau drei gebündelte Statusberichte pro Tag
 
 
 def _scheduled_digest():
@@ -2780,12 +2780,10 @@ scheduler.add_job(
     id="smarthome_automation_suggestions", misfire_grace_time=3600,
 )
 scheduler.add_job(
-    # 3x taeglich statt alle 5 min: proactive.run() ruft jedes Mal die lokale
-    # KI (gemma3:4b) - alle 5 min waren ~230 Inferenzen/Tag = viel CPU/Strom
-    # ohne Mehrwert (die Vorschlaege sind nicht minutenkritisch; Dringendes
-    # laeuft ueber _scheduled_anomaly_check). Feste Zeiten, ausserhalb der
-    # Ruhezeiten 02-07.
-    _scheduled_proactive_assistant, CronTrigger(hour="8,14,20", minute=7),
+    # Stündlich tagsüber nach neuen, handlungsrelevanten Zusammenhängen suchen.
+    # Das ist bewusst vom dreimal täglichen Status-Digest getrennt. Derselbe
+    # Hinweis wird in proactive.run() sieben Tage lang entdoppelt.
+    _scheduled_proactive_assistant, CronTrigger(hour="8-22", minute=7),
     id="proactive_assistant", misfire_grace_time=1800, max_instances=1, coalesce=True,
 )
 for _meal_key, _meal_label, _hour, _minute in (

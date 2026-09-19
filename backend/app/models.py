@@ -336,22 +336,20 @@ class Settings(Base):
     # eine Umbuchungs-Markierung (anders als eine Kategorie) nicht rueckwirkend
     # nachvollziehbar sein muss.
     transfers_marked_since_digest = Column(Integer, nullable=False, default=0)
-    # --- Morgen-Briefing (main._scheduled_morning_briefing) - ergänzt den
-    # 3-stündlichen Digest um einen EINEN kompakten Ping am Morgen, siehe
+    # --- Morgen-Briefing (main._scheduled_morning_briefing) - ergänzt die
+    # drei täglichen Status-Digests um einen EINEN kompakten Ping am Morgen, siehe
     # crud.build_morning_briefing. send_empty Default False: "still, wenn
     # nichts ist" ist ausdrücklicher Nutzerwunsch, nicht die Ausnahme.
     morning_briefing_enabled = Column(Boolean, nullable=False, default=True)
     morning_briefing_hour = Column(Integer, nullable=False, default=7)
     morning_briefing_minute = Column(Integer, nullable=False, default=30)
     morning_briefing_send_empty = Column(Boolean, nullable=False, default=False)
-    # --- Proaktiver KI-Assistent: prüft alle 10 Minuten einen breiten Lebens-
+    # --- Proaktiver KI-Assistent: prüft tagsüber stündlich einen breiten Lebens-
     # Snapshot (Finanzen/Todos/Kalender/Ziele/Fristen) und meldet sich per
     # Telegram, wenn die lokale KI genau eine wirklich nützliche, nicht
     # offensichtliche Sache sieht (siehe proactive.py). Default False (opt-in).
-    # Die KI wird nur befragt, wenn sich der Snapshot seit dem letzten Lauf
-    # geändert hat (last_snapshot_hash); last_hash dedupliziert identische
-    # Meldungen; min_gap_hours ist historisch (feste 8-Minuten-Untergrenze in
-    # proactive.py) und wird nicht mehr ausgewertet.
+    # Identische und ähnliche Meldungen werden sieben Tage entdoppelt;
+    # min_gap_hours und die Hash-Felder bleiben nur aus Kompatibilitätsgründen.
     proactive_assistant_enabled = Column(Boolean, nullable=False, default=False)
     proactive_assistant_min_gap_hours = Column(Integer, nullable=False, default=4)
     proactive_assistant_last_sent_at = Column(DateTime, nullable=True)
