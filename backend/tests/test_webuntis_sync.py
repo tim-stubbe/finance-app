@@ -51,3 +51,6 @@ def test_sync_only_touches_webuntis_resources(monkeypatch):
     assert written == ["https://dav/tim/arbeit_stubbe/webuntis-42@kies.ics"]
     assert deleted == ["https://dav/tim/arbeit_stubbe/webuntis-old@kies.ics"]
     assert result["created"] == 1 and result["removed"] == 1
+    assert result["details"][0]["type"] == "neu"
+    saved = __import__("json").loads(settings.webuntis_state_json)
+    assert "fingerprints" in saved and "events" in saved

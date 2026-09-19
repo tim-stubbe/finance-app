@@ -2551,11 +2551,27 @@ def _scheduled_webuntis_sync():
         db.commit()
         changes = result["created"] + result["changed"] + result["removed"]
         if changes and not first_sync and not result["errors"]:
+            detail_lines = []
+            for change in result.get("details", [])[:6]:
+                event = change.get("event") or {}
+                try:
+                    start = datetime.fromisoformat(event["start"])
+                    when = start.strftime("%a, %d.%m. %H:%M")
+                    when = {"Mon": "Mo", "Tue": "Di", "Wed": "Mi", "Thu": "Do",
+                            "Fri": "Fr", "Sat": "Sa", "Sun": "So"}.get(when[:3], when[:2]) + when[3:]
+                except (KeyError, TypeError, ValueError):
+                    when = "Zeit unbekannt"
+                title = event.get("title") or "Unterricht"
+                room = f", Raum {event['location']}" if event.get("location") else ""
+                detail_lines.append(f"• {change['type'].capitalize()}: {when} – {title}{room}")
+            detail = "\n" + "\n".join(detail_lines) if detail_lines else ""
+            if len(result.get("details", [])) > 6:
+                detail += f"\n• … und {len(result['details']) - 6} weitere Änderung(en)"
             notifications.notify(
                 settings,
                 f"🎓 WebUntis geändert: {result['created']} neu, "
                 f"{result['changed']} geändert, {result['removed']} entfallen. "
-                "Der Kalender „Arbeit Stubbe“ ist aktualisiert.",
+                f"Der Kalender „Arbeit Stubbe“ ist aktualisiert.{detail}",
             )
     except Exception:
         pass

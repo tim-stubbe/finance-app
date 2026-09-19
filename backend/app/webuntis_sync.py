@@ -148,19 +148,39 @@ def _fingerprint(event: dict) -> str:
     return hashlib.sha256(json.dumps(relevant, default=str, sort_keys=True).encode()).hexdigest()
 
 
+def _summary(event: dict) -> dict:
+    """Kleine, JSON-fähige Darstellung für verständliche Änderungsmeldungen."""
+    return {
+        "title": event.get("title") or "Unterricht",
+        "start": event["start"].isoformat(timespec="minutes"),
+        "end": event["end"].isoformat(timespec="minutes"),
+        "location": event.get("location"),
+        "cancelled": bool(event.get("cancelled")),
+    }
+
+
 def sync(settings, password: str, radicale_password: str, today: date | None = None) -> dict:
     today = today or date.today()
     start, end = today - timedelta(days=1), today + timedelta(days=28)
     periods = fetch_periods(settings.webuntis_url, settings.webuntis_username, password, start, end)
     events = [event for event in (normalise_period(p) for p in periods) if event]
     current = {event["uid"]: _fingerprint(event) for event in events}
+    current_events = {event["uid"]: _summary(event) for event in events}
     try:
-        previous = json.loads(settings.webuntis_state_json or "{}")
+        stored = json.loads(settings.webuntis_state_json or "{}")
     except (TypeError, json.JSONDecodeError):
-        previous = {}
+        stored = {}
+    # Abwärtskompatibel zum alten Format {uid: fingerprint}.
+    if isinstance(stored, dict) and "fingerprints" in stored:
+        previous = stored.get("fingerprints") or {}
+        previous_events = stored.get("events") or {}
+    else:
+        previous = stored if isinstance(stored, dict) else {}
+        previous_events = {}
     calendar = settings.webuntis_calendar_url.rstrip("/") + "/"
     created = changed = removed = 0
     errors: list[str] = []
+    details: list[dict] = []
 
     for event in events:
         resource = calendar + event["uid"] + ".ics"
@@ -172,8 +192,11 @@ def sync(settings, password: str, radicale_password: str, today: date | None = N
             radicale_sync.put_ics(resource, settings.radicale_username, radicale_password, build_event(event), etag)
             if event["uid"] in previous:
                 changed += 1
+                details.append({"type": "geändert", "before": previous_events.get(event["uid"]),
+                                "event": current_events[event["uid"]]})
             else:
                 created += 1
+                details.append({"type": "neu", "event": current_events[event["uid"]]})
         except Exception as exc:
             errors.append(f"{event['title']}: {type(exc).__name__}")
 
@@ -183,10 +206,14 @@ def sync(settings, password: str, radicale_password: str, today: date | None = N
         try:
             radicale_sync.delete_ics(calendar + uid + ".ics", settings.radicale_username, radicale_password)
             removed += 1
+            details.append({"type": "entfallen", "event": previous_events.get(uid), "uid": uid})
         except Exception as exc:
             errors.append(f"Entfernen {uid}: {type(exc).__name__}")
 
     if not errors:
-        settings.webuntis_state_json = json.dumps(current, sort_keys=True)
+        settings.webuntis_state_json = json.dumps(
+            {"fingerprints": current, "events": current_events}, sort_keys=True
+        )
         settings.webuntis_last_sync_at = datetime.utcnow()
-    return {"created": created, "changed": changed, "removed": removed, "periods": len(events), "errors": errors}
+    return {"created": created, "changed": changed, "removed": removed,
+            "periods": len(events), "errors": errors, "details": details}

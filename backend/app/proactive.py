@@ -42,7 +42,7 @@ _SYSTEM = (
     "ausbauen' + Ziel 'Umzug Schweiz' + '190 Fahrten unklassifiziert' + "
     "anstehende Steuer -> ein Vorschlag, der das zusammenbringt. Ein guter "
     "Vorschlag spart Tim mehrere Handgriffe auf einmal.\n\n"
-    "Du antwortest AUSSCHLIESSLICH mit JSON, HÖCHSTENS 3 Vorschläge, in genau "
+    "Du antwortest AUSSCHLIESSLICH mit JSON, HÖCHSTENS 1 gebündelten Vorschlag, in genau "
     "dieser Form:\n"
     '{"proposals": [\n'
     '  {"kind": "wahl|bestaetigen|info",\n'
@@ -54,7 +54,11 @@ _SYSTEM = (
     '      {"label": "Klartext für den Button", "action": {"type": "...", "params": {...}}}\n'
     "   ]}\n"
     "]}\n\n"
-    "Halte body kurz - keine langen Erklärungen, kein Zeilenumbruch im Text.\n"
+    "Bevorzuge konkrete Terminübersichten: nenne bei mehreren anstehenden "
+    "Terminen die wichtigsten mit Datum/Uhrzeit und sage klar, was Tim prüfen "
+    "oder vorbereiten sollte. Bündele zusammengehörige Termine in EINER Meldung.\n"
+    "Halte body kompakt, aber nützlich (höchstens 3 kurze Sätze). Kein unnötiger "
+    "Ping ohne neue oder handlungsrelevante Information.\n"
     "Regeln für options:\n"
     "- kind=info NUR, wenn KEINE Aktion aus dem Katalog passt. Passt eine "
     "Aktion (z.B. Fahrten einordnen, To-do abhaken), dann IMMER kind=wahl oder "
@@ -380,7 +384,9 @@ def think(db, settings, space_id: int) -> list[dict]:
         return []
     data = _extract_json(reply)
     out = []
-    for p in (data.get("proposals") or [])[:3]:
+    # Harte Obergrenze zusätzlich zum Prompt: pro Zeitfenster höchstens eine
+    # gebündelte Push-Nachricht, selbst wenn das lokale Modell mehr liefert.
+    for p in (data.get("proposals") or [])[:1]:
         s = _sanitize(p) if isinstance(p, dict) else None
         if s:
             out.append(s)
