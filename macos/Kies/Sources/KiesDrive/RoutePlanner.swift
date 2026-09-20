@@ -47,6 +47,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     private let synthesizer = AVSpeechSynthesizer()
     private var announcedStepKeys: Set<String> = []
     private var offRouteStrikes = 0
+    private var stationLoadGeneration = UUID()
     private static let cacheKey = "drive.offlineRoute"
 
     override init() {
@@ -316,17 +317,37 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
 
     func loadStations(fuel: FuelKind) async {
         guard !legs.isEmpty else { return }
-        let points = legs.flatMap { sample($0.polyline, maximum: 10) }
+        let generation = UUID()
+        stationLoadGeneration = generation
+        // A handful of evenly distributed requests is sufficient. The old
+        // 25-km radius at ten route points returned hundreds of duplicates.
+        let points = evenlySpaced(legs.flatMap { sample($0.polyline, maximum: 80) }, maximum: 6)
         var unique: [String: FuelStation] = [:]
         await withTaskGroup(of: [FuelStation].self) { group in
-            for point in points { group.addTask { (try? await DriveAPI.stations(near: point, fuel: fuel)) ?? [] } }
+            for point in points { group.addTask { (try? await DriveAPI.stations(near: point, fuel: fuel, radiusKm: 8)) ?? [] } }
             for await batch in group { for station in batch { unique[station.id] = station } }
         }
-        let routePoints = legs.flatMap { sample($0.polyline, maximum: 80) }.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
-        stations = unique.values.filter { station in
+        guard generation == stationLoadGeneration else { return }
+        let routeCoordinates = legs.flatMap { sample($0.polyline, maximum: 160) }
+        let routePoints = routeCoordinates.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+        let nearRoute = unique.values.compactMap { station -> (FuelStation, Int)? in
             let point = CLLocation(latitude: station.lat, longitude: station.lon)
-            return routePoints.map { $0.distance(from: point) }.min() ?? .greatestFiniteMagnitude < 8_000
-        }.sorted { $0.price == $1.price ? $0.distanceKm < $1.distanceKm : $0.price < $1.price }
+            guard let match = routePoints.enumerated().min(by: { $0.element.distance(from: point) < $1.element.distance(from: point) }),
+                  match.element.distance(from: point) < 4_000 else { return nil }
+            return (station, match.offset)
+        }
+        // Keep at most one strong candidate per route section. This gives the
+        // break planner geographic coverage without flooding MapKit with pins.
+        let bucketCount = min(12, max(1, routeCoordinates.count))
+        let grouped = Dictionary(grouping: nearRoute) { item in
+            min(bucketCount - 1, item.1 * bucketCount / max(1, routeCoordinates.count))
+        }
+        stations = grouped.keys.sorted().compactMap { bucket in
+            grouped[bucket]?.min {
+                if $0.0.open != $1.0.open { return $0.0.open != false }
+                return $0.0.price == $1.0.price ? $0.0.distanceKm < $1.0.distanceKm : $0.0.price < $1.0.price
+            }?.0
+        }
     }
 
     /// Fügt eine Tankstelle als Zwischenstopp ein (oder entfernt sie erneut,
@@ -360,5 +381,12 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         polyline.getCoordinates(coordinates, range: NSRange(location: 0, length: polyline.pointCount))
         let stride = max(1, polyline.pointCount / maximum)
         return Swift.stride(from: 0, to: polyline.pointCount, by: stride).map { coordinates[$0] }
+    }
+
+    private func evenlySpaced(_ points: [CLLocationCoordinate2D], maximum: Int) -> [CLLocationCoordinate2D] {
+        guard points.count > maximum, maximum > 1 else { return points }
+        return (0..<maximum).map { index in
+            points[index * (points.count - 1) / (maximum - 1)]
+        }
     }
 }
