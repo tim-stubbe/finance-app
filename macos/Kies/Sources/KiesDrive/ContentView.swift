@@ -365,9 +365,11 @@ struct DriveSettingsView: View {
                 }
                 Section("Langstrecke & Fahrzeug") {
                     Stepper("Zieltempo auf geeigneten freien Abschnitten: \(Int(settings.targetSpeedKmh)) km/h", value: $settings.targetSpeedKmh, in: 100...220, step: 10)
+                        .onChange(of: settings.targetSpeedKmh) { _, _ in planner.refreshLongTripPlan(settings: settings) }
                     LabeledContent("Normverbrauch") {
                         TextField("l/100 km", value: $settings.consumptionLPer100km, format: .number.precision(.fractionLength(1)))
                             .multilineTextAlignment(.trailing).frame(width: 90)
+                            .onChange(of: settings.consumptionLPer100km) { _, _ in planner.refreshLongTripPlan(settings: settings) }
                     }
                     LabeledContent("Tankgröße") {
                         TextField("Liter", value: $settings.tankCapacityL, format: .number.precision(.fractionLength(0)))
@@ -376,6 +378,7 @@ struct DriveSettingsView: View {
                     LabeledContent("Kraftstoffpreis") {
                         TextField("€/l", value: $settings.fuelPricePerLitre, format: .number.precision(.fractionLength(2)))
                             .multilineTextAlignment(.trailing).frame(width: 90)
+                            .onChange(of: settings.fuelPricePerLitre) { _, _ in planner.refreshLongTripPlan(settings: settings) }
                     }
                     Text("Das Zieltempo wird nur auf Streckenanteile ohne bekanntes Limit angewendet. MapKit-Verkehr, begrenzte Abschnitte und Pausen bleiben berücksichtigt.")
                         .font(.caption).foregroundStyle(.secondary)

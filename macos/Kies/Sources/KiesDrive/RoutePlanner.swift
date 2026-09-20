@@ -289,6 +289,12 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
             .compare(routes: inputs, scenarios: scenarios, vehicle: profile)
     }
 
+    /// Recomputes scenario numbers from the already loaded route when vehicle
+    /// or target-speed settings change; no network request is required.
+    func refreshLongTripPlan(settings: DriveSettings) {
+        buildLongTripPlan(settings: settings)
+    }
+
     private func breakCandidates(totalDistance: Double) -> [BreakCandidate] {
         let routeCoordinates = legs.flatMap { sample($0.polyline, maximum: 160) }
         guard routeCoordinates.count > 1 else { return [] }
