@@ -973,19 +973,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Sources/KiesDrive/KiesDriveiOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Sources/KiesDrive/Info-iOS.plist";
+				INFOPLIST_FILE = "Sources/KiesDrive/Info-iOS-PersonalTeam.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kies.drive.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kies.drive.ios.dev;
 				PRODUCT_NAME = "Kies Drive";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
