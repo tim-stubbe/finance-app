@@ -14,19 +14,6 @@ import requests
 from . import bank_sync
 
 TWILIO_CALLS_URL = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Calls.json"
-ASSISTANT_NAME = "Annabell"
-
-
-def _spoken_intro(text: str) -> str:
-    """Give every outbound call one consistent, human introduction."""
-    cleaned = (text or "").strip()
-    cleaned = cleaned.replace("Wichtige Meldung von Kies.", "Wichtige Meldung.")
-    cleaned = cleaned.replace("Wichtiges Dokument von Kies.", "Wichtiges Dokument.")
-    cleaned = cleaned.replace("Kies-Notruf:", "Wichtiger Hinweis:")
-    cleaned = cleaned.replace("Kies:", "")
-    if ASSISTANT_NAME.casefold() in cleaned.casefold():
-        return cleaned
-    return f"Hallo Tim, hier ist {ASSISTANT_NAME}. {cleaned}".strip()
 
 
 def make_local_call(url: str, token: str, to_number: str, text: str) -> None:
@@ -58,7 +45,6 @@ def call(settings, text: str) -> None:
     den täglichen Sync/die Ziel-Auswertung nie zum Absturz bringen."""
     if not settings.calls_enabled:
         return
-    text = _spoken_intro(text)
     local_url = os.environ.get("KIES_LOCAL_CALL_URL", "").strip()
     local_token = os.environ.get("KIES_LOCAL_CALL_TOKEN", "").strip()
     local_to = (os.environ.get("KIES_CALL_TO", "").strip()
