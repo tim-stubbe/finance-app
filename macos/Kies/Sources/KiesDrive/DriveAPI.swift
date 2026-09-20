@@ -99,4 +99,25 @@ enum DriveAPI {
         let payload = try await data(for: try request(path: "/api/navigation/speed-limits", method: "POST", body: body))
         return try JSONDecoder().decode(SpeedLimitEnvelope.self, from: payload).limits
     }
+
+    static func tollCost(origin: String, destination: String) async throws -> TollCost {
+        let body = try JSONEncoder().encode(TollSearchRequest(origin: origin, destination: destination))
+        let payload = try await data(for: try request(path: "/api/navigation/toll-search", method: "POST", body: body))
+        let result = try JSONDecoder().decode(TollSearchResponse.self, from: payload)
+        if result.status == "known", let amount = result.amount {
+            return .known(amount: Decimal(amount), currency: result.currency, source: result.source)
+        }
+        let titles = result.sources.prefix(3).map(\.title).joined(separator: " · ")
+        return .unknown(reason: titles.isEmpty ? "SearXNG fand keinen eindeutig belegten Gesamtpreis." : "SearXNG geprüft: \(titles)")
+    }
+}
+
+private struct TollSearchRequest: Encodable { let origin: String; let destination: String }
+private struct TollSearchSource: Decodable { let title: String; let url: String; let snippet: String }
+private struct TollSearchResponse: Decodable {
+    let status: String
+    let amount: Double?
+    let currency: String
+    let source: String
+    let sources: [TollSearchSource]
 }

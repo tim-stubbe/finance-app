@@ -26,7 +26,18 @@ final class LongTripPlanningTests: XCTestCase {
 
         XCTAssertEqual(breaks.count, 2)
         XCTAssertEqual(breaks.first?.candidate?.id, "best")
-        XCTAssertEqual(Set(breaks.compactMap { $0.candidate?.id }).count, 2, "A stop must not be suggested twice")
+        XCTAssertNil(breaks.last?.candidate, "A later pause must never point backwards along the route")
+        XCTAssertEqual(Set(breaks.compactMap { $0.candidate?.id }).count, 1, "A stop must not be suggested twice")
+    }
+
+    func testBreaksFollowTwoHourDrivingIntervals() {
+        let candidates = [
+            BreakCandidate(id: "two-hours", name: "First", coordinate: .init(), progress: 0.4, detourMetres: 100, isOpen: true),
+            BreakCandidate(id: "four-hours", name: "Second", coordinate: .init(), progress: 0.8, detourMetres: 100, isOpen: true),
+        ]
+        let breaks = BreakPlanner().plan(drivingTime: 5 * 3600, candidates: candidates)
+        XCTAssertEqual(breaks[0].afterDriving, 2 * 3600, accuracy: 1)
+        XCTAssertEqual(breaks[1].afterDriving, 4 * 3600, accuracy: 1)
     }
 
     func testUnknownTollNeverTurnsIntoInventedZero() async throws {

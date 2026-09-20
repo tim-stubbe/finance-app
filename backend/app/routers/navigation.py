@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import math
 import os
+import re
+from datetime import date
 from typing import Literal
 
 import requests
@@ -14,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import auth, bank_sync, models
+from .. import auth, bank_sync, models, websearch
 from ..database import get_db
 
 navigation_router = APIRouter(prefix="/api/navigation", tags=["navigation"])
@@ -23,6 +25,63 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 # Suchradius um jeden Routenpunkt, innerhalb dessen eine Straße mit
 # Tempolimit-Tag als "die Straße an dieser Stelle" gilt.
 SPEED_LIMIT_SEARCH_RADIUS_M = 40
+
+
+class TollSearchRequest(BaseModel):
+    origin: str = Field(min_length=2, max_length=180)
+    destination: str = Field(min_length=2, max_length=180)
+
+
+def _explicit_toll_amount(text: str) -> float | None:
+    """Only accept an amount directly labelled as total toll costs."""
+    patterns = (
+        r"(?:gesamtmaut|mautkosten|toll costs?)\s*(?:von|:|-)?\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur)",
+        r"(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur)\s*(?:gesamtmaut|mautkosten|toll costs?)",
+    )
+    lowered = text.lower()
+    for pattern in patterns:
+        match = re.search(pattern, lowered)
+        if match:
+            return float(match.group(1).replace(",", "."))
+    return None
+
+
+@navigation_router.post("/toll-search")
+def toll_search(
+    body: TollSearchRequest,
+    db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
+):
+    """Research current car tolls through the user's own TrueNAS SearXNG.
+
+    Search snippets are evidence, not a calculator: an amount is returned only
+    when a result explicitly labels it as the total toll for the requested route.
+    """
+    del principal
+    settings = auth.get_or_create_settings(db)
+    if settings.websearch_provider != "searxng" or not settings.searxng_url:
+        raise HTTPException(503, "SearXNG ist auf dem TrueNAS noch nicht eingerichtet")
+    query = (
+        f"PKW Mautkosten Gesamtmaut {body.origin} nach {body.destination} "
+        f"{date.today().year}"
+    )
+    try:
+        results = websearch.search_searxng(settings.searxng_url, query)
+    except (requests.RequestException, ValueError) as exc:
+        raise HTTPException(502, "SearXNG ist gerade nicht erreichbar") from exc
+
+    sources = [
+        {"title": item.get("title") or "Suchtreffer", "url": item.get("url") or "",
+         "snippet": item.get("snippet") or ""}
+        for item in results[:3]
+    ]
+    for source in sources:
+        amount = _explicit_toll_amount(f"{source['title']} {source['snippet']}")
+        if amount is not None:
+            return {"status": "known", "amount": amount, "currency": "EUR",
+                    "source": source["title"], "source_url": source["url"], "sources": sources}
+    return {"status": "unknown", "amount": None, "currency": "EUR",
+            "source": "SearXNG", "source_url": None, "sources": sources}
 
 
 def _distance_km(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:

@@ -40,6 +40,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     @Published var longTripPlan: LongTripPlan?
     @Published var isNavigating = false
     private var comparisonRoute: MKRoute?
+    private var researchedToll: TollCost = .unknown(reason: "Mautrecherche läuft noch.")
 
     /// Tempolimits entlang der Route, parallel zu `speedLimitPoints` indiziert.
     private var speedLimitPoints: [CLLocationCoordinate2D] = []
@@ -131,6 +132,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
             offRouteStrikes = 0
             await loadStations(fuel: settings.fuel)
             await loadSpeedLimits()
+            await loadTollCost(from: start)
             buildLongTripPlan(settings: settings)
             cacheForOffline()
         } catch { errorMessage = "Route konnte nicht berechnet werden: \(error.localizedDescription)" }
@@ -284,7 +286,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
             mapKitExpectedTravelTime: mainTime,
             unlimitedMotorwayFraction: unlimitedFraction,
             typicalUnlimitedSpeedKmh: 130,
-            toll: .unknown(reason: "MapKit liefert keine belastbaren Mautpreise."),
+            toll: settings.avoidTolls ? .unknown(reason: "Mautvermeidung gewählt; Restmaut wird nicht als null angenommen.") : researchedToll,
             breakCandidates: candidates
         )]
         if let comparisonRoute,
@@ -296,7 +298,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
                 mapKitExpectedTravelTime: comparisonRoute.expectedTravelTime,
                 unlimitedMotorwayFraction: 0,
                 typicalUnlimitedSpeedKmh: 130,
-                toll: .unknown(reason: "MapKit liefert keine belastbaren Mautpreise."),
+                toll: settings.avoidTolls ? researchedToll : .unknown(reason: "Mautvermeidung gewählt; Restmaut wird nicht als null angenommen."),
                 breakCandidates: []
             ))
         }
@@ -308,6 +310,17 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         let scenarios = [SpeedScenario.target(settings.targetSpeedKmh)] + (settings.targetSpeedKmh == 200 ? [] : [.target(200)])
         longTripPlan = RouteComparison(fuelModel: .init(), breakPlanner: .init())
             .compare(routes: inputs, scenarios: scenarios, vehicle: profile)
+    }
+
+    private func loadTollCost(from start: CLLocationCoordinate2D) async {
+        guard let destination else { return }
+        let origin = String(format: "%.4f, %.4f", start.latitude, start.longitude)
+        let destinationName = destination.placemark.title ?? destination.name ?? destinationText
+        do {
+            researchedToll = try await DriveAPI.tollCost(origin: origin, destination: destinationName)
+        } catch {
+            researchedToll = .unknown(reason: "SearXNG-Mautrecherche nicht verfügbar: \(error.localizedDescription)")
+        }
     }
 
     /// Recomputes scenario numbers from the already loaded route when vehicle

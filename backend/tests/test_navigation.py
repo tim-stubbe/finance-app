@@ -63,3 +63,8 @@ def test_fuel_station_uses_encrypted_settings_key(monkeypatch):
     assert result["stations"] == []
     assert result["fuel"] == "diesel"
     assert seen["apikey"] == "db-key"
+
+
+def test_toll_amount_requires_explicit_total_label():
+    assert navigation._explicit_toll_amount("Mautkosten: 18,40 EUR für diese Route") == 18.4
+    assert navigation._explicit_toll_amount("Vignette ab 11,50 EUR") is None

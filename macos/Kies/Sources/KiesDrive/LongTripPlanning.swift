@@ -99,12 +99,23 @@ struct BreakPlanner {
         guard drivingTime > maximumContinuousDriving else { return [] }
         let count = max(1, Int(ceil(drivingTime / maximumContinuousDriving)) - 1)
         var remaining = candidates.filter { $0.isOpen }
+        var lastProgress = 0.0
         return (1...count).map { index in
-            let idealProgress = Double(index) / Double(count + 1)
-            let best = remaining.min {
+            // Stop after each maximum driving interval, not at evenly split
+            // fractions (e.g. a five-hour trip should pause near 2h and 4h).
+            let idealProgress = min(0.95, Double(index) * maximumContinuousDriving / drivingTime)
+            let candidatesAhead = remaining.filter { $0.progress > lastProgress + 0.05 }
+            let candidatesInWindow = candidatesAhead.filter { abs($0.progress - idealProgress) <= 0.12 }
+            let pool = candidatesInWindow.isEmpty ? candidatesAhead : candidatesInWindow
+            let best = pool.min {
                 score($0, idealProgress: idealProgress) < score($1, idealProgress: idealProgress)
             }
-            if let best { remaining.removeAll { $0.id == best.id } }
+            if let best {
+                remaining.removeAll { $0.id == best.id }
+                lastProgress = best.progress
+            } else {
+                lastProgress = idealProgress
+            }
             let progress = best?.progress ?? idealProgress
             let detour = best.map { " · \(Int($0.detourMetres / 100) * 100) m Umweg" } ?? ""
             return PlannedBreak(
@@ -117,7 +128,7 @@ struct BreakPlanner {
     }
 
     private func score(_ candidate: BreakCandidate, idealProgress: Double) -> Double {
-        abs(candidate.progress - idealProgress) * 100 + min(30, candidate.detourMetres / 1_000 * 4)
+        abs(candidate.progress - idealProgress) * 100 + min(40, candidate.detourMetres / 1_000 * 8)
     }
 }
 
