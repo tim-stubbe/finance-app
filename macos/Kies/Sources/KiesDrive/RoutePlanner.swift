@@ -38,6 +38,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     @Published var speedWarning: Bool = false
     @Published var offlineRoute: CachedRoute?
     @Published var longTripPlan: LongTripPlan?
+    @Published var isNavigating = false
     private var comparisonRoute: MKRoute?
 
     /// Tempolimits entlang der Route, parallel zu `speedLimitPoints` indiziert.
@@ -61,6 +62,25 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     var route: MKRoute? { legs.first }
     var totalDistance: Double { legs.reduce(0) { $0 + $1.distance } }
     var totalTravelTime: TimeInterval { legs.reduce(0) { $0 + $1.expectedTravelTime } }
+
+    func startNavigation() {
+        guard !legs.isEmpty else { return }
+        isNavigating = true
+        announcedStepKeys = []
+        lastAnnouncement = nextInstruction ?? "Route gestartet"
+        speak(lastAnnouncement ?? "Route gestartet")
+    }
+
+    func stopNavigation() {
+        isNavigating = false
+        synthesizer.stopSpeaking(at: .immediate)
+        lastAnnouncement = nil
+        speedWarning = false
+    }
+
+    var nextInstruction: String? {
+        legs.first?.steps.dropFirst().first(where: { !$0.instructions.isEmpty })?.instructions
+    }
 
     func searchDestination(near coordinate: CLLocationCoordinate2D?) async {
         guard destinationText.count > 2 else { suggestions = []; return }
@@ -152,7 +172,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     /// Überschreitung erkennen und bei Abweichung von der Route automatisch
     /// neu berechnen.
     func updateProgress(at location: CLLocation, settings: DriveSettings) {
-        guard let route = legs.first else { return }
+        guard isNavigating, let route = legs.first else { return }
         checkSpeedLimit(at: location.coordinate, speedMps: location.speed)
         if settings.voiceGuidance { announceNextStep(near: location.coordinate, in: route) }
         checkForDeviation(from: location.coordinate, route: route, settings: settings)

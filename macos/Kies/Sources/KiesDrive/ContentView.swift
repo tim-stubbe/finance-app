@@ -11,8 +11,17 @@ struct DriveContentView: View {
     @State private var showSettings = false
     @State private var showJarvis = false
     @State private var selectedStation: FuelStation?
+    @State private var showRouteDetails = false
 
     var body: some View {
+        #if os(iOS)
+        mobileBody
+        #else
+        desktopBody
+        #endif
+    }
+
+    private var desktopBody: some View {
         NavigationSplitView {
             routePanel
                 .navigationTitle("Kies Drive")
@@ -34,6 +43,165 @@ struct DriveContentView: View {
         .sheet(isPresented: $showSettings) { DriveSettingsView(planner: planner) }
         .sheet(isPresented: $showJarvis) { JarvisDriveView(route: planner.route, destination: planner.destination) }
     }
+
+    #if os(iOS)
+    private var mobileBody: some View {
+        ZStack {
+            map
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                if planner.isNavigating {
+                    navigationInstructionCard
+                } else {
+                    mobileSearchCard
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            mobileBottomCard
+        }
+        .onAppear {
+            location.start()
+            if !settings.isReady { showSettings = true }
+        }
+        .onReceive(location.$location) { newValue in
+            guard let newValue, !planner.legs.isEmpty else { return }
+            planner.updateProgress(at: newValue, settings: settings)
+        }
+        .sheet(isPresented: $showSettings) { DriveSettingsView(planner: planner) }
+        .sheet(isPresented: $showJarvis) { JarvisDriveView(route: planner.route, destination: planner.destination) }
+        .sheet(isPresented: $showRouteDetails) {
+            NavigationStack {
+                routePanel
+                    .navigationTitle("Routendetails")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { Button("Fertig") { showRouteDetails = false } }
+            }
+        }
+    }
+
+    private var mobileSearchCard: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Wohin möchtest du?", text: $planner.destinationText)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.search)
+                    .onSubmit { Task { await planner.searchDestination(near: location.location?.coordinate) } }
+                if !planner.destinationText.isEmpty {
+                    Button { planner.destinationText = ""; planner.suggestions = [] } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                }
+                Button { showJarvis = true } label: { Image(systemName: "sparkles") }
+                Button { showSettings = true } label: { Image(systemName: "person.crop.circle") }
+            }
+            .font(.title3)
+            .padding(.horizontal, 14)
+            .frame(height: 52)
+
+            if !planner.suggestions.isEmpty {
+                Divider()
+                ForEach(Array(planner.suggestions.prefix(4)), id: \.self) { item in
+                    Button {
+                        planner.destination = item
+                        planner.destinationText = item.name ?? item.placemark.title ?? "Ziel"
+                        planner.suggestions = []
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name ?? "Ziel").fontWeight(.semibold).foregroundStyle(.primary)
+                                Text(item.placemark.title ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 5)
+    }
+
+    @ViewBuilder
+    private var mobileBottomCard: some View {
+        if planner.isNavigating {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(formatArrival(planner.totalTravelTime)).font(.title2.bold()).foregroundStyle(.green)
+                    Text("Ankunft · \(formatTime(planner.totalTravelTime)) · \(formatDistance(planner.totalDistance))")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Beenden", role: .destructive) { planner.stopNavigation() }
+                    .buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 18).padding(.vertical, 14)
+            .background(.ultraThickMaterial)
+        } else if planner.route != nil {
+            VStack(spacing: 12) {
+                Capsule().fill(.tertiary).frame(width: 36, height: 5)
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(planner.destination?.name ?? "Route").font(.headline).lineLimit(1)
+                        Text("\(formatTime(planner.totalTravelTime)) · \(formatDistance(planner.totalDistance))")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Los") {
+                        planner.startNavigation()
+                        position = .userLocation(followsHeading: true, fallback: .automatic)
+                    }
+                    .font(.headline).buttonStyle(.borderedProminent).controlSize(.large)
+                }
+                Button("Route, Pausen und Kosten anzeigen") { showRouteDetails = true }
+                    .font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 12)
+            .background(.ultraThickMaterial)
+        } else if planner.destination != nil {
+            Button {
+                guard let start = location.location?.coordinate else {
+                    planner.errorMessage = "Standort ist noch nicht verfügbar."
+                    return
+                }
+                Task {
+                    await planner.calculate(from: start, settings: settings)
+                    if let route = planner.route { position = .rect(route.polyline.boundingMapRect) }
+                }
+            } label: {
+                Label(planner.isLoading ? "Route wird berechnet …" : "Route berechnen", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+            }
+            .buttonStyle(.borderedProminent).controlSize(.large)
+            .disabled(planner.isLoading)
+            .padding(16).background(.ultraThickMaterial)
+        }
+    }
+
+    private var navigationInstructionCard: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "arrow.turn.up.right")
+                .font(.system(size: 34, weight: .bold)).frame(width: 48)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(planner.lastAnnouncement ?? planner.nextInstruction ?? "Route folgen")
+                    .font(.title3.bold()).lineLimit(2)
+                if planner.isRecalculating { Text("Route wird neu berechnet …").font(.caption) }
+            }
+            Spacer()
+        }
+        .foregroundStyle(.white).padding(16)
+        .background(Color.green.gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 12, y: 5)
+    }
+    #endif
 
     private var routePanel: some View {
         List {
@@ -87,7 +255,12 @@ struct DriveContentView: View {
                             }
                         }
                     }
-                    Button("Navigation in Apple Karten starten", systemImage: "location.fill") { openInMaps() }
+                    Button("Navigation in Kies Drive starten", systemImage: "location.fill") {
+                        planner.startNavigation()
+                        #if os(iOS)
+                        position = .userLocation(followsHeading: true, fallback: .automatic)
+                        #endif
+                    }
                 }
                 if let plan = planner.longTripPlan {
                     Section("Langstreckenvergleich") {
@@ -220,6 +393,7 @@ struct DriveContentView: View {
             }
         }
         .overlay(alignment: .top) {
+            #if os(macOS)
             HStack {
                 if settings.avoidTolls { Label("Vignetten/Maut vermeiden", systemImage: "checkmark.shield.fill") }
                 Picker("Karte", selection: $settings.mapAppearance) {
@@ -229,8 +403,10 @@ struct DriveContentView: View {
                 .frame(maxWidth: 280)
             }
             .padding(9).background(.regularMaterial, in: Capsule()).padding()
+            #endif
         }
         .overlay(alignment: .bottom) {
+            #if os(macOS)
             VStack(spacing: 8) {
                 if planner.speedWarning {
                     Label("Zu schnell - Tempolimit beachten", systemImage: "exclamationmark.triangle.fill")
@@ -242,6 +418,7 @@ struct DriveContentView: View {
                 }
             }
             .padding()
+            #endif
         }
     }
 
@@ -291,14 +468,11 @@ struct DriveContentView: View {
         .shadow(radius: 3)
     }
 
-    private func openInMaps() {
-        guard let destination = planner.destination else { return }
-        var options: [String: Any] = [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
-        if settings.avoidTolls { options[MKLaunchOptionsDirectionsModeKey] = MKLaunchOptionsDirectionsModeDriving }
-        destination.openInMaps(launchOptions: options)
-    }
     private func formatDistance(_ metres: Double) -> String { metres >= 1000 ? String(format: "%.1f km", metres / 1000) : "\(Int(metres)) m" }
     private func formatTime(_ seconds: TimeInterval) -> String { let m = Int(seconds / 60); return m >= 60 ? "\(m / 60) Std. \(m % 60) Min." : "\(m) Min." }
+    private func formatArrival(_ seconds: TimeInterval) -> String {
+        Date().addingTimeInterval(seconds).formatted(date: .omitted, time: .shortened)
+    }
 
     @ViewBuilder
     private func comparisonSummary(_ plan: LongTripPlan) -> some View {
@@ -395,7 +569,10 @@ struct DriveSettingsView: View {
             .formStyle(.grouped)
             .navigationTitle("Einstellungen")
             .toolbar { Button("Fertig") { dismiss() } }
-        }.frame(minWidth: 420, minHeight: 420)
+        }
+        #if os(macOS)
+        .frame(minWidth: 420, minHeight: 420)
+        #endif
     }
 }
 
@@ -418,7 +595,10 @@ struct JarvisDriveView: View {
             }
             .navigationTitle("Jarvis unterwegs")
             .toolbar { Button("Schließen") { dismiss() } }
-        }.frame(minWidth: 440, minHeight: 480)
+        }
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 480)
+        #endif
     }
 
     private func ask() {
