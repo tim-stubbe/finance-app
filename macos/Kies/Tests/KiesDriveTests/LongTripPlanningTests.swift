@@ -26,6 +26,7 @@ final class LongTripPlanningTests: XCTestCase {
 
         XCTAssertEqual(breaks.count, 2)
         XCTAssertEqual(breaks.first?.candidate?.id, "best")
+        XCTAssertEqual(Set(breaks.compactMap { $0.candidate?.id }).count, 2, "A stop must not be suggested twice")
     }
 
     func testUnknownTollNeverTurnsIntoInventedZero() async throws {
@@ -39,5 +40,16 @@ final class LongTripPlanningTests: XCTestCase {
 
     func testShortTripDoesNotAddBreak() {
         XCTAssertTrue(BreakPlanner().plan(drivingTime: 90 * 60, candidates: []).isEmpty)
+    }
+
+    func testComparisonOnlyCalculatesTollSavingsForKnownPrices() {
+        let scenario = SpeedScenario.target(150)
+        let fuel = FuelEstimate(litres: 40, cost: 70, averageConsumptionLPer100km: 7)
+        let baseline = RouteScenarioResult(id: "a", routeTitle: "A", scenario: scenario, distanceMetres: 500_000, drivingTime: 18_000, totalTime: 19_200, fuel: fuel, toll: .known(amount: 24, currency: "EUR", source: "provider"), breaks: [], unlimitedFraction: 0)
+        let unknown = RouteScenarioResult(id: "b", routeTitle: "B", scenario: scenario, distanceMetres: 520_000, drivingTime: 19_000, totalTime: 20_200, fuel: fuel, toll: .unknown(reason: "missing"), breaks: [], unlimitedFraction: 0)
+        let free = RouteScenarioResult(id: "c", routeTitle: "C", scenario: scenario, distanceMetres: 520_000, drivingTime: 19_000, totalTime: 20_200, fuel: fuel, toll: .noToll(source: "provider"), breaks: [], unlimitedFraction: 0)
+
+        XCTAssertNil(RouteComparisonDelta(from: baseline, to: unknown).tollSavings)
+        XCTAssertEqual(RouteComparisonDelta(from: baseline, to: free).tollSavings, 24)
     }
 }

@@ -98,7 +98,7 @@ struct DriveContentView: View {
                                 Text(String(format: "%.1f l · %.2f € Kraftstoff · %.1f l/100 km", result.fuel.litres, result.fuel.cost, result.fuel.averageConsumptionLPer100km))
                                 switch result.toll {
                                 case .known(let amount, let currency, let source):
-                                    Text("Maut: \(amount) \(currency) · \(source)")
+                                    Text("Maut: \(NSDecimalNumber(decimal: amount).stringValue) \(currency) · \(source)")
                                 case .noToll(let source):
                                     Text("Keine Maut · \(source)")
                                 case .unknown(let reason):
@@ -107,9 +107,17 @@ struct DriveContentView: View {
                                 ForEach(result.breaks) { stop in
                                     Label(stop.candidate?.name ?? "Pausenort entlang der Route suchen", systemImage: "cup.and.saucer.fill")
                                     Text(stop.explanation).font(.caption).foregroundStyle(.secondary)
+                                    if stop.candidate != nil {
+                                        Button("Als Zwischenstopp übernehmen") {
+                                            guard let start = location.location?.coordinate else { return }
+                                            Task { await planner.addPlannedBreak(stop, from: start, settings: settings) }
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
                                 }
                             }
                         }
+                        comparisonSummary(plan)
                         Text(plan.note).font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -291,6 +299,46 @@ struct DriveContentView: View {
     }
     private func formatDistance(_ metres: Double) -> String { metres >= 1000 ? String(format: "%.1f km", metres / 1000) : "\(Int(metres)) m" }
     private func formatTime(_ seconds: TimeInterval) -> String { let m = Int(seconds / 60); return m >= 60 ? "\(m / 60) Std. \(m % 60) Min." : "\(m) Min." }
+
+    @ViewBuilder
+    private func comparisonSummary(_ plan: LongTripPlan) -> some View {
+        let configured = plan.results.first { $0.scenario.targetSpeedKmh == settings.targetSpeedKmh }
+        let fast = configured.flatMap { base in
+            plan.results.first { $0.routeTitle == base.routeTitle && $0.scenario.targetSpeedKmh == 200 }
+        }
+        if let configured, let fast, configured.id != fast.id {
+            let delta = RouteComparisonDelta(from: configured, to: fast)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("200 statt \(Int(settings.targetSpeedKmh)) km/h").font(.headline)
+                Text("\(signedTime(delta.timeDifference)) · \(signed(delta.fuelDifferenceLitres, unit: "l")) · \(signed(delta.fuelCostDifference, unit: "€"))")
+                Text("Nur für als unbegrenzt erkannte, geeignete Abschnitte gerechnet.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+
+        let selectedSpeed = settings.targetSpeedKmh
+        let routeOptions = plan.results.filter { $0.scenario.targetSpeedKmh == selectedSpeed }
+        if routeOptions.count >= 2 {
+            let delta = RouteComparisonDelta(from: routeOptions[0], to: routeOptions[1])
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Mautroute gegenüber Alternative").font(.headline)
+                Text("\(signedTime(delta.timeDifference)) · \(signed(delta.distanceDifferenceMetres / 1_000, unit: "km")) · \(signed(delta.fuelCostDifference, unit: "€ Kraftstoff"))")
+                if let savings = delta.tollSavings {
+                    Text("Mautersparnis: \(NSDecimalNumber(decimal: savings).doubleValue, format: .currency(code: "EUR"))")
+                } else {
+                    Text("Mautersparnis nicht berechenbar: keine verifizierten Preise.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func signed(_ value: Double, unit: String) -> String {
+        String(format: "%@%.1f %@", value > 0 ? "+" : "", value, unit)
+    }
+
+    private func signedTime(_ seconds: TimeInterval) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        return "\(minutes > 0 ? "+" : "")\(minutes) Min."
+    }
 }
 
 struct DriveSettingsView: View {

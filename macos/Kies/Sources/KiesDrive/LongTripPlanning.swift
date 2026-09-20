@@ -98,12 +98,13 @@ struct BreakPlanner {
     func plan(drivingTime: TimeInterval, candidates: [BreakCandidate]) -> [PlannedBreak] {
         guard drivingTime > maximumContinuousDriving else { return [] }
         let count = max(1, Int(ceil(drivingTime / maximumContinuousDriving)) - 1)
+        var remaining = candidates.filter { $0.isOpen }
         return (1...count).map { index in
             let idealProgress = Double(index) / Double(count + 1)
-            let viable = candidates.filter { $0.isOpen }
-            let best = viable.min {
+            let best = remaining.min {
                 score($0, idealProgress: idealProgress) < score($1, idealProgress: idealProgress)
             }
+            if let best { remaining.removeAll { $0.id == best.id } }
             let progress = best?.progress ?? idealProgress
             let detour = best.map { " · \(Int($0.detourMetres / 100) * 100) m Umweg" } ?? ""
             return PlannedBreak(
@@ -117,6 +118,26 @@ struct BreakPlanner {
 
     private func score(_ candidate: BreakCandidate, idealProgress: Double) -> Double {
         abs(candidate.progress - idealProgress) * 100 + min(30, candidate.detourMetres / 1_000 * 4)
+    }
+}
+
+struct RouteComparisonDelta: Equatable {
+    let timeDifference: TimeInterval
+    let distanceDifferenceMetres: Double
+    let fuelDifferenceLitres: Double
+    let fuelCostDifference: Double
+    let tollSavings: Decimal?
+
+    init(from baseline: RouteScenarioResult, to alternative: RouteScenarioResult) {
+        timeDifference = alternative.totalTime - baseline.totalTime
+        distanceDifferenceMetres = alternative.distanceMetres - baseline.distanceMetres
+        fuelDifferenceLitres = alternative.fuel.litres - baseline.fuel.litres
+        fuelCostDifference = alternative.fuel.cost - baseline.fuel.cost
+        if let baselineToll = baseline.toll.amount, let alternativeToll = alternative.toll.amount {
+            tollSavings = baselineToll - alternativeToll
+        } else {
+            tollSavings = nil
+        }
     }
 }
 

@@ -335,6 +335,18 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         await calculate(from: start, settings: settings)
     }
 
+    func addPlannedBreak(_ plannedBreak: PlannedBreak, from start: CLLocationCoordinate2D, settings: DriveSettings) async {
+        guard let candidate = plannedBreak.candidate,
+              let station = stations.first(where: { $0.id == candidate.id }),
+              !viaStations.contains(where: { $0.id == station.id }) else { return }
+        viaStations.append(station)
+        let progressByID = Dictionary(uniqueKeysWithValues: breakCandidates(totalDistance: totalDistance).map { ($0.id, $0.progress) })
+        viaStations.sort { lhs, rhs in
+            (progressByID[lhs.id] ?? 1) < (progressByID[rhs.id] ?? 1)
+        }
+        await calculate(from: start, settings: settings)
+    }
+
     private func sample(_ polyline: MKPolyline, maximum: Int) -> [CLLocationCoordinate2D] {
         guard polyline.pointCount > 0 else { return [] }
         let coordinates = UnsafeMutablePointer<CLLocationCoordinate2D>.allocate(capacity: polyline.pointCount)
