@@ -169,6 +169,17 @@ def detect_calendar_conflicts(db: Session, days: int = 14) -> list[dict]:
     def effective_end(ev):
         return ev.end or (ev.start + timedelta(minutes=30))
 
+    def is_school_lesson(ev) -> bool:
+        """WebUntis-Unterricht ist ein Stundenplanblock, kein frei geplanter
+        Termin. Er soll deshalb keine allgemeinen Konfliktmeldungen auslösen.
+
+        Die UID ist das zuverlässige Merkmal. Der Titel-Fallback fängt ältere
+        bereits importierte Unterrichtseinträge ohne WebUntis-UID ab.
+        """
+        uid = str(getattr(ev, "uid", "") or "").strip().casefold()
+        title = str(getattr(ev, "title", "") or "").strip().casefold()
+        return uid.startswith("webuntis-") or title == "unterricht"
+
     conflicts = []
     for i in range(len(events)):
         a = events[i]
@@ -177,6 +188,8 @@ def detect_calendar_conflicts(db: Session, days: int = 14) -> list[dict]:
             b = events[j]
             if b.start >= a_end:
                 break  # nach Start sortiert - ab hier kann nichts mehr ueberlappen
+            if is_school_lesson(a) or is_school_lesson(b):
+                continue
             conflicts.append({
                 "event_a_id": a.id, "event_a_title": a.title, "event_a_start": a.start,
                 "event_b_id": b.id, "event_b_title": b.title, "event_b_start": b.start,
