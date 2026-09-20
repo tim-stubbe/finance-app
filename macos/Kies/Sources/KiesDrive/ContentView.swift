@@ -5,7 +5,7 @@ import KiesCore
 
 struct DriveContentView: View {
     @StateObject private var settings = DriveSettings.shared
-    @StateObject private var location = LocationService.shared
+    @StateObject private var location = LocationService()
     @StateObject private var planner = RoutePlanner.shared
     @State private var position: MapCameraPosition = .automatic
     @State private var showSettings = false
@@ -72,14 +72,46 @@ struct DriveContentView: View {
                     Label(formatDistance(planner.totalDistance), systemImage: "road.lanes")
                     Label(formatTime(planner.totalTravelTime), systemImage: "clock")
                     if settings.avoidTolls { Label("Mautstraßen werden vermieden", systemImage: "eurosign.slash") }
-                    if let via = planner.viaStation {
-                        Label("Zwischenstopp: \(via.brand.isEmpty ? via.name : via.brand)", systemImage: "fuelpump.fill")
-                        Button("Zwischenstopp entfernen", systemImage: "xmark.circle") {
-                            guard let start = location.location?.coordinate else { return }
-                            Task { await planner.toggleWaypoint(via, from: start, settings: settings) }
+                    if !planner.viaStations.isEmpty {
+                        Section {
+                            ForEach(planner.viaStations) { via in
+                                Label("Zwischenstopp: \(via.brand.isEmpty ? via.name : via.brand)", systemImage: "fuelpump.fill")
+                            }
+                            Button("Zwischenstopps entfernen", systemImage: "xmark.circle") {
+                                guard let start = location.location?.coordinate else { return }
+                                Task {
+                                    for via in planner.viaStations {
+                                        await planner.toggleWaypoint(via, from: start, settings: settings)
+                                    }
+                                }
+                            }
                         }
                     }
                     Button("Navigation in Apple Karten starten", systemImage: "location.fill") { openInMaps() }
+                }
+                if let plan = planner.longTripPlan {
+                    Section("Langstreckenvergleich") {
+                        ForEach(plan.results) { result in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("\(result.routeTitle) · \(result.scenario.name)").font(.headline)
+                                Text("\(formatDistance(result.distanceMetres)) · \(formatTime(result.totalTime)) inkl. \(result.breaks.count) Pause(n)")
+                                Text(String(format: "%.1f l · %.2f € Kraftstoff · %.1f l/100 km", result.fuel.litres, result.fuel.cost, result.fuel.averageConsumptionLPer100km))
+                                switch result.toll {
+                                case .known(let amount, let currency, let source):
+                                    Text("Maut: \(amount) \(currency) · \(source)")
+                                case .noToll(let source):
+                                    Text("Keine Maut · \(source)")
+                                case .unknown(let reason):
+                                    Text("Mautkosten unbekannt · \(reason)").foregroundStyle(.secondary)
+                                }
+                                ForEach(result.breaks) { stop in
+                                    Label(stop.candidate?.name ?? "Pausenort entlang der Route suchen", systemImage: "cup.and.saucer.fill")
+                                    Text(stop.explanation).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        Text(plan.note).font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Section("Fahrhinweise") {
                     ForEach(Array(planner.legs.enumerated()), id: \.offset) { legIndex, leg in
@@ -109,7 +141,7 @@ struct DriveContentView: View {
                     Text("Keine geöffneten Tankstellen mit Preis in Routennähe gefunden.").foregroundStyle(.secondary)
                 }
                 ForEach(planner.stations) { station in
-                    let isVia = planner.viaStation?.id == station.id
+                    let isVia = planner.viaStations.contains(where: { $0.id == station.id })
                     HStack {
                         Button { selectedStation = station; position = .region(.init(center: station.coordinate, latitudinalMeters: 8_000, longitudinalMeters: 8_000)) } label: {
                             HStack {
@@ -282,6 +314,23 @@ struct DriveSettingsView: View {
                     Toggle("Sprachansagen", isOn: $settings.voiceGuidance)
                     Picker("Kraftstoff", selection: $settings.fuel) { ForEach(FuelKind.allCases) { Text($0.label).tag($0) } }
                     Picker("Kartendarstellung", selection: $settings.mapAppearance) { ForEach(DriveMapAppearance.allCases) { Text($0.label).tag($0) } }
+                }
+                Section("Langstrecke & Fahrzeug") {
+                    Stepper("Zieltempo auf geeigneten freien Abschnitten: \(Int(settings.targetSpeedKmh)) km/h", value: $settings.targetSpeedKmh, in: 100...220, step: 10)
+                    LabeledContent("Normverbrauch") {
+                        TextField("l/100 km", value: $settings.consumptionLPer100km, format: .number.precision(.fractionLength(1)))
+                            .multilineTextAlignment(.trailing).frame(width: 90)
+                    }
+                    LabeledContent("Tankgröße") {
+                        TextField("Liter", value: $settings.tankCapacityL, format: .number.precision(.fractionLength(0)))
+                            .multilineTextAlignment(.trailing).frame(width: 90)
+                    }
+                    LabeledContent("Kraftstoffpreis") {
+                        TextField("€/l", value: $settings.fuelPricePerLitre, format: .number.precision(.fractionLength(2)))
+                            .multilineTextAlignment(.trailing).frame(width: 90)
+                    }
+                    Text("Das Zieltempo wird nur auf Streckenanteile ohne bekanntes Limit angewendet. MapKit-Verkehr, begrenzte Abschnitte und Pausen bleiben berücksichtigt.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Offline-Zwischenspeicher") {
                     Button("Zwischengespeicherte Route löschen", role: .destructive) { planner.clearOfflineCache() }

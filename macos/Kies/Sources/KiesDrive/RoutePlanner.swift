@@ -21,14 +21,13 @@ struct CachedRoute: Codable {
 
 @MainActor
 final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    /// Eine gemeinsame Instanz für die SwiftUI-Oberfläche und die
-    /// CarPlay-Szene, damit beide dieselbe Route/Tankstellenliste sehen.
+    /// Shared by the phone UI and CarPlay so both surfaces operate on the
+    /// same route, stops and long-trip plan.
     static let shared = RoutePlanner()
-
     @Published var destinationText = ""
     @Published var suggestions: [MKMapItem] = []
     @Published var destination: MKMapItem?
-    @Published var viaStation: FuelStation?
+    @Published var viaStations: [FuelStation] = []
     @Published var legs: [MKRoute] = []
     @Published var alternatives: [MKRoute] = []
     @Published var stations: [FuelStation] = []
@@ -38,6 +37,8 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     @Published var lastAnnouncement: String?
     @Published var speedWarning: Bool = false
     @Published var offlineRoute: CachedRoute?
+    @Published var longTripPlan: LongTripPlan?
+    private var comparisonRoute: MKRoute?
 
     /// Tempolimits entlang der Route, parallel zu `speedLimitPoints` indiziert.
     private var speedLimitPoints: [CLLocationCoordinate2D] = []
@@ -75,25 +76,41 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         defer { isLoading = false }
         let startItem = MKMapItem(placemark: MKPlacemark(coordinate: start))
         do {
-            if let viaStation {
-                // MapKit kennt keine mehrgliedrigen Routen - daher zwei
-                // Teilstrecken (Start→Tankstelle, Tankstelle→Ziel) einzeln
-                // berechnen und aneinanderhängen.
-                let viaItem = MKMapItem(placemark: MKPlacemark(coordinate: viaStation.coordinate))
-                guard let leg1 = try await computeRoutes(from: startItem, to: viaItem, settings: settings, alternates: false).first,
-                      let leg2 = try await computeRoutes(from: viaItem, to: destination, settings: settings, alternates: false).first
-                else { throw DriveAPIError.invalidData }
-                legs = [leg1, leg2]
-                alternatives = []
-            } else {
+            if viaStations.isEmpty {
                 let routes = try await computeRoutes(from: startItem, to: destination, settings: settings, alternates: true)
                 alternatives = routes
                 legs = routes.first.map { [$0] } ?? []
+                // Request the opposite toll preference for an honest route-level
+                // distance/time comparison. MapKit exposes no toll price; that
+                // remains explicitly unknown until a verified provider responds.
+                comparisonRoute = try? await computeRoutes(
+                    from: startItem, to: destination, settings: settings,
+                    alternates: false, avoidTollsOverride: !settings.avoidTolls
+                ).first
+            } else {
+                // MapKit kennt keine mehrgliedrigen Routen als ein einziges Objekt.
+                // Daher Teilstrecken sequentiell (Start→wp1→wp2→…→Ziel) berechnen.
+                let waypoints: [MKMapItem] = viaStations.map { MKMapItem(placemark: MKPlacemark(coordinate: $0.coordinate)) }
+                let allStops = [startItem] + waypoints + [destination]
+
+                var newLegs: [MKRoute] = []
+                for i in 0..<(allStops.count - 1) {
+                    let from = allStops[i]
+                    let to = allStops[i + 1]
+                    guard let leg = try await computeRoutes(from: from, to: to, settings: settings, alternates: false).first else {
+                        throw DriveAPIError.invalidData
+                    }
+                    newLegs.append(leg)
+                }
+                legs = newLegs
+                alternatives = []
+                comparisonRoute = nil
             }
             announcedStepKeys = []
             offRouteStrikes = 0
             await loadStations(fuel: settings.fuel)
             await loadSpeedLimits()
+            buildLongTripPlan(settings: settings)
             cacheForOffline()
         } catch { errorMessage = "Route konnte nicht berechnet werden: \(error.localizedDescription)" }
     }
@@ -221,15 +238,74 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         return speedLimits[safe: bestIndex]
     }
 
-    private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings, alternates: Bool) async throws -> [MKRoute] {
+    private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings, alternates: Bool, avoidTollsOverride: Bool? = nil) async throws -> [MKRoute] {
         let request = MKDirections.Request()
         request.source = source
         request.destination = destination
         request.transportType = .automobile
         request.requestsAlternateRoutes = alternates
-        request.tollPreference = settings.avoidTolls ? .avoid : .any
+        request.tollPreference = (avoidTollsOverride ?? settings.avoidTolls) ? .avoid : .any
         request.highwayPreference = settings.avoidHighways ? .avoid : .any
         return try await MKDirections(request: request).calculate().routes
+    }
+
+    private func buildLongTripPlan(settings: DriveSettings) {
+        guard !legs.isEmpty else { longTripPlan = nil; return }
+        let mainDistance = totalDistance
+        let mainTime = totalTravelTime
+        let knownLimits = speedLimits.filter { $0.maxspeed != nil || $0.unlimited }
+        let unlimitedFraction = knownLimits.isEmpty ? 0 : Double(knownLimits.filter(\.unlimited).count) / Double(knownLimits.count)
+        let candidates = breakCandidates(totalDistance: mainDistance)
+        var inputs = [RoutePlanningInput(
+            id: settings.avoidTolls ? "toll-avoiding" : "standard",
+            title: settings.avoidTolls ? "Maut vermeiden" : "Schnellste Route",
+            distanceMetres: mainDistance,
+            mapKitExpectedTravelTime: mainTime,
+            unlimitedMotorwayFraction: unlimitedFraction,
+            typicalUnlimitedSpeedKmh: 130,
+            toll: .unknown(reason: "MapKit liefert keine belastbaren Mautpreise."),
+            breakCandidates: candidates
+        )]
+        if let comparisonRoute,
+           abs(comparisonRoute.distance - mainDistance) > 100 || abs(comparisonRoute.expectedTravelTime - mainTime) > 60 {
+            inputs.append(.init(
+                id: settings.avoidTolls ? "standard" : "toll-avoiding",
+                title: settings.avoidTolls ? "Schnellste Route" : "Maut vermeiden",
+                distanceMetres: comparisonRoute.distance,
+                mapKitExpectedTravelTime: comparisonRoute.expectedTravelTime,
+                unlimitedMotorwayFraction: 0,
+                typicalUnlimitedSpeedKmh: 130,
+                toll: .unknown(reason: "MapKit liefert keine belastbaren Mautpreise."),
+                breakCandidates: []
+            ))
+        }
+        let profile = VehicleProfile(
+            baseConsumptionLPer100km: settings.consumptionLPer100km,
+            fuelPricePerLitre: settings.fuelPricePerLitre,
+            tankCapacityLitres: settings.tankCapacityL
+        )
+        let scenarios = [SpeedScenario.target(settings.targetSpeedKmh)] + (settings.targetSpeedKmh == 200 ? [] : [.target(200)])
+        longTripPlan = RouteComparison(fuelModel: .init(), breakPlanner: .init())
+            .compare(routes: inputs, scenarios: scenarios, vehicle: profile)
+    }
+
+    private func breakCandidates(totalDistance: Double) -> [BreakCandidate] {
+        let routeCoordinates = legs.flatMap { sample($0.polyline, maximum: 160) }
+        guard routeCoordinates.count > 1 else { return [] }
+        return stations.compactMap { station in
+            let location = CLLocation(latitude: station.lat, longitude: station.lon)
+            guard let match = routeCoordinates.enumerated().min(by: {
+                location.distance(from: CLLocation(latitude: $0.element.latitude, longitude: $0.element.longitude)) <
+                location.distance(from: CLLocation(latitude: $1.element.latitude, longitude: $1.element.longitude))
+            }) else { return nil }
+            let detour = location.distance(from: CLLocation(latitude: match.element.latitude, longitude: match.element.longitude))
+            return BreakCandidate(
+                id: station.id, name: station.brand.isEmpty ? station.name : station.brand,
+                coordinate: station.coordinate,
+                progress: Double(match.offset) / Double(routeCoordinates.count - 1),
+                detourMetres: detour * 2, isOpen: station.open != false
+            )
+        }
     }
 
     func loadStations(fuel: FuelKind) async {
@@ -251,7 +327,11 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     /// wenn sie bereits als Zwischenstopp gesetzt ist) und berechnet die
     /// Route neu.
     func toggleWaypoint(_ station: FuelStation, from start: CLLocationCoordinate2D, settings: DriveSettings) async {
-        viaStation = (viaStation?.id == station.id) ? nil : station
+        if let index = viaStations.firstIndex(where: { $0.id == station.id }) {
+            viaStations.remove(at: index)
+        } else {
+            viaStations.append(station)
+        }
         await calculate(from: start, settings: settings)
     }
 

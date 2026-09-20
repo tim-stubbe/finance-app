@@ -152,10 +152,23 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "1.1"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: Sources/KiesDrive/KiesDriveiOS.entitlements
+    postBuildScripts:
+      - name: "Build-Nummer aus Git-Commits setzen"
+        # CURRENT_PROJECT_VERSION stand fest auf "1" - die Versionsanzeige in
+        # den Einstellungen hat sich deshalb nie geändert. Statt das bei jedem
+        # Release manuell hochzuzählen, hier automatisch aus der Anzahl der
+        # Git-Commits ableiten, direkt im bereits prozessierten Info.plist.
+        script: |
+          GIT_COUNT=$(git -C "$SRCROOT" rev-list --count HEAD 2>/dev/null)
+          INFOPLIST="$BUILT_PRODUCTS_DIR/$INFOPLIST_PATH"
+          if [ -n "$GIT_COUNT" ] && [ -f "$INFOPLIST" ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GIT_COUNT" "$INFOPLIST"
+          fi
+        basedOnDependencyAnalysis: false
 
   KiesDriveMac:
     type: application
@@ -176,9 +189,31 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.9"
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "1.1"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
+    postBuildScripts:
+      - name: "Build-Nummer aus Git-Commits setzen"
+        script: |
+          GIT_COUNT=$(git -C "$SRCROOT" rev-list --count HEAD 2>/dev/null)
+          INFOPLIST="$BUILT_PRODUCTS_DIR/$INFOPLIST_PATH"
+          if [ -n "$GIT_COUNT" ] && [ -f "$INFOPLIST" ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GIT_COUNT" "$INFOPLIST"
+          fi
+        basedOnDependencyAnalysis: false
+
+  KiesDriveTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/KiesDriveTests
+      - path: Sources/KiesDrive/LongTripPlanning.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.kies.drive.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
 
 schemes:
   KiesiOS:
@@ -201,5 +236,9 @@ schemes:
     build:
       targets:
         KiesDriveMac: all
+        KiesDriveTests: [test]
+    test:
+      targets:
+        - KiesDriveTests
     run:
       config: Debug
