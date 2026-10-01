@@ -812,9 +812,13 @@
           <label>Frist beginnt am <input type="date" id="rd-start" required></label>
           <label>Rückgabefrist (Tage) <input type="number" step="1" min="1" id="rd-days" required value="14"></label>
           <label>Erinnerung wie viele Tage vorher <input type="number" step="1" min="0" id="rd-remind" required value="3"></label>
+          <label>Erwartete Erstattung (€) <input type="number" step="0.01" min="0" id="rd-refund-amount" placeholder="z. B. 89,99"></label>
+          <label>Erstattung erwartet am <input type="date" id="rd-refund-date"></label>
+          <p class="page-sub wide" id="rd-refund-status">Nach dem Zurücksenden wird die Erstattung in deiner Geldplanung berücksichtigt.</p>
           <div class="form-actions wide">
             <button type="submit" class="btn-primary">Speichern</button>
             <button type="button" id="rd-mark-returned" class="btn-ghost hidden">Als zurückgeschickt markieren</button>
+            <button type="button" id="rd-mark-refunded" class="btn-ghost hidden">Erstattung erhalten</button>
             <button type="button" id="rd-delete" class="btn-ghost hidden">Löschen</button>
           </div>
         </form>

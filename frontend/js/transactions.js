@@ -201,16 +201,25 @@ function normalizeDescriptionKey(desc) {
 
 function openReturnDeadlineModal(transactionId) {
   const existing = returnDeadlinesCache.find(r => r.transaction_id === transactionId);
+  const transaction = txListCache.find(t => t.id === transactionId);
+  const defaultRefundDate = new Date();
+  defaultRefundDate.setDate(defaultRefundDate.getDate() + 10);
   document.getElementById("return-deadline-modal-title").textContent = existing ? "Rückgabefrist bearbeiten" : "Rückgabefrist anlegen";
   document.getElementById("return-deadline-modal-sub").textContent = existing?.returned
-    ? "Bereits als zurückgeschickt markiert." : "";
+    ? (existing.refund_received ? "Erstattung ist eingegangen." : "Zurückgeschickt – Erstattung wird erwartet.") : "";
   document.getElementById("rd-id").value = existing ? existing.id : "";
   document.getElementById("rd-transaction-id").value = transactionId;
   document.getElementById("rd-start").value = existing ? existing.start_date : new Date().toISOString().slice(0, 10);
   document.getElementById("rd-days").value = existing ? existing.deadline_days : 14;
   document.getElementById("rd-remind").value = existing ? existing.remind_days_before : 3;
+  document.getElementById("rd-refund-amount").value = existing?.refund_expected_amount ?? (transaction ? Math.abs(transaction.amount).toFixed(2) : "");
+  document.getElementById("rd-refund-date").value = existing?.refund_expected_date ?? defaultRefundDate.toISOString().slice(0, 10);
+  document.getElementById("rd-refund-status").textContent = existing?.refund_received
+    ? "Erledigt: Die Erstattung ist eingegangen und wird nicht mehr als zukünftiges Geld gezählt."
+    : "Nach dem Zurücksenden wird die Erstattung in deiner Geldplanung berücksichtigt.";
   document.getElementById("rd-delete").classList.toggle("hidden", !existing);
   document.getElementById("rd-mark-returned").classList.toggle("hidden", !existing || existing.returned);
+  document.getElementById("rd-mark-refunded").classList.toggle("hidden", !existing?.returned || existing.refund_received);
   document.getElementById("return-deadline-modal").classList.remove("hidden");
 }
 window.openReturnDeadlineModal = openReturnDeadlineModal;
@@ -229,6 +238,10 @@ document.getElementById("return-deadline-form").addEventListener("submit", async
     deadline_days: parseInt(document.getElementById("rd-days").value),
     remind_days_before: parseInt(document.getElementById("rd-remind").value),
   };
+  if (id) {
+    payload.refund_expected_amount = parseFloat(document.getElementById("rd-refund-amount").value) || null;
+    payload.refund_expected_date = document.getElementById("rd-refund-date").value || null;
+  }
   await api(id ? `/return-deadlines/${id}` : "/return-deadlines", {
     method: id ? "PUT" : "POST", body: JSON.stringify(payload),
   });
@@ -239,7 +252,24 @@ document.getElementById("return-deadline-form").addEventListener("submit", async
 document.getElementById("rd-mark-returned").addEventListener("click", async () => {
   const id = document.getElementById("rd-id").value;
   if (!id) return;
-  await api(`/return-deadlines/${id}`, { method: "PUT", body: JSON.stringify({ returned: true }) });
+  const amount = parseFloat(document.getElementById("rd-refund-amount").value);
+  const expectedDate = document.getElementById("rd-refund-date").value;
+  if (!(amount > 0) || !expectedDate) {
+    alert("Bitte Erstattungsbetrag und erwartetes Datum eintragen.");
+    return;
+  }
+  await api(`/return-deadlines/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ returned: true, refund_expected_amount: amount, refund_expected_date: expectedDate }),
+  });
+  closeReturnDeadlineModal();
+  loadTransactions();
+});
+
+document.getElementById("rd-mark-refunded").addEventListener("click", async () => {
+  const id = document.getElementById("rd-id").value;
+  if (!id) return;
+  await api(`/return-deadlines/${id}`, { method: "PUT", body: JSON.stringify({ refund_received: true }) });
   closeReturnDeadlineModal();
   loadTransactions();
 });
@@ -251,4 +281,3 @@ document.getElementById("rd-delete").addEventListener("click", async () => {
   closeReturnDeadlineModal();
   loadTransactions();
 });
-
