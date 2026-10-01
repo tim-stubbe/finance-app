@@ -69,6 +69,11 @@ models.Base.metadata.create_all(bind=engine)
 ensure_columns("document_insights", {
     "urgency": "VARCHAR DEFAULT 'niedrig'",
 })
+ensure_columns("return_deadlines", {
+    "refund_expected_amount": "FLOAT",
+    "refund_expected_date": "DATE",
+    "refund_received": "BOOLEAN DEFAULT 0",
+})
 ensure_columns("settings", {
     "enablebanking_app_id": "VARCHAR",
     "enablebanking_private_key_encrypted": "TEXT",

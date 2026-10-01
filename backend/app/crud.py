@@ -568,6 +568,13 @@ def _cashflow_events(db: Session, space_id: int, end: date) -> list[dict]:
     Heuristik verwenden und nicht auseinanderlaufen können."""
     today = date.today()
     events: list[dict] = []
+    for refund in get_return_deadlines(db, space_id):
+        if (refund.returned and not refund.refund_received and refund.refund_expected_date
+                and refund.refund_expected_amount and today <= refund.refund_expected_date <= end):
+            events.append({"date": refund.refund_expected_date,
+                           "amount": abs(refund.refund_expected_amount),
+                           "description": f"Erwartete Erstattung: {refund.transaction_description or 'Rückgabe'}",
+                           "description_key": None})
     for r in detect_recurring_transactions(db, space_id):
         interval = RECURRING_INTERVAL_DAYS.get(r["frequency"])
         if not interval:
@@ -1281,6 +1288,9 @@ def _return_deadline_out(r: models.ReturnDeadline, tx: models.Transaction | None
         transaction_amount=tx.amount if tx else None,
         start_date=r.start_date, deadline_days=r.deadline_days,
         remind_days_before=r.remind_days_before, returned=r.returned,
+        refund_expected_amount=r.refund_expected_amount,
+        refund_expected_date=r.refund_expected_date,
+        refund_received=r.refund_received,
         deadline_date=deadline_date,
         days_left=(deadline_date - date.today()).days,
         due=(not r.returned) and date.today() >= deadline_date - timedelta(days=r.remind_days_before),

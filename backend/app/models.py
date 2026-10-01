@@ -1440,6 +1440,9 @@ class ReturnDeadline(Base):
     remind_days_before = Column(Integer, nullable=False, default=3)
     reminded = Column(Boolean, nullable=False, default=False)
     returned = Column(Boolean, nullable=False, default=False)
+    refund_expected_amount = Column(Float, nullable=True)
+    refund_expected_date = Column(Date, nullable=True)
+    refund_received = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

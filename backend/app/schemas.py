@@ -971,6 +971,9 @@ class ReturnDeadlineUpdate(BaseModel):
     deadline_days: Optional[int] = None
     remind_days_before: Optional[int] = None
     returned: Optional[bool] = None
+    refund_expected_amount: Optional[float] = None
+    refund_expected_date: Optional[date] = None
+    refund_received: Optional[bool] = None
 
 
 class ReturnDeadlineOut(BaseModel):
@@ -983,6 +986,9 @@ class ReturnDeadlineOut(BaseModel):
     deadline_days: int
     remind_days_before: int
     returned: bool
+    refund_expected_amount: Optional[float] = None
+    refund_expected_date: Optional[date] = None
+    refund_received: bool = False
     deadline_date: date
     days_left: int
     due: bool
