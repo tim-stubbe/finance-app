@@ -612,6 +612,12 @@ body::after {
 
 .nav-btn.active { color: var(--accent-strong); }
 
+/* Ruhiger Standard: nur die täglichen Wege zeigen. Alle Spezialbereiche
+   bleiben über einen einzigen "Mehr anzeigen"-Knopf erreichbar. */
+#app:not(.nav-expanded) .sidebar .nav .nav-secondary { display: none !important; }
+.nav-more-toggle { color: var(--text-secondary); }
+.nav-more-toggle svg { opacity: 0.8; }
+
 /* ---------- Layout ---------- */
 main {
   flex: 1;

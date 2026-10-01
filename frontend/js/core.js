@@ -386,6 +386,32 @@ function initThemeSwitchUI() {
 
 // ---------- Tabs ----------
 
+const SIMPLE_NAV_TABS = new Set(["hub", "transactions", "accounts", "recurring", "trips"]);
+const appShell = document.getElementById("app");
+const navMoreToggle = document.getElementById("nav-more-toggle");
+
+document.querySelectorAll(".sidebar .nav .nav-btn[data-tab]").forEach(btn => {
+  if (!SIMPLE_NAV_TABS.has(btn.dataset.tab)) btn.classList.add("nav-secondary");
+});
+document.querySelectorAll(".sidebar .nav .nav-section-label").forEach(label => {
+  if (label.textContent.trim() !== "Finanzen") label.classList.add("nav-secondary");
+});
+
+function setNavExpanded(expanded) {
+  appShell.classList.toggle("nav-expanded", expanded);
+  navMoreToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  navMoreToggle.querySelector("span").textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
+  requestAnimationFrame(() => moveNavIndicator(document.querySelector(".nav-btn.active")));
+}
+
+navMoreToggle.addEventListener("click", () => {
+  const expanded = !appShell.classList.contains("nav-expanded");
+  setNavExpanded(expanded);
+  if (!expanded && document.querySelector(".sidebar .nav .nav-btn.active.nav-secondary")) {
+    document.querySelector('.sidebar .nav .nav-btn[data-tab="hub"]').click();
+  }
+});
+
 const navIndicator = document.querySelector(".nav-indicator");
 function moveNavIndicator(btn) {
   if (!navIndicator || !btn) return;
@@ -464,4 +490,3 @@ function applySign(valueEl, value, cardEl) {
     cardEl.classList.toggle("card-neg", !positive);
   }
 }
-
