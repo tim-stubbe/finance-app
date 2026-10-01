@@ -15,4 +15,4 @@ pytest-timeout==2.4.0
 #   pip install -r requirements-voice.txt
 # numpy allein ist klein und hat verlaessliche cp314-Wheels - reicht fuer
 # den Frame-Slicing-Unit-Test von voice/wakeword.py (test_voice.py).
-numpy==2.5.2
+numpy==2.5.3
