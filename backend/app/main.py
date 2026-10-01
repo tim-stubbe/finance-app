@@ -2900,6 +2900,15 @@ def system_runtime_status():
     }
 
 
+@app.get("/healthz", include_in_schema=False)
+def container_health():
+    """Knappe öffentliche Container-Prüfung für TrueNAS/Docker."""
+    healthy = scheduler.running and _telegram_thread.is_alive() and os.path.isdir(DATA_DIR)
+    if not healthy:
+        return JSONResponse(status_code=503, content={"ok": False})
+    return {"ok": True}
+
+
 @app.on_event("shutdown")
 def _shutdown_scheduler():
     scheduler.shutdown(wait=False)

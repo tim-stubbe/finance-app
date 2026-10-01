@@ -191,3 +191,9 @@ def test_system_runtime_is_visible_in_app(auth_client):
     assert data["scheduler"] == "running"
     assert data["data_directory"] == "available"
     assert any(job["id"] == "proactive_assistant" for job in data["jobs"])
+
+
+def test_container_health_is_public(client):
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}

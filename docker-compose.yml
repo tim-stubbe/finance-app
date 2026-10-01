@@ -4,6 +4,15 @@ services:
     image: finance-app:latest
     container_name: finance-app
     restart: unless-stopped
+    labels:
+      org.opencontainers.image.title: "Kies"
+      org.opencontainers.image.description: "Persönlicher Finanz- und Alltagsassistent"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
     ports:
       - "8000:8000"
     volumes:

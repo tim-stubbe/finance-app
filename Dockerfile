@@ -61,6 +61,8 @@ ENV BUILD_DATE=${BUILD_DATE}
 # aussen ueber die Registry ablesen laesst (Grundlage fuer den
 # "veraltet"-Hinweis) - nicht nur aus dem laufenden Container heraus.
 LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.title="Kies"
+LABEL org.opencontainers.image.description="Persönlicher Finanz- und Alltagsassistent"
 
 ENV DATA_DIR=/data
 ENV FRONTEND_DIR=/frontend
@@ -72,5 +74,8 @@ ENV XDG_CONFIG_HOME=/data/scalable-cli-home
 
 VOLUME ["/data"]
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+  CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()"]
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
