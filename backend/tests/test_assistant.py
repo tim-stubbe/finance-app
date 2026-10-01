@@ -181,3 +181,13 @@ def test_sync_errors_ignores_old_and_successful(auth_client):
 
     r = auth_client.get("/api/assistant/sync-errors")
     assert r.json() == []
+
+
+def test_system_runtime_is_visible_in_app(auth_client):
+    response = auth_client.get("/api/system/runtime")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["server"] == "online"
+    assert data["scheduler"] == "running"
+    assert data["data_directory"] == "available"
+    assert any(job["id"] == "proactive_assistant" for job in data["jobs"])

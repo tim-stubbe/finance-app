@@ -2848,7 +2848,9 @@ _scheduled_net_worth_snapshot()
 
 # Läuft dauerhaft im Hintergrund (kein Cron-Job, da Long-Polling blockiert) -
 # prüft selbst bei jedem Durchlauf, ob Telegram überhaupt konfiguriert ist.
-threading.Thread(target=telegram_bot.run_polling_loop, daemon=True, name="telegram-polling").start()
+_telegram_thread = threading.Thread(
+    target=telegram_bot.run_polling_loop, daemon=True, name="telegram-polling")
+_telegram_thread.start()
 
 # Home-Assistant-Live-Zustände per WebSocket (smarthome_ws.py) - eigener
 # Hintergrund-Thread, verbindet sich selbst neu und prüft bei jedem Anlauf,
@@ -2868,6 +2870,34 @@ def _ha_ws_conn():
 
 from . import smarthome_ws  # noqa: E402
 smarthome_ws.start(_ha_ws_conn)
+
+
+@app.get("/api/system/runtime", dependencies=[Depends(auth.require_auth)])
+def system_runtime_status():
+    """Nicht-technische Betriebsübersicht für die App. Zeigt nur Zustand und
+    nächste Läufe; keine Secrets, Prozesslisten oder administrativen Aktionen."""
+    now = datetime.now().astimezone()
+    jobs = []
+    for job in scheduler.get_jobs():
+        next_run = getattr(job, "next_run_time", None)
+        jobs.append({
+            "id": job.id,
+            "next_run_at": next_run.isoformat() if next_run else None,
+        })
+    jobs.sort(key=lambda item: item["next_run_at"] or "9999")
+    try:
+        free_bytes = shutil.disk_usage(DATA_DIR).free
+    except OSError:
+        free_bytes = None
+    return {
+        "server": "online",
+        "checked_at": now.isoformat(),
+        "scheduler": "running" if scheduler.running else "stopped",
+        "telegram": "running" if _telegram_thread.is_alive() else "stopped",
+        "data_directory": "available" if os.path.isdir(DATA_DIR) else "missing",
+        "free_disk_bytes": free_bytes,
+        "jobs": jobs,
+    }
 
 
 @app.on_event("shutdown")

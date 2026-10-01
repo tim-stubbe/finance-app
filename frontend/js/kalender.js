@@ -218,6 +218,38 @@ async function loadIntegrationStatus() {
   applySettingsPanelCollapse(data.items);
 }
 
+const RUNTIME_JOB_LABELS = {
+  bank_sync: "Banken abgleichen", auto_backup: "Datensicherung", radicale_sync: "Kalender abgleichen",
+  webuntis_sync: "Stundenplan abgleichen", proactive_assistant: "Assistent prüft Wichtiges",
+  morning_briefing: "Morgenbriefing", travel_reminder: "Fahrzeit prüfen", receipt_indexing: "Belege einlesen",
+  anomaly_check: "Auffälligkeiten prüfen", alert_rules: "Eigene Regeln prüfen",
+};
+
+async function loadRuntimeStatus() {
+  const box = document.getElementById("runtime-status");
+  if (!box) return;
+  try {
+    const s = await api("/system/runtime");
+    const ok = value => value === "running" || value === "online" || value === "available";
+    const rows = [
+      ["Kies-Server", s.server], ["Automatische Aufgaben", s.scheduler],
+      ["Telegram-Antworten", s.telegram], ["Datenspeicher", s.data_directory],
+    ];
+    const next = (s.jobs || []).filter(j => j.next_run_at).slice(0, 8);
+    box.innerHTML = `<div class="integration-grid">${rows.map(([name, state]) => `
+      <div class="integration-card ${ok(state) ? "is-ok" : "is-missing"}">
+        <div class="integration-mark">${ok(state) ? "✓" : "❗"}</div>
+        <div class="integration-body"><div class="integration-name">${name}</div>
+        <div class="integration-purpose">${ok(state) ? "Läuft" : "Gestoppt oder nicht erreichbar"}</div></div>
+      </div>`).join("")}</div>
+      <h4 class="settings-subhead">Nächste automatische Aufgaben</h4>
+      <ul class="settings-list">${next.map(j => `<li><span>${esc(RUNTIME_JOB_LABELS[j.id] || j.id.replaceAll("_", " "))}</span><span class="page-sub">${new Date(j.next_run_at).toLocaleString("de-DE")}</span></li>`).join("")}</ul>
+      ${s.free_disk_bytes != null ? `<p class="page-sub">Freier Speicher für Kies-Daten: <strong>${(s.free_disk_bytes / 1073741824).toFixed(1)} GB</strong></p>` : ""}`;
+  } catch (e) {
+    box.innerHTML = `<p class="beleg-warning">Betriebsstatus konnte nicht geladen werden.</p>`;
+  }
+}
+
 async function loadSplitwiseStatus() {
   const box = document.getElementById("splitwise-status");
   if (!box) return;
@@ -237,6 +269,7 @@ document.getElementById("splitwise-settings-form")?.addEventListener("submit", a
   document.getElementById("splitwise-api-key").value = "";
   await loadSplitwiseStatus();
   await loadIntegrationStatus();
+  await loadRuntimeStatus();
 });
 
 document.getElementById("splitwise-sync")?.addEventListener("click", async () => {
