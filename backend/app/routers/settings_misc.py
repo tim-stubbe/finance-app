@@ -31,6 +31,7 @@ from typing import Optional
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard, splitwise_client

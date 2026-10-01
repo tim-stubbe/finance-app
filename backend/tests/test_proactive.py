@@ -83,6 +83,25 @@ def test_snapshot_includes_health_trends(client):
         db.close()
 
 
+def test_snapshot_includes_realistic_liquidity(client, monkeypatch):
+    db = SessionLocal()
+    s = auth.get_or_create_settings(db)
+    try:
+        monkeypatch.setattr(proactive.crud, "cashflow_forecast", lambda *args, **kwargs: type("F", (), {
+            "start_balance": 200.0,
+            "planning_balance": 1000.0,
+            "expected_receivables": 900.0,
+            "expected_payables": 100.0,
+            "lowest_balance": 150.0,
+        })())
+        snap = proactive.build_snapshot(db, s, 1)
+        assert "realistisch verfügbar 1.000 €" in snap
+        assert "bestätigte Rückzahlungen/Forderungen +900 €" in snap
+        assert "offene Schulden -100 €" in snap
+    finally:
+        db.close()
+
+
 def test_quiet_hours_block_proactive_run(client, monkeypatch):
     import app.proactive as p
     monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)

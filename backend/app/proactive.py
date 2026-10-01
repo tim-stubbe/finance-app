@@ -132,6 +132,22 @@ def build_snapshot(db, settings, space_id: int) -> str:
         pass
 
     try:
+        liquidity = crud.cashflow_forecast(db, space_id, horizon_days=30)
+        details = []
+        if liquidity.expected_receivables > 0:
+            details.append(f"bestätigte Rückzahlungen/Forderungen +{_fmt_eur(liquidity.expected_receivables)}")
+        if liquidity.expected_payables > 0:
+            details.append(f"offene Schulden -{_fmt_eur(liquidity.expected_payables)}")
+        suffix = f" ({'; '.join(details)})" if details else ""
+        lines.append(
+            f"Liquiditätsplanung: Konten {_fmt_eur(liquidity.start_balance)}, "
+            f"realistisch verfügbar {_fmt_eur(liquidity.planning_balance)}{suffix}; "
+            f"30-Tage-Tiefstand {_fmt_eur(liquidity.lowest_balance)}"
+        )
+    except Exception:
+        pass
+
+    try:
         budgets = crud.get_budgets(db, space_id) or []
         over = [b for b in budgets if getattr(b, "spent", 0) and getattr(b, "amount", 0)
                 and b.spent > b.amount]
