@@ -34,9 +34,11 @@ _SYSTEM = (
     "(Frist, Vertrag, Termin ohne Ort/Zeit, überfällige Sache).\n"
     "3. Mehrere Kleinigkeiten lassen sich in einem Rutsch erledigen.\n"
     "4. Du kannst etwas sofort tun, sobald Tim eine Option wählt.\n\n"
-    "Sei NICHT übervorsichtig: wenn der Snapshot Inhalt hat und gerade nichts "
-    "Dringendes offen ist, findest du trotzdem meist eine sinnvolle Anregung. "
-    "Stell ruhig komplexe Fragen mit 2-5 Optionen - Ja/Nein ist oft zu simpel.\n"
+    "SCHWEIGEN IST DER STANDARD: Melde dich nur, wenn Tim jetzt entscheiden "
+    "muss oder du nach seiner Antwort konkret Arbeit übernehmen kannst. Eine "
+    "bloße Beobachtung, Wiederholung oder theoretische Optimierung ist keinen "
+    "Ping wert. Fehlt dir entscheidender Kontext, erfinde nichts: stelle genau "
+    "eine kurze Rückfrage mit sinnvollen Antwortoptionen.\n"
     "Das Wertvollste: VERKNÜPFE Punkte aus verschiedenen Bereichen zu EINER "
     "Einsicht, statt sie einzeln abzuarbeiten. Beispiel: Todo 'Grafikkarte "
     "ausbauen' + Ziel 'Umzug Schweiz' + '190 Fahrten unklassifiziert' + "
@@ -78,6 +80,11 @@ _SYSTEM = (
     "Vorhaben (steht evtl. schon oben unter 'Was ich mir gemerkt habe'), "
     "biete eine Option mit action.type=\"memory_add\" an.\n"
     "- Keine Zahlen erfinden. Keine Anlageberatung. Kein Geld bewegen.\n"
+    "- Kalender: Eine zeitliche Überschneidung ist nicht automatisch ein Problem. "
+    "Berücksichtige gleiche/nahe Orte, zusammengehörige Unterrichtsblöcke und einen "
+    "aktiven Reisezeitraum. Frage nach, wenn Ort oder Reiseplan unklar ist.\n"
+    "- Niedrig priorisierte oder vertagte Themen nicht erneut hochstufen. Eine "
+    "fehlende Information ist ein Grund für eine Rückfrage, nicht für Alarm.\n"
     "- Datumsangaben immer TT.MM.JJJJ, nie ISO (2027-01-01 falsch).\n"
     "- Wenn wirklich GAR NICHTS einen Ping wert ist: {\"proposals\": []}"
 )
@@ -398,8 +405,10 @@ def think(db, settings, space_id: int) -> list[dict]:
 def _recent_dedup_keys(db, days: int = 7) -> set[str]:
     since = datetime.utcnow() - timedelta(days=days)
     rows = (db.query(models.ProactiveProposal.dedup_key)
-            .filter(models.ProactiveProposal.created_at >= since,
-                    models.ProactiveProposal.dedup_key.isnot(None)).all())
+            .filter(models.ProactiveProposal.dedup_key.isnot(None),
+                    (models.ProactiveProposal.created_at >= since) |
+                    ((models.ProactiveProposal.status == "snoozed") &
+                     (models.ProactiveProposal.expires_at > datetime.utcnow()))).all())
     return {r[0] for r in rows}
 
 
@@ -441,8 +450,10 @@ def run(db, settings) -> list[models.ProactiveProposal]:
     space_id = spaces[0].id if spaces else 1
     seen = _recent_dedup_keys(db)
     recent_titles = [r[0] for r in db.query(models.ProactiveProposal.title)
-                     .filter(models.ProactiveProposal.created_at
-                             >= datetime.utcnow() - timedelta(days=7)).all()]
+                     .filter((models.ProactiveProposal.created_at
+                              >= datetime.utcnow() - timedelta(days=7)) |
+                             ((models.ProactiveProposal.status == "snoozed") &
+                              (models.ProactiveProposal.expires_at > datetime.utcnow()))).all()]
     created: list[models.ProactiveProposal] = []
     for s in think(db, settings, space_id):
         if s["dedup_key"] in seen or _too_similar(s["title"], recent_titles):
@@ -523,14 +534,20 @@ def answer(db, settings, proposal_id: int, key: str) -> str:
         result = proactive_actions.execute(db, settings, chosen["action"])
     except Exception as exc:  # noqa: BLE001
         result = f"Konnte die Aktion nicht ausführen: {exc}"
-    p.status = "beantwortet"
+    action = chosen.get("action") or {}
+    if action.get("type") == "remind_later":
+        days = max(int((action.get("params") or {}).get("days") or 1), 1)
+        p.status = "snoozed"
+        p.expires_at = datetime.utcnow() + timedelta(days=days)
+    else:
+        p.status = "beantwortet"
     p.chosen_key = chosen["key"]
     p.result_text = result
     p.answered_at = datetime.utcnow()
 
     # Implizites Lernen: echte Aktion gewählt = nützlich, dismiss = daneben.
     # remind_later ist neutral, kein Feedback.
-    at = (chosen.get("action") or {}).get("type")
+    at = action.get("type")
     if at in ("dismiss",) or at not in ("remind_later", "open"):
         db.add(models.ProactiveFeedback(
             text=f"[{p.kind}/{p.urgency}] {p.title}",

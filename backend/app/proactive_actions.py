@@ -198,8 +198,6 @@ def _open(db, settings, p) -> str:
 
 def _remind_later(db, settings, p) -> str:
     days = max(int(p.get("days") or 1), 1)
-    settings.proactive_assistant_snoozed_until = datetime.utcnow() + timedelta(days=days)
-    db.commit()
     return f"Okay, ich melde mich in {days} Tag(en) wieder."
 
 

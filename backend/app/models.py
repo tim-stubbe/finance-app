@@ -1802,7 +1802,7 @@ class ProactiveProposal(Base):
     Ziel (siehe [[feedback-push-not-pull]]): Kies meldet sich mit einer fertigen
     Entscheidung und handelt auf Tims Antwort - er muss keinen Tab bedienen.
 
-    status: offen -> beantwortet | verfallen | storniert
+    status: offen -> beantwortet | snoozed | verfallen | storniert
     """
 
     __tablename__ = "proactive_proposals"

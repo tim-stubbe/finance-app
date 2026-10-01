@@ -8,14 +8,25 @@ Callback-URL, weil die App nur über Tailscale erreichbar ist und Twilio keinen
 
 import xml.sax.saxutils
 import os
+import re
+import unicodedata
 
 import requests
 
 from . import bank_sync
 
 TWILIO_CALLS_URL = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Calls.json"
-
-
+def _speech_safe(text: str) -> str:
+    """Turn notification prose into short, understandable spoken German."""
+    value = unicodedata.normalize("NFKC", text or "")
+    value = re.sub(r"https?://\S+", " Link in Telegram ", value)
+    value = re.sub(r"[#*_`~|<>\[\]{}]", " ", value)
+    value = value.replace("€", " Euro ").replace("%", " Prozent ")
+    value = re.sub(r"[\U00010000-\U0010ffff]", " ", value)
+    value = "".join(" " if unicodedata.category(char) in ("So", "Sk") else char for char in value)
+    value = re.sub(r"\s+", " ", value).strip()
+    # A phone call must not read an entire generated report or raw payload.
+    return value[:500].rsplit(" ", 1)[0] if len(value) > 500 else value
 def make_local_call(url: str, token: str, to_number: str, text: str) -> None:
     """Lokales SIP-Gateway ansprechen (FRITZ!Box heute, VoLTE-Gateway später)."""
     resp = requests.post(
@@ -40,11 +51,17 @@ def make_call(account_sid: str, auth_token: str, from_number: str, to_number: st
     resp.raise_for_status()
 
 
-def call(settings, text: str) -> None:
+def call(settings, text: str, *, interactive: bool = False) -> None:
     """Best-effort wie notifications.notify() - ein kaputter Twilio-Zugang darf
     den täglichen Sync/die Ziel-Auswertung nie zum Absturz bringen."""
     if not settings.calls_enabled:
         return
+    # The current gateways only play a message and hang up. Never use that
+    # path for automatic escalation: it cannot accept a reply and will speak
+    # into voicemail. A future two-way gateway must opt in explicitly.
+    if not interactive and os.environ.get("KIES_ALLOW_ONE_WAY_CALLS", "").lower() not in ("1", "true", "yes"):
+        return
+    text = _speech_safe(text)
     local_url = os.environ.get("KIES_LOCAL_CALL_URL", "").strip()
     local_token = os.environ.get("KIES_LOCAL_CALL_TOKEN", "").strip()
     local_to = (os.environ.get("KIES_CALL_TO", "").strip()
