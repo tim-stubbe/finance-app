@@ -218,6 +218,34 @@ async function loadIntegrationStatus() {
   applySettingsPanelCollapse(data.items);
 }
 
+async function loadSplitwiseStatus() {
+  const box = document.getElementById("splitwise-status");
+  if (!box) return;
+  try {
+    const s = await api("/settings/splitwise");
+    box.textContent = s.configured
+      ? `${Number(s.receivable_eur).toFixed(2)} € bekommst du zurück · ${Number(s.payable_eur).toFixed(2)} € schuldest du noch`
+      : "Noch nicht verbunden.";
+  } catch (e) { box.textContent = "Status konnte nicht geladen werden."; }
+}
+
+document.getElementById("splitwise-settings-form")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  const key = document.getElementById("splitwise-api-key").value.trim();
+  if (!key) return;
+  await api("/settings/splitwise", {method: "PUT", body: JSON.stringify({api_key: key})});
+  document.getElementById("splitwise-api-key").value = "";
+  await loadSplitwiseStatus();
+  await loadIntegrationStatus();
+});
+
+document.getElementById("splitwise-sync")?.addEventListener("click", async () => {
+  await api("/splitwise/sync", {method: "POST"});
+  await loadSplitwiseStatus();
+});
+
+loadSplitwiseStatus();
+
 // Klappt die Einstellungen-Panels bereits vollständig eingerichteter
 // Anbindungen standardmäßig zu - bewusst NUR die einzelnen Formulare unten,
 // nicht die große Übersicht ("Einrichtungsstatus") oben, die soll unverändert

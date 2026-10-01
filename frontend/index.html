@@ -3074,6 +3074,21 @@
         </div>
       </div>
 
+      <div class="panel" data-integration-key="splitwise">
+        <h3 class="panel-title">Splitwise</h3>
+        <p class="page-sub">Offene Rückzahlungen werden getrennt vom Kontostand in deiner Liquiditätsplanung berücksichtigt.</p>
+        <form id="splitwise-settings-form" class="form-grid">
+          <label class="wide">API-Schlüssel
+            <input type="password" id="splitwise-api-key" autocomplete="off" placeholder="wird verschlüsselt gespeichert">
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Verbinden</button>
+            <button type="button" id="splitwise-sync" class="btn-ghost">Jetzt aktualisieren</button>
+          </div>
+        </form>
+        <p id="splitwise-status" class="page-sub">Noch nicht geladen.</p>
+      </div>
+
       <div class="panel" data-integration-key="enablebanking">
         <h3 class="panel-title"><svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg> Open Banking (Enable Banking) – z.B. C24, Finom</h3>
         <p class="page-sub">
