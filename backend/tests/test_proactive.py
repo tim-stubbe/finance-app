@@ -116,6 +116,22 @@ def test_snooze_blocks(client, monkeypatch):
         db.close()
 
 
+def test_remind_later_snoozes_only_that_topic(client, monkeypatch):
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
+    db, s = _settings()
+    try:
+        proposal = proactive.run(db, s)[0]
+        result = proactive.answer(db, s, proposal.id, "b")
+        db.refresh(proposal)
+        assert "3 Tag" in result
+        assert proposal.status == "snoozed"
+        assert proposal.expires_at > datetime.utcnow() + timedelta(days=2)
+        assert s.proactive_assistant_snoozed_until is None
+        assert proposal.dedup_key in proactive._recent_dedup_keys(db)
+    finally:
+        db.close()
+
+
 def test_telegram_proaktiv_command(client, monkeypatch):
     from app import telegram_bot
     sent = []

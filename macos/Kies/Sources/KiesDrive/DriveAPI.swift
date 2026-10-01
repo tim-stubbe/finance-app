@@ -12,6 +12,13 @@ final class DriveSettings: ObservableObject {
     @Published var mapAppearance: DriveMapAppearance { didSet { UserDefaults.standard.set(mapAppearance.rawValue, forKey: "drive.mapAppearance") } }
     @Published var voiceGuidance: Bool { didSet { UserDefaults.standard.set(voiceGuidance, forKey: "drive.voiceGuidance") } }
 
+    /// Fahrzeugdaten für Reichweiten-/Tankvorschläge.
+    /// Einheit: L/100km und Liter.
+    @Published var consumptionLPer100km: Double { didSet { UserDefaults.standard.set(consumptionLPer100km, forKey: "drive.consumptionLPer100km") } }
+    @Published var tankCapacityL: Double { didSet { UserDefaults.standard.set(tankCapacityL, forKey: "drive.tankCapacityL") } }
+    @Published var fuelPricePerLitre: Double { didSet { UserDefaults.standard.set(fuelPricePerLitre, forKey: "drive.fuelPricePerLitre") } }
+    @Published var targetSpeedKmh: Double { didSet { UserDefaults.standard.set(targetSpeedKmh, forKey: "drive.targetSpeedKmh") } }
+
     private init() {
         baseURL = UserDefaults.standard.string(forKey: "drive.baseURL") ?? "https://100.72.226.91:8000"
         fuel = FuelKind(rawValue: UserDefaults.standard.string(forKey: "drive.fuel") ?? "diesel") ?? .diesel
@@ -19,6 +26,11 @@ final class DriveSettings: ObservableObject {
         avoidHighways = UserDefaults.standard.object(forKey: "drive.avoidHighways") as? Bool ?? false
         mapAppearance = DriveMapAppearance(rawValue: UserDefaults.standard.string(forKey: "drive.mapAppearance") ?? "standard") ?? .standard
         voiceGuidance = UserDefaults.standard.object(forKey: "drive.voiceGuidance") as? Bool ?? true
+
+        consumptionLPer100km = UserDefaults.standard.object(forKey: "drive.consumptionLPer100km") as? Double ?? 6.5
+        tankCapacityL = UserDefaults.standard.object(forKey: "drive.tankCapacityL") as? Double ?? 50.0
+        fuelPricePerLitre = UserDefaults.standard.object(forKey: "drive.fuelPricePerLitre") as? Double ?? 1.75
+        targetSpeedKmh = UserDefaults.standard.object(forKey: "drive.targetSpeedKmh") as? Double ?? 150
     }
     var isReady: Bool { !baseURL.isEmpty && DeviceTokenStore.shared.token != nil }
     /// App-Version + Build, z.B. "1.0 (3)" - zur Diagnose, ob ein Gerät noch
@@ -64,9 +76,10 @@ enum DriveAPI {
         return data
     }
 
-    static func stations(near coordinate: CLLocationCoordinate2D, fuel: FuelKind) async throws -> [FuelStation] {
-        let path = String(format: "/api/navigation/fuel-stations?lat=%.6f&lon=%.6f&radius_km=25&fuel=%@",
-                          coordinate.latitude, coordinate.longitude, fuel.apiValue)
+    static func stations(near coordinate: CLLocationCoordinate2D, fuel: FuelKind, radiusKm: Double = 8) async throws -> [FuelStation] {
+        let boundedRadius = min(12, max(3, radiusKm))
+        let path = String(format: "/api/navigation/fuel-stations?lat=%.6f&lon=%.6f&radius_km=%.1f&fuel=%@",
+                          coordinate.latitude, coordinate.longitude, boundedRadius, fuel.apiValue)
         let payload = try await data(for: try request(path: path))
         return try JSONDecoder().decode(FuelStationEnvelope.self, from: payload).stations
     }
@@ -86,4 +99,25 @@ enum DriveAPI {
         let payload = try await data(for: try request(path: "/api/navigation/speed-limits", method: "POST", body: body))
         return try JSONDecoder().decode(SpeedLimitEnvelope.self, from: payload).limits
     }
+
+    static func tollCost(origin: String, destination: String) async throws -> TollCost {
+        let body = try JSONEncoder().encode(TollSearchRequest(origin: origin, destination: destination))
+        let payload = try await data(for: try request(path: "/api/navigation/toll-search", method: "POST", body: body))
+        let result = try JSONDecoder().decode(TollSearchResponse.self, from: payload)
+        if result.status == "known", let amount = result.amount {
+            return .known(amount: Decimal(amount), currency: result.currency, source: result.source)
+        }
+        let titles = result.sources.prefix(3).map(\.title).joined(separator: " · ")
+        return .unknown(reason: titles.isEmpty ? "SearXNG fand keinen eindeutig belegten Gesamtpreis." : "SearXNG geprüft: \(titles)")
+    }
+}
+
+private struct TollSearchRequest: Encodable { let origin: String; let destination: String }
+private struct TollSearchSource: Decodable { let title: String; let url: String; let snippet: String }
+private struct TollSearchResponse: Decodable {
+    let status: String
+    let amount: Double?
+    let currency: String
+    let source: String
+    let sources: [TollSearchSource]
 }

@@ -21,14 +21,13 @@ struct CachedRoute: Codable {
 
 @MainActor
 final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    /// Eine gemeinsame Instanz für die SwiftUI-Oberfläche und die
-    /// CarPlay-Szene, damit beide dieselbe Route/Tankstellenliste sehen.
+    /// Shared by the phone UI and CarPlay so both surfaces operate on the
+    /// same route, stops and long-trip plan.
     static let shared = RoutePlanner()
-
     @Published var destinationText = ""
     @Published var suggestions: [MKMapItem] = []
     @Published var destination: MKMapItem?
-    @Published var viaStation: FuelStation?
+    @Published var viaStations: [FuelStation] = []
     @Published var legs: [MKRoute] = []
     @Published var alternatives: [MKRoute] = []
     @Published var stations: [FuelStation] = []
@@ -38,6 +37,10 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     @Published var lastAnnouncement: String?
     @Published var speedWarning: Bool = false
     @Published var offlineRoute: CachedRoute?
+    @Published var longTripPlan: LongTripPlan?
+    @Published var isNavigating = false
+    private var comparisonRoute: MKRoute?
+    private var researchedToll: TollCost = .unknown(reason: "Mautrecherche läuft noch.")
 
     /// Tempolimits entlang der Route, parallel zu `speedLimitPoints` indiziert.
     private var speedLimitPoints: [CLLocationCoordinate2D] = []
@@ -46,6 +49,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     private let synthesizer = AVSpeechSynthesizer()
     private var announcedStepKeys: Set<String> = []
     private var offRouteStrikes = 0
+    private var stationLoadGeneration = UUID()
     private static let cacheKey = "drive.offlineRoute"
 
     override init() {
@@ -59,6 +63,25 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     var route: MKRoute? { legs.first }
     var totalDistance: Double { legs.reduce(0) { $0 + $1.distance } }
     var totalTravelTime: TimeInterval { legs.reduce(0) { $0 + $1.expectedTravelTime } }
+
+    func startNavigation() {
+        guard !legs.isEmpty else { return }
+        isNavigating = true
+        announcedStepKeys = []
+        lastAnnouncement = nextInstruction ?? "Route gestartet"
+        speak(lastAnnouncement ?? "Route gestartet")
+    }
+
+    func stopNavigation() {
+        isNavigating = false
+        synthesizer.stopSpeaking(at: .immediate)
+        lastAnnouncement = nil
+        speedWarning = false
+    }
+
+    var nextInstruction: String? {
+        legs.first?.steps.dropFirst().first(where: { !$0.instructions.isEmpty })?.instructions
+    }
 
     func searchDestination(near coordinate: CLLocationCoordinate2D?) async {
         guard destinationText.count > 2 else { suggestions = []; return }
@@ -75,25 +98,42 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         defer { isLoading = false }
         let startItem = MKMapItem(placemark: MKPlacemark(coordinate: start))
         do {
-            if let viaStation {
-                // MapKit kennt keine mehrgliedrigen Routen - daher zwei
-                // Teilstrecken (Start→Tankstelle, Tankstelle→Ziel) einzeln
-                // berechnen und aneinanderhängen.
-                let viaItem = MKMapItem(placemark: MKPlacemark(coordinate: viaStation.coordinate))
-                guard let leg1 = try await computeRoutes(from: startItem, to: viaItem, settings: settings, alternates: false).first,
-                      let leg2 = try await computeRoutes(from: viaItem, to: destination, settings: settings, alternates: false).first
-                else { throw DriveAPIError.invalidData }
-                legs = [leg1, leg2]
-                alternatives = []
-            } else {
+            if viaStations.isEmpty {
                 let routes = try await computeRoutes(from: startItem, to: destination, settings: settings, alternates: true)
                 alternatives = routes
                 legs = routes.first.map { [$0] } ?? []
+                // Request the opposite toll preference for an honest route-level
+                // distance/time comparison. MapKit exposes no toll price; that
+                // remains explicitly unknown until a verified provider responds.
+                comparisonRoute = try? await computeRoutes(
+                    from: startItem, to: destination, settings: settings,
+                    alternates: false, avoidTollsOverride: !settings.avoidTolls
+                ).first
+            } else {
+                // MapKit kennt keine mehrgliedrigen Routen als ein einziges Objekt.
+                // Daher Teilstrecken sequentiell (Start→wp1→wp2→…→Ziel) berechnen.
+                let waypoints: [MKMapItem] = viaStations.map { MKMapItem(placemark: MKPlacemark(coordinate: $0.coordinate)) }
+                let allStops = [startItem] + waypoints + [destination]
+
+                var newLegs: [MKRoute] = []
+                for i in 0..<(allStops.count - 1) {
+                    let from = allStops[i]
+                    let to = allStops[i + 1]
+                    guard let leg = try await computeRoutes(from: from, to: to, settings: settings, alternates: false).first else {
+                        throw DriveAPIError.invalidData
+                    }
+                    newLegs.append(leg)
+                }
+                legs = newLegs
+                alternatives = []
+                comparisonRoute = nil
             }
             announcedStepKeys = []
             offRouteStrikes = 0
             await loadStations(fuel: settings.fuel)
             await loadSpeedLimits()
+            await loadTollCost(from: start)
+            buildLongTripPlan(settings: settings)
             cacheForOffline()
         } catch { errorMessage = "Route konnte nicht berechnet werden: \(error.localizedDescription)" }
     }
@@ -134,7 +174,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     /// Überschreitung erkennen und bei Abweichung von der Route automatisch
     /// neu berechnen.
     func updateProgress(at location: CLLocation, settings: DriveSettings) {
-        guard let route = legs.first else { return }
+        guard isNavigating, let route = legs.first else { return }
         checkSpeedLimit(at: location.coordinate, speedMps: location.speed)
         if settings.voiceGuidance { announceNextStep(near: location.coordinate, in: route) }
         checkForDeviation(from: location.coordinate, route: route, settings: settings)
@@ -221,37 +261,149 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         return speedLimits[safe: bestIndex]
     }
 
-    private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings, alternates: Bool) async throws -> [MKRoute] {
+    private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings, alternates: Bool, avoidTollsOverride: Bool? = nil) async throws -> [MKRoute] {
         let request = MKDirections.Request()
         request.source = source
         request.destination = destination
         request.transportType = .automobile
         request.requestsAlternateRoutes = alternates
-        request.tollPreference = settings.avoidTolls ? .avoid : .any
+        request.tollPreference = (avoidTollsOverride ?? settings.avoidTolls) ? .avoid : .any
         request.highwayPreference = settings.avoidHighways ? .avoid : .any
         return try await MKDirections(request: request).calculate().routes
     }
 
+    private func buildLongTripPlan(settings: DriveSettings) {
+        guard !legs.isEmpty else { longTripPlan = nil; return }
+        let mainDistance = totalDistance
+        let mainTime = totalTravelTime
+        let knownLimits = speedLimits.filter { $0.maxspeed != nil || $0.unlimited }
+        let unlimitedFraction = knownLimits.isEmpty ? 0 : Double(knownLimits.filter(\.unlimited).count) / Double(knownLimits.count)
+        let candidates = breakCandidates(totalDistance: mainDistance)
+        var inputs = [RoutePlanningInput(
+            id: settings.avoidTolls ? "toll-avoiding" : "standard",
+            title: settings.avoidTolls ? "Maut vermeiden" : "Schnellste Route",
+            distanceMetres: mainDistance,
+            mapKitExpectedTravelTime: mainTime,
+            unlimitedMotorwayFraction: unlimitedFraction,
+            typicalUnlimitedSpeedKmh: 130,
+            toll: settings.avoidTolls ? .unknown(reason: "Mautvermeidung gewählt; Restmaut wird nicht als null angenommen.") : researchedToll,
+            breakCandidates: candidates
+        )]
+        if let comparisonRoute,
+           abs(comparisonRoute.distance - mainDistance) > 100 || abs(comparisonRoute.expectedTravelTime - mainTime) > 60 {
+            inputs.append(.init(
+                id: settings.avoidTolls ? "standard" : "toll-avoiding",
+                title: settings.avoidTolls ? "Schnellste Route" : "Maut vermeiden",
+                distanceMetres: comparisonRoute.distance,
+                mapKitExpectedTravelTime: comparisonRoute.expectedTravelTime,
+                unlimitedMotorwayFraction: 0,
+                typicalUnlimitedSpeedKmh: 130,
+                toll: settings.avoidTolls ? researchedToll : .unknown(reason: "Mautvermeidung gewählt; Restmaut wird nicht als null angenommen."),
+                breakCandidates: []
+            ))
+        }
+        let profile = VehicleProfile(
+            baseConsumptionLPer100km: settings.consumptionLPer100km,
+            fuelPricePerLitre: settings.fuelPricePerLitre,
+            tankCapacityLitres: settings.tankCapacityL
+        )
+        let scenarios = [SpeedScenario.target(settings.targetSpeedKmh)] + (settings.targetSpeedKmh == 200 ? [] : [.target(200)])
+        longTripPlan = RouteComparison(fuelModel: .init(), breakPlanner: .init())
+            .compare(routes: inputs, scenarios: scenarios, vehicle: profile)
+    }
+
+    private func loadTollCost(from start: CLLocationCoordinate2D) async {
+        guard let destination else { return }
+        let origin = String(format: "%.4f, %.4f", start.latitude, start.longitude)
+        let destinationName = destination.placemark.title ?? destination.name ?? destinationText
+        do {
+            researchedToll = try await DriveAPI.tollCost(origin: origin, destination: destinationName)
+        } catch {
+            researchedToll = .unknown(reason: "SearXNG-Mautrecherche nicht verfügbar: \(error.localizedDescription)")
+        }
+    }
+
+    /// Recomputes scenario numbers from the already loaded route when vehicle
+    /// or target-speed settings change; no network request is required.
+    func refreshLongTripPlan(settings: DriveSettings) {
+        buildLongTripPlan(settings: settings)
+    }
+
+    private func breakCandidates(totalDistance: Double) -> [BreakCandidate] {
+        let routeCoordinates = legs.flatMap { sample($0.polyline, maximum: 160) }
+        guard routeCoordinates.count > 1 else { return [] }
+        return stations.compactMap { station in
+            let location = CLLocation(latitude: station.lat, longitude: station.lon)
+            guard let match = routeCoordinates.enumerated().min(by: {
+                location.distance(from: CLLocation(latitude: $0.element.latitude, longitude: $0.element.longitude)) <
+                location.distance(from: CLLocation(latitude: $1.element.latitude, longitude: $1.element.longitude))
+            }) else { return nil }
+            let detour = location.distance(from: CLLocation(latitude: match.element.latitude, longitude: match.element.longitude))
+            return BreakCandidate(
+                id: station.id, name: station.brand.isEmpty ? station.name : station.brand,
+                coordinate: station.coordinate,
+                progress: Double(match.offset) / Double(routeCoordinates.count - 1),
+                detourMetres: detour * 2, isOpen: station.open != false
+            )
+        }
+    }
+
     func loadStations(fuel: FuelKind) async {
         guard !legs.isEmpty else { return }
-        let points = legs.flatMap { sample($0.polyline, maximum: 10) }
+        let generation = UUID()
+        stationLoadGeneration = generation
+        // A handful of evenly distributed requests is sufficient. The old
+        // 25-km radius at ten route points returned hundreds of duplicates.
+        let points = evenlySpaced(legs.flatMap { sample($0.polyline, maximum: 80) }, maximum: 6)
         var unique: [String: FuelStation] = [:]
         await withTaskGroup(of: [FuelStation].self) { group in
-            for point in points { group.addTask { (try? await DriveAPI.stations(near: point, fuel: fuel)) ?? [] } }
+            for point in points { group.addTask { (try? await DriveAPI.stations(near: point, fuel: fuel, radiusKm: 8)) ?? [] } }
             for await batch in group { for station in batch { unique[station.id] = station } }
         }
-        let routePoints = legs.flatMap { sample($0.polyline, maximum: 80) }.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
-        stations = unique.values.filter { station in
+        guard generation == stationLoadGeneration else { return }
+        let routeCoordinates = legs.flatMap { sample($0.polyline, maximum: 160) }
+        let routePoints = routeCoordinates.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+        let nearRoute = unique.values.compactMap { station -> (FuelStation, Int)? in
             let point = CLLocation(latitude: station.lat, longitude: station.lon)
-            return routePoints.map { $0.distance(from: point) }.min() ?? .greatestFiniteMagnitude < 8_000
-        }.sorted { $0.price == $1.price ? $0.distanceKm < $1.distanceKm : $0.price < $1.price }
+            guard let match = routePoints.enumerated().min(by: { $0.element.distance(from: point) < $1.element.distance(from: point) }),
+                  match.element.distance(from: point) < 4_000 else { return nil }
+            return (station, match.offset)
+        }
+        // Keep at most one strong candidate per route section. This gives the
+        // break planner geographic coverage without flooding MapKit with pins.
+        let bucketCount = min(12, max(1, routeCoordinates.count))
+        let grouped = Dictionary(grouping: nearRoute) { item in
+            min(bucketCount - 1, item.1 * bucketCount / max(1, routeCoordinates.count))
+        }
+        stations = grouped.keys.sorted().compactMap { bucket in
+            grouped[bucket]?.min {
+                if $0.0.open != $1.0.open { return $0.0.open != false }
+                return $0.0.price == $1.0.price ? $0.0.distanceKm < $1.0.distanceKm : $0.0.price < $1.0.price
+            }?.0
+        }
     }
 
     /// Fügt eine Tankstelle als Zwischenstopp ein (oder entfernt sie erneut,
     /// wenn sie bereits als Zwischenstopp gesetzt ist) und berechnet die
     /// Route neu.
     func toggleWaypoint(_ station: FuelStation, from start: CLLocationCoordinate2D, settings: DriveSettings) async {
-        viaStation = (viaStation?.id == station.id) ? nil : station
+        if let index = viaStations.firstIndex(where: { $0.id == station.id }) {
+            viaStations.remove(at: index)
+        } else {
+            viaStations.append(station)
+        }
+        await calculate(from: start, settings: settings)
+    }
+
+    func addPlannedBreak(_ plannedBreak: PlannedBreak, from start: CLLocationCoordinate2D, settings: DriveSettings) async {
+        guard let candidate = plannedBreak.candidate,
+              let station = stations.first(where: { $0.id == candidate.id }),
+              !viaStations.contains(where: { $0.id == station.id }) else { return }
+        viaStations.append(station)
+        let progressByID = Dictionary(uniqueKeysWithValues: breakCandidates(totalDistance: totalDistance).map { ($0.id, $0.progress) })
+        viaStations.sort { lhs, rhs in
+            (progressByID[lhs.id] ?? 1) < (progressByID[rhs.id] ?? 1)
+        }
         await calculate(from: start, settings: settings)
     }
 
@@ -262,5 +414,12 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         polyline.getCoordinates(coordinates, range: NSRange(location: 0, length: polyline.pointCount))
         let stride = max(1, polyline.pointCount / maximum)
         return Swift.stride(from: 0, to: polyline.pointCount, by: stride).map { coordinates[$0] }
+    }
+
+    private func evenlySpaced(_ points: [CLLocationCoordinate2D], maximum: Int) -> [CLLocationCoordinate2D] {
+        guard points.count > maximum, maximum > 1 else { return points }
+        return (0..<maximum).map { index in
+            points[index * (points.count - 1) / (maximum - 1)]
+        }
     }
 }

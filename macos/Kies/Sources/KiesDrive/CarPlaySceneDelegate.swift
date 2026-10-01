@@ -43,7 +43,7 @@ final class CarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
     /// Baut die Liste bei jeder Routen-/Tankstellenänderung neu auf.
     private func observePlanner() {
         let planner = RoutePlanner.shared
-        Publishers.CombineLatest3(planner.$legs, planner.$stations, planner.$viaStation)
+        Publishers.CombineLatest3(planner.$legs, planner.$stations, planner.$viaStations)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _, _, _ in
                 guard let self, let listTemplate = self.interfaceController?.rootTemplate as? CPListTemplate else { return }
@@ -77,7 +77,7 @@ final class CarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
 
         if !planner.stations.isEmpty {
             let stationItems: [CPListItem] = planner.stations.prefix(8).map { station in
-                let isVia = planner.viaStation?.id == station.id
+                let isVia = planner.viaStations.contains(where: { $0.id == station.id })
                 let name = station.brand.isEmpty ? station.name : station.brand
                 let item = CPListItem(
                     text: isVia ? "✓ \(name)" : name,
