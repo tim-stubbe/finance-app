@@ -71,7 +71,7 @@ def test_upload_import_dedups_and_summary_and_purpose(auth_client):
     assert summ["trip_count"] == 2
     assert abs(summ["total_km"] - (3.838 + 12.49)) < 0.05
     assert summ["vehicles"] == ["Peugeot 5008"]
-    assert summ["unknown_km"] > 0 and summ["business_km"] == 0.0
+    assert summ["private_km"] > 0 and summ["unknown_km"] == 0.0 and summ["business_km"] == 0.0
 
     t1 = next(t for t in trips if t["distance_km"] < 5)
     r = auth_client.patch(f"/api/vehicle/trips/{t1['id']}", json={"purpose": "geschaeftlich", "note": "Kunde"})
@@ -130,14 +130,18 @@ def test_trip_rules_classify_on_import_and_retroactively(auth_client):
     trips = auth_client.get("/api/vehicle/trips").json()
     assert next(t for t in trips if t["id"])["purpose"] == "geschaeftlich"
 
-    # 3) Fahrt ohne Match bleibt unbekannt; neue Regel + apply-rules ordnet nach
+    # 3) Fahrt ohne Match wird standardmäßig privat. Eine neue Regel ändert
+    # bestehende Fahrten nicht ungefragt, kann aber ausdrücklich rückwirkend
+    # auf alle Fahrten angewendet werden.
     fd = {"file": ("c.speedometer", io.BytesIO(json.dumps(_rule_backup("Zuhause", "Baumarkt", "R2")).encode()), "application/json")}
     auth_client.post("/api/vehicle/trips/import", files=fd)
     r2 = auth_client.post("/api/vehicle/trip-rules", json={
-        "pattern": "Baumarkt", "match_field": "any", "purpose": "privat"})
-    assert r2.json()["changed"] == 1
+        "pattern": "Baumarkt", "match_field": "any", "purpose": "geschaeftlich"})
+    assert r2.json()["changed"] == 0
+    applied = auth_client.post("/api/vehicle/trips/apply-rules?all_trips=true")
+    assert applied.status_code == 200 and applied.json()["changed"] == 1
     baumarkt = next(t for t in auth_client.get("/api/vehicle/trips").json() if (t["end_location"] or "") == "Baumarkt")
-    assert baumarkt["purpose"] == "privat"
+    assert baumarkt["purpose"] == "geschaeftlich"
 
     # 4) Regel löschen
     rid = auth_client.get("/api/vehicle/trip-rules").json()[0]["id"]
