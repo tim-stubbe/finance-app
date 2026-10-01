@@ -1009,6 +1009,9 @@ class CashflowForecastOut(BaseModel):
     lowest_date: Optional[str] = None
     goes_negative: bool
     first_negative_date: Optional[str] = None
+    expected_receivables: float = 0.0
+    expected_payables: float = 0.0
+    planning_balance: float = 0.0
 
 
 class CashflowScenarioRequest(BaseModel):

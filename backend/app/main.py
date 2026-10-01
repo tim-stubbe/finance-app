@@ -74,6 +74,12 @@ ensure_columns("settings", {
     "enablebanking_private_key_encrypted": "TEXT",
 })
 ensure_columns("settings", {
+    "splitwise_api_key_encrypted": "VARCHAR",
+    "splitwise_receivable_eur": "FLOAT DEFAULT 0",
+    "splitwise_payable_eur": "FLOAT DEFAULT 0",
+    "splitwise_last_sync_at": "DATETIME",
+})
+ensure_columns("settings", {
     "enablebanking_redirect_base_url": "VARCHAR",
 })
 ensure_columns("holdings", {

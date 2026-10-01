@@ -225,6 +225,10 @@ class Settings(Base):
     # unveraendert weiterlaufen.
     websearch_provider = Column(String, nullable=False, default="brave")
     searxng_url = Column(String, nullable=True)
+    splitwise_api_key_encrypted = Column(String, nullable=True)
+    splitwise_receivable_eur = Column(Float, nullable=False, default=0.0)
+    splitwise_payable_eur = Column(Float, nullable=False, default=0.0)
+    splitwise_last_sync_at = Column(DateTime, nullable=True)
     # Reine Anzeige-Einstellung: gespeichert wird immer in EUR, hier steht nur,
     # in welcher Währung das Frontend umrechnet/anzeigt.
     display_currency = Column(String, nullable=False, default="EUR")

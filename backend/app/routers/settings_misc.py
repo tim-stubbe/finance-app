@@ -33,7 +33,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard
+from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard, splitwise_client
 from ..database import get_db
 from .ai_assistant import websearch_configured
 
@@ -480,6 +480,14 @@ def integrations_status(db: Session = Depends(get_db)):
 
     items = []
 
+    items.append(entry(
+        "splitwise", "Splitwise",
+        "Offene Rückzahlungen in der Liquiditätsplanung berücksichtigen",
+        [] if s.splitwise_api_key_encrypted else ["API-Schlüssel"],
+        detail_ok=(f"{s.splitwise_receivable_eur or 0:.2f} € zu bekommen · zuletzt {s.splitwise_last_sync_at}"
+                   if s.splitwise_last_sync_at else "Verbunden, noch nicht synchronisiert."),
+    ))
+
     missing = []
     if not s.ollama_url:
         missing.append("Server-Adresse")
@@ -625,6 +633,47 @@ def integrations_status(db: Session = Depends(get_db)):
         ready=sum(1 for i in items if i.status == "ok"),
         incomplete=sum(1 for i in items if i.status in ("missing", "partial")),
     )
+
+
+class SplitwiseSettingsUpdate(BaseModel):
+    api_key: str
+
+
+@settings_misc_router.get("/settings/splitwise")
+def get_splitwise_settings(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    return {"configured": bool(s.splitwise_api_key_encrypted),
+            "receivable_eur": s.splitwise_receivable_eur or 0,
+            "payable_eur": s.splitwise_payable_eur or 0,
+            "last_sync_at": s.splitwise_last_sync_at}
+
+
+@settings_misc_router.put("/settings/splitwise")
+def update_splitwise_settings(data: SplitwiseSettingsUpdate, db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    key = data.api_key.strip()
+    if not key:
+        raise HTTPException(400, "API-Schlüssel fehlt")
+    values = splitwise_client.balances(key).get("EUR", {"receivable": 0, "payable": 0})
+    s.splitwise_api_key_encrypted = bank_sync.encrypt_secret(s.secret_key, key)
+    s.splitwise_receivable_eur = values["receivable"]
+    s.splitwise_payable_eur = values["payable"]
+    s.splitwise_last_sync_at = datetime.utcnow()
+    db.commit()
+    return get_splitwise_settings(db)
+
+
+@settings_misc_router.post("/splitwise/sync")
+def sync_splitwise(db: Session = Depends(get_db)):
+    s = auth.get_or_create_settings(db)
+    if not s.splitwise_api_key_encrypted:
+        raise HTTPException(400, "Splitwise ist nicht verbunden")
+    key = bank_sync.decrypt_secret(s.secret_key, s.splitwise_api_key_encrypted)
+    values = splitwise_client.balances(key).get("EUR", {"receivable": 0, "payable": 0})
+    s.splitwise_receivable_eur, s.splitwise_payable_eur = values["receivable"], values["payable"]
+    s.splitwise_last_sync_at = datetime.utcnow()
+    db.commit()
+    return get_splitwise_settings(db)
 
 
 # ---------------- Scalable Capital (Investments) ----------------

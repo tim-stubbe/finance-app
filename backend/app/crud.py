@@ -652,7 +652,14 @@ def cashflow_forecast(db: Session, space_id: int, horizon_days: int = 90) -> sch
     end = today + timedelta(days=horizon_days)
     events = _cashflow_events(db, space_id, end)
     points = _cashflow_points(start_balance, events, today, end)
-    return _cashflow_summary(start_balance, horizon_days, points, events)
+    result = _cashflow_summary(start_balance, horizon_days, points, events)
+    settings = db.query(models.Settings).first()
+    if settings is None:
+        return result
+    result.expected_receivables = settings.splitwise_receivable_eur or 0
+    result.expected_payables = settings.splitwise_payable_eur or 0
+    result.planning_balance = round(start_balance + result.expected_receivables - result.expected_payables, 2)
+    return result
 
 
 def cashflow_scenario(
