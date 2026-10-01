@@ -102,6 +102,30 @@ def test_snapshot_includes_realistic_liquidity(client, monkeypatch):
         db.close()
 
 
+def test_active_trip_hides_school_routine_but_keeps_real_appointments(client):
+    db = SessionLocal()
+    s = auth.get_or_create_settings(db)
+    try:
+        space = db.query(models.Space).first()
+        db.add(models.Trip(space_id=space.id, name="Berlin", start_date=date.today(),
+                           end_date=date.today() + timedelta(days=6)))
+        start = datetime.utcnow() + timedelta(days=1)
+        db.add_all([
+            models.CalendarEvent(uid="webuntis-42@kies", title="Unterricht", start=start,
+                                 end=start + timedelta(minutes=45), location="Schule", all_day=False),
+            models.CalendarEvent(uid="private-arzt", title="Arzt", start=start,
+                                 end=start + timedelta(minutes=30), location="Berlin", all_day=False),
+        ])
+        db.commit()
+
+        snap = proactive.build_snapshot(db, s, space.id)
+        assert "AKTIVER REISEMODUS: Berlin" in snap
+        assert "Unterricht" not in snap
+        assert "Arzt" in snap and "@ Berlin" in snap
+    finally:
+        db.close()
+
+
 def test_quiet_hours_block_proactive_run(client, monkeypatch):
     import app.proactive as p
     monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)

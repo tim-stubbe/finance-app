@@ -115,6 +115,23 @@ def build_snapshot(db, settings, space_id: int) -> str:
     einzeln abgesichert - eine kaputte Domäne darf den Snapshot nicht kippen."""
     today = date.today()
     lines: list[str] = [f"Datum/Uhrzeit: {datetime.now().strftime('%a %d.%m.%Y %H:%M')}"]
+    active_trip = None
+    try:
+        active_trip = (db.query(models.Trip)
+                       .filter(models.Trip.space_id == space_id,
+                               models.Trip.start_date.isnot(None),
+                               models.Trip.end_date.isnot(None),
+                               models.Trip.start_date <= today,
+                               models.Trip.end_date >= today)
+                       .order_by(models.Trip.start_date.desc()).first())
+        if active_trip:
+            lines.append(
+                f"AKTIVER REISEMODUS: {active_trip.name} "
+                f"({_de(active_trip.start_date)}–{_de(active_trip.end_date)}). "
+                "Schul-/Alltagsroutine am Heimatort nicht melden; nur bei echter Unsicherheit kurz nachfragen."
+            )
+    except Exception:
+        active_trip = None
 
     try:
         nw = crud.net_worth(db, space_id)
@@ -196,10 +213,12 @@ def build_snapshot(db, settings, space_id: int) -> str:
 
     try:
         events = crud.get_upcoming_calendar_events(db, days=2, limit=8)
+        if active_trip:
+            events = [e for e in events if not _is_school_event(e)]
         if events:
             lines.append("Termine nächste 48 h: " + "; ".join(
                 f"{e.title} ({_de(e.start)})"
-                + ("" if getattr(e, "location", None) else " [ohne Ort]")
+                + (f" @ {e.location}" if getattr(e, "location", None) else " [ohne Ort]")
                 for e in events))
     except Exception:
         pass
@@ -271,6 +290,14 @@ def build_snapshot(db, settings, space_id: int) -> str:
         pass
 
     return "\n".join(lines)
+
+
+def _is_school_event(event) -> bool:
+    """WebUntis-Stundenplan zuverlässig erkennen, damit eine aktive Reise
+    nicht mit Unterrichtsmeldungen am Heimatort zugespammt wird."""
+    uid = str(getattr(event, "uid", "") or "").strip().casefold()
+    title = str(getattr(event, "title", "") or "").strip().casefold()
+    return uid.startswith("webuntis-") or title == "unterricht"
 
 
 def _avg(vals) -> float | None:

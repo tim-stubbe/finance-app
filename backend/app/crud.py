@@ -2039,11 +2039,13 @@ def build_morning_briefing(
     day_end = day_start + timedelta(days=1)
     lines = [f"☀️ Guten Morgen ({today.strftime('%d.%m.%Y')}):"]
     has_content = False
+    active_trip_mode = False
 
     # Reise-Modus (Spezifikation Abschnitt H) - gleiche Erkennung wie /today
     # (main.today_overview: active_trip), hier zusätzlich im Briefing erwähnt.
     for t in get_trips(db, space_id):
         if t.start_date and t.end_date and t.start_date <= today <= t.end_date:
+            active_trip_mode = True
             trip = trip_summary(db, t)
             has_content = True
             if trip.budget:
@@ -2063,6 +2065,8 @@ def build_morning_briefing(
             break  # zwei gleichzeitig aktive Trips sind ein Datenfehler, nicht vorgesehen (wie in /today)
 
     raw_events = get_calendar_events(db, day_start, day_end)
+    if active_trip_mode:
+        raw_events = [ev for ev in raw_events if not _calendar_event_is_school(ev)]
     if raw_events:
         has_content = True
         lines.append("\n🗓 Heute:")
@@ -2127,6 +2131,12 @@ def build_morning_briefing(
     if not has_content:
         return None
     return "\n".join(lines)
+
+
+def _calendar_event_is_school(event) -> bool:
+    uid = str(getattr(event, "uid", "") or "").strip().casefold()
+    title = str(getattr(event, "title", "") or "").strip().casefold()
+    return uid.startswith("webuntis-") or title == "unterricht"
 
 
 # ---------- Jarvis-Vorschläge (Spezifikation Abschnitt B) ----------
