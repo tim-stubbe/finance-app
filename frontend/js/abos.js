@@ -13,6 +13,15 @@ let cashflowDays = 90;
 async function loadCashflowForecast() {
   const data = await api(`/forecast/cashflow?days=${cashflowDays}`);
 
+  const planningEl = document.getElementById("cashflow-planning-summary");
+  const receivable = Number(data.expected_receivables || 0);
+  const payable = Number(data.expected_payables || 0);
+  const parts = [`Konten heute: <strong>${eur(data.start_balance)}</strong>`];
+  if (receivable > 0) parts.push(`du bekommst noch <strong class="row-amount-pos">${eur(receivable)}</strong>`);
+  if (payable > 0) parts.push(`du schuldest noch <strong class="row-amount-neg">${eur(payable)}</strong>`);
+  parts.push(`realistisch verfügbar: <strong>${eur(data.planning_balance)}</strong>`);
+  planningEl.innerHTML = parts.join(" · ");
+
   const warnEl = document.getElementById("cashflow-warning");
   if (data.goes_negative) {
     warnEl.textContent = `⚠️ Prognose: Kontostand könnte am ${fmtDate(data.first_negative_date)} ins Minus rutschen (Tiefstand ${eur(data.lowest_balance)} am ${fmtDate(data.lowest_date)}).`;
