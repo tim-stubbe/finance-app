@@ -30,11 +30,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, Form
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard, splitwise_client
+from .. import models, schemas, crud, auth, bank_sync, notifications, prices, ai_auto, scalable_sync, net_guard, splitwise_client, jarvis, calls
 from ..database import get_db
 from .ai_assistant import websearch_configured
 
@@ -45,6 +46,35 @@ settings_misc_router = APIRouter(prefix="/api")
 # main.py: settings_misc_router bekommt dependencies=[Depends(auth.
 # require_auth)], webhook_public_router explizit NICHT).
 webhook_public_router = APIRouter(prefix="/api")
+
+
+@webhook_public_router.post("/calls/reply")
+def receive_call_reply(
+    token: str,
+    SpeechResult: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Twilio-Sprachantwort eines interaktiven Anrufs ausführen und die kurze
+    Jarvis-Antwort direkt im selben Telefonat vorlesen."""
+    expected = os.environ.get("KIES_CALL_CALLBACK_TOKEN", "")
+    if not expected or not secrets.compare_digest(token, expected):
+        raise HTTPException(401, "Nicht autorisiert")
+    transcript = (SpeechResult or "").strip()
+    if not transcript:
+        reply = "Ich habe leider nichts verstanden."
+    else:
+        settings = auth.get_or_create_settings(db)
+        spaces = crud.get_spaces(db)
+        space_id = spaces[0].id if spaces else 1
+        result = jarvis.handle(db, settings, transcript, space_id, source="phone")
+        reply = result.get("reply") or "Erledigt."
+    xml = f'<Response><Say language="de-DE">{xml_escape(calls._speech_safe(reply))}</Say></Response>'
+    return Response(content=xml, media_type="application/xml")
+
+
+def xml_escape(value: str) -> str:
+    import xml.sax.saxutils
+    return xml.sax.saxutils.escape(value)
 
 
 # ---------------- FinTS Bank-Sync ----------------

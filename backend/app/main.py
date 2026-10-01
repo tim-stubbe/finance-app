@@ -1194,6 +1194,7 @@ def _check_daily_alerts():
                                 settings,
                                 f"Kies-Notruf: Dein Kontostand könnte spätestens am "
                                 f"{first_negative.strftime('%-d. %-m.')} ins Minus rutschen. Bitte prüfe die App.",
+                                interactive=True,
                             )
                         settings.last_cashflow_alert_date = today
                         db.commit()
@@ -2168,7 +2169,8 @@ def _scheduled_proactive_assistant():
                 except Exception:
                     pass
             if p.urgency == "hoch":
-                calls.call(settings, f"Wichtige Meldung von Kies. {p.title}. {p.body or ''}")
+                calls.call(settings, f"Wichtige Meldung von Kies. {p.title}. {p.body or ''}",
+                           interactive=True)
     finally:
         db.close()
 

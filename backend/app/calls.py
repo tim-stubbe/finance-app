@@ -10,6 +10,7 @@ import xml.sax.saxutils
 import os
 import re
 import unicodedata
+from urllib.parse import urlencode
 
 import requests
 
@@ -37,15 +38,23 @@ def make_local_call(url: str, token: str, to_number: str, text: str) -> None:
     resp.raise_for_status()
 
 
-def _twiml(text: str) -> str:
+def _twiml(text: str, callback_url: str | None = None) -> str:
+    spoken = xml.sax.saxutils.escape(text)
+    if callback_url:
+        action = xml.sax.saxutils.escape(callback_url, {'"': '&quot;'})
+        return (f'<Response><Gather input="speech" language="de-DE" speechTimeout="auto" '
+                f'action="{action}" method="POST"><Say language="de-DE">{spoken}. '
+                'Was soll ich tun?</Say></Gather>'
+                '<Say language="de-DE">Ich habe keine Antwort verstanden und lege jetzt auf.</Say></Response>')
     return f'<Response><Say language="de-DE">{xml.sax.saxutils.escape(text)}</Say></Response>'
 
 
-def make_call(account_sid: str, auth_token: str, from_number: str, to_number: str, text: str) -> None:
+def make_call(account_sid: str, auth_token: str, from_number: str, to_number: str, text: str,
+              callback_url: str | None = None) -> None:
     resp = requests.post(
         TWILIO_CALLS_URL.format(sid=account_sid),
         auth=(account_sid, auth_token),
-        data={"To": to_number, "From": from_number, "Twiml": _twiml(text)},
+        data={"To": to_number, "From": from_number, "Twiml": _twiml(text, callback_url)},
         timeout=15,
     )
     resp.raise_for_status()
@@ -66,7 +75,7 @@ def call(settings, text: str, *, interactive: bool = False) -> None:
     local_token = os.environ.get("KIES_LOCAL_CALL_TOKEN", "").strip()
     local_to = (os.environ.get("KIES_CALL_TO", "").strip()
                 or (settings.twilio_to_number or "").strip())
-    if local_url and local_token and local_to:
+    if local_url and local_token and local_to and not interactive:
         try:
             make_local_call(local_url, local_token, local_to, text)
         except Exception:
@@ -77,6 +86,14 @@ def call(settings, text: str, *, interactive: bool = False) -> None:
         return
     try:
         token = bank_sync.decrypt_secret(settings.secret_key, settings.twilio_auth_token_encrypted)
-        make_call(settings.twilio_account_sid, token, settings.twilio_from_number, settings.twilio_to_number, text)
+        callback_url = None
+        if interactive:
+            callback_base = os.environ.get("KIES_CALL_CALLBACK_URL", "").strip()
+            callback_token = os.environ.get("KIES_CALL_CALLBACK_TOKEN", "").strip()
+            if not callback_base or not callback_token:
+                return
+            callback_url = callback_base.rstrip("/") + "/api/calls/reply?" + urlencode({"token": callback_token})
+        make_call(settings.twilio_account_sid, token, settings.twilio_from_number,
+                  settings.twilio_to_number, text, callback_url)
     except Exception:
         pass
