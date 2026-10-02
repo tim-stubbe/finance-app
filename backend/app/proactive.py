@@ -17,6 +17,7 @@ immer wieder auftaucht.
 
 import json
 import hashlib
+import unicodedata
 from datetime import date, datetime, timedelta
 
 from . import assistant_memory, crud, models, ollama_client, proactive_actions
@@ -455,9 +456,31 @@ def _recent_dedup_keys(db, days: int = 7) -> set[str]:
     return {r[0] for r in rows}
 
 
+_TOPIC_STOPWORDS = {
+    "aber", "auch", "dass", "deine", "deinen", "deiner", "eine", "einen",
+    "einer", "fuer", "hier", "jetzt", "kann", "noch", "oder", "soll",
+    "spaeter", "thema", "wieder", "wurde", "zum", "zur",
+}
+
+
+def _stem(word: str) -> str:
+    """Sehr kleine, absichtlich konservative deutsche Wortnormalisierung.
+
+    Das ist kein Sprachmodell. Es soll nur verhindern, dass ein vertagtes
+    Thema durch Plural/Flexion oder Schreibweisen wie ``Drohne``/``Drohnen``
+    sofort erneut als angeblich neuer Vorschlag erscheint.
+    """
+    for suffix in ("ern", "em", "en", "er", "es", "e", "n", "s"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 5:
+            return word[:-len(suffix)]
+    return word
+
+
 def _norm(s: str) -> set[str]:
-    return {w for w in "".join(c if c.isalnum() else " " for c in (s or "").lower()).split()
-            if len(w) > 3}
+    plain = unicodedata.normalize("NFKD", (s or "").casefold())
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    words = "".join(c if c.isalnum() else " " for c in plain).split()
+    return {_stem(w) for w in words if len(w) > 3 and w not in _TOPIC_STOPWORDS}
 
 
 def _too_similar(title: str, recent_titles: list[str]) -> bool:
@@ -469,9 +492,39 @@ def _too_similar(title: str, recent_titles: list[str]) -> bool:
         return False
     for t in recent_titles:
         b = _norm(t)
-        if b and len(a & b) / len(a | b) >= 0.6:
+        if not b:
+            continue
+        overlap = a & b
+        # Ein identisches praegendes Thema reicht bei kurzen Titeln aus;
+        # laengere Titel brauchen weiterhin eine deutliche Ueberschneidung.
+        if (overlap and min(len(a), len(b)) <= 2) or len(overlap) / len(a | b) >= 0.5:
             return True
     return False
+
+
+def _minimum_gap_active(settings, *, now: datetime | None = None) -> bool:
+    """Globale Push-Bremse aus den Einstellungen tatsächlich anwenden."""
+    last = getattr(settings, "proactive_assistant_last_sent_at", None)
+    hours = max(int(getattr(settings, "proactive_assistant_min_gap_hours", 4) or 0), 0)
+    return bool(last and hours and (now or datetime.utcnow()) < last + timedelta(hours=hours))
+
+
+def _recent_topic_titles(db) -> list[str]:
+    """Texte, die noch nicht erneut als neues Thema gemeldet werden dürfen.
+
+    Vertagte Themen bleiben bis zum gewählten Datum gesperrt. Weggeklickte
+    Vorschläge erhalten 30 Tage Ruhe; alle anderen sieben Tage. Body wird
+    einbezogen, weil lokale Modelle den Titel gerne komplett umformulieren.
+    """
+    now = datetime.utcnow()
+    rows = (db.query(models.ProactiveProposal)
+            .filter((models.ProactiveProposal.created_at >= now - timedelta(days=7)) |
+                    ((models.ProactiveProposal.status == "snoozed") &
+                     (models.ProactiveProposal.expires_at > now)) |
+                    ((models.ProactiveProposal.status == "beantwortet") &
+                     (models.ProactiveProposal.created_at >= now - timedelta(days=30))))
+            .all())
+    return [" ".join(x for x in (r.title, r.body) if x) for r in rows]
 
 
 def run(db, settings) -> list[models.ProactiveProposal]:
@@ -481,6 +534,8 @@ def run(db, settings) -> list[models.ProactiveProposal]:
     if not (settings.proactive_assistant_enabled and settings.notifications_enabled):
         return []
     if snoozed and datetime.utcnow() < snoozed:
+        return []
+    if _minimum_gap_active(settings):
         return []
     # Ruhezeiten gelten auch fuer den proaktiven Job - anders als bei
     # notifications.notify() gibt es hier kein urgent-Bypass. Fenster wird ueber
@@ -492,17 +547,14 @@ def run(db, settings) -> list[models.ProactiveProposal]:
     spaces = crud.get_spaces(db)
     space_id = spaces[0].id if spaces else 1
     seen = _recent_dedup_keys(db)
-    recent_titles = [r[0] for r in db.query(models.ProactiveProposal.title)
-                     .filter((models.ProactiveProposal.created_at
-                              >= datetime.utcnow() - timedelta(days=7)) |
-                             ((models.ProactiveProposal.status == "snoozed") &
-                              (models.ProactiveProposal.expires_at > datetime.utcnow()))).all()]
+    recent_titles = _recent_topic_titles(db)
     created: list[models.ProactiveProposal] = []
     for s in think(db, settings, space_id):
-        if s["dedup_key"] in seen or _too_similar(s["title"], recent_titles):
+        topic_text = " ".join(x for x in (s["title"], s["body"]) if x)
+        if s["dedup_key"] in seen or _too_similar(topic_text, recent_titles):
             continue
         seen.add(s["dedup_key"])
-        recent_titles.append(s["title"])
+        recent_titles.append(topic_text)
         row = models.ProactiveProposal(
             kind=s["kind"], urgency=s["urgency"], title=s["title"], body=s["body"],
             options_json=json.dumps(s["options"], ensure_ascii=False),
@@ -527,11 +579,18 @@ def push_proposal(db, settings, *, title: str, body: str | None = None,
     Aktionen werden durch `_sanitize` gegen die Allowlist geprüft. Gibt die
     gespeicherte Zeile zurück, oder None wenn der `dedup_key` in den letzten
     7 Tagen schon da war."""
+    # Hohe Dringlichkeit darf den globalen Abstand uebergehen, niemals aber
+    # die Themen-Sperre. So bleibt ein echter Alarm moeglich, ohne Spam.
+    if urgency != "hoch" and _minimum_gap_active(settings):
+        return None
     if dedup_key and dedup_key in _recent_dedup_keys(db):
         return None
     s = _sanitize({"kind": kind, "urgency": urgency, "title": title,
                    "body": body, "dedup": dedup_key, "options": options or []})
     if not s:
+        return None
+    if _too_similar(" ".join(x for x in (s["title"], s["body"]) if x),
+                    _recent_topic_titles(db)):
         return None
     row = models.ProactiveProposal(
         kind=s["kind"], urgency=s["urgency"], title=s["title"], body=s["body"],

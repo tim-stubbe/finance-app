@@ -175,6 +175,43 @@ def test_remind_later_snoozes_only_that_topic(client, monkeypatch):
         db.close()
 
 
+def test_minimum_gap_blocks_differently_worded_followup(client, monkeypatch):
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
+    db, s = _settings(proactive_assistant_min_gap_hours=4)
+    try:
+        assert len(proactive.run(db, s)) == 1
+        # Selbst ein anderes Thema darf nicht direkt den naechsten Push ausloesen.
+        monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: json.dumps({"proposals": [{
+            "kind": "info", "title": "Ganz anderes Thema", "dedup": "anderes-thema"
+        }]}))
+        assert proactive.run(db, s) == []
+    finally:
+        db.close()
+
+
+def test_snoozed_topic_stays_quiet_when_llm_renames_it(client, monkeypatch):
+    monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: json.dumps({"proposals": [{
+        "kind": "wahl", "title": "Drohne verkaufen", "dedup": "drohne-alt",
+        "options": [
+            {"label": "Später", "action": {"type": "remind_later", "params": {"days": 7}}},
+            {"label": "Nein", "action": {"type": "dismiss"}},
+        ],
+    }]}))
+    db, s = _settings()
+    try:
+        first = proactive.run(db, s)[0]
+        proactive.answer(db, s, first.id, "a")
+        # Abstand bewusst ablaufen lassen: Hier soll die Themen-Sperre greifen.
+        s.proactive_assistant_last_sent_at = datetime.utcnow() - timedelta(days=1)
+        db.commit()
+        monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: json.dumps({"proposals": [{
+            "kind": "info", "title": "Drohnen-Verkauf prüfen", "dedup": "neuer-key"
+        }]}))
+        assert proactive.run(db, s) == []
+    finally:
+        db.close()
+
+
 def test_telegram_proaktiv_command(client, monkeypatch):
     from app import telegram_bot
     sent = []
@@ -223,7 +260,7 @@ def test_dedup_key_prevents_repeat(client, monkeypatch):
     """Kein Cooldown - aber derselbe Vorschlag (gleicher dedup_key) kommt nicht
     zweimal. Ein inhaltlich anderer Vorschlag schon."""
     monkeypatch.setattr(ollama_client, "chat", lambda *a, **k: _ONE)
-    db, s = _settings()
+    db, s = _settings(proactive_assistant_min_gap_hours=0)
     try:
         first = proactive.run(db, s)
         assert len(first) == 1 and first[0].dedup_key == "steuer-ueberfaellig"
