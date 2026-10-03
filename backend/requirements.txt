@@ -1,6 +1,6 @@
-fastapi==0.141.1
-uvicorn[standard]==0.53.0
-sqlalchemy==2.0.54
+fastapi==0.142.1
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.1
 # Schema-Migrationen (backend/alembic/, app/db_migrate.py laeuft beim Start).
 # Reines Python-Wheel (nur Mako als Extra-Abhaengigkeit), unbedenklich fuer
 # das schlanke python:3.14-slim-Image.
@@ -16,7 +16,7 @@ itsdangerous==2.2.0
 passlib[argon2]==1.7.4
 pyotp==2.10.0
 qrcode==8.2
-webauthn==3.0.0
+webauthn==3.0.1
 requests==2.34.2
 fints==5.0.0
 cryptography==50.0.1
