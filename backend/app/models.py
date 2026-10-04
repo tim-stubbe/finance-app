@@ -642,6 +642,36 @@ class Device(Base):
     revoked_at = Column(DateTime, nullable=True)
 
 
+class DriveRemoteState(Base):
+    """Letzter von Kies Drive gemeldeter Live-Zustand.
+
+    Der Server berechnet keine Navigation. Er haelt nur einen kurzlebigen,
+    geraetegebundenen Snapshot fuer die kontrollierte MCP-Leseschicht.
+    """
+
+    __tablename__ = "drive_remote_states"
+
+    device_id = Column(Integer, ForeignKey("devices.id"), primary_key=True)
+    payload = Column(JSON, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class DriveRemoteCommand(Base):
+    """Ein von MCP angeforderter, durch die native App auszufuehrender Befehl."""
+
+    __tablename__ = "drive_remote_commands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=True, index=True)
+    command = Column(String, nullable=False)
+    arguments = Column(JSON, nullable=False, default=dict)
+    status = Column(String, nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    claimed_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    result = Column(JSON, nullable=True)
+
+
 class AuthenticatedPrincipal:
     """Gemeinsames Ergebnis von `auth.require_session_or_device` - fasst
     Web-Session- und Device-Token-Auth hinter einer Form zusammen, damit

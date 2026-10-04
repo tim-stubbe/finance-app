@@ -110,6 +110,26 @@ enum DriveAPI {
         let titles = result.sources.prefix(3).map(\.title).joined(separator: " · ")
         return .unknown(reason: titles.isEmpty ? "SearXNG fand keinen eindeutig belegten Gesamtpreis." : "SearXNG geprüft: \(titles)")
     }
+
+    static func publishRemoteState(_ state: DriveRemoteState) async throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        _ = try await data(for: try request(path: "/api/navigation/remote/state", method: "PUT",
+                                            body: encoder.encode(state)))
+    }
+
+    static func remoteCommands() async throws -> [DriveRemoteCommand] {
+        let payload = try await data(for: try request(path: "/api/navigation/remote/commands"))
+        let decoder = JSONDecoder()
+        return try decoder.decode(DriveRemoteCommandEnvelope.self, from: payload).commands
+    }
+
+    static func completeRemoteCommand(_ id: Int, ok: Bool, message: String?) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["ok": ok, "message": message as Any])
+        _ = try await data(for: try request(path: "/api/navigation/remote/commands/\(id)/complete",
+                                            method: "POST", body: body))
+    }
 }
 
 private struct TollSearchRequest: Encodable { let origin: String; let destination: String }

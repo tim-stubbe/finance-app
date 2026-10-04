@@ -388,6 +388,26 @@ Welcher Stand gerade läuft, zeigt die Versionsanzeige unten in der Seitenleiste
 (Commit-Kurzform + Alter des Builds), mit Warnung, falls ein neuerer Stand
 veröffentlicht, aber noch nicht angekommen ist.
 
+## Kies Drive MCP
+
+Kies Drive meldet während des Betriebs einen gerätegebundenen Live-Snapshot an
+das Kies-Backend. Der MCP-Endpunkt ist anschließend unter
+`/api/navigation/mcp` erreichbar und bietet Standort, Richtung,
+Geschwindigkeit, Route, nächsten Fahrhinweis sowie kontrollierte Ziel-/
+Routenänderungen an. Die App führt Befehle selbst aus; der Server navigiert
+nicht.
+
+Für TrueNAS muss ein eigener langer Zufallswert als Umgebungsvariable
+`KIES_DRIVE_MCP_TOKEN` gesetzt werden. Der MCP-Client verwendet denselben Wert
+als `Authorization: Bearer …`. Geräte kommunizieren weiterhin ausschließlich
+mit ihrem einzeln widerrufbaren Kies-Gerätetoken. Ohne gesetzten MCP-Token ist
+der externe Endpunkt deaktiviert.
+
+Aktive Trips werden lokal inklusive Pflicht-Zwischenpunkten,
+abschnittsbezogenen Maut-/Autobahnregeln und erlaubtem Routenkorridor
+gespeichert. Pause, Prozessende und Geräte-Neustart löschen den Trip nicht;
+nur „Trip beenden“ schließt ihn ab.
+
 ## Sicherheit
 
 - Automatisierte Prüfung über GitHub Code Scanning (CodeQL) und Dependabot

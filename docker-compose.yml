@@ -15,5 +15,9 @@ services:
       retries: 3
     ports:
       - "8000:8000"
+    environment:
+      # Separater, widerrufbarer Token nur fuer den Kies-Drive-MCP-Endpunkt.
+      # In TrueNAS als Secret/Environment Variable setzen, nie ins Repository.
+      KIES_DRIVE_MCP_TOKEN: ${KIES_DRIVE_MCP_TOKEN:-}
     volumes:
       - ./data:/data

@@ -8,11 +8,11 @@ from __future__ import annotations
 import math
 import os
 import re
-from datetime import date
-from typing import Literal
+from datetime import date, datetime, timedelta
+from typing import Any, Literal
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -146,6 +146,169 @@ class SpeedLimitRequest(BaseModel):
     # Begrenzt auf sample-taugliche Größe - das sind bereits grob abgetastete
     # Routenpunkte (siehe RoutePlanner.sample in Kies Drive), keine ganze Polyline.
     points: list[SpeedLimitPoint] = Field(min_length=1, max_length=80)
+
+
+# --- Kies Drive Remote/MCP bridge -----------------------------------------
+
+class DriveLiveState(BaseModel):
+    location: dict[str, Any] | None = None
+    heading_degrees: float | None = None
+    speed_kmh: float | None = None
+    active_route: dict[str, Any] | None = None
+    next_maneuver: dict[str, Any] | None = None
+    route_lock: dict[str, Any] | None = None
+    navigation_active: bool = False
+    recorded_at: datetime
+
+
+class DriveCommandResult(BaseModel):
+    ok: bool
+    message: str | None = None
+
+
+@navigation_router.put("/remote/state")
+def put_drive_state(
+    state: DriveLiveState,
+    db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
+):
+    if not principal.device:
+        raise HTTPException(403, "Live-Status darf nur ein registriertes Drive-Gerät melden")
+    row = db.get(models.DriveRemoteState, principal.device.id)
+    payload = state.model_dump(mode="json")
+    if row:
+        row.payload = payload
+        row.updated_at = datetime.utcnow()
+    else:
+        row = models.DriveRemoteState(device_id=principal.device.id, payload=payload,
+                                      updated_at=datetime.utcnow())
+        db.add(row)
+    db.commit()
+    return {"ok": True}
+
+
+@navigation_router.get("/remote/commands")
+def get_drive_commands(
+    db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
+):
+    if not principal.device:
+        raise HTTPException(403, "Befehle sind nur für registrierte Drive-Geräte verfügbar")
+    rows = (db.query(models.DriveRemoteCommand)
+            .filter(models.DriveRemoteCommand.status == "pending",
+                    ((models.DriveRemoteCommand.device_id == principal.device.id) |
+                     (models.DriveRemoteCommand.device_id.is_(None))))
+            .order_by(models.DriveRemoteCommand.id).limit(10).all())
+    return {"commands": [{"id": r.id, "command": r.command, "arguments": r.arguments}
+                         for r in rows]}
+
+
+@navigation_router.post("/remote/commands/{command_id}/complete")
+def complete_drive_command(
+    command_id: int,
+    result: DriveCommandResult,
+    db: Session = Depends(get_db),
+    principal: models.AuthenticatedPrincipal = Depends(auth.require_session_or_device),
+):
+    if not principal.device:
+        raise HTTPException(403, "Befehle sind nur für registrierte Drive-Geräte verfügbar")
+    row = db.query(models.DriveRemoteCommand).filter_by(id=command_id).first()
+    if not row or (row.device_id is not None and row.device_id != principal.device.id):
+        raise HTTPException(404, "Befehl nicht gefunden")
+    row.device_id = principal.device.id
+    row.status = "completed" if result.ok else "failed"
+    row.completed_at = datetime.utcnow()
+    row.result = result.model_dump()
+    db.commit()
+    return {"ok": True}
+
+
+_MCP_TOOLS = [
+    {"name": "get_location", "description": "Aktuellen Standort von Kies Drive lesen.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "get_heading", "description": "Aktuelle Fahrtrichtung in Grad und Himmelsrichtung lesen.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "get_speed", "description": "Aktuelle GPS-Geschwindigkeit lesen.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "get_active_route", "description": "Aktive Route und persistenten Trip-Lock lesen.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "get_next_maneuver", "description": "Nächsten Navigationsschritt lesen.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "set_destination", "description": "Ziel in Kies Drive setzen; die App berechnet die Route lokal.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "latitude": {"type": "number"}, "longitude": {"type": "number"}, "required_waypoints": {"type": "array", "items": {"type": "object"}}}, "anyOf": [{"required": ["query"]}, {"required": ["latitude", "longitude"]}]}},
+    {"name": "set_route_options", "description": "Globale oder abschnittsbezogene Routenvorgaben ändern.", "inputSchema": {"type": "object", "properties": {"avoid_tolls": {"type": "boolean"}, "avoid_highways": {"type": "boolean"}, "waypoint_id": {"type": "string"}}}},
+    {"name": "restore_route", "description": "Persistenten Trip ab aktueller Position in Kies Drive fortsetzen.", "inputSchema": {"type": "object", "properties": {}}},
+]
+
+
+def _mcp_authorize(authorization: str | None) -> None:
+    expected = os.environ.get("KIES_DRIVE_MCP_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(503, "KIES_DRIVE_MCP_TOKEN ist noch nicht gesetzt")
+    if not authorization or authorization != f"Bearer {expected}":
+        raise HTTPException(401, "Ungültiger MCP-Token")
+
+
+def _latest_drive_state(db: Session) -> models.DriveRemoteState:
+    row = db.query(models.DriveRemoteState).order_by(models.DriveRemoteState.updated_at.desc()).first()
+    if not row:
+        raise HTTPException(409, "Kies Drive hat noch keine Live-Daten gemeldet")
+    return row
+
+
+def _mcp_text(value: Any) -> dict[str, Any]:
+    import json
+    return {"content": [{"type": "text", "text": json.dumps(value, ensure_ascii=False)}]}
+
+
+def _state_meta(state: models.DriveRemoteState) -> dict[str, Any]:
+    age = max(0, int((datetime.utcnow() - state.updated_at).total_seconds()))
+    return {"recorded_at": state.payload.get("recorded_at"), "age_seconds": age,
+            "live": age <= 30, "warning": None if age <= 30 else "Live-Daten sind veraltet"}
+
+
+def _call_drive_tool(db: Session, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    reads = {
+        "get_location": "location", "get_heading": "heading_degrees",
+        "get_speed": "speed_kmh", "get_next_maneuver": "next_maneuver",
+    }
+    if name in reads:
+        state = _latest_drive_state(db)
+        return _mcp_text({"value": state.payload.get(reads[name]), **_state_meta(state)})
+    if name == "get_active_route":
+        state = _latest_drive_state(db)
+        return _mcp_text({"active_route": state.payload.get("active_route"),
+                          "route_lock": state.payload.get("route_lock"),
+                          "navigation_active": state.payload.get("navigation_active"),
+                          **_state_meta(state)})
+    if name not in {"set_destination", "set_route_options", "restore_route"}:
+        raise HTTPException(400, f"Unbekanntes Tool: {name}")
+    state = db.query(models.DriveRemoteState).order_by(models.DriveRemoteState.updated_at.desc()).first()
+    command = models.DriveRemoteCommand(
+        device_id=state.device_id if state else None, command=name,
+        arguments=arguments, status="pending", created_at=datetime.utcnow(),
+    )
+    db.add(command)
+    db.commit()
+    return _mcp_text({"accepted": True, "command_id": command.id,
+                      "message": "An Kies Drive gesendet; Navigation wird lokal in der App berechnet."})
+
+
+@navigation_router.post("/mcp")
+def drive_mcp(request_body: dict[str, Any], db: Session = Depends(get_db),
+              authorization: str | None = Header(default=None)):
+    """Kleiner MCP-Streamable-HTTP JSON-RPC-Endpunkt für Kies Drive."""
+    _mcp_authorize(authorization)
+    method = request_body.get("method")
+    request_id = request_body.get("id")
+    if method == "initialize":
+        result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {"listChanged": False}},
+                  "serverInfo": {"name": "kies-drive", "version": "1.0.0"}}
+    elif method == "tools/list":
+        result = {"tools": _MCP_TOOLS}
+    elif method == "tools/call":
+        params = request_body.get("params") or {}
+        result = _call_drive_tool(db, params.get("name", ""), params.get("arguments") or {})
+    elif method and method.startswith("notifications/"):
+        return {"jsonrpc": "2.0", "result": {}}
+    else:
+        return {"jsonrpc": "2.0", "id": request_id,
+                "error": {"code": -32601, "message": "Method not found"}}
+    return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
 def _parse_maxspeed(raw: str | None) -> tuple[int | None, bool]:

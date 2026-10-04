@@ -39,6 +39,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     @Published var offlineRoute: CachedRoute?
     @Published var longTripPlan: LongTripPlan?
     @Published var isNavigating = false
+    @Published var activeRouteLock: ActiveRouteLock?
     private var comparisonRoute: MKRoute?
     private var researchedToll: TollCost = .unknown(reason: "Mautrecherche läuft noch.")
 
@@ -50,12 +51,19 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     private var announcedStepKeys: Set<String> = []
     private var offRouteStrikes = 0
     private var stationLoadGeneration = UUID()
+    private var didAttemptAutomaticRestore = false
     private static let cacheKey = "drive.offlineRoute"
+    private let routeLockStore = RouteLockStore.shared
 
     override init() {
         super.init()
         synthesizer.delegate = self
         offlineRoute = Self.loadCache()
+        activeRouteLock = routeLockStore.activeLock
+        if let lock = activeRouteLock {
+            destinationText = lock.destinationName
+            destination = MKMapItem(placemark: MKPlacemark(coordinate: lock.destination.clLocationCoordinate))
+        }
     }
 
     /// Erste Teilstrecke - für Rückwärtskompatibilität und schnellen Zugriff
@@ -66,6 +74,7 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
 
     func startNavigation() {
         guard !legs.isEmpty else { return }
+        persistActiveTrip()
         isNavigating = true
         announcedStepKeys = []
         lastAnnouncement = nextInstruction ?? "Route gestartet"
@@ -79,8 +88,101 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         speedWarning = false
     }
 
+    /// Beendet den Trip bewusst. Ein normales Stoppen/Pausieren der Navigation
+    /// loescht den Lock dagegen nicht, damit Rast und App-Neustart sicher sind.
+    func completeActiveTrip() {
+        stopNavigation()
+        routeLockStore.finish()
+        activeRouteLock = nil
+        routeLockStore.clearFinished()
+    }
+
+    private func persistActiveTrip() {
+        guard let destination else { return }
+        let coordinate = destination.placemark.coordinate
+        let options = LockedRouteOptions(avoidTolls: DriveSettings.shared.avoidTolls,
+                                         avoidHighways: DriveSettings.shared.avoidHighways)
+        let existing = routeLockStore.activeLock
+        let waypoints: [LockedWaypoint]
+        if let existing, existing.isActive {
+            waypoints = existing.waypoints
+        } else {
+            waypoints = viaStations.map {
+                LockedWaypoint(id: $0.id, name: $0.brand.isEmpty ? $0.name : $0.brand,
+                               coordinate: .init(latitude: $0.lat, longitude: $0.lon),
+                               required: true, optionsAfter: nil)
+            }
+        }
+        let lock = ActiveRouteLock(
+            id: existing?.id ?? UUID(), title: existing?.title ?? (destination.name ?? destinationText),
+            destinationName: destination.name ?? destinationText,
+            destination: .init(latitude: coordinate.latitude, longitude: coordinate.longitude),
+            waypoints: waypoints, defaultOptions: existing?.defaultOptions ?? options,
+            corridorWidthMetres: existing?.corridorWidthMetres ?? 5_000,
+            corridorPoints: existing?.corridorPoints ?? legs.flatMap { sample($0.polyline, maximum: 120) }
+                .map { .init(latitude: $0.latitude, longitude: $0.longitude) },
+            visitedWaypointIDs: existing?.visitedWaypointIDs ?? [],
+            status: .active, createdAt: existing?.createdAt ?? Date(), updatedAt: Date()
+        )
+        routeLockStore.save(lock)
+        activeRouteLock = lock
+    }
+
+    /// Einmaliger Wiederanlauf nach App-Start. Erst mit einer echten Position
+    /// wird neu gerechnet; dadurch setzt MapKit am passenden aktuellen
+    /// Routenabschnitt an, waehrend Pflichtpunkte und Segmentregeln erhalten bleiben.
+    func restoreActiveTripIfNeeded(from current: CLLocationCoordinate2D, settings: DriveSettings) async {
+        guard !didAttemptAutomaticRestore else { return }
+        didAttemptAutomaticRestore = true
+        guard let lock = routeLockStore.activeLock, lock.isActive else { return }
+        activeRouteLock = lock
+        destinationText = lock.destinationName
+        destination = MKMapItem(placemark: MKPlacemark(coordinate: lock.destination.clLocationCoordinate))
+        await calculate(from: current, settings: settings)
+        if !legs.isEmpty { startNavigation() }
+    }
+
+    func restoreActiveTrip(from current: CLLocationCoordinate2D, settings: DriveSettings) async {
+        didAttemptAutomaticRestore = false
+        await restoreActiveTripIfNeeded(from: current, settings: settings)
+    }
+
+    func updateLockedRouteOptions(waypointID: String?, avoidTolls: Bool?, avoidHighways: Bool?) {
+        routeLockStore.update { lock in
+            if let waypointID, let index = lock.waypoints.firstIndex(where: { $0.id == waypointID }) {
+                var options = lock.waypoints[index].optionsAfter ?? lock.defaultOptions
+                if let avoidTolls { options.avoidTolls = avoidTolls }
+                if let avoidHighways { options.avoidHighways = avoidHighways }
+                lock.waypoints[index].optionsAfter = options
+            } else {
+                if let avoidTolls { lock.defaultOptions.avoidTolls = avoidTolls }
+                if let avoidHighways { lock.defaultOptions.avoidHighways = avoidHighways }
+            }
+        }
+        activeRouteLock = routeLockStore.activeLock
+    }
+
+    func replaceRouteLockForRemoteDestination(waypoints: [LockedWaypoint] = []) {
+        guard let destination else { return }
+        let coordinate = destination.placemark.coordinate
+        let lock = ActiveRouteLock(
+            id: UUID(), title: destination.name ?? destinationText,
+            destinationName: destination.name ?? destinationText,
+            destination: .init(latitude: coordinate.latitude, longitude: coordinate.longitude),
+            waypoints: waypoints,
+            defaultOptions: .init(avoidTolls: DriveSettings.shared.avoidTolls,
+                                  avoidHighways: DriveSettings.shared.avoidHighways),
+            corridorWidthMetres: 5_000, corridorPoints: nil, visitedWaypointIDs: [],
+            status: .active, createdAt: Date(), updatedAt: Date())
+        routeLockStore.save(lock)
+        activeRouteLock = lock
+    }
+
     var nextInstruction: String? {
-        legs.first?.steps.dropFirst().first(where: { !$0.instructions.isEmpty })?.instructions
+        legs.first?.steps.enumerated().first(where: { index, step in
+            index > 0 && !step.instructions.isEmpty &&
+            !announcedStepKeys.contains("\(index):\(step.instructions)")
+        })?.element.instructions
     }
 
     func searchDestination(near coordinate: CLLocationCoordinate2D?) async {
@@ -98,7 +200,10 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         defer { isLoading = false }
         let startItem = MKMapItem(placemark: MKPlacemark(coordinate: start))
         do {
-            if viaStations.isEmpty {
+            let lock = routeLockStore.activeLock
+            let visited = Set(lock?.visitedWaypointIDs ?? [])
+            let lockedWaypoints = lock?.waypoints.filter { $0.required && !visited.contains($0.id) } ?? []
+            if viaStations.isEmpty && lockedWaypoints.isEmpty {
                 let routes = try await computeRoutes(from: startItem, to: destination, settings: settings, alternates: true)
                 alternatives = routes
                 legs = routes.first.map { [$0] } ?? []
@@ -112,14 +217,19 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
             } else {
                 // MapKit kennt keine mehrgliedrigen Routen als ein einziges Objekt.
                 // Daher Teilstrecken sequentiell (Start→wp1→wp2→…→Ziel) berechnen.
-                let waypoints: [MKMapItem] = viaStations.map { MKMapItem(placemark: MKPlacemark(coordinate: $0.coordinate)) }
+                let waypoints: [MKMapItem] = lockedWaypoints.isEmpty
+                    ? viaStations.map { MKMapItem(placemark: MKPlacemark(coordinate: $0.coordinate)) }
+                    : lockedWaypoints.map { MKMapItem(placemark: MKPlacemark(coordinate: $0.coordinate.clLocationCoordinate)) }
                 let allStops = [startItem] + waypoints + [destination]
 
                 var newLegs: [MKRoute] = []
                 for i in 0..<(allStops.count - 1) {
                     let from = allStops[i]
                     let to = allStops[i + 1]
-                    guard let leg = try await computeRoutes(from: from, to: to, settings: settings, alternates: false).first else {
+                    let lockedOptions = i == 0 ? routeLockStore.activeLock?.defaultOptions
+                        : lockedWaypoints[safe: i - 1]?.optionsAfter ?? routeLockStore.activeLock?.defaultOptions
+                    guard let leg = try await computeRoutes(from: from, to: to, settings: settings,
+                                                            alternates: false, lockedOptions: lockedOptions).first else {
                         throw DriveAPIError.invalidData
                     }
                     newLegs.append(leg)
@@ -175,9 +285,26 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     /// neu berechnen.
     func updateProgress(at location: CLLocation, settings: DriveSettings) {
         guard isNavigating, let route = legs.first else { return }
+        markReachedWaypoints(at: location, settings: settings)
         checkSpeedLimit(at: location.coordinate, speedMps: location.speed)
         if settings.voiceGuidance { announceNextStep(near: location.coordinate, in: route) }
         checkForDeviation(from: location.coordinate, route: route, settings: settings)
+    }
+
+    private func markReachedWaypoints(at location: CLLocation, settings: DriveSettings) {
+        guard let lock = routeLockStore.activeLock else { return }
+        let visited = Set(lock.visitedWaypointIDs ?? [])
+        guard let reached = lock.waypoints.first(where: {
+            !visited.contains($0.id) && location.distance(from: CLLocation(
+                latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)) <= 250
+        }) else { return }
+        routeLockStore.update { current in
+            var ids = current.visitedWaypointIDs ?? []
+            if !ids.contains(reached.id) { ids.append(reached.id) }
+            current.visitedWaypointIDs = ids
+        }
+        activeRouteLock = routeLockStore.activeLock
+        Task { await calculate(from: location.coordinate, settings: settings) }
     }
 
     private func checkSpeedLimit(at coordinate: CLLocationCoordinate2D, speedMps: Double) {
@@ -261,15 +388,21 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         return speedLimits[safe: bestIndex]
     }
 
-    private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings, alternates: Bool, avoidTollsOverride: Bool? = nil) async throws -> [MKRoute] {
+    private func computeRoutes(from source: MKMapItem, to destination: MKMapItem, settings: DriveSettings,
+                               alternates: Bool, avoidTollsOverride: Bool? = nil,
+                               lockedOptions: LockedRouteOptions? = nil) async throws -> [MKRoute] {
         let request = MKDirections.Request()
         request.source = source
         request.destination = destination
         request.transportType = .automobile
         request.requestsAlternateRoutes = alternates
-        request.tollPreference = (avoidTollsOverride ?? settings.avoidTolls) ? .avoid : .any
-        request.highwayPreference = settings.avoidHighways ? .avoid : .any
-        return try await MKDirections(request: request).calculate().routes
+        request.tollPreference = (avoidTollsOverride ?? lockedOptions?.avoidTolls ?? settings.avoidTolls) ? .avoid : .any
+        request.highwayPreference = (lockedOptions?.avoidHighways ?? settings.avoidHighways) ? .avoid : .any
+        let routes = try await MKDirections(request: request).calculate().routes
+        guard let lock = routeLockStore.activeLock,
+              let corridor = lock.corridorPoints, !corridor.isEmpty else { return routes }
+        return routes.filter { routeInsideLockedCorridor($0, points: corridor,
+                                                         width: lock.corridorWidthMetres) }
     }
 
     private func buildLongTripPlan(settings: DriveSettings) {
@@ -421,5 +554,18 @@ final class RoutePlanner: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         return (0..<maximum).map { index in
             points[index * (points.count - 1) / (maximum - 1)]
         }
+    }
+
+    private func routeInsideLockedCorridor(_ route: MKRoute, points: [DriveCoordinate], width: Double) -> Bool {
+        let anchors = points.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+        let routePoints = sample(route.polyline, maximum: 100)
+        guard !anchors.isEmpty, !routePoints.isEmpty else { return false }
+        // Einzelne Anschlussstellen duerfen den Korridor leicht verlassen;
+        // mindestens 90 % der Neuberechnung muessen innerhalb bleiben.
+        let inside = routePoints.filter { coordinate in
+            let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            return anchors.contains { $0.distance(from: location) <= width }
+        }.count
+        return Double(inside) / Double(routePoints.count) >= 0.9
     }
 }

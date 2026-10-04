@@ -1,5 +1,5 @@
 import Foundation
-import CoreLocation
+@preconcurrency import CoreLocation
 
 @MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -41,5 +41,6 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         location = locations.last
+        if let location { Task { await DriveRemoteBridge.shared.sync(location: location) } }
     }
 }

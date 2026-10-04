@@ -1,8 +1,11 @@
 import pytest
+from datetime import datetime
 from fastapi import HTTPException
 from types import SimpleNamespace
 
 from app.routers import navigation
+from app import models
+from app.database import SessionLocal
 
 
 class Response:
@@ -68,3 +71,44 @@ def test_fuel_station_uses_encrypted_settings_key(monkeypatch):
 def test_toll_amount_requires_explicit_total_label():
     assert navigation._explicit_toll_amount("Mautkosten: 18,40 EUR für diese Route") == 18.4
     assert navigation._explicit_toll_amount("Vignette ab 11,50 EUR") is None
+
+
+def test_drive_mcp_lists_tools(client, monkeypatch):
+    monkeypatch.setenv("KIES_DRIVE_MCP_TOKEN", "remote-secret")
+    response = client.post("/api/navigation/mcp", headers={"Authorization": "Bearer remote-secret"}, json={
+        "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {},
+    })
+    assert response.status_code == 200
+    names = {tool["name"] for tool in response.json()["result"]["tools"]}
+    assert {"get_location", "get_active_route", "set_destination", "restore_route"} <= names
+
+
+def test_drive_mcp_reads_state_and_queues_actions(monkeypatch):
+    monkeypatch.setenv("KIES_DRIVE_MCP_TOKEN", "remote-secret")
+    db = SessionLocal()
+    try:
+        device = models.Device(name="Drive Test", token_hash="unused")
+        db.add(device); db.flush()
+        db.add(models.DriveRemoteState(device_id=device.id, updated_at=datetime.utcnow(), payload={
+            "location": {"latitude": 49.0, "longitude": 8.0},
+            "recorded_at": "2026-10-04T12:00:00Z", "navigation_active": True,
+        }))
+        db.commit()
+        result = navigation._call_drive_tool(db, "get_location", {})
+        assert "49.0" in result["content"][0]["text"]
+
+        result = navigation._call_drive_tool(db, "set_route_options", {"avoid_highways": True})
+        assert "accepted" in result["content"][0]["text"]
+        command = db.query(models.DriveRemoteCommand).one()
+        assert command.device_id == device.id
+        assert command.arguments == {"avoid_highways": True}
+    finally:
+        db.close()
+
+
+def test_drive_mcp_rejects_wrong_token(client, monkeypatch):
+    monkeypatch.setenv("KIES_DRIVE_MCP_TOKEN", "remote-secret")
+    response = client.post("/api/navigation/mcp", headers={"Authorization": "Bearer wrong"}, json={
+        "jsonrpc": "2.0", "id": 1, "method": "tools/list",
+    })
+    assert response.status_code == 401

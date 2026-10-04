@@ -37,8 +37,9 @@ struct DriveContentView: View {
             if !settings.isReady { showSettings = true }
         }
         .onReceive(location.$location) { newValue in
-            guard let newValue, !planner.legs.isEmpty else { return }
-            planner.updateProgress(at: newValue, settings: settings)
+            guard let newValue else { return }
+            if !planner.legs.isEmpty { planner.updateProgress(at: newValue, settings: settings) }
+            Task { await planner.restoreActiveTripIfNeeded(from: newValue.coordinate, settings: settings) }
         }
         .sheet(isPresented: $showSettings) { DriveSettingsView(planner: planner) }
         .sheet(isPresented: $showJarvis) { JarvisDriveView(route: planner.route, destination: planner.destination) }
@@ -69,8 +70,9 @@ struct DriveContentView: View {
             if !settings.isReady { showSettings = true }
         }
         .onReceive(location.$location) { newValue in
-            guard let newValue, !planner.legs.isEmpty else { return }
-            planner.updateProgress(at: newValue, settings: settings)
+            guard let newValue else { return }
+            if !planner.legs.isEmpty { planner.updateProgress(at: newValue, settings: settings) }
+            Task { await planner.restoreActiveTripIfNeeded(from: newValue.coordinate, settings: settings) }
         }
         .sheet(isPresented: $showSettings) { DriveSettingsView(planner: planner) }
         .sheet(isPresented: $showJarvis) { JarvisDriveView(route: planner.route, destination: planner.destination) }
@@ -140,7 +142,7 @@ struct DriveContentView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Beenden", role: .destructive) { planner.stopNavigation() }
+                Button("Trip beenden", role: .destructive) { planner.completeActiveTrip() }
                     .buttonStyle(.bordered)
             }
             .padding(.horizontal, 18).padding(.vertical, 14)

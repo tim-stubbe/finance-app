@@ -217,6 +217,7 @@ targets:
     sources:
       - path: Tests/KiesDriveTests
       - path: Sources/KiesDrive/LongTripPlanning.swift
+      - path: Sources/KiesDrive/RoutePersistence.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.kies.drive.tests
