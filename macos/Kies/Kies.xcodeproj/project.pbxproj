@@ -531,6 +531,7 @@
 						ProvisioningStyle = Automatic;
 					};
 					412D077BC7C34E758E480E87 = {
+						DevelopmentTeam = NGBW8LC6RA;
 						ProvisioningStyle = Automatic;
 					};
 					49AF7C9601DAD573B37FAABB = {
@@ -827,6 +828,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NGBW8LC6RA;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Sources/KiesDrive/Info-iOS.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -995,6 +997,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NGBW8LC6RA;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Sources/KiesDrive/Info-iOS-PersonalTeam.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
