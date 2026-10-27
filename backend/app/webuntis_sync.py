@@ -121,6 +121,51 @@ def normalise_period(period: dict) -> dict | None:
     }
 
 
+def aggregate_school_days(periods: list[dict]) -> list[dict]:
+    """Fasst alle stattfindenden Stunden eines Tages zu einem Schulblock zusammen.
+
+    Ausgefallene Stunden werden nicht zur Berechnung von Beginn und Ende benutzt,
+    bleiben aber als Hinweis in der Beschreibung erhalten. Dadurch verkürzt sich
+    der Kalendereintrag, wenn die erste oder letzte Stunde entfällt.
+    """
+    days: dict[date, list[dict]] = {}
+    for period in periods:
+        days.setdefault(period["start"].date(), []).append(period)
+
+    events: list[dict] = []
+    for day, lessons in sorted(days.items()):
+        active = [lesson for lesson in lessons if not lesson.get("cancelled")]
+        if not active:
+            continue
+        active.sort(key=lambda lesson: (lesson["start"], lesson["end"], lesson["title"]))
+        rooms = list(dict.fromkeys(
+            room for lesson in active for room in (lesson.get("location") or "").split(", ") if room
+        ))
+        details = [
+            f"{lesson['start'].strftime('%H:%M')}–{lesson['end'].strftime('%H:%M')} {lesson['title']}"
+            for lesson in active
+        ]
+        cancelled = sorted(
+            (lesson for lesson in lessons if lesson.get("cancelled")),
+            key=lambda lesson: (lesson["start"], lesson["end"], lesson["title"]),
+        )
+        details.extend(
+            f"Entfällt: {lesson['start'].strftime('%H:%M')}–{lesson['end'].strftime('%H:%M')} "
+            f"{lesson['title'].removeprefix('Entfällt · ')}"
+            for lesson in cancelled
+        )
+        events.append({
+            "uid": f"webuntis-school-{day.strftime('%Y%m%d')}@kies",
+            "title": "Schule",
+            "start": min(lesson["start"] for lesson in active),
+            "end": max(lesson["end"] for lesson in active),
+            "location": ", ".join(rooms) or None,
+            "description": "WebUntis · " + " · ".join(details),
+            "cancelled": False,
+        })
+    return events
+
+
 def _escape(value: str) -> str:
     return radicale_sync._escape_text(value)
 
@@ -163,7 +208,8 @@ def sync(settings, password: str, radicale_password: str, today: date | None = N
     today = today or date.today()
     start, end = today - timedelta(days=1), today + timedelta(days=28)
     periods = fetch_periods(settings.webuntis_url, settings.webuntis_username, password, start, end)
-    events = [event for event in (normalise_period(p) for p in periods) if event]
+    lessons = [event for event in (normalise_period(p) for p in periods) if event]
+    events = aggregate_school_days(lessons)
     current = {event["uid"]: _fingerprint(event) for event in events}
     current_events = {event["uid"]: _summary(event) for event in events}
     try:
