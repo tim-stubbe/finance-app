@@ -1,12 +1,12 @@
-fastapi==0.141.1
-uvicorn[standard]==0.53.0
-sqlalchemy==2.0.54
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.6
 # Schema-Migrationen (backend/alembic/, app/db_migrate.py laeuft beim Start).
 # Reines Python-Wheel (nur Mako als Extra-Abhaengigkeit), unbedenklich fuer
 # das schlanke python:3.14-slim-Image.
-alembic==1.20.0
+alembic==1.20.1
 python-multipart==0.0.32
-pydantic==2.13.5
+pydantic==2.14.1
 itsdangerous==2.2.0
 # Web-Login (siehe backend/app/auth.py/routers/auth_login.py) - Passwort-
 # Hashing (Argon2id), TOTP (2FA), Passkeys (WebAuthn), QR-Code fuers TOTP-
@@ -16,10 +16,10 @@ itsdangerous==2.2.0
 passlib[argon2]==1.7.4
 pyotp==2.10.0
 qrcode==8.2
-webauthn==3.0.0
+webauthn==3.0.1
 requests==2.34.2
-fints==5.0.0
-cryptography==50.0.1
+fints==5.0.1
+cryptography==50.0.2
 APScheduler==3.11.3
 # Nur zum Parsen/Validieren der von der KI erzeugten Home-Assistant-
 # Automationen (siehe smarthome_automations.py) - reines Python-Wheel.
@@ -27,7 +27,7 @@ PyYAML==6.0.3
 # WebSocket-Client fuer die HA-Live-Zustaende (smarthome_ws.py) - ein
 # Hintergrund-Thread haelt die Verbindung, kein async noetig. Reines Wheel.
 websocket-client==1.9.2
-PyMuPDF==1.28.2
+PyMuPDF==2.0
 # Fuer den Bildvergleich der Immich-Duplikate. Noetig, weil Immich seine
 # Vorschaubilder als WebP ausliefert und PyMuPDF dieses Format nicht liest.
 pillow==13.0.0
